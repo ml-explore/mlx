@@ -8,7 +8,7 @@ runs:
       shell: bash
       env:
         DEVICE: cpu
-      run: python -m unittest discover python/tests -v
+      run: uv run python/tests/run.py -v
 
     - name: Run CPP tests - CPU
       shell: bash

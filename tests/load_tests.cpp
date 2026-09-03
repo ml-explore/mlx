@@ -257,6 +257,104 @@ TEST_CASE("test gguf tensor data offset validation") {
   }
 }
 
+// Writes a one-tensor GGUF whose tensor header carries `dims` and `type`
+// verbatim, so a test can drive the dimension product independently of the
+// amount of tensor data in the file. The name ends in ".weight" because the
+// quantized loader derives the scales and biases names from it.
+void write_raw_gguf_dims(
+    const std::string& path,
+    const std::vector<uint64_t>& dims,
+    uint32_t type,
+    size_t data_bytes) {
+  std::ofstream out(path, std::ios::binary);
+  auto u32 = [&out](uint32_t v) {
+    out.write(reinterpret_cast<const char*>(&v), 4);
+  };
+  auto u64 = [&out](uint64_t v) {
+    out.write(reinterpret_cast<const char*>(&v), 8);
+  };
+  out.write("GGUF", 4);
+  u32(3); // version
+  u64(1); // tensor_count
+  u64(0); // metadata_kv_count
+  u64(8); // tensor name length
+  out.write("w.weight", 8);
+  u32(dims.size());
+  for (auto dim : dims) {
+    u64(dim);
+  }
+  u32(type);
+  u64(0); // tensor data offset
+  while (out.tellp() % 32 != 0) { // default GGUF alignment
+    out.put(0);
+  }
+  std::vector<char> data(data_bytes, 0);
+  out.write(data.data(), data.size());
+}
+
+TEST_CASE("test gguf tensor dimension validation") {
+  // The element count exists in two widths: gguflib keeps the 64 bit product in
+  // tensor.num_weights, and get_shape narrows each dimension to a 32 bit
+  // ShapeElem. Only the byte size is checked against the file, so dimensions
+  // that make the two disagree size a buffer from one and index it with the
+  // other. See ml-explore/mlx#4244.
+  const uint32_t q8_0 = 8;
+
+  SUBCASE("valid quantized tensor loads") {
+    std::string file_path = get_temp_file("test_gguf_dims_ok.gguf");
+    // One block of 32 weights: 2 bytes of scale plus 32 bytes of weights.
+    write_raw_gguf_dims(file_path, {32}, q8_0, 34);
+    auto [weights, metadata] = load_gguf(file_path);
+    CHECK_EQ(weights.at("w.weight").shape(), Shape{8});
+    CHECK_EQ(weights.at("w.scales").shape(), Shape{1});
+    CHECK_EQ(weights.at("w.biases").shape(), Shape{1});
+  }
+
+  SUBCASE("dimension past the ShapeElem range") {
+    // Narrows to a shape of 32 that no longer describes the file.
+    std::string file_path = get_temp_file("test_gguf_dim_narrowed.gguf");
+    write_raw_gguf_dims(file_path, {(1ull << 32) + 32}, q8_0, 34);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("dimension that narrows to a negative shape") {
+    std::string file_path = get_temp_file("test_gguf_dim_negative.gguf");
+    write_raw_gguf_dims(file_path, {1ull << 31}, q8_0, 34);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("dimension product that wraps to a small byte size") {
+    // 96 * 384307168202282326 wraps to 64, so the tensor needs only 68 bytes of
+    // data and passes the byte size check, while the narrowed shape
+    // {1431655766, 96} still describes 2^37 elements. That drives the scales
+    // element count past INT32_MAX, which is what truncates the allocation size
+    // while the extractor still loops over the full count.
+    std::string file_path = get_temp_file("test_gguf_dim_wrap.gguf");
+    write_raw_gguf_dims(file_path, {96, 384307168202282326ull}, q8_0, 68);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("dimension product that wraps to zero") {
+    // Wraps num_weights to exactly 0, so the tensor claims no data at all.
+    std::string file_path = get_temp_file("test_gguf_dim_wrap_zero.gguf");
+    write_raw_gguf_dims(
+        file_path,
+        {(1ull << 32) + (1ull << 25),
+         (1ull << 32) + (1ull << 15),
+         (1ull << 32) + (1ull << 24)},
+        q8_0,
+        0);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("tensor without dimensions") {
+    // gguf_load_quantized indexes the last shape element unconditionally.
+    std::string file_path = get_temp_file("test_gguf_no_dims.gguf");
+    write_raw_gguf_dims(file_path, {}, q8_0, 0);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+}
+
 // Writes a metadata-only GGUF (no tensors) whose metadata KV section is
 // `kv_section` verbatim, so a caller can encode values whose lengths exceed the
 // file to exercise check_metadata_value_in_file(). `kv_count` must match the

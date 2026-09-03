@@ -4,6 +4,7 @@
 #include <fstream>
 #include <limits>
 #include <sstream>
+#include <thread>
 
 // Used by pread implementation.
 #ifdef _WIN32
@@ -147,6 +148,10 @@ void save(std::shared_ptr<io::Writer> out_stream, array a) {
 
   a = contiguous(a, true);
   a.eval();
+
+  // Open only after the inputs are evaluated: opening a FileWriter
+  // truncates the file and lazy inputs may still read from it.
+  out_stream->open();
 
   ////////////////////////////////////////////////////////
   // Check file
@@ -334,6 +339,40 @@ array load(std::string file, StreamOrDevice s) {
 
 namespace io {
 
+namespace {
+
+// The reads to keep in flight while reading a file in batches. The disk, not
+// the cpu, is the limit here: a thread waits for it most of the time, but a
+// queue deeper than the device can serve only adds latency. Half the cores
+// saturates the storage of a machine, which is faster on the machines that
+// have more cores.
+size_t batch_thread_count() {
+  size_t n_cores = std::thread::hardware_concurrency();
+  return std::clamp<size_t>(n_cores / 2, 4, 16);
+}
+
+// The pool of the batched reads. Every reader shares it, because the disk is
+// one resource: a pool per file would multiply the reads in flight by the
+// number of open files, which is how a sharded model is read.
+//
+// It is held with a weak reference, so the threads start with the first
+// batched read and stop once the readers that use them are destroyed. Reading
+// a file is a startup task, and this keeps no thread for the rest of the run.
+std::shared_ptr<ThreadPool> acquire_batch_pool() {
+  static std::mutex mtx;
+  static std::weak_ptr<ThreadPool> weak_pool;
+
+  std::lock_guard<std::mutex> lock(mtx);
+  auto pool = weak_pool.lock();
+  if (!pool) {
+    pool = std::make_shared<ThreadPool>(batch_thread_count());
+    weak_pool = pool;
+  }
+  return pool;
+}
+
+} // namespace
+
 ThreadPool& thread_pool() {
   // Leak - see Scheduler singleton comment in scheduler.cpp.
   static ThreadPool* pool_ = new ThreadPool{4};
@@ -341,9 +380,8 @@ ThreadPool& thread_pool() {
 }
 
 ThreadPool& ParallelFileReader::thread_pool() {
-  // Leak - see Scheduler singleton comment in scheduler.cpp.
-  static ThreadPool* thread_pool = new ThreadPool{4};
-  return *thread_pool;
+  std::call_once(pool_once_, [this]() { pool_ = acquire_batch_pool(); });
+  return *pool_;
 }
 
 void ParallelFileReader::read(char* data, size_t n) {
@@ -371,26 +409,22 @@ void ParallelFileReader::read(char* data, size_t n, size_t offset) {
     }
     return true;
   };
+  // Read the whole batches in the pool and what is left in this thread.
   std::vector<std::future<bool>> futs;
-  while (n != 0) {
-    if (n < batch_size_) {
-      if (!readfn(offset, n, data)) {
-        throw std::runtime_error("[read] Unable to read from file.");
-      }
-      break;
-    } else {
-      size_t m = batch_size_;
-      futs.emplace_back(
-          ParallelFileReader::thread_pool().enqueue(readfn, offset, m, data));
-      data += m;
-      n -= m;
-      offset += m;
-    }
+  while (n >= batch_size_) {
+    futs.emplace_back(thread_pool().enqueue(readfn, offset, batch_size_, data));
+    data += batch_size_;
+    offset += batch_size_;
+    n -= batch_size_;
   }
+  bool ok = n == 0 || readfn(offset, n, data);
+
+  // Wait for every batch, they all write into |data|.
   for (auto& f : futs) {
-    if (!f.get()) {
-      throw std::runtime_error("[read] Unable to read from file.");
-    }
+    ok = f.get() && ok;
+  }
+  if (!ok) {
+    throw std::runtime_error("[read] Unable to read from file.");
   }
 }
 

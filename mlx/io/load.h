@@ -3,7 +3,9 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <sstream>
+#include <utility>
 
 #include <fcntl.h>
 #ifdef _MSC_VER
@@ -53,6 +55,8 @@ class Writer {
       std::ios_base::seekdir way = std::ios_base::beg) = 0;
   virtual void write(const char* data, size_t n) = 0;
   virtual std::string label() const = 0;
+  virtual void open() {}
+
   virtual ~Writer() = default;
 };
 
@@ -102,31 +106,46 @@ class ParallelFileReader : public Reader {
   }
 
  private:
+  // Reads larger than this are split in batches and read in parallel.
   static constexpr size_t batch_size_ = 1 << 25;
-  static ThreadPool& thread_pool();
+
+  // The pool that reads the batches, held from the first batched read until
+  // the reader is destroyed. It cannot be io::thread_pool(), the tasks that
+  // run there wait for these batches and would deadlock in the same pool.
+  ThreadPool& thread_pool();
+
   int fd_;
   std::string label_;
+  std::once_flag pool_once_;
+  std::shared_ptr<ThreadPool> pool_;
 };
 
 class FileWriter : public Writer {
  public:
   explicit FileWriter() {}
   explicit FileWriter(std::string file_path)
-      : fd_(open(
-            file_path.c_str(),
-            O_CREAT | O_WRONLY | O_TRUNC | O_BINARY,
-            0644)),
-        label_(std::move(file_path)) {}
+      : file_path_(std::move(file_path)) {}
 
   FileWriter(const FileWriter&) = delete;
   FileWriter& operator=(const FileWriter&) = delete;
-  FileWriter(FileWriter&& other) {
-    std::swap(fd_, other.fd_);
+  FileWriter(FileWriter&& other)
+      : fd_(std::exchange(other.fd_, -1)),
+        file_path_(std::move(other.file_path_)) {
+    other.file_path_.clear();
   }
 
   ~FileWriter() override {
-    if (fd_ != 0) {
+    if (fd_ >= 0) {
       close(fd_);
+    }
+  }
+
+  // Kept separate from construction so lazy inputs can be evaluated first,
+  // they may still read from the file.
+  void open() override {
+    if (fd_ < 0 && !file_path_.empty()) {
+      fd_ = ::open(
+          file_path_.c_str(), O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, 0644);
     }
   }
 
@@ -139,11 +158,13 @@ class FileWriter : public Writer {
   }
 
   size_t tell() override {
+    check_open();
     return lseek(fd_, 0, SEEK_CUR);
   }
 
   void seek(int64_t off, std::ios_base::seekdir way = std::ios_base::beg)
       override {
+    check_open();
     if (way == std::ios_base::beg) {
       lseek(fd_, off, SEEK_SET);
     } else if (way == std::ios_base::end) {
@@ -154,6 +175,7 @@ class FileWriter : public Writer {
   }
 
   void write(const char* data, size_t n) override {
+    check_open();
     while (n != 0) {
       auto m = ::write(fd_, data, std::min(n, static_cast<size_t>(INT32_MAX)));
       if (m <= 0) {
@@ -167,12 +189,18 @@ class FileWriter : public Writer {
   }
 
   std::string label() const override {
-    return "file " + label_;
+    return "file " + file_path_;
   }
 
  private:
-  int fd_{0};
-  std::string label_;
+  void check_open() const {
+    if (!is_open()) {
+      throw std::runtime_error("[write] File " + file_path_ + " is not open.");
+    }
+  }
+
+  int fd_{-1};
+  std::string file_path_;
 };
 
 } // namespace io

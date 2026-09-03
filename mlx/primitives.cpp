@@ -1941,6 +1941,11 @@ std::pair<std::vector<array>, std::vector<int>> Equal::vmap(
   return {{equal(a, b, stream())}, {to_ax}};
 }
 
+bool Equal::is_equivalent(const Primitive& other) const {
+  const Equal& e_other = static_cast<const Equal&>(other);
+  return equal_nan_ == e_other.equal_nan_;
+}
+
 std::vector<array> Equal::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
@@ -2793,6 +2798,11 @@ std::pair<std::vector<array>, std::vector<int>> Log::vmap(
           std::make_shared<Log>(stream(), base_),
           {in})},
       axes};
+}
+
+bool Log::is_equivalent(const Primitive& other) const {
+  const Log& l_other = static_cast<const Log&>(other);
+  return base_ == l_other.base_;
 }
 
 std::vector<array> Log1p::vjp(

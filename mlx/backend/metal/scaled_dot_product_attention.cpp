@@ -466,10 +466,15 @@ void sdpa_vector_2pass(
   std::string kname;
   kname.reserve(64);
   kname += "sdpa_vector_2pass_1";
-  if (!mask && !sinks && q.shape(2) == 1 && q.shape(1) == 8 * k.shape(1) &&
-      q.shape(-1) == v.shape(-1) && (q.shape(-1) == 64 || q.shape(-1) == 128) &&
-      k.shape(2) >= 8192) {
-    kname += "_gqa";
+  int gqa_factor = q.shape(1) / k.shape(1);
+  bool gqa_dims =
+      (gqa_factor == 8 && (q.shape(-1) == 64 || q.shape(-1) == 128)) ||
+      ((gqa_factor == 12 || gqa_factor == 16) && q.shape(-1) == 128);
+  if (!mask && !sinks && q.shape(2) == 1 &&
+      q.shape(1) == gqa_factor * k.shape(1) && q.shape(-1) == v.shape(-1) &&
+      gqa_dims && k.shape(2) >= 8192) {
+    kname += "_gqa_";
+    kname += std::to_string(gqa_factor);
   }
   kname += "_";
   kname += get_type_string(q.dtype());
@@ -479,7 +484,6 @@ void sdpa_vector_2pass(
   kname += std::to_string(v.shape(-1));
 
   // Compute the necessary sizes
-  int gqa_factor = q.shape(1) / k.shape(1);
   int n_simds = gqa_factor * q.shape(2);
 
   char devc = d.get_architecture().back();
@@ -753,8 +757,8 @@ bool ScaledDotProductAttention::use_fallback(
   // blocks to fill the machine.
   if (metal::is_nax_available() &&
       (env::enable_tf32() || q.dtype() != float32) &&
-      query_sequence_length >= 1024 && query_head_dim == 256 && do_causal &&
-      !has_arr_mask) {
+      query_sequence_length >= 1024 && query_head_dim == 256 &&
+      (do_causal || has_arr_mask)) {
     return false;
   }
 

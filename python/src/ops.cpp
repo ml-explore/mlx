@@ -213,14 +213,14 @@ void init_ops(nb::module_& m) {
   m.def(
       "unstack",
       [](const mx::array& a, int axis, mx::StreamOrDevice s) {
-        return mx::unstack(a, axis, s);
+        return nb::tuple(nb::cast(mx::unstack(a, axis, s)));
       },
       nb::arg(),
       nb::kw_only(),
       "axis"_a = 0,
       "stream"_a = nb::none(),
       nb::sig(
-          "def unstack(x: array, /, *, axis: int = 0, stream: StreamOrDevice = None) -> list[array]"),
+          "def unstack(x: array, /, *, axis: int = 0, stream: StreamOrDevice = None) -> tuple[array, ...]"),
       R"pbdoc(
         Split an array into a sequence of arrays along the given axis.
 
@@ -232,7 +232,7 @@ void init_ops(nb::module_& m) {
             axis (int, optional): Axis along which to unstack. Default: ``0``.
 
         Returns:
-            list(array): A list of arrays, one for each index along ``axis``.
+            tuple(array): A tuple of arrays, one for each index along ``axis``.
       )pbdoc");
   m.def(
       "expand_dims",
@@ -1768,11 +1768,11 @@ void init_ops(nb::module_& m) {
       },
       nb::arg(),
       "indices"_a,
-      "axis"_a = nb::none(),
+      "axis"_a.none() = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def take_along_axis(a: array, /, indices: array, axis: int | None = None, *, stream: StreamOrDevice = None) -> array"),
+          "def take_along_axis(a: array, /, indices: array, axis: int | None = -1, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Take values along an axis at the specified indices.
 
@@ -1782,7 +1782,7 @@ void init_ops(nb::module_& m) {
               the input array excluding the `axis` dimension.
             axis (int or None): Axis in the input to take the values from. If
               ``axis == None`` the array is flattened to 1D prior to the indexing
-              operation.
+              operation. Defaults to ``-1``.
 
         Returns:
             array: The output array.
@@ -1807,7 +1807,7 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       "indices"_a,
       "values"_a,
-      "axis"_a.none(),
+      "axis"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -2856,7 +2856,9 @@ void init_ops(nb::module_& m) {
          const IntOrVec& axis,
          bool keepdims,
          int ddof,
+         std::optional<int> correction,
          mx::StreamOrDevice s) {
+        ddof = correction.value_or(ddof);
         return mx::var(a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
       },
       nb::arg(),
@@ -2864,6 +2866,7 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       "ddof"_a = 0,
       nb::kw_only(),
+      "correction"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
           "def var(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, stream: StreamOrDevice = None) -> array"),
@@ -2889,7 +2892,9 @@ void init_ops(nb::module_& m) {
          const IntOrVec& axis,
          bool keepdims,
          int ddof,
+         std::optional<int> correction,
          mx::StreamOrDevice s) {
+        ddof = correction.value_or(ddof);
         return mx::std(a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
       },
       nb::arg(),
@@ -2897,6 +2902,7 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       "ddof"_a = 0,
       nb::kw_only(),
+      "correction"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
           "def std(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, stream: StreamOrDevice = None) -> array"),

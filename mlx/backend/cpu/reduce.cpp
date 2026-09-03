@@ -69,6 +69,18 @@ const complex64_t Limits<complex64_t>::min =
     -std::numeric_limits<float>::infinity();
 
 template <typename T, typename U, typename Op>
+struct ReductionAccumulator {
+  static constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
+  // Widen to float32 only if the input is float16 (with N=1) or bfloat16 as it
+  // improves performance.
+  static constexpr bool widen_to_float =
+      (std::is_same_v<T, bfloat16_t> ||
+       (N == 1 && std::is_same_v<T, float16_t>));
+
+  using type = std::conditional_t<widen_to_float, float, U>;
+};
+
+template <typename T, typename U, typename Op>
 void strided_reduce(
     const T* x,
     U* accumulator,
@@ -261,6 +273,23 @@ void reduction_op(
   }
 }
 
+template <typename T, typename U, typename Op>
+void float_reduction(
+    const array& x,
+    array& out,
+    const std::vector<int>& axes,
+    U init) {
+  using AccT = ReductionAccumulator<T, U, Op>::type;
+  if constexpr (std::is_same_v<AccT, U>) {
+    reduction_op<T, U, Op>(x, out, axes, init);
+  } else {
+    array temp(out.shape(), TypeToDtype<AccT>(), nullptr, {});
+    temp.set_data(allocator::malloc(temp.nbytes()));
+    reduction_op<T, AccT, Op>(x, temp, axes, static_cast<AccT>(init));
+    std::copy_n(temp.data<AccT>(), out.size(), out.data<U>());
+  }
+}
+
 struct AndReduce {
   template <typename T>
   bool operator()(bool x, T y) {
@@ -420,13 +449,13 @@ void reduce_dispatch_sum_prod(
     if constexpr (std::is_integral_v<InT> && sizeof(InT) <= 4) {
       reduction_op<InT, int32_t, SumReduce>(in, out, axes, 0);
     } else {
-      reduction_op<InT, InT, SumReduce>(in, out, axes, 0);
+      float_reduction<InT, InT, SumReduce>(in, out, axes, 0);
     }
   } else {
     if constexpr (std::is_integral_v<InT> && sizeof(InT) <= 4) {
       reduction_op<InT, int32_t, ProdReduce>(in, out, axes, 1);
     } else {
-      reduction_op<InT, InT, ProdReduce>(in, out, axes, 1);
+      float_reduction<InT, InT, ProdReduce>(in, out, axes, 1);
     }
   }
 }
