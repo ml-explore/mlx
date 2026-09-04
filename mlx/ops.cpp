@@ -5575,9 +5575,9 @@ array gather_qmm(
           << ".";
       throw std::invalid_argument(msg.str());
     }
-    if (!metal::is_available) {
+    if (to_stream(s).device != Device::gpu || !metal::is_available()) {
       throw std::invalid_argument(
-          "[gather_qmm] Global scale is not supported on Metal Backend.");
+          "[gather_qmm] Global scale is only supported on the Metal backend.");
     }
   }
   if (qmode == QuantizationMode::Affine) {
