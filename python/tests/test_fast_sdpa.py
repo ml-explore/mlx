@@ -1,7 +1,9 @@
 import math
 import os
 import unittest
+from contextlib import nullcontext
 from itertools import product
+from unittest.mock import patch
 
 import mlx.core as mx
 import mlx_tests
@@ -364,6 +366,13 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         scale = D**-0.5
         mx.random.seed(0)
 
+        # Keep the test hermetic if the caller already configured a threshold.
+        # addCleanup restores the complete environment snapshot on every exit.
+        environment = patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop("MLX_SDPA_D512_MIN_KL", None)
+
         # Below the admission threshold the generic vector kernel stays on
         # the unfused path, and force_fused says so. The threshold is read
         # per call from MLX_SDPA_D512_MIN_KL (default 1024).
@@ -380,8 +389,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         # L = 128 admitted via the threshold override takes the 1-pass
         # kernel; 8192 and 8201 take the 2-pass one at the default
         # threshold.
-        os.environ["MLX_SDPA_D512_MIN_KL"] = "0"
-        try:
+        with patch.dict(os.environ, {"MLX_SDPA_D512_MIN_KL": "0"}):
             for dtype in (mx.float32, mx.float16, mx.bfloat16):
                 with self.subTest(L=128, dtype=dtype, threshold="off"):
                     q = mx.random.normal(shape=(1, Nq, 1, D), dtype=dtype)
@@ -389,12 +397,10 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     v = mx.random.normal(shape=(1, Nkv, 128, D), dtype=dtype)
                     ref = mlx_ref_attn(q, k, v, scale)
                     out = mx.fast.scaled_dot_product_attention(
-                        q, k, v, scale=scale
+                        q, k, v, scale=scale, force_fused=True
                     )
                     atol = 1e-5 if dtype == mx.float32 else 2e-2
                     self.assertTrue(mx.allclose(ref, out, atol=atol))
-        finally:
-            os.environ.pop("MLX_SDPA_D512_MIN_KL", None)
         for L, dtype in product(
             (8192, 8201), (mx.float32, mx.float16, mx.bfloat16)
         ):
@@ -403,7 +409,9 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 k = mx.random.normal(shape=(1, Nkv, L, D), dtype=dtype)
                 v = mx.random.normal(shape=(1, Nkv, L, D), dtype=dtype)
                 ref = mlx_ref_attn(q, k, v, scale)
-                out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, force_fused=True
+                )
                 atol = 1e-5 if dtype == mx.float32 else 2e-2
                 self.assertTrue(mx.allclose(ref, out, atol=atol))
 
@@ -432,7 +440,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 with self.subTest(qL=qL, mask=i):
                     ref = mlx_ref_attn(q, k, v, scale, mask=m)
                     out = mx.fast.scaled_dot_product_attention(
-                        q, k, v, scale=scale, mask=m
+                        q, k, v, scale=scale, mask=m, force_fused=True
                     )
                     self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
@@ -447,19 +455,24 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             v = mx.random.normal(shape=(B, Nkv, L, D))
             for s_in in (None, sinks):
                 with self.subTest(L=L, sinks=s_in is not None):
-                    if L == 256:
-                        os.environ["MLX_SDPA_D512_MIN_KL"] = "0"
-                    try:
+                    threshold = (
+                        patch.dict(os.environ, {"MLX_SDPA_D512_MIN_KL": "0"})
+                        if L == 256
+                        else nullcontext()
+                    )
+                    with threshold:
                         ref = mlx_ref_attn(q, k, v, scale, sinks=s_in)
                         out = mx.fast.scaled_dot_product_attention(
-                            q, k, v, scale=scale, sinks=s_in
+                            q,
+                            k,
+                            v,
+                            scale=scale,
+                            sinks=s_in,
+                            force_fused=True,
                         )
                         self.assertTrue(
                             mx.allclose(ref, out, atol=1e-4, rtol=1e-4)
                         )
-                    finally:
-                        if L == 256:
-                            os.environ.pop("MLX_SDPA_D512_MIN_KL", None)
 
     def test_sdpa_fully_masked(self):
         Lkv = 8
