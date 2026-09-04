@@ -424,6 +424,35 @@ class TestEinsum(mlx_tests.MLXTestCase):
         self.assertEqual(mx_out.shape, np_out.shape)
         self.assertTrue(np.allclose(mx_out, np_out, rtol=1e-4, atol=1e-4))
 
+    def test_integer_contractions(self):
+        dtypes = [
+            mx.int8,
+            mx.int16,
+            mx.int32,
+            mx.int64,
+            mx.uint8,
+            mx.uint16,
+            mx.uint32,
+            mx.uint64,
+        ]
+        for dtype in dtypes:
+            a = mx.array([[1, 2], [3, 4]], dtype=dtype)
+            b = mx.array([[5, 6], [7, 8]], dtype=dtype)
+            np_a = np.array(a)
+            np_b = np.array(b)
+
+            mx_out = mx.einsum("ij,jk->ik", a, b)
+            np_out = np.einsum("ij,jk->ik", np_a, np_b)
+            self.assertEqual(mx_out.shape, np_out.shape)
+            self.assertEqual(mx_out.dtype, dtype)
+            self.assertTrue(np.array_equal(np.array(mx_out), np_out))
+
+            # Inner product contraction
+            mx_dot = mx.einsum("i,i->", a[0], b[0])
+            np_dot = np.einsum("i,i->", np_a[0], np_b[0])
+            self.assertEqual(mx_dot.dtype, dtype)
+            self.assertEqual(mx_dot.item(), int(np_dot))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

@@ -82,4 +82,11 @@ TEST_CASE("test einsum") {
   x = einsum("i,j->ij", {full({2}, 15.0f), full({4}, 20.0f)});
   expected = full({2, 4}, 300.0f);
   CHECK_EQ(allclose(x, expected).item<bool>(), true);
+
+  // Test integer contraction (einsum fallback for non-floating types)
+  auto a_int = array({1, 2, 3, 4}, {2, 2}, int32);
+  auto b_int = array({5, 6, 7, 8}, {2, 2}, int32);
+  auto res_int = einsum("ij,jk->ik", {a_int, b_int});
+  auto expected_int = array({19, 22, 43, 50}, {2, 2}, int32);
+  CHECK_EQ(array_equal(res_int, expected_int).item<bool>(), true);
 }

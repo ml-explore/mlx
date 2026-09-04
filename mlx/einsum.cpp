@@ -867,7 +867,12 @@ array einsum(
     preprocess_einsum_inputs(
         node.inputs, node.output, node.positions, inputs, s);
 
-    if (can_dot(node.inputs, node.output)) {
+    if (can_dot(node.inputs, node.output) &&
+        issubdtype(
+            promote_types(
+                inputs[node.positions[0]].dtype(),
+                inputs[node.positions[1]].dtype()),
+            inexact)) {
       auto& in_a = node.inputs[0];
       auto& in_b = node.inputs[1];
       auto& out = node.output;
