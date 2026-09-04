@@ -37,6 +37,11 @@ class PyStreamContext {
     }
   }
 
+  // Without this, a context whose __exit__ is never called leaks _inner.
+  ~PyStreamContext() {
+    exit();
+  }
+
  private:
   mx::StreamOrDevice _s;
   mx::StreamContext* _inner;

@@ -7,6 +7,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <thread>
 #include <variant>
 
 #include "mlx/api.h"
@@ -28,7 +29,9 @@ MLX_API Stream to_stream(StreamOrDevice s, Device default_);
 
 struct StreamContext {
  public:
-  StreamContext(StreamOrDevice s) : _stream(default_stream(default_device())) {
+  StreamContext(StreamOrDevice s)
+      : _stream(default_stream(default_device())),
+        _owner(std::this_thread::get_id()) {
     if (std::holds_alternative<std::monostate>(s)) {
       throw std::runtime_error(
           "[StreamContext] Invalid argument, please specify a stream or device.");
@@ -39,12 +42,17 @@ struct StreamContext {
   }
 
   ~StreamContext() {
+    // Streams are thread-affine, so only the constructing thread can restore.
+    if (std::this_thread::get_id() != _owner) {
+      return;
+    }
     set_default_device(_stream.device);
     set_default_stream(_stream);
   }
 
  private:
   Stream _stream;
+  std::thread::id _owner;
 };
 
 struct MLX_API PrintOptions {

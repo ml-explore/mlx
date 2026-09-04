@@ -1,5 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
+import concurrent.futures
+import gc
 import unittest
 
 import mlx.core as mx
@@ -111,6 +113,33 @@ class TestStream(mlx_tests.MLXTestCase):
         s_cpu = mx.new_stream(mx.cpu)
         b = mx.add(x, y, stream=s_cpu)
         self.assertEqual(a.item(), b.item())
+
+    def test_stream_context_exited_on_another_thread(self):
+        # A generator suspended inside `mx.stream(...)` and abandoned is
+        # finalized by the GC on whatever thread drops the last reference.
+        # Restoring there would install a foreign, thread-affine stream as
+        # that thread's default and break every later op on it.
+        abandoned = {}
+
+        def on_worker():
+            def gen():
+                with mx.stream(mx.new_stream(mx.default_device())):
+                    yield 1
+                    yield 2
+
+            g = gen()
+            next(g)
+            abandoned["gen"] = g
+
+        before = mx.default_stream(mx.default_device())
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(on_worker).result()
+
+        del abandoned["gen"]
+        gc.collect()
+
+        self.assertEqual(mx.default_stream(mx.default_device()), before)
+        mx.eval(mx.add(mx.array(1.0), mx.array(1.0)))
 
 
 class TestDeviceInfo(mlx_tests.MLXTestCase):
