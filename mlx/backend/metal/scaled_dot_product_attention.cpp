@@ -710,6 +710,22 @@ std::tuple<bool, std::string> has_fused_kernel(
           << query_sequence_length << " and GQA factor " << gqa_factor << ".";
       return {false, msg.str()};
     }
+    // Head dim 512 sits on the generic (non-GQA) vector kernel, whose cost
+    // is dominated by reading K/V. Its measured win over the unfused path
+    // grows with the key length and is only a few percent at short ones,
+    // so admit it from a minimum key length and keep the existing path
+    // below that. The threshold is read per call so callers and tests can
+    // observe both routings in one process.
+    if (query_head_dim == 512) {
+      const int min_key_sequence_length =
+          env::get_var("MLX_SDPA_D512_MIN_KL", 1024);
+      if (key_sequence_length < min_key_sequence_length) {
+        msg << "the vector attention kernel for head dim 512 requires at "
+            << "least " << min_key_sequence_length << " keys; got key length "
+            << key_sequence_length << ".";
+        return {false, msg.str()};
+      }
+    }
   }
   return {true, ""};
 }
