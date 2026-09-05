@@ -1103,11 +1103,13 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             mx.fast.scaled_dot_product_attention(
                 q, k, v, scale=64**-0.5, force_fused=True
             )
-        with self.assertRaisesRegex(ValueError, r"requires at least \d+ keys"):
-            q, k, v = make_qkv(1, 512, 512, qH=32, kH=4)
-            mx.fast.scaled_dot_product_attention(
-                q, k, v, scale=512**-0.5, force_fused=True
-            )
+        with patch.dict(os.environ):
+            os.environ.pop("MLX_SDPA_D512_MIN_KL", None)
+            with self.assertRaisesRegex(ValueError, r"requires at least \d+ keys"):
+                q, k, v = make_qkv(1, 512, 512, qH=32, kH=4)
+                mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=512**-0.5, force_fused=True
+                )
 
         # No CPU fused kernel.
         with mx.stream(mx.cpu):
