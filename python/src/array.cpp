@@ -1267,6 +1267,15 @@ void init_array(nb::module_& m) {
           "T",
           [](const mx::array& a) { return mx::transpose(a); },
           "Equivalent to calling ``self.transpose()`` with no arguments.")
+      .def_prop_ro(
+          "mT",
+          [](const mx::array& a) {
+            std::vector<int> axes(a.ndim());
+            std::iota(axes.begin(), axes.end(), 0);
+            std::swap(axes[a.ndim() - 1], axes[a.ndim() - 2]);
+            return mx::transpose(a, axes);
+          },
+          "Equivalent to calling ``self.transpose()`` with the last two axes swapped.")
       .def(
           "sum",
           [](const mx::array& a,
