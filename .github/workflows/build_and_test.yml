@@ -139,6 +139,53 @@ jobs:
         with:
           toolkit: ${{ matrix.toolkit }}
 
+  array_api_test:
+    name: Array API Tests (Metal)
+    if: github.repository == 'ml-explore/mlx'
+    needs: mac_build
+    runs-on: 'macos-26-xlarge'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          toolkit: 'metal'
+          use-ccache: false
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifact
+          pattern: mlx-metal-*
+      - name: Checkout array-api-tests
+        uses: actions/checkout@v7
+        with:
+          repository: data-apis/array-api-tests
+          ref: master
+          submodules: 'true'
+          path: 'array-api-tests'
+          persist-credentials: false
+      - name: Install dependencies
+        shell: bash
+        run: |
+          uv pip install pytest-xdist -r array-api-tests/requirements.txt
+      - name: Run the test suite
+        shell: bash
+        env:
+          ARRAY_API_TESTS_MODULE: mlx.core
+          ARRAY_API_TESTS_SKIP_DTYPES: 'float64,complex128'
+          PYTHONWARNINGS: 'ignore::UserWarning::,ignore::DeprecationWarning::,ignore::RuntimeWarning::'
+          METAL_DEBUG_ERROR_MODE: 0
+          METAL_DEVICE_WRAPPER_TYPE: 1
+        run: |
+          if [[ -d artifact ]] ; then
+            for SUBDIR in artifact/*; do
+              rm -rf build dist
+              mv "$SUBDIR"/* .
+              break
+            done
+          fi
+          uv pip install dist/*.whl
+          cd "${GITHUB_WORKSPACE}/array-api-tests"
+          pytest array_api_tests -v -c pytest.ini -n 2 --max-examples=1000 --derandomize --disable-data-dependent-shapes --disable-deadline --skips-file "${GITHUB_WORKSPACE}/xfail.txt"
+
   build_documentation:
     name: Build Documentation
     if: github.repository == 'ml-explore/mlx'
