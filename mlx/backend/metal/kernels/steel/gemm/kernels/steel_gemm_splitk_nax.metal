@@ -22,6 +22,8 @@
 
 #define instantiate_gemm_splitk_shapes_helper(iname, itype, oname, otype) \
     instantiate_gemm_splitk_transpose_helper(iname, itype, oname, otype,  64,  64, 256, 2, 2) \
+    instantiate_gemm_splitk_transpose_helper(iname, itype, oname, otype,  64, 128, 512, 2, 4) \
+    instantiate_gemm_splitk_transpose_helper(iname, itype, oname, otype, 128,  64, 512, 4, 2) \
     instantiate_gemm_splitk_transpose_helper(iname, itype, oname, otype, 128, 128, 512, 4, 4)
 
 instantiate_gemm_splitk_shapes_helper(float16, half, float32, float);
