@@ -1319,6 +1319,32 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertNotEqual(id(a_1), id(arrs[1]))
         self.assertEqual(id(a_2), id(arrs[2]))
 
+    def test_conv_second_order_grad_with_padding(self):
+        # The weight gradient of a padded conv pads the input on the spatial
+        # axes only, so differentiating through it exercises the vjp of a pad
+        # on a subset of the axes.
+        x = mx.random.normal((1, 4, 4, 1))
+        w = mx.random.normal((1, 2, 2, 1))
+
+        def wgrad_sum(x_):
+            fn = lambda w_: mx.conv2d(x_, w_, padding=(1, 2)).sum()
+            return mx.grad(fn)(w).sum()
+
+        dx = mx.grad(wgrad_sum)(x)
+        self.assertEqual(dx.shape, x.shape)
+
+        # The weight gradient is linear in the input so central differences
+        # are exact up to floating point error
+        eps = 1e-2
+        fd = []
+        for i in range(x.size):
+            e = mx.zeros(x.size)
+            e[i] = eps
+            e = e.reshape(x.shape)
+            fd.append((wgrad_sum(x + e) - wgrad_sum(x - e)) / (2 * eps))
+        fd = mx.stack(fd).reshape(x.shape)
+        self.assertTrue(mx.allclose(dx, fd, atol=1e-3, rtol=1e-3))
+
     def test_grad_with_inplace_update(self):
         def loss_fn(model):
             model[1] = mx.array(2.0)
