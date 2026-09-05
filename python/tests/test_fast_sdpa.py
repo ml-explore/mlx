@@ -1,7 +1,9 @@
 import math
 import os
 import unittest
+from contextlib import nullcontext
 from itertools import product
+from unittest.mock import patch
 
 import mlx.core as mx
 import mlx_tests
@@ -355,6 +357,173 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 ref = mlx_primitives_sdpa(q, kr, vr, scale)
                 out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
                 self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    def test_sdpa_vector_head_dim_512(self):
+        # gemma-4 global attention: 32 query heads over 4 key/value heads.
+        D = 512
+        Nq, Nkv = 32, 4
+        scale = D**-0.5
+        mx.random.seed(0)
+
+        # Keep the test hermetic if the caller already configured a threshold.
+        # addCleanup restores the complete environment snapshot on every exit.
+        environment = patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop("MLX_SDPA_D512_MIN_KL", None)
+
+        # Below the admission threshold the generic vector kernel stays on
+        # the unfused path, and force_fused says so. The threshold is read
+        # per call from MLX_SDPA_D512_MIN_KL (default 1024).
+        q = mx.random.normal(shape=(1, Nq, 1, D), dtype=mx.float16)
+        k = mx.random.normal(shape=(1, Nkv, 128, D), dtype=mx.float16)
+        v = mx.random.normal(shape=(1, Nkv, 128, D), dtype=mx.float16)
+        with self.assertRaisesRegex(
+            ValueError, r"requires at least \d+ keys"
+        ):
+            mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale, force_fused=True
+            )
+
+        # L = 128 admitted via the threshold override takes the 1-pass
+        # kernel; 8192 and 8201 take the 2-pass one at the default
+        # threshold.
+        with patch.dict(os.environ, {"MLX_SDPA_D512_MIN_KL": "0"}):
+            for dtype in (mx.float32, mx.float16, mx.bfloat16):
+                with self.subTest(L=128, dtype=dtype, threshold="off"):
+                    q = mx.random.normal(shape=(1, Nq, 1, D), dtype=dtype)
+                    k = mx.random.normal(shape=(1, Nkv, 128, D), dtype=dtype)
+                    v = mx.random.normal(shape=(1, Nkv, 128, D), dtype=dtype)
+                    ref = mlx_ref_attn(q, k, v, scale)
+                    out = mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, force_fused=True
+                    )
+                    atol = 1e-5 if dtype == mx.float32 else 2e-2
+                    self.assertTrue(mx.allclose(ref, out, atol=atol))
+        for L, dtype in product(
+            (8192, 8201), (mx.float32, mx.float16, mx.bfloat16)
+        ):
+            with self.subTest(L=L, dtype=dtype):
+                q = mx.random.normal(shape=(1, Nq, 1, D), dtype=dtype)
+                k = mx.random.normal(shape=(1, Nkv, L, D), dtype=dtype)
+                v = mx.random.normal(shape=(1, Nkv, L, D), dtype=dtype)
+                ref = mlx_ref_attn(q, k, v, scale)
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, force_fused=True
+                )
+                atol = 1e-5 if dtype == mx.float32 else 2e-2
+                self.assertTrue(mx.allclose(ref, out, atol=atol))
+
+        # By default D=512 admits the measured single-token GQA surface, not
+        # MHA, multi-token queries, or array masks. The zero threshold is an
+        # explicit expansion used to retain correctness coverage for those
+        # otherwise supported vector-kernel shapes.
+        L = 1024
+        k = mx.random.normal(shape=(1, Nkv, L, D))
+        v = mx.random.normal(shape=(1, Nkv, L, D))
+
+        q = mx.random.normal(shape=(1, Nq, 4, D))
+        with self.assertRaisesRegex(ValueError, r"single-token queries"):
+            mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale, force_fused=True
+            )
+
+        q = mx.random.normal(shape=(1, Nq, 1, D))
+        array_mask = mx.array([True] * (L - 10) + [False] * 10)
+        with self.assertRaisesRegex(ValueError, r"without array masks"):
+            mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale, mask=array_mask, force_fused=True
+            )
+
+        for q_heads, kv_heads in ((8, 8), (32, 8)):
+            with self.subTest(q_heads=q_heads, kv_heads=kv_heads):
+                other_q = mx.random.normal(shape=(1, q_heads, 1, D))
+                other_k = mx.random.normal(shape=(1, kv_heads, L, D))
+                other_v = mx.random.normal(shape=(1, kv_heads, L, D))
+                with self.assertRaisesRegex(ValueError, r"GQA factor 8"):
+                    mx.fast.scaled_dot_product_attention(
+                        other_q,
+                        other_k,
+                        other_v,
+                        scale=scale,
+                        force_fused=True,
+                    )
+                with patch.dict(os.environ, {"MLX_SDPA_D512_MIN_KL": "0"}):
+                    ref = mlx_ref_attn(other_q, other_k, other_v, scale)
+                    out = mx.fast.scaled_dot_product_attention(
+                        other_q,
+                        other_k,
+                        other_v,
+                        scale=scale,
+                        force_fused=True,
+                    )
+                    self.assertTrue(
+                        mx.allclose(ref, out, atol=1e-4, rtol=1e-4)
+                    )
+
+        for qL in (1, 4):
+            q = mx.random.normal(shape=(1, Nq, qL, D))
+            masks = [
+                None,
+                mx.array(True),
+                mx.array([True] * (L - 10) + [False] * 10),
+                mx.random.uniform(shape=(Nq, qL, L)) > 0.2,
+                mx.random.uniform(shape=(L, qL, Nq)).T > 0.2,
+                mx.random.uniform(shape=(Nq, qL, L)),
+                mx.random.uniform(shape=(L, qL, Nq)).T,
+                "causal",
+            ]
+            # The reference does the multi-query scores as a GEMM, which is
+            # the less accurate arm at qL > 1, so use the same tolerance as
+            # the other multi-query tests.
+            tol = 1e-4 if qL == 1 else 1e-3
+            for i, m in enumerate(masks):
+                with self.subTest(qL=qL, mask=i):
+                    needs_override = qL > 1 or i not in (0, 7)
+                    threshold = (
+                        patch.dict(os.environ, {"MLX_SDPA_D512_MIN_KL": "0"})
+                        if needs_override
+                        else nullcontext()
+                    )
+                    with threshold:
+                        ref = mlx_ref_attn(q, k, v, scale, mask=m)
+                        out = mx.fast.scaled_dot_product_attention(
+                            q, k, v, scale=scale, mask=m, force_fused=True
+                        )
+                        self.assertTrue(
+                            mx.allclose(ref, out, atol=tol, rtol=tol)
+                        )
+
+        # Batched, with and without attention sinks, over both kernels.
+        # L = 256 is below the admission threshold, so the fused-1-pass leg
+        # runs with the threshold override; L = 8192 fuses by default.
+        B = 2
+        sinks = 10 * mx.random.normal(shape=(Nq,))
+        q = mx.random.normal(shape=(B, Nq, 1, D))
+        for L in (256, 8192):
+            k = mx.random.normal(shape=(B, Nkv, L, D))
+            v = mx.random.normal(shape=(B, Nkv, L, D))
+            for s_in in (None, sinks):
+                with self.subTest(L=L, sinks=s_in is not None):
+                    threshold = (
+                        patch.dict(os.environ, {"MLX_SDPA_D512_MIN_KL": "0"})
+                        if L == 256
+                        else nullcontext()
+                    )
+                    with threshold:
+                        ref = mlx_ref_attn(q, k, v, scale, sinks=s_in)
+                        out = mx.fast.scaled_dot_product_attention(
+                            q,
+                            k,
+                            v,
+                            scale=scale,
+                            sinks=s_in,
+                            force_fused=True,
+                        )
+                        self.assertTrue(
+                            mx.allclose(ref, out, atol=1e-4, rtol=1e-4)
+                        )
 
     def test_sdpa_fully_masked(self):
         Lkv = 8
@@ -826,15 +995,21 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
 
         # Vector attention kernel.
-        for D in (192, 256):
+        for D in (192, 256, 512):
             with self.subTest(head_dim=D):
                 q, k, v = make_qkv(4, 16385, D, 4, 2)
                 scale = D**-0.5
-                ref = mlx_ref_attn(q, k, v, scale=scale)
-                out = mx.fast.scaled_dot_product_attention(
-                    q, k, v, scale=scale, force_fused=True
+                threshold = (
+                    patch.dict(os.environ, {"MLX_SDPA_D512_MIN_KL": "0"})
+                    if D == 512
+                    else nullcontext()
                 )
-                self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
+                with threshold:
+                    ref = mlx_ref_attn(q, k, v, scale=scale)
+                    out = mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, force_fused=True
+                    )
+                    self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
 
         # No full attention fused kernels.
         with self.assertRaisesRegex(ValueError, "supports head dims"):
@@ -865,6 +1040,11 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             q, k, v = make_qkv(8, 128, 64, qH=8, kH=1)
             mx.fast.scaled_dot_product_attention(
                 q, k, v, scale=64**-0.5, force_fused=True
+            )
+        with self.assertRaisesRegex(ValueError, r"requires at least \d+ keys"):
+            q, k, v = make_qkv(1, 512, 512, qH=32, kH=4)
+            mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=512**-0.5, force_fused=True
             )
 
         # No CPU fused kernel.

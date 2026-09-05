@@ -687,13 +687,13 @@ std::tuple<bool, std::string> has_fused_kernel(
         (query_head_dim == value_head_dim &&
          (query_head_dim == 64 || query_head_dim == 96 ||
           query_head_dim == 128 || query_head_dim == 192 ||
-          query_head_dim == 256)) ||
+          query_head_dim == 256 || query_head_dim == 512)) ||
         (query_head_dim == 192 && value_head_dim == 128);
     if (!supported_head_dim) {
       msg << "the vector attention kernel supports head dims "
-          << "{64, 96, 128, 192, 256} with matching query/value head dims, "
-          << "or query head dim 192 with value head dim 128; got query head "
-          << "dim " << query_head_dim << " and value head dim "
+          << "{64, 96, 128, 192, 256, 512} with matching query/value head "
+          << "dims, or query head dim 192 with value head dim 128; got "
+          << "query head dim " << query_head_dim << " and value head dim "
           << value_head_dim << ".";
       return {false, msg.str()};
     }
@@ -709,6 +709,39 @@ std::tuple<bool, std::string> has_fused_kernel(
           << "the GQA factor to be at most 32; got query length "
           << query_sequence_length << " and GQA factor " << gqa_factor << ".";
       return {false, msg.str()};
+    }
+    // Head dim 512 sits on the generic vector kernel, whose cost is dominated
+    // by reading K/V. Default admission is limited to the measured decode
+    // surface: a single query, GQA factor 8, and no array mask.
+    // The threshold is read per call; setting it to zero deliberately expands
+    // admission for benchmarking and correctness coverage.
+    if (query_head_dim == 512) {
+      const int min_key_sequence_length =
+          env::get_var("MLX_SDPA_D512_MIN_KL", 1024);
+      const bool expand_admission = min_key_sequence_length == 0;
+      if (!expand_admission && query_sequence_length != 1) {
+        msg << "the vector attention kernel for head dim 512 defaults to "
+               "single-token queries; got query length "
+            << query_sequence_length << ".";
+        return {false, msg.str()};
+      }
+      if (!expand_admission && gqa_factor != 8) {
+        msg << "the vector attention kernel for head dim 512 defaults to "
+               "GQA factor 8; got GQA factor "
+            << gqa_factor << ".";
+        return {false, msg.str()};
+      }
+      if (!expand_admission && has_arr_mask) {
+        msg << "the vector attention kernel for head dim 512 defaults to "
+               "calls without array masks.";
+        return {false, msg.str()};
+      }
+      if (key_sequence_length < min_key_sequence_length) {
+        msg << "the vector attention kernel for head dim 512 requires at "
+            << "least " << min_key_sequence_length << " keys; got key length "
+            << key_sequence_length << ".";
+        return {false, msg.str()};
+      }
     }
   }
   return {true, ""};
