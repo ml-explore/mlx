@@ -1,5 +1,6 @@
 import os
 import unittest
+from unittest.mock import patch
 
 import mlx.core as mx
 import mlx_tests
@@ -254,6 +255,40 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
             self.assertTrue(
                 mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4), msg="State " + msg
             )
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
+    def test_gated_delta_sequential_layouts(self):
+        heads = [(24, 24), (32, 32), (16, 16), (16, 32), (16, 48), (16, 64)]
+        for hk, hv in heads:
+            for dtype in (mx.float32, mx.float16, mx.bfloat16):
+                mx.random.seed(0)
+                q = mx.random.normal((2, 7, hk, 128)).astype(dtype)
+                k = mx.random.normal((2, 7, hk, 128))
+                k = (k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)).astype(
+                    dtype
+                )
+                v = mx.random.normal((2, 7, hv, 128)).astype(dtype)
+                g = mx.random.uniform(shape=(2, 7, hv)).astype(dtype)
+                beta = mx.sigmoid(mx.random.normal((2, 7, hv))).astype(dtype)
+                h0 = mx.random.normal((2, hv, 128, 128))
+                inputs = (q, k, v, g, beta)
+                for chunk in ("0", "1"):
+                    outputs = []
+                    for packed in ("0", "1"):
+                        with patch.dict(
+                            os.environ,
+                            {"GATED_DELTA_CHUNK": chunk, "GATED_DELTA_PACKED": packed},
+                        ):
+                            result = mx.fast.gated_delta_update(
+                                *inputs, initial_state=h0
+                            )
+                            mx.eval(result)
+                            outputs.append(result)
+                    with self.subTest(hk=hk, hv=hv, dtype=dtype, chunk=chunk):
+                        for actual, expected in zip(outputs[1], outputs[0]):
+                            self.assertTrue(
+                                mx.allclose(actual, expected, atol=1e-4, rtol=1e-4)
+                            )
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_gated_delta_simdgroup(self):
