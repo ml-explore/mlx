@@ -22,26 +22,7 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& d = metal::device(s.device);
 
   // Make sure that the last dimension is contiguous
-  auto set_output = [&s, &out](const array& x) {
-    if (x.flags().contiguous && x.strides()[x.ndim() - 1] == 1) {
-      if (x.is_donatable()) {
-        out.copy_shared_buffer(x);
-      } else {
-        out.set_data(
-            allocator::malloc(x.data_size() * x.itemsize()),
-            x.data_size(),
-            x.strides(),
-            x.flags());
-      }
-      return x;
-    } else {
-      array x_copy = contiguous_copy_gpu(x, s);
-      out.copy_shared_buffer(x_copy);
-      return x_copy;
-    }
-  };
-
-  const array in = set_output(inputs[0]);
+  const array in = ensure_innermost_contiguous(out, inputs[0], s);
 
   int axis_size = in.shape().back();
   int n_rows = in.data_size() / axis_size;
