@@ -702,6 +702,7 @@ FunctionExporter::FunctionExporter(
       fun(std::move(fun)),
       ftable(std::make_shared<FunctionTable>(shapeless)),
       metadata_(std::move(metadata)) {
+  os.open();
   if (!os.is_open()) {
     throw std::runtime_error("[export_function] Failed to open " + file);
   }

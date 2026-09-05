@@ -149,6 +149,10 @@ void save(std::shared_ptr<io::Writer> out_stream, array a) {
   a = contiguous(a, true);
   a.eval();
 
+  // Open only after the inputs are evaluated: opening a FileWriter
+  // truncates the file and lazy inputs may still read from it.
+  out_stream->open();
+
   ////////////////////////////////////////////////////////
   // Check file
   if (!out_stream->good() || !out_stream->is_open()) {
