@@ -1049,9 +1049,10 @@ void init_array(nb::module_& m) {
       .def(
           "__bytes__",
           [](mx::array& a) {
-            a.eval();
+            auto c = mx::contiguous(a);
+            c.eval();
             return nb::bytes(
-                reinterpret_cast<const char*>(a.data<void>()), a.nbytes());
+                reinterpret_cast<const char*>(c.data<void>()), c.nbytes());
           })
       .def(
           "__format__",
