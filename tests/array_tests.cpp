@@ -690,3 +690,62 @@ TEST_CASE("test siblings circular references without eval") {
   fun();
   CHECK(tracker.expired());
 }
+
+// https://github.com/ml-explore/mlx/pull/4453
+TEST_CASE("test siblings circular references released by assignment") {
+  std::weak_ptr<array::Data> tracker;
+  auto fun = [&]() {
+    array sink({3, 4});
+    array key({1, 2});
+    auto splits = split(key, 2);
+    {
+      // Set fake data as a tracker for ArrayDesc's lifetime.
+      splits[0].set_data(allocator::malloc(0));
+      tracker = splits[0].data_shared_ptr();
+    }
+    // Drop both outputs by assigning over them rather than destroying
+    // them. The siblings hold each other, so unless assignment runs the
+    // same check the destructor does, nothing ever releases them.
+    splits[0] = sink; // copy assignment
+    splits[1] = array({5, 6}); // move assignment
+  };
+  fun();
+  CHECK(tracker.expired());
+}
+
+// https://github.com/ml-explore/mlx/pull/4453
+TEST_CASE("test siblings circular references released by overwrite") {
+  std::weak_ptr<array::Data> tracker;
+  auto fun = [&]() {
+    array key({1, 2});
+    auto splits = split(key, 2);
+    {
+      // Set fake data as a tracker for ArrayDesc's lifetime.
+      splits[0].set_data(allocator::malloc(0));
+      tracker = splits[0].data_shared_ptr();
+    }
+    // Leave one output as the last reference, then replace it in place.
+    // This is the path __setitem__ takes, with no compile involved.
+    array last = splits[0];
+    splits.clear();
+    last.overwrite_descriptor(array({7, 8}));
+  };
+  fun();
+  CHECK(tracker.expired());
+}
+
+// https://github.com/ml-explore/mlx/pull/4453
+TEST_CASE("test assigning a sibling over the last reference keeps the cycle") {
+  array key({1, 2});
+  auto splits = split(key, 2);
+  // Leave one output as the last outside reference to the pair, then assign
+  // its sibling over it. The sibling is reachable only through the array
+  // being replaced, so it has to be held before the old descriptor is
+  // checked: checked first, the pair looks unreferenced, its cycle is broken
+  // and the sibling list the new value lives in is freed before it is read.
+  array last = splits[0];
+  splits.clear();
+  last = last.siblings()[0];
+  REQUIRE_EQ(last.siblings().size(), 1);
+  CHECK(array_equal(last, array({2})).item<bool>());
+}
