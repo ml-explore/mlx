@@ -1,12 +1,21 @@
 // Copyright © 2023 Apple Inc.
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
 
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#include <winioctl.h>
+#endif
+
 #include "doctest/doctest.h"
 
+#include "mlx/io/load.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -653,4 +662,115 @@ TEST_CASE("test single array serialization") {
     CHECK_EQ(a.shape(), b.shape());
     CHECK(array_equal(a, b).item<bool>());
   }
+}
+
+namespace {
+struct SparseSafetensorsFile {
+  std::filesystem::path path = std::filesystem::temp_directory_path() /
+      ("mlx-large-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()) +
+       ".safetensors");
+
+  ~SparseSafetensorsFile() {
+    std::error_code error;
+    std::filesystem::remove(path, error);
+  }
+
+  void write(size_t rows, const std::vector<uint8_t>& payload) {
+    const size_t padding = rows * 65536;
+    std::ofstream out(path, std::ios::binary);
+    REQUIRE(out.good());
+#ifdef _WIN32
+    // Windows needs this flag to leave the zero-filled tensor unallocated.
+    auto handle = CreateFileW(
+        path.c_str(),
+        GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr,
+        OPEN_EXISTING,
+        0,
+        nullptr);
+    REQUIRE(handle != INVALID_HANDLE_VALUE);
+    DWORD returned;
+    auto sparse = DeviceIoControl(
+        handle, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &returned, nullptr);
+    CloseHandle(handle);
+    REQUIRE(sparse);
+#endif
+    std::ostringstream json;
+    json << R"({"first":{"dtype":"U8","shape":[4],"data_offsets":[0,4]},)"
+         << R"("padding":{"dtype":"U8","shape":[)" << rows
+         << R"(,65536],"data_offsets":[4,)" << padding + 4 << R"(]},)"
+         << R"("last":{"dtype":"U8","shape":[)" << payload.size()
+         << R"(],"data_offsets":[)" << padding + 4 << ','
+         << padding + 4 + payload.size() << "]}}";
+    auto header = json.str();
+    header.append((8 - header.size() % 8) % 8, ' ');
+    uint64_t length = header.size();
+    out.write(reinterpret_cast<const char*>(&length), 8);
+    out.write(header.data(), header.size());
+    out.write("abcd", 4);
+    out.seekp(padding, std::ios::cur);
+    out.write(reinterpret_cast<const char*>(payload.data()), payload.size());
+    out.close();
+    REQUIRE(out.good());
+    REQUIRE(
+        std::filesystem::file_size(path) ==
+        8 + header.size() + 4 + padding + payload.size());
+  }
+};
+} // namespace
+
+TEST_CASE("test large safetensors load and evaluate") {
+  size_t rows = 1;
+  SUBCASE("small control") {
+    rows = 1;
+  }
+  SUBCASE("beyond 2 GiB") {
+    rows = 49152;
+  }
+  SUBCASE("beyond 4 GiB") {
+    rows = 81920;
+  }
+
+  // Exceed the parallel reader's 32 MiB batch size.
+  std::vector<uint8_t> payload((33 << 20) + 17);
+  for (size_t i = 0; i < payload.size(); ++i) {
+    payload[i] = static_cast<uint8_t>((i * 17 + i / (1 << 20)) % 251);
+  }
+  SparseSafetensorsFile file;
+  file.write(rows, payload);
+  auto [weights, metadata] = load_safetensors(file.path.string());
+  REQUIRE(weights.size() == 3);
+  CHECK(weights.at("padding").nbytes() == rows * 65536);
+  CHECK(array_equal(weights.at("first"), array({97, 98, 99, 100}, uint8))
+            .item<bool>());
+  CHECK(array_equal(
+            weights.at("last"),
+            array(payload.data(), {static_cast<int>(payload.size())}, uint8))
+            .item<bool>());
+}
+
+TEST_CASE("test large file writer seeks") {
+  const size_t offset = size_t{5} << 30;
+  SparseSafetensorsFile file;
+  file.write(81920, {11, 22, 33, 44});
+  char bytes[4]{};
+  io::FileWriter writer(file.path.string());
+  writer.open();
+  writer.seek(offset);
+  REQUIRE(writer.tell() == offset);
+  writer.write("ABCD", 4);
+  CHECK(writer.tell() == offset + 4);
+  writer.seek(-2, std::ios::end);
+  CHECK(writer.tell() == offset + 2);
+  writer.seek(-1, std::ios::cur);
+  CHECK(writer.tell() == offset + 1);
+  writer.write("Z", 1);
+  std::ifstream check(file.path, std::ios::binary);
+  check.seekg(offset);
+  check.read(bytes, 4);
+  REQUIRE(check.good());
+  CHECK(std::string(bytes, 4) == "AZCD");
 }
