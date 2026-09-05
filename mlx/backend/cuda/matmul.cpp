@@ -394,23 +394,6 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto lhs_indices = ensure_row_contiguous(inputs[2], encoder, s);
   auto rhs_indices = ensure_row_contiguous(inputs[3], encoder, s);
 
-  // We are walking a in order and b is also in order so we can batch up the
-  // matmuls and reuse reading a and b.
-  if (M == 1 && right_sorted_ == true) {
-    cutlass_grouped_gemm_unaligned(
-        a_transposed,
-        lda,
-        b_transposed,
-        ldb,
-        b.size() / b.shape(-1) / b.shape(-2), // group_count
-        a,
-        b,
-        rhs_indices,
-        out,
-        encoder);
-    return;
-  }
-
   auto use_gemv = cu::can_use_gemv(M, N, K, a_transposed, b_transposed);
   if (M == 1 && use_gemv) {
     gather_mv(b, a, rhs_indices, lhs_indices, out, N, K, encoder);
@@ -466,6 +449,31 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       segments,
       out,
       encoder);
+}
+
+void GroupedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("GroupedMM::eval_gpu");
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  assert(inputs.size() == 3);
+  auto& a_pre = inputs[0];
+  auto& b_pre = inputs[1];
+  auto& offsets_pre = inputs[2];
+
+  if (out.size() == 0 || a_pre.size() == 0 || b_pre.size() == 0) {
+    array zero(0, a_pre.dtype());
+    encoder.add_temporary(zero);
+    fill_gpu(zero, out, s);
+    return;
+  }
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+  auto [a_transposed, lda, a] = ensure_batch_contiguous(a_pre, encoder, s);
+  auto [b_transposed, ldb, b] = ensure_batch_contiguous(b_pre, encoder, s);
+  auto offsets = ensure_row_contiguous(offsets_pre, encoder, s);
+
+  grouped_mm(a_transposed, lda, b_transposed, ldb, a, b, offsets, out, encoder);
 }
 
 } // namespace mlx::core

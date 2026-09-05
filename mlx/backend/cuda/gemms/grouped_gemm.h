@@ -1,7 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
 #pragma once
-
 namespace mlx::core {
 
 namespace cu {
@@ -33,6 +32,24 @@ void cutlass_segmented_mm(
     const array& a,
     const array& b,
     const array& segments,
+    array& out,
+    cu::CommandEncoder& encoder);
+
+void cudnn_grouped_mm(
+    const array& x,
+    const array& w,
+    const array& token_offsets,
+    array& out,
+    cu::CommandEncoder& encoder);
+
+void grouped_mm(
+    bool a_transposed,
+    int lda,
+    bool b_transposed,
+    int ldb,
+    const array& a,
+    const array& b,
+    const array& offsets,
     array& out,
     cu::CommandEncoder& encoder);
 
