@@ -3732,9 +3732,13 @@ std::vector<array> GatherQMM::vjp(
   auto biases = (mode_ == QuantizationMode::Affine)
       ? std::optional<array>(primals[3])
       : std::nullopt;
+  auto global_scale = (mode_ != QuantizationMode::Affine && primals.size() == 6)
+      ? std::optional<array>(primals[3])
+      : std::nullopt;
 
   int M = cotan.shape(-2);
   int K = x.shape(-1);
+  int first_index_arg = primals.size() - 2;
 
   bool sorted = left_sorted_ || right_sorted_;
   bool no_broadcast = rhs_indices.size() * M * K == x.size();
@@ -3754,6 +3758,7 @@ std::vector<array> GatherQMM::vjp(
           group_size_,
           bits_,
           quantization_mode_to_string(mode_),
+          global_scale,
           sorted,
           stream());
       if (sorted && no_broadcast) {
@@ -3772,15 +3777,18 @@ std::vector<array> GatherQMM::vjp(
     }
 
     // gradient wrt to the indices is undefined
-    else if (arg > 3) {
+    else if (arg >= first_index_arg) {
       throw std::runtime_error(
           "[GatherQMM::vjp] cannot compute the gradient wrt the indices.");
     }
 
-    // gradient wrt to w_q, scales or biases
+    // gradient wrt to w_q, scales, biases or the global scale
     else if (arg == 1) {
       throw std::runtime_error(
           "[GatherQMM::vjp] no gradient wrt the quantized weights.");
+    } else if (global_scale && arg == 3) {
+      throw std::runtime_error(
+          "[GatherQMM::vjp] no gradient wrt the global scale.");
     } else {
       if (mode_ != QuantizationMode::Affine) {
         std::ostringstream msg;
@@ -3852,8 +3860,7 @@ bool GatherQMM::is_equivalent(const Primitive& other) const {
 std::vector<Shape> GatherQMM::output_shapes(const std::vector<array>& inputs) {
   const auto& x = inputs[0];
   const auto& w = inputs[1];
-  const auto& lhs_indices =
-      (mode_ == QuantizationMode::Affine) ? inputs[4] : inputs[3];
+  const auto& lhs_indices = inputs[inputs.size() - 2];
   int w_outer = transpose_ ? w.shape(-2) : w.shape(-1) * 32 / bits_;
   auto out_shape = lhs_indices.shape();
   out_shape.push_back(x.shape(-2));
