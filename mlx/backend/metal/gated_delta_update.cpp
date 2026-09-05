@@ -86,6 +86,9 @@ void GatedDeltaUpdate::eval_gpu(
   if (!metal::is_nax_available())
     C = std::min(C, 8); // override in case nax is not available.
 
+  const bool use_packed = (C == 0 || C == 1) && Dk == 128 && Dv % 8 == 0 &&
+      env::get_var("GATED_DELTA_PACKED", 1);
+
   std::string suffix;
   concatenate(
       suffix,
@@ -132,7 +135,8 @@ void GatedDeltaUpdate::eval_gpu(
     case 0:
       C = 1; // avoiding a div by zero on the grid.
     case 1: {
-      std::string kernel_name = "seq_gated_delta_";
+      std::string kernel_name =
+          use_packed ? "seq_gated_delta_packed_" : "seq_gated_delta_";
       std::string base_name;
       concatenate(base_name, kernel_name, suffix);
       std::string hash_name = base_name;
@@ -159,8 +163,9 @@ void GatedDeltaUpdate::eval_gpu(
   compute_encoder.set_output_array(hf, 7); // final state out
   compute_encoder.set_bytes(T, 8);
 
-  auto grid = MTL::Size(32, Dv / C, B * Hv);
-  auto threads = MTL::Size(32, 4, 1);
+  // The packed sequential kernel processes 8 value rows per SIMD-group.
+  auto grid = MTL::Size(32, Dv / (use_packed ? 8 : C), B * Hv);
+  auto threads = MTL::Size(32, use_packed ? 2 : 4, 1);
   compute_encoder.dispatch_threads(grid, threads);
 }
 
