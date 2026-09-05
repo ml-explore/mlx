@@ -82,9 +82,6 @@ inline size_t ceildiv(size_t n, size_t m) {
   return (n + m - 1) / m;
 }
 
-// Ensure the last dimension of x is contiguous, donating or copying the
-// buffer into out. With relax_prev_stride, a second-to-last stride of 0,
-// D, or a size-1 axis is also accepted.
 inline array ensure_innermost_contiguous(
     array& out,
     const array& x,
