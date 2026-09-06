@@ -11,8 +11,10 @@
 #include "mlx/allocator.h"
 #include "mlx/device.h"
 #include "mlx/memory.h"
+#include "mlx/ops.h"
 #include "mlx/scheduler.h"
 #include "mlx/stream.h"
+#include "mlx/transforms.h"
 
 using namespace mlx::core;
 
@@ -64,6 +66,24 @@ TEST_CASE("test cached allocation keeps capacity") {
 
   clear_cache();
   set_cache_limit(old_limit);
+}
+
+TEST_CASE("test array buffer size") {
+  auto a = array({1.0f, 2.0f, 3.0f, 4.0f});
+  auto view = reshape(a, {2, 2});
+
+  CHECK_THROWS_AS(get_array_buffer_size({view}), std::invalid_argument);
+
+  eval(view);
+  auto a_size = a.buffer_size();
+  CHECK_EQ(get_array_buffer_size({}), 0);
+  CHECK_EQ(get_array_buffer_size({a}), a_size);
+  CHECK_EQ(get_array_buffer_size({a, a}), a_size);
+  CHECK_EQ(get_array_buffer_size({a, view}), a_size);
+
+  auto b = array({5.0f, 6.0f});
+  CHECK_EQ(get_array_buffer_size({a, b}), a_size + b.buffer_size());
+  CHECK_EQ(get_array_buffer_size({array({})}), 0);
 }
 
 TEST_CASE("test clear cache synchronizes cpu streams") {
