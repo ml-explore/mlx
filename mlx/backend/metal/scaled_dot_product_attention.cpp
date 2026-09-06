@@ -234,7 +234,8 @@ void sdpa_full_self_attention_metal(
   // Pad head dims 72 and 80 to 96 to reach the NAX kernel. Exact: head_dim is
   // the reduction axis of q.k^T, so the padded lanes add zero.
   if ((D == 72 || D == 80) && metal::is_nax_available() &&
-      (env::enable_tf32() || q.dtype() != float32)) {
+      (env::enable_tf32() || q.dtype() != float32) &&
+      env::get_var("MLX_SDPA_PAD_HEAD_DIM", 0) == 1) {
     constexpr int pad_to = 96;
     auto& enc = metal::get_command_encoder(s);
     array zero = array(0, q.dtype());

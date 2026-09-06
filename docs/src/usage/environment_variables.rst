@@ -128,6 +128,13 @@ users. Their behavior may change as the implementation evolves.
    dot-product attention kernel. Positive values are rounded up to a multiple
    of ``32``.
 
+.. envvar:: MLX_SDPA_PAD_HEAD_DIM
+
+   Opt in to padding Metal attention head dimensions 72 and 80 to 96 for
+   the NAX kernel. The default is ``0`` because padding and copy overhead
+   can slow short sequences. ``1`` enables the path on supported NAX
+   devices and dtypes. This variable is read at each dispatch.
+
 CUDA
 ----
 

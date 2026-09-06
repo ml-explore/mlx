@@ -145,6 +145,40 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 self.assertLessEqual(mx.max(diff).item(), atol)
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    def test_sdpa_pad_head_dim_opt_in(self):
+        name = "MLX_SDPA_PAD_HEAD_DIM"
+        previous = os.environ.get(name)
+        try:
+            for D in (72, 80):
+                q, k, v, scale, mask = prepare_inputs(
+                    1, 64, 128, D, 8, 2, None, False, mx.float16
+                )
+                ref = mlx_ref_attn(q, k, v, scale, mask)
+                outputs = {}
+                for value in (None, "0", "1"):
+                    if value is None:
+                        os.environ.pop(name, None)
+                    else:
+                        os.environ[name] = value
+                    out = mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, mask=mask
+                    )
+                    mx.eval(out)
+                    outputs[value] = out
+                    self.assertTrue(mx.allclose(out, ref, atol=3e-4, rtol=3e-4))
+                self.assertTrue(mx.array_equal(outputs[None], outputs["0"]))
+            # Exercise the opt-in route across the existing dtype/mask/sinks matrix.
+            os.environ[name] = "1"
+            self.test_sdpa_head_dim_72()
+            self.test_sdpa_head_dim_80()
+            self.test_sdpa_head_dim_72_80_sinks()
+        finally:
+            if previous is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = previous
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
     def test_sdpa_head_dim_80(self):
         B, D, qH, kH = (1, 80, 8, 2)
         for qL, kL, dtype, mask_str in product(
