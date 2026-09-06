@@ -4084,6 +4084,16 @@ class TestOps(mlx_tests.MLXTestCase):
                 mx_op = getattr(mx, op)
                 self.assertTrue(np.allclose(mx_op(x), np_op(x)))
 
+        if mx.metal.is_available() and mx.default_device() == mx.gpu:
+            x = mx.array(
+                [1e20 + 1e20j, 2.5e-20 - 3e-20j, 3e38 + 0j, 1e-19j], mx.complex64
+            )
+            for op in ["abs", "log"]:
+                with self.subTest(op=op):
+                    np_op = getattr(np, op)
+                    mx_op = getattr(mx, op)
+                    self.assertTrue(np.allclose(mx_op(x), np_op(x), rtol=1e-5))
+
         x = mx.array(
             [
                 3.0 + 4.0j,
