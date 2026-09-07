@@ -164,9 +164,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                             os.environ.pop(name, None)
                         else:
                             os.environ[name] = value
-                        out = mx.fast.scaled_dot_product_attention(
-                            q, k, v, scale=scale
-                        )
+                        out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
                         mx.eval(out)
                         outputs[value] = out
                     expected = "1" if qL >= 512 and kL >= 512 else "0"
