@@ -37,7 +37,8 @@ class PyStreamContext {
     delete inner;
   }
 
-  // ~StreamContext throws when destroyed on a different thread, which Python cannot control
+  // ~StreamContext throws when destroyed on a different thread, which Python
+  // cannot control
   ~PyStreamContext() {
     try {
       exit();
