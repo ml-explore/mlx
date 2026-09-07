@@ -420,8 +420,10 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
                 self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
-    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
     def test_sdpa_vector_head_dim_512(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
         # gemma-4 global attention: 32 query heads over 4 key/value heads.
         D = 512
         Nq, Nkv = 32, 4
