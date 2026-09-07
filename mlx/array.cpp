@@ -208,12 +208,7 @@ void array::copy_shared_buffer(const array& other) {
   copy_shared_buffer(other, other.strides(), other.flags(), other.data_size());
 }
 
-void array::reset(std::shared_ptr<ArrayDesc> desc) {
-  // Hold the new descriptor first, so that a cycle it belongs to has an
-  // outside reference while the old one is checked below
-  auto previous = std::move(array_desc_);
-  array_desc_ = std::move(desc);
-
+void array::release(std::shared_ptr<ArrayDesc> previous) {
   if (previous == nullptr) {
     return;
   }

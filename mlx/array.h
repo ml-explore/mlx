@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "mlx/allocator.h"
@@ -84,22 +85,24 @@ class MLX_API array {
   array(array&& other) = default;
 
   /**
-   * Assignment goes through reset() so that the sibling reference cycle of a
+   * Assignment goes through release() so that the sibling reference cycle of a
    * multi-output primitive is broken when the last external reference to it
    * goes away by assignment rather than by destruction. Otherwise a cycle can
    * outlive everything that used it and keep its inputs (including captured
    * constants) alive forever.
    */
   array& operator=(array&& other) & noexcept {
-    if (this != &other) {
-      reset(std::move(other.array_desc_));
+    if (array_desc_ != other.array_desc_) {
+      // Take the new descriptor before releasing the old one: see release()
+      release(std::exchange(array_desc_, std::move(other.array_desc_)));
     }
     return *this;
   }
 
   array& operator=(const array& other) & {
-    if (this->id() != other.id()) {
-      reset(other.array_desc_);
+    if (array_desc_ != other.array_desc_) {
+      // Take the new descriptor before releasing the old one: see release()
+      release(std::exchange(array_desc_, other.array_desc_));
     }
     return *this;
   }
@@ -479,11 +482,11 @@ class MLX_API array {
   void copy_shared_buffer(const array& other);
 
   void overwrite_descriptor(const array& other) {
-    reset(other.array_desc_);
+    release(std::exchange(array_desc_, other.array_desc_));
   }
 
   ~array() {
-    reset();
+    release(std::move(array_desc_));
   }
 
  private:
@@ -549,14 +552,17 @@ class MLX_API array {
   std::shared_ptr<ArrayDesc> array_desc_;
 
   /**
-   * Like shared_ptr::reset: drop the current descriptor and hold desc instead
-   * (null when destroying). Dropping it breaks the sibling reference cycle of
-   * a multi-output primitive if this was the last reference to it from outside
-   * the cycle. The new descriptor is held before the old one is checked, so a
-   * sibling assigned over the last outside reference to its own cycle does not
-   * have that cycle broken under it.
+   * Lets go of a descriptor, breaking the sibling reference cycle of a
+   * multi-output primitive if this was the last reference to it from outside
+   * that cycle.
+   *
+   * Callers take their new descriptor first (the std::exchange above),
+   * because the array being assigned may itself be a sibling of the one
+   * being released, reachable only through it. Released first, that cycle
+   * looks unreferenced, and the sibling list the new value lives in is
+   * cleared out from under it.
    */
-  void reset(std::shared_ptr<ArrayDesc> desc = nullptr);
+  static void release(std::shared_ptr<ArrayDesc> desc);
 };
 
 template <typename T>
