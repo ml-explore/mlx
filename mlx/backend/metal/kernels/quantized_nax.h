@@ -653,10 +653,6 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    // src_tile_dim.y bounds the rows of the tile and src_tile_dim.x bounds the
-    // columns, for both reduction dims. When the reduction axis runs along the
-    // columns (reduction_dim == 1), a partial tile needs the columns past the
-    // edge zeroed rather than the rows.
     if (bi >= src_tile_dim.y) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
@@ -790,10 +786,6 @@ struct QuantizedBlockLoader<
       return;
     }
 
-    // src_tile_dim.y bounds the rows of the tile and src_tile_dim.x bounds the
-    // columns, for both reduction dims. When the reduction axis runs along the
-    // columns (reduction_dim == 1), a partial tile needs the columns past the
-    // edge zeroed rather than the rows.
     if (bi >= src_tile_dim.y) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
