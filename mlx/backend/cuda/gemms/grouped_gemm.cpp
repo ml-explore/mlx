@@ -8,10 +8,6 @@
 namespace mlx::core {
 
 void grouped_mm(
-    [[maybe_unused]] bool a_transposed,
-    [[maybe_unused]] int lda,
-    [[maybe_unused]] bool b_transposed,
-    [[maybe_unused]] int ldb,
     const array& a,
     const array& b,
     const array& offsets,

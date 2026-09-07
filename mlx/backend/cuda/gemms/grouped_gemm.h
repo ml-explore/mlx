@@ -43,10 +43,6 @@ void cudnn_grouped_mm(
     cu::CommandEncoder& encoder);
 
 void grouped_mm(
-    bool a_transposed,
-    int lda,
-    bool b_transposed,
-    int ldb,
     const array& a,
     const array& b,
     const array& offsets,
