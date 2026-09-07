@@ -130,10 +130,12 @@ users. Their behavior may change as the implementation evolves.
 
 .. envvar:: MLX_SDPA_PAD_HEAD_DIM
 
-   Opt in to padding Metal attention head dimensions 72 and 80 to 96 for
-   the NAX kernel. The default is ``0`` because padding and copy overhead
-   can slow short sequences. ``1`` enables the path on supported NAX
-   devices and dtypes. This variable is read at each dispatch.
+   Control padding Metal attention head dimensions 72 and 80 to 96 for
+   the NAX kernel. On supported NAX devices, float16 and bfloat16 use it
+   by default when query and key lengths are at least 512, with no mask
+   or attention sinks. ``0`` disables padding; ``1`` also enables it for
+   shorter sequences and masked attention. Float32 keeps its existing
+   routing. This variable is read at each dispatch.
 
 CUDA
 ----
