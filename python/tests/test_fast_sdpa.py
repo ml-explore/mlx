@@ -443,12 +443,8 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         q = mx.random.normal(shape=(1, Nq, 1, D), dtype=mx.float16)
         k = mx.random.normal(shape=(1, Nkv, 128, D), dtype=mx.float16)
         v = mx.random.normal(shape=(1, Nkv, 128, D), dtype=mx.float16)
-        with self.assertRaisesRegex(
-            ValueError, r"requires at least \d+ keys"
-        ):
-            mx.fast.scaled_dot_product_attention(
-                q, k, v, scale=scale, force_fused=True
-            )
+        with self.assertRaisesRegex(ValueError, r"requires at least \d+ keys"):
+            mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, force_fused=True)
 
         # L = 128 admitted via the threshold override takes the 1-pass
         # kernel; 8192 and 8201 take the 2-pass one at the default
@@ -465,9 +461,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     )
                     atol = 1e-5 if dtype == mx.float32 else 2e-2
                     self.assertTrue(mx.allclose(ref, out, atol=atol))
-        for L, dtype in product(
-            (8192, 8201), (mx.float32, mx.float16, mx.bfloat16)
-        ):
+        for L, dtype in product((8192, 8201), (mx.float32, mx.float16, mx.bfloat16)):
             with self.subTest(L=L, dtype=dtype):
                 q = mx.random.normal(shape=(1, Nq, 1, D), dtype=dtype)
                 k = mx.random.normal(shape=(1, Nkv, L, D), dtype=dtype)
@@ -489,9 +483,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
         q = mx.random.normal(shape=(1, Nq, 4, D))
         with self.assertRaisesRegex(ValueError, r"single-token queries"):
-            mx.fast.scaled_dot_product_attention(
-                q, k, v, scale=scale, force_fused=True
-            )
+            mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, force_fused=True)
 
         q = mx.random.normal(shape=(1, Nq, 1, D))
         array_mask = mx.array([True] * (L - 10) + [False] * 10)
@@ -522,9 +514,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                         scale=scale,
                         force_fused=True,
                     )
-                    self.assertTrue(
-                        mx.allclose(ref, out, atol=1e-4, rtol=1e-4)
-                    )
+                    self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
         for qL in (1, 4):
             q = mx.random.normal(shape=(1, Nq, qL, D))
@@ -555,9 +545,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                         out = mx.fast.scaled_dot_product_attention(
                             q, k, v, scale=scale, mask=m, force_fused=True
                         )
-                        self.assertTrue(
-                            mx.allclose(ref, out, atol=tol, rtol=tol)
-                        )
+                        self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
         # Batched, with and without attention sinks, over both kernels.
         # L = 256 is below the admission threshold, so the fused-1-pass leg
@@ -585,9 +573,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                             sinks=s_in,
                             force_fused=True,
                         )
-                        self.assertTrue(
-                            mx.allclose(ref, out, atol=1e-4, rtol=1e-4)
-                        )
+                        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     def test_sdpa_fully_masked(self):
         Lkv = 8
