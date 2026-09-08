@@ -1319,6 +1319,17 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertNotEqual(id(a_1), id(arrs[1]))
         self.assertEqual(id(a_2), id(arrs[2]))
 
+    def test_conv_second_order_grad_with_padding(self):
+        x = mx.random.normal((1, 4, 4, 1))
+        w = mx.random.normal((1, 2, 2, 1))
+
+        def wgrad_sum(x_):
+            fn = lambda w_: mx.conv2d(x_, w_, padding=(1, 2)).sum()
+            return mx.grad(fn)(w).sum()
+
+        dx = mx.grad(wgrad_sum)(x)
+        self.assertEqual(dx.shape, x.shape)
+
     def test_grad_with_inplace_update(self):
         def loss_fn(model):
             model[1] = mx.array(2.0)
