@@ -972,35 +972,21 @@ void gather_qmm_nax(
       global_scale ? "_hgs" : "");
   MTL::ComputePipelineState* kernel;
   if (transpose) {
-    kernel = global_scale ? get_qmm_nax_kernel_wrapped(
-                                d,
-                                kname,
-                                "gather_qmm_t_nax_",
-                                mode,
-                                type_string,
-                                group_size,
-                                bits,
-                                aligned,
-                                bm,
-                                bk,
-                                bn,
-                                wm,
-                                wn,
-                                true)
-                          : get_qmm_nax_kernel_wrapped(
-                                d,
-                                kname,
-                                "gather_qmm_t_nax_",
-                                mode,
-                                type_string,
-                                group_size,
-                                bits,
-                                aligned,
-                                bm,
-                                bk,
-                                bn,
-                                wm,
-                                wn);
+    kernel = get_qmm_nax_kernel_wrapped(
+        d,
+        kname,
+        "gather_qmm_t_nax",
+        mode,
+        type_string,
+        group_size,
+        bits,
+        aligned,
+        bm,
+        bk,
+        bn,
+        wm,
+        wn,
+        global_scale.has_value());
   } else {
     kernel = get_qmm_nax_kernel_wrapped(
         d,
@@ -1302,38 +1288,26 @@ void gather_qmm(
       global_scale ? "_hgs" : "");
   MTL::ComputePipelineState* kernel;
   if (transpose) {
-    kernel = global_scale ? get_quantized_kernel_wrapped(
-                                d,
-                                kname,
-                                "gather_qmm_t",
-                                mode,
-                                type_string,
-                                group_size,
-                                bits,
-                                aligned,
-                                true)
-                          : get_quantized_kernel_wrapped(
-                                d,
-                                kname,
-                                "gather_qmm_t",
-                                mode,
-                                type_string,
-                                group_size,
-                                bits,
-                                aligned);
+    kernel = get_quantized_kernel_wrapped(
+        d,
+        kname,
+        "gather_qmm_t",
+        mode,
+        type_string,
+        group_size,
+        bits,
+        aligned,
+        global_scale.has_value());
   } else {
-    kernel = global_scale
-        ? get_quantized_kernel_wrapped(
-              d,
-              kname,
-              "gather_qmm_n",
-              mode,
-              type_string,
-              group_size,
-              bits,
-              true)
-        : get_quantized_kernel_wrapped(
-              d, kname, "gather_qmm_n", mode, type_string, group_size, bits);
+    kernel = get_quantized_kernel_wrapped(
+        d,
+        kname,
+        "gather_qmm_n",
+        mode,
+        type_string,
+        group_size,
+        bits,
+        global_scale.has_value());
   }
 
   auto& compute_encoder = metal::get_command_encoder(s);
