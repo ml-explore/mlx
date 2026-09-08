@@ -1,6 +1,7 @@
 // Copyright © 2026 Apple Inc.
 
 #include "mlx/backend/cuda/windows_memory.h"
+#include "mlx/backend/gpu/device_info.h"
 
 #include <dxgi1_4.h>
 #include <windows.h>
@@ -36,6 +37,8 @@ namespace {
 struct DeviceMemoryBudget {
   Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter;
   UINT node{0};
+  std::chrono::steady_clock::time_point next_query{};
+  size_t memory_limit{std::numeric_limits<size_t>::max()};
 };
 
 class WddmMemoryBudget {
@@ -75,66 +78,57 @@ class WddmMemoryBudget {
     }
   }
 
-  size_t get_memory_limit(
-      size_t memory_limit,
-      const std::vector<cudaMemPool_t>& pools) {
-    if (pools.size() != device_budgets_.size()) {
-      return memory_limit;
+  size_t
+  get_memory_limit(size_t hard_memory_limit, int device, cudaMemPool_t pool) {
+    if (device < 0 || device >= static_cast<int>(device_budgets_.size())) {
+      return hard_memory_limit;
     }
 
     std::lock_guard lock(mutex_);
+    auto& budget = device_budgets_[device];
+    if (!budget.adapter || !pool) {
+      return hard_memory_limit;
+    }
+
     auto now = std::chrono::steady_clock::now();
-    if (now < next_query_) {
-      return std::min(memory_limit, wddm_limit_);
+    if (now < budget.next_query) {
+      return std::min(hard_memory_limit, budget.memory_limit);
     }
-    next_query_ = now + std::chrono::milliseconds(20);
+    budget.next_query = now + std::chrono::milliseconds(20);
 
-    auto wddm_limit = std::numeric_limits<size_t>::max();
-    for (size_t device = 0; device < device_budgets_.size(); ++device) {
-      auto& budget = device_budgets_[device];
-      auto pool = pools[device];
-      if (!budget.adapter || !pool) {
-        continue;
-      }
-
-      DXGI_QUERY_VIDEO_MEMORY_INFO info{};
-      uint64_t pool_reserved = 0;
-      if (FAILED(budget.adapter->QueryVideoMemoryInfo(
-              budget.node, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) ||
-          info.Budget == 0 ||
-          cudaMemPoolGetAttribute(
-              pool, cudaMemPoolAttrReservedMemCurrent, &pool_reserved) !=
-              cudaSuccess) {
-        continue;
-      }
-
-      wddm_limit = std::min(
-          wddm_limit,
-          compute_wddm_memory_limit(
-              std::numeric_limits<size_t>::max(),
-              info.Budget,
-              info.CurrentUsage,
-              pool_reserved));
+    DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+    uint64_t pool_reserved = 0;
+    if (FAILED(budget.adapter->QueryVideoMemoryInfo(
+            budget.node, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) ||
+        info.Budget == 0 ||
+        cudaMemPoolGetAttribute(
+            pool, cudaMemPoolAttrReservedMemCurrent, &pool_reserved) !=
+            cudaSuccess) {
+      budget.memory_limit = std::numeric_limits<size_t>::max();
+      return hard_memory_limit;
     }
 
-    wddm_limit_ = wddm_limit;
-    return std::min(memory_limit, wddm_limit_);
+    budget.memory_limit = compute_wddm_memory_limit(
+        std::numeric_limits<size_t>::max(),
+        info.Budget,
+        info.CurrentUsage,
+        pool_reserved);
+    return std::min(hard_memory_limit, budget.memory_limit);
   }
 
  private:
   std::vector<DeviceMemoryBudget> device_budgets_;
-  std::chrono::steady_clock::time_point next_query_{};
-  size_t wddm_limit_{std::numeric_limits<size_t>::max()};
   std::mutex mutex_;
 };
 
 } // namespace
 
-size_t windows_memory_limit(
-    size_t memory_limit,
-    const std::vector<cudaMemPool_t>& pools) {
-  static WddmMemoryBudget budget(pools.size());
-  return budget.get_memory_limit(memory_limit, pools);
+size_t get_windows_memory_limit(
+    size_t hard_memory_limit,
+    int device,
+    cudaMemPool_t pool) {
+  static WddmMemoryBudget budget(gpu::device_count());
+  return budget.get_memory_limit(hard_memory_limit, device, pool);
 }
 
 } // namespace mlx::core::cu

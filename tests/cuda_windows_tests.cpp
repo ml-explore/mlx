@@ -52,24 +52,38 @@ TEST_CASE("test WDDM memory limit") {
       cu::compute_wddm_memory_limit(32 * gib, 24 * gib, 4 * gib, 6 * gib),
       24 * gib - (24 * gib) / 20);
   CHECK_EQ(cu::compute_wddm_memory_limit(32 * gib, 24 * gib, 25 * gib, 0), 0);
-
-  auto multi_device_limit = cu::compute_wddm_memory_limit(
-      std::numeric_limits<size_t>::max(), 24 * gib, 8 * gib, 6 * gib);
-  multi_device_limit = cu::compute_wddm_memory_limit(
-      multi_device_limit, 16 * gib, 4 * gib, 4 * gib);
-  CHECK_EQ(multi_device_limit, 16 * gib - (16 * gib) / 20);
 }
 
 TEST_CASE("test Windows memory limit query") {
-  cudaDeviceProp properties{};
-  REQUIRE_EQ(cudaGetDeviceProperties(&properties, 0), cudaSuccess);
-
   MemoryLimitGuard memory_limit{
       set_memory_limit(std::numeric_limits<size_t>::max())};
-  auto limit = get_memory_limit();
-  if (properties.memoryPoolsSupported && !properties.integrated &&
-      !properties.tccDriver && properties.luidDeviceNodeMask != 0) {
-    CHECK_LT(limit, std::numeric_limits<size_t>::max());
+  cudaDeviceProp default_properties{};
+  REQUIRE_EQ(cudaGetDeviceProperties(&default_properties, 0), cudaSuccess);
+  auto default_limit = get_memory_limit();
+  if (default_properties.memoryPoolsSupported &&
+      !default_properties.integrated && !default_properties.tccDriver &&
+      default_properties.luidDeviceNodeMask != 0) {
+    CHECK_LT(default_limit, std::numeric_limits<size_t>::max());
+  }
+
+  int device_count = 0;
+  REQUIRE_EQ(cudaGetDeviceCount(&device_count), cudaSuccess);
+  for (int device = 0; device < device_count; ++device) {
+    cudaDeviceProp properties{};
+    REQUIRE_EQ(cudaGetDeviceProperties(&properties, device), cudaSuccess);
+
+    cudaMemPool_t pool = nullptr;
+    if (properties.memoryPoolsSupported) {
+      REQUIRE_EQ(cudaDeviceGetDefaultMemPool(&pool, device), cudaSuccess);
+    }
+    auto limit = cu::get_windows_memory_limit(
+        std::numeric_limits<size_t>::max(), device, pool);
+    if (properties.memoryPoolsSupported && !properties.integrated &&
+        !properties.tccDriver && properties.luidDeviceNodeMask != 0) {
+      CHECK_LT(limit, std::numeric_limits<size_t>::max());
+    } else {
+      CHECK_EQ(limit, std::numeric_limits<size_t>::max());
+    }
   }
 }
 

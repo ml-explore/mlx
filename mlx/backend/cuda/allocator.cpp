@@ -4,6 +4,7 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/backend/gpu/device_info.h"
+#include "mlx/device.h"
 #include "mlx/memory.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
@@ -185,7 +186,7 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
   }
 
   // Find available buffer from cache.
-  auto memory_limit = get_memory_limit();
+  auto memory_limit = get_memory_limit(device);
   std::unique_lock lock(mutex_);
   CudaBuffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
@@ -344,12 +345,17 @@ void CudaAllocator::reset_peak_memory() {
   peak_memory_ = 0;
 }
 
-size_t CudaAllocator::get_memory_limit() {
+size_t CudaAllocator::get_memory_limit(int device) {
 #ifdef _WIN32
-  return windows_memory_limit(memory_limit_, mem_pools_);
+  if (device >= 0 && device < static_cast<int>(mem_pools_.size())) {
+    return get_windows_memory_limit(memory_limit_, device, mem_pools_[device]);
+  }
 #endif
-
   return memory_limit_;
+}
+
+size_t CudaAllocator::get_memory_limit() {
+  return get_memory_limit(default_device().index);
 }
 
 size_t CudaAllocator::set_memory_limit(size_t limit) {

@@ -70,6 +70,7 @@ class CudaAllocator : public allocator::Allocator {
  private:
   void free_cuda_buffer(CudaBuffer* buf);
   void free_async(CudaBuffer& buf, cudaStream_t stream = nullptr);
+  size_t get_memory_limit(int device);
 
   CudaAllocator();
   friend CudaAllocator& allocator();
