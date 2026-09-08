@@ -823,13 +823,20 @@ bool ScaledDotProductAttention::use_fallback(
   const int query_head_dim = q.shape(-1);
   const int value_head_dim = v.shape(-1);
 
-  // Use headdim-split kernel when NAX is enabled and there are enough query
-  // blocks to fill the machine.
+  // Use the head-dim-split kernel from 1024 query rows. For fp16/bf16 also
+  // admit short causal prefill chunks while the key length stays at most
+  // 1536: a 512-query causal chunk is faster on that kernel there, while
+  // float32 and explicit array masks are not, so they keep the routing below.
   if (metal::is_nax_available() &&
-      (env::enable_tf32() || q.dtype() != float32) &&
-      query_sequence_length >= 1024 && query_head_dim == 256 &&
+      (env::enable_tf32() || q.dtype() != float32) && query_head_dim == 256 &&
       (do_causal || has_arr_mask)) {
-    return false;
+    if (query_sequence_length >= 1024) {
+      return false;
+    }
+    if (do_causal && (q.dtype() == float16 || q.dtype() == bfloat16) &&
+        query_sequence_length >= 512 && k.shape(2) <= 1536) {
+      return false;
+    }
   }
 
   // Unfused path is faster for following shapes.
