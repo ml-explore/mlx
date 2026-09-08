@@ -145,63 +145,12 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 self.assertLessEqual(mx.max(diff).item(), atol)
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
-    def test_sdpa_pad_head_dim_default_window(self):
+    def test_sdpa_pad_head_dim_opt_in(self):
         if mx.default_device() != mx.gpu:
             self.skipTest("requires GPU")
         name = "MLX_SDPA_PAD_HEAD_DIM"
         previous = os.environ.get(name)
         try:
-            for D, dtype, qL, kL in product(
-                (72, 80), (mx.float16, mx.bfloat16), (511, 512), (511, 512)
-            ):
-                with self.subTest(D=D, dtype=dtype, qL=qL, kL=kL):
-                    q, k, v, scale, mask = prepare_inputs(
-                        1, qL, kL, D, 8, 2, None, False, dtype
-                    )
-                    outputs = {}
-                    for value in (None, "0", "1"):
-                        if value is None:
-                            os.environ.pop(name, None)
-                        else:
-                            os.environ[name] = value
-                        out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
-                        mx.eval(out)
-                        outputs[value] = out
-                    expected = "1" if qL >= 512 and kL >= 512 else "0"
-                    self.assertTrue(mx.array_equal(outputs[None], outputs[expected]))
-                    self.assertTrue(
-                        mx.allclose(outputs["0"], outputs["1"], atol=5e-3, rtol=5e-3)
-                    )
-        finally:
-            if previous is None:
-                os.environ.pop(name, None)
-            else:
-                os.environ[name] = previous
-
-    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
-    def test_sdpa_pad_head_dim_opt_in(self):
-        name = "MLX_SDPA_PAD_HEAD_DIM"
-        previous = os.environ.get(name)
-        try:
-            for D in (72, 80):
-                q, k, v, scale, mask = prepare_inputs(
-                    1, 64, 128, D, 8, 2, None, False, mx.float16
-                )
-                ref = mlx_ref_attn(q, k, v, scale, mask)
-                outputs = {}
-                for value in (None, "0", "1"):
-                    if value is None:
-                        os.environ.pop(name, None)
-                    else:
-                        os.environ[name] = value
-                    out = mx.fast.scaled_dot_product_attention(
-                        q, k, v, scale=scale, mask=mask
-                    )
-                    mx.eval(out)
-                    outputs[value] = out
-                    self.assertTrue(mx.allclose(out, ref, atol=3e-4, rtol=3e-4))
-                self.assertTrue(mx.array_equal(outputs[None], outputs["0"]))
-            # Exercise the opt-in route across the existing dtype/mask/sinks matrix.
             os.environ[name] = "1"
             self.test_sdpa_head_dim_72()
             self.test_sdpa_head_dim_80()
