@@ -4750,6 +4750,25 @@ void validate_global_scale(
   }
 }
 
+// Affine quantized matmuls accept scales/biases in the other 16-bit float
+// (float16 scales with bfloat16 activations, or the reverse) without
+// promoting: the Metal matvec kernels convert the scale per group in
+// registers, and the other Metal paths fall back to a float32 computation
+// inside the primitive. Other backends keep the promotion.
+static bool mixed_qscales_allowed(
+    const array& x,
+    const array& scales,
+    const std::optional<array>& biases,
+    const Stream& s) {
+  if (!biases.has_value() || s.device != Device::gpu ||
+      !metal::is_available()) {
+    return false;
+  }
+  auto is16 = [](Dtype d) { return d == float16 || d == bfloat16; };
+  return is16(x.dtype()) && is16(scales.dtype()) &&
+      x.dtype() != scales.dtype() && biases->dtype() == scales.dtype();
+}
+
 array quantized_matmul(
     const array& x,
     const array& w,
@@ -4769,7 +4788,11 @@ array quantized_matmul(
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
       "quantized_matmul", x, w, scales, biases, transpose, group_size, bits);
 
-  if (qmode == QuantizationMode::Affine) {
+  bool mixed = qmode == QuantizationMode::Affine &&
+      mixed_qscales_allowed(x, scales, biases, to_stream(s));
+  if (mixed) {
+    dtype = x.dtype();
+  } else if (qmode == QuantizationMode::Affine) {
     dtype = promote_types(x.dtype(), dtype);
   } else {
     dtype = x.dtype();
@@ -4782,7 +4805,9 @@ array quantized_matmul(
     throw std::invalid_argument(msg.str());
   }
   std::vector<array> inputs;
-  if (qmode == QuantizationMode::Affine) {
+  if (mixed) {
+    inputs = {x, w, scales, *biases};
+  } else if (qmode == QuantizationMode::Affine) {
     inputs = {
         astype(x, dtype), w, astype(scales, dtype), astype(*biases, dtype)};
   } else {
@@ -5580,7 +5605,11 @@ array gather_qmm(
           "[gather_qmm] Global scale is only supported on the Metal backend.");
     }
   }
-  if (qmode == QuantizationMode::Affine) {
+  bool mixed = qmode == QuantizationMode::Affine &&
+      mixed_qscales_allowed(x, scales, biases, to_stream(s));
+  if (mixed) {
+    out_type = x.dtype();
+  } else if (qmode == QuantizationMode::Affine) {
     out_type = promote_types(x.dtype(), out_type);
   } else {
     out_type = x.dtype();
@@ -5604,7 +5633,15 @@ array gather_qmm(
   out_shape.push_back(x.shape(-2));
   out_shape.push_back(w_outer_dims);
   std::vector<array> inputs;
-  if (qmode == QuantizationMode::Affine) {
+  if (mixed) {
+    inputs = {
+        x,
+        std::move(w),
+        scales,
+        *biases,
+        std::move(lhs_indices),
+        std::move(rhs_indices)};
+  } else if (qmode == QuantizationMode::Affine) {
     inputs = {
         astype(x, out_type, s),
         std::move(w),

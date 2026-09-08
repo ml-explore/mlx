@@ -481,6 +481,9 @@ void qmv(
   std::string kname;
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
+  if (mode == "affine" && scales.dtype() != x.dtype()) {
+    type_string += "_s_" + get_type_string(scales.dtype());
+  }
   bool fast = N % bn == 0 && K % qmv_fast_k_alignment(bits) == 0;
   // A narrower output tile reduces register pressure for large
   // floating-point quantized matrix-vector products on M5 Max GPUs.
@@ -1361,6 +1364,9 @@ void gather_qmv(
   std::string kname;
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
+  if (mode == "affine" && scales.dtype() != x.dtype()) {
+    type_string += "_s_" + get_type_string(scales.dtype());
+  }
   bool fast = N % bn == 0 && K % qmv_fast_k_alignment(bits) == 0;
   concatenate(
       kname,
@@ -1798,14 +1804,15 @@ void dispatch_qmv(
     const Stream& s,
     const std::string& mode) {
   // It is a qmv with a small inner dimension so route to qmv_quad kernel
-  if ((K == 128 || K == 64) && is_power_of_2(bits) && !global_scale) {
+  bool mixed = mode == "affine" && scales.dtype() != x.dtype();
+  if (!mixed && (K == 128 || K == 64) && is_power_of_2(bits) && !global_scale) {
     qmv_quad(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
     return;
   }
 
   // Small batch so route to qmv_wide, which reuses each weight group across the
   // M vectors.
-  if (M >= 2 && use_qmv_wide(mode, d) && !global_scale) {
+  if (!mixed && M >= 2 && use_qmv_wide(mode, d) && !global_scale) {
     qmv_wide(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
     return;
   }
@@ -1825,22 +1832,44 @@ void dispatch_qmv(
       mode);
 }
 
-void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
-  auto& s = stream();
-  auto& d = metal::device(s.device);
-
+// Mixed 16-bit scales reach the affine matvec kernels natively; every other
+// path runs the promoted float32 computation the op would otherwise have
+// built, with the casts done here as temporaries, and the result cast back
+// to the activation dtype.
+static array promoted_copy(const array& in, const Stream& s) {
+  array out(in.shape(), float32, nullptr, {});
   out.set_data(allocator::malloc(out.nbytes()));
+  copy_gpu(
+      in,
+      out,
+      in.flags().row_contiguous ? CopyType::Vector : CopyType::General,
+      s);
+  metal::get_command_encoder(s).add_temporary(out);
+  return out;
+}
 
-  // Make sure the last two dims of x and w, s, b are contiguous. This should
-  // be relaxed for x.
-  array x = ensure_row_contiguous_matrix(inputs[0], d, s);
-  array w = ensure_row_contiguous_matrix(inputs[1], d, s);
-  array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
-  std::optional<array> biases = std::nullopt;
-  if (inputs.size() == 4) {
-    biases = ensure_row_contiguous_matrix(inputs[3], d, s);
-  }
+static bool mixed_scales(
+    const array& x,
+    const array& scales,
+    const std::optional<array>& biases,
+    QuantizationMode mode) {
+  auto is16 = [](Dtype d) { return d == float16 || d == bfloat16; };
+  return mode == QuantizationMode::Affine && biases.has_value() &&
+      is16(x.dtype()) && is16(scales.dtype()) && scales.dtype() != x.dtype();
+}
 
+static void quantized_matmul_dispatch(
+    array x,
+    array w,
+    array scales,
+    std::optional<array> biases,
+    array& out,
+    bool transpose_,
+    int group_size_,
+    int bits_,
+    QuantizationMode mode_,
+    metal::Device& d,
+    const Stream& s) {
   // Extract the matmul shapes
   bool non_batched = w.ndim() == 2 && x.flags().row_contiguous;
   int K = x.shape(-1);
@@ -1920,26 +1949,61 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   return;
 }
 
-void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
   out.set_data(allocator::malloc(out.nbytes()));
 
+  // Make sure the last two dims of x and w, s, b are contiguous. This should
+  // be relaxed for x.
   array x = ensure_row_contiguous_matrix(inputs[0], d, s);
   array w = ensure_row_contiguous_matrix(inputs[1], d, s);
   array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
-  // Affine gets biases at index 3, nvfp4 an optional global scale.
   std::optional<array> biases = std::nullopt;
-  std::optional<array> global_scale = std::nullopt;
-  if (mode_ == QuantizationMode::Affine) {
+  if (inputs.size() == 4) {
     biases = ensure_row_contiguous_matrix(inputs[3], d, s);
-  } else if (inputs.size() == 6) {
-    global_scale = ensure_row_contiguous(inputs[3], d, s);
   }
-  const array& lhs_indices = inputs[inputs.size() - 2];
-  const array& rhs_indices = inputs[inputs.size() - 1];
 
+  if (mixed_scales(x, scales, biases, mode_)) {
+    bool non_batched = w.ndim() == 2 && x.flags().row_contiguous;
+    int K = x.shape(-1);
+    int M = non_batched ? x.size() / K : x.shape(-2);
+    int N = out.shape(-1);
+    bool matvec = transpose_ && M < get_qmv_batch_limit(K, N, d);
+    if (!matvec) {
+      array x32 = promoted_copy(x, s);
+      array s32 = promoted_copy(scales, s);
+      array b32 = promoted_copy(*biases, s);
+      array out32(out.shape(), float32, nullptr, {});
+      out32.set_data(allocator::malloc(out32.nbytes()));
+      metal::get_command_encoder(s).add_temporary(out32);
+      quantized_matmul_dispatch(
+          x32, w, s32, b32, out32, transpose_, group_size_, bits_, mode_, d, s);
+      copy_gpu(out32, out, CopyType::Vector, s);
+      return;
+    }
+  }
+  quantized_matmul_dispatch(
+      x, w, scales, biases, out, transpose_, group_size_, bits_, mode_, d, s);
+}
+
+static void gather_qmm_dispatch(
+    array x,
+    array w,
+    array scales,
+    std::optional<array> biases,
+    const std::optional<array>& global_scale,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    array& out,
+    bool transpose_,
+    int group_size_,
+    int bits_,
+    QuantizationMode mode_,
+    bool right_sorted_,
+    metal::Device& d,
+    const Stream& s) {
   int K = x.shape(-1);
   int M = x.shape(-2);
   int N = out.shape(-1);
@@ -2034,6 +2098,80 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       d,
       s,
       mode);
+}
+
+void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  array x = ensure_row_contiguous_matrix(inputs[0], d, s);
+  array w = ensure_row_contiguous_matrix(inputs[1], d, s);
+  array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
+  // Affine gets biases at index 3, nvfp4 an optional global scale.
+  std::optional<array> biases = std::nullopt;
+  std::optional<array> global_scale = std::nullopt;
+  if (mode_ == QuantizationMode::Affine) {
+    biases = ensure_row_contiguous_matrix(inputs[3], d, s);
+  } else if (inputs.size() == 6) {
+    global_scale = ensure_row_contiguous(inputs[3], d, s);
+  }
+  const array& lhs_indices = inputs[inputs.size() - 2];
+  const array& rhs_indices = inputs[inputs.size() - 1];
+
+  if (mixed_scales(x, scales, biases, mode_)) {
+    int K = x.shape(-1);
+    int M = x.shape(-2);
+    int N = out.shape(-1);
+    int B = out.size() / M / N;
+    int E = w.size() / w.shape(-1) / w.shape(-2);
+    bool sorted_rhs_path = M == 1 && B >= 16 && right_sorted_ && B / E >= 4;
+    bool matvec =
+        transpose_ && !sorted_rhs_path && M < get_qmv_batch_limit(K, N, d);
+    if (!matvec) {
+      array x32 = promoted_copy(x, s);
+      array s32 = promoted_copy(scales, s);
+      array b32 = promoted_copy(*biases, s);
+      array out32(out.shape(), float32, nullptr, {});
+      out32.set_data(allocator::malloc(out32.nbytes()));
+      metal::get_command_encoder(s).add_temporary(out32);
+      gather_qmm_dispatch(
+          x32,
+          w,
+          s32,
+          b32,
+          global_scale,
+          lhs_indices,
+          rhs_indices,
+          out32,
+          transpose_,
+          group_size_,
+          bits_,
+          mode_,
+          right_sorted_,
+          d,
+          s);
+      copy_gpu(out32, out, CopyType::Vector, s);
+      return;
+    }
+  }
+  gather_qmm_dispatch(
+      x,
+      w,
+      scales,
+      biases,
+      global_scale,
+      lhs_indices,
+      rhs_indices,
+      out,
+      transpose_,
+      group_size_,
+      bits_,
+      mode_,
+      right_sorted_,
+      d,
+      s);
 }
 
 void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {

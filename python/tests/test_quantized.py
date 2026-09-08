@@ -1900,6 +1900,76 @@ class TestQuantized(mlx_tests.MLXTestCase):
         expected = mx.dequantize(w_q, mx.contiguous(scales), mode=mode)
         self.assertTrue(mx.allclose(w_hat, expected))
 
+    def test_mixed_scale_dtype(self):
+        # Affine scales/biases in the other 16-bit float than the activations
+        # must run without promotion: the output keeps the activation dtype
+        # and matches the float32 computation with the exact scale values.
+        key = mx.random.key(0)
+        pairs = [(mx.bfloat16, mx.float16), (mx.float16, mx.bfloat16)]
+        for x_dtype, s_dtype in pairs:
+            for gs in [32, 64, 128]:
+                for bits in [2, 3, 4, 5, 6, 8]:
+                    for K, N in [(512, 256), (512, 250)]:
+                        w = mx.random.normal(shape=(N, K), key=key).astype(s_dtype)
+                        w_q, scales, biases = mx.quantize(w, gs, bits)
+                        self.assertEqual(scales.dtype, s_dtype)
+                        for M, transpose in [
+                            (1, True),
+                            (5, True),
+                            (64, True),
+                            (1, False),
+                        ]:
+                            x = mx.random.normal(
+                                shape=(M, K if transpose else N), key=key
+                            ).astype(x_dtype)
+                            y = mx.quantized_matmul(
+                                x,
+                                w_q,
+                                scales,
+                                biases,
+                                transpose=transpose,
+                                group_size=gs,
+                                bits=bits,
+                            )
+                            ref = mx.quantized_matmul(
+                                x.astype(mx.float32),
+                                w_q,
+                                scales.astype(mx.float32),
+                                biases.astype(mx.float32),
+                                transpose=transpose,
+                                group_size=gs,
+                                bits=bits,
+                            )
+                            self.assertEqual(y.dtype, x_dtype)
+                            tol = 3e-2 * float(mx.abs(ref).max())
+                            self.assertLess(
+                                float(mx.abs(y.astype(mx.float32) - ref).max()), tol
+                            )
+
+        # gather_qmm, matvec and matrix paths
+        for x_dtype, s_dtype in pairs:
+            E, K, N = 8, 512, 256
+            w = mx.random.normal(shape=(E, N, K), key=key).astype(s_dtype)
+            w_q, scales, biases = mx.quantize(w, 64, 4)
+            rhs = mx.array([[0, 3, 5, 7]], dtype=mx.uint32)
+            for M in [1, 64]:
+                x = mx.random.normal(shape=(1, 1, M, K), key=key).astype(x_dtype)
+                y = mx.gather_qmm(
+                    x, w_q, scales, biases, rhs_indices=rhs, group_size=64, bits=4
+                )
+                ref = mx.gather_qmm(
+                    x.astype(mx.float32),
+                    w_q,
+                    scales.astype(mx.float32),
+                    biases.astype(mx.float32),
+                    rhs_indices=rhs,
+                    group_size=64,
+                    bits=4,
+                )
+                self.assertEqual(y.dtype, x_dtype)
+                tol = 3e-2 * float(mx.abs(ref).max())
+                self.assertLess(float(mx.abs(y.astype(mx.float32) - ref).max()), tol)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

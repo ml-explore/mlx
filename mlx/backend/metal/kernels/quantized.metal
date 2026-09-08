@@ -180,3 +180,36 @@
   instantiate_quantized_groups(8)
 
 instantiate_quantized_all() // clang-format on
+
+// Mixed-dtype instantiations: activations in `type`, scales/biases in `stype`.
+// Lets a checkpoint whose scales were stored in the other 16-bit float run
+// without promoting (and re-casting the whole scales table) on every call.
+#define instantiate_quantized_mixed(type, stype, group_size, bits)                                                     \
+  instantiate_kernel("affine_qmv_fast_" #type "_s_" #stype "_gs_" #group_size "_b_" #bits "_batch_0",                 \
+      affine_qmv_fast, type, group_size, bits, false, false, 4, stype)                                                  \
+  instantiate_kernel("affine_qmv_fast_" #type "_s_" #stype "_gs_" #group_size "_b_" #bits "_batch_1",                 \
+      affine_qmv_fast, type, group_size, bits, true, false, 4, stype)                                                   \
+  instantiate_kernel("affine_qmv_" #type "_s_" #stype "_gs_" #group_size "_b_" #bits "_batch_0",                      \
+      affine_qmv, type, group_size, bits, false, false, 4, stype)                                                       \
+  instantiate_kernel("affine_qmv_" #type "_s_" #stype "_gs_" #group_size "_b_" #bits "_batch_1",                      \
+      affine_qmv, type, group_size, bits, true, false, 4, stype)                                                        \
+  instantiate_kernel("affine_gather_qmv_fast_" #type "_s_" #stype "_gs_" #group_size "_b_" #bits,                     \
+      affine_gather_qmv_fast, type, group_size, bits, false, stype)                                                     \
+  instantiate_kernel("affine_gather_qmv_" #type "_s_" #stype "_gs_" #group_size "_b_" #bits,                          \
+      affine_gather_qmv, type, group_size, bits, false, stype)
+
+#define instantiate_quantized_mixed_groups(type, stype, bits) \
+  instantiate_quantized_mixed(type, stype, 128, bits)         \
+  instantiate_quantized_mixed(type, stype, 64, bits)          \
+  instantiate_quantized_mixed(type, stype, 32, bits)
+
+#define instantiate_quantized_mixed_all(type, stype)  \
+  instantiate_quantized_mixed_groups(type, stype, 2)  \
+  instantiate_quantized_mixed_groups(type, stype, 3)  \
+  instantiate_quantized_mixed_groups(type, stype, 4)  \
+  instantiate_quantized_mixed_groups(type, stype, 5)  \
+  instantiate_quantized_mixed_groups(type, stype, 6)  \
+  instantiate_quantized_mixed_groups(type, stype, 8)
+
+instantiate_quantized_mixed_all(bfloat16_t, float16_t)
+instantiate_quantized_mixed_all(float16_t, bfloat16_t)

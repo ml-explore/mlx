@@ -4649,7 +4649,9 @@ void init_ops(nb::module_& m) {
         Args:
           x (array): Input array
           w (array): Quantized matrix packed in unsigned integers
-          scales (array): The scales to use per ``group_size`` elements of ``w``
+          scales (array): The scales to use per ``group_size`` elements of ``w``.
+            For affine quantization the scales and biases may be ``float16`` or
+            ``bfloat16`` independently of ``x``; the output takes the dtype of ``x``.
           biases (array, optional): The biases to use per ``group_size``
             elements of ``w``. Default: ``None``.
           transpose (bool, optional): Defines whether to multiply with the
@@ -4849,7 +4851,9 @@ void init_ops(nb::module_& m) {
         Args:
             x (array): Input array
             w (array): Quantized matrix packed in unsigned integers
-            scales (array): The scales to use per ``group_size`` elements of ``w``
+            scales (array): The scales to use per ``group_size`` elements of ``w``.
+              For affine quantization the scales and biases may be ``float16`` or
+              ``bfloat16`` independently of ``x``; the output takes the dtype of ``x``.
             biases (array, optional): The biases to use per ``group_size``
               elements of ``w``. Default: ``None``.
             lhs_indices (array, optional): Integer indices for ``x``. Default: ``None``.
