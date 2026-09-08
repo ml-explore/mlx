@@ -653,14 +653,7 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    if (reduction_dim == 1 && bi >= src_tile_dim.x) {
-      for (int i = 0; i < n_reads * pack_factor; i++) {
-        dst[i] = T(0);
-      }
-      return;
-    }
-
-    if (reduction_dim == 0 && bi >= src_tile_dim.y) {
+    if (bi >= src_tile_dim.y) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
       }
@@ -793,14 +786,7 @@ struct QuantizedBlockLoader<
       return;
     }
 
-    if (reduction_dim == 1 && bi >= src_tile_dim.x) {
-      for (int i = 0; i < n_reads * pack_factor; i++) {
-        dst[i] = T(0);
-      }
-      return;
-    }
-
-    if (reduction_dim == 0 && bi >= src_tile_dim.y) {
+    if (bi >= src_tile_dim.y) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
       }
@@ -1655,7 +1641,7 @@ template <
 
               volatile int compiler_barrier;
 
-              const short psk = min(int(SK), max(0, (BK - kk1)));
+              const short psk = min(int(SK), max(0, (k_remain - kk1)));
               Atile.load_safe(xn + kk1, K, short2(psk, sgp_sm));
 
               if constexpr (transpose) {

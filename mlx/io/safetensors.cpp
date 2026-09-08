@@ -221,6 +221,20 @@ void save_safetensors(
     std::shared_ptr<io::Writer> out_stream,
     std::unordered_map<std::string, array> a,
     std::unordered_map<std::string, std::string> metadata /* = {} */) {
+  {
+    std::vector<array> to_eval;
+    to_eval.reserve(a.size());
+    for (auto& p : a) {
+      p.second = contiguous(p.second);
+      to_eval.push_back(p.second);
+    }
+    eval(std::move(to_eval));
+  }
+
+  // Open only after the inputs are evaluated: opening a FileWriter
+  // truncates the file and lazy inputs may still read from it.
+  out_stream->open();
+
   ////////////////////////////////////////////////////////
   // Check file
   if (!out_stream->good() || !out_stream->is_open()) {
@@ -237,16 +251,6 @@ void save_safetensors(
     _metadata[key] = value;
   }
   parent["__metadata__"] = _metadata;
-
-  {
-    std::vector<array> to_eval;
-    to_eval.reserve(a.size());
-    for (auto& p : a) {
-      p.second = contiguous(p.second);
-      to_eval.push_back(p.second);
-    }
-    eval(std::move(to_eval));
-  }
 
   size_t offset = 0;
   for (auto& [key, arr] : a) {

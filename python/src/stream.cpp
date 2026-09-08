@@ -31,9 +31,18 @@ class PyStreamContext {
   }
 
   void exit() {
-    if (_inner != nullptr) {
-      delete _inner;
-      _inner = nullptr;
+    auto* inner = _inner;
+    _inner = nullptr;
+    // the destructor can throw, _inner is freed regardless.
+    delete inner;
+  }
+
+  // ~StreamContext throws when destroyed on a different thread, which Python
+  // cannot control
+  ~PyStreamContext() {
+    try {
+      exit();
+    } catch (...) {
     }
   }
 

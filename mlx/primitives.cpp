@@ -3335,9 +3335,10 @@ std::vector<array> Pad::vjp(
   Shape start(cotan.ndim(), 0);
   auto stop = cotan.shape();
 
-  for (auto i : axes_) {
-    start[i] = low_pad_size_[i];
-    stop[i] -= high_pad_size_[i];
+  for (size_t i = 0; i < axes_.size(); i++) {
+    auto ax = normalize_axis_index(axes_[i], cotan.ndim(), "[pad] ");
+    start[ax] = low_pad_size_[i];
+    stop[ax] -= high_pad_size_[i];
   }
 
   auto out = slice(cotan, start, stop, stream());
