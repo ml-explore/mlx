@@ -24,7 +24,14 @@
       type,        \
       group_size,          \
       bits,           \
-      aligned, bm, bk, bn, wm, wn)
+      aligned, bm, bk, bn, wm, wn) \
+  instantiate_kernel( \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn "_alN_" #aligned "_hgs", \
+      fp_ ## name, \
+      type,        \
+      group_size,          \
+      bits,           \
+      aligned, bm, bk, bn, wm, wn, true)
 
 #define instantiate_quantized_aligned_batched(mode, name, type, bm, bn, bk, wm, wn, aligned, batched, group_size, bits) \
   instantiate_kernel( \
@@ -48,7 +55,20 @@
       bk,      \
       wm,      \
       wn,      \
-      transpose)
+      transpose) \
+  instantiate_kernel( \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_bm_" #bm "_bn_" #bn "_bk_" #bk "_wm_" #wm "_wn_" #wn "_hgs", \
+      func,    \
+      type,    \
+      group_size,      \
+      bits,       \
+      bm,      \
+      bn,      \
+      bk,      \
+      wm,      \
+      wn,      \
+      transpose, \
+      true)
 
 
 #define instantiate_quantized_all_aligned(type, mode, group_size, bits) \
