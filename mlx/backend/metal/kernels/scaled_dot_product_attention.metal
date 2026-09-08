@@ -47,6 +47,7 @@ using namespace metal;
   instantiate_sdpa_vector(type, 256, 256)        \
   instantiate_sdpa_vector_gqa(type, 64, 64, 8, 8)     \
   instantiate_sdpa_vector_gqa(type, 128, 128, 8, 4)   \
+  instantiate_sdpa_vector_gqa(type, 256, 256, 8, 2)   \
   instantiate_sdpa_vector_gqa(type, 128, 128, 12, 4)  \
   instantiate_sdpa_vector_gqa(type, 128, 128, 16, 2)  \
   instantiate_sdpa_vector_aggregation(type, 64)  \
