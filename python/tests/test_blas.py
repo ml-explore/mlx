@@ -1,8 +1,9 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
+import os
 import unittest
-from itertools import permutations
+from itertools import product
 
 import mlx.core as mx
 import mlx_tests
@@ -1609,9 +1610,7 @@ class TestBlas(mlx_tests.MLXTestCase):
         c = mx.segmented_mm(a, a.T, s)
         self.assertEqual(c.shape, (2, 2, 4, 10, 10))
 
-    @unittest.skipIf(
-        not mx.cuda.is_available(), "grouped_mm is only implemented for CUDA"
-    )
+    @unittest.skipIf("CI" in os.environ, "No device that supports grouped_mm in CI")
     def test_grouped_mm(self):
         def token_offsets(sizes):
             offsets = [sum(sizes[:g]) for g in range(len(sizes))]
@@ -1639,33 +1638,32 @@ class TestBlas(mlx_tests.MLXTestCase):
         # So we only test float16 and bfloat16 for now.
         dtypes = [(mx.float16, 1e-3), (mx.bfloat16, 1e-2)]
 
-        for allocation in allocations:
-            for b_transposed in (True, False):
-                for a_transposed in (True, False):
-                    for dtype, tol in dtypes:
-                        with self.subTest(
-                            sizes=allocation,
-                            b_transposed=b_transposed,
-                            a_transposed=a_transposed,
-                            dtype=dtype,
-                        ):
-                            E = len(allocation)
-                            T = sum(allocation)
-                            a_shape = (K, T) if a_transposed else (T, K)
-                            b_shape = (E, N, K) if b_transposed else (E, K, N)
-                            a = mx.random.normal(a_shape, dtype=dtype)
-                            b = mx.random.normal(b_shape, dtype=dtype)
-                            if a_transposed:
-                                a = a.swapaxes(-1, -2)
-                            if b_transposed:
-                                b = b.swapaxes(-1, -2)
-                            offsets = token_offsets(allocation)
+        for allocation, b_transposed, a_transposed, (dtype, tol) in product(
+            allocations, (True, False), (True, False), dtypes
+        ):
+            with self.subTest(
+                sizes=allocation,
+                b_transposed=b_transposed,
+                a_transposed=a_transposed,
+                dtype=dtype,
+            ):
+                E = len(allocation)
+                T = sum(allocation)
+                a_shape = (K, T) if a_transposed else (T, K)
+                b_shape = (E, N, K) if b_transposed else (E, K, N)
+                a = mx.random.normal(a_shape, dtype=dtype)
+                b = mx.random.normal(b_shape, dtype=dtype)
+                if a_transposed:
+                    a = a.swapaxes(-1, -2)
+                if b_transposed:
+                    b = b.swapaxes(-1, -2)
+                offsets = token_offsets(allocation)
 
-                            c1 = grouped_mm_ref(a, b, allocation)
-                            c2 = mx.grouped_mm(a, b, token_offsets=offsets)
-                            self.assertEqual(c2.shape, (T, N))
-                            self.assertEqual(c2.dtype, dtype)
-                            self.assertTrue(mx.allclose(c1, c2, rtol=tol, atol=tol))
+                c1 = grouped_mm_ref(a, b, allocation)
+                c2 = mx.grouped_mm(a, b, token_offsets=offsets)
+                self.assertEqual(c2.shape, (T, N))
+                self.assertEqual(c2.dtype, dtype)
+                self.assertTrue(mx.allclose(c1, c2, rtol=tol, atol=tol))
 
     def test_gemv_gemm_same_precision(self):
         mx.random.seed(0)
