@@ -118,6 +118,10 @@ struct StridedIterator {
 
 template <typename T>
 void sort(array& out, int axis) {
+  if (out.size() == 0) {
+    return;
+  }
+
   // Get axis, shape and stride info
   axis = axis < 0 ? axis + out.ndim() : axis;
   size_t in_size = out.size();
@@ -149,6 +153,10 @@ void sort(array& out, int axis) {
 
 template <typename T, typename IdxT = uint32_t>
 void argsort(const array& in, array& out, int axis) {
+  if (in.size() == 0) {
+    return;
+  }
+
   // Get axis, shape and stride info
   axis = axis < 0 ? axis + in.ndim() : axis;
   size_t n_rows = in.size() / in.shape(axis);
@@ -212,6 +220,10 @@ void argsort(const array& in, array& out, int axis) {
 
 template <typename T>
 void partition(array& out, int axis, int kth) {
+  if (out.size() == 0) {
+    return;
+  }
+
   // Get axis, shape and stride info
   axis = axis < 0 ? axis + out.ndim() : axis;
   size_t in_size = out.size();
@@ -246,6 +258,10 @@ void partition(array& out, int axis, int kth) {
 
 template <typename T, typename IdxT = uint32_t>
 void argpartition(const array& in, array& out, int axis, int kth) {
+  if (in.size() == 0) {
+    return;
+  }
+
   // Get axis, shape and stride info
   axis = axis < 0 ? axis + in.ndim() : axis;
   size_t n_rows = in.size() / in.shape(axis);
