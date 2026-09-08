@@ -813,37 +813,27 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
         # The explicit-GEMM conv path unfolds into one buffer that can exceed
         # maxBufferLength for large outputs; it unfolds and runs the gemm in row
         # tiles instead (issue #3082).
-        key = "MLX_CONV_UNFOLD_TILE_ROWS"
-        prev = os.environ.get(key)
         cases = (
             (mx.conv_transpose1d, (2, 9, 4), (5, 3, 4), {"stride": 2}),
             (mx.conv_transpose2d, (2, 5, 5, 4), (5, 3, 3, 4), {"stride": 2}),
             (mx.conv_transpose3d, (1, 4, 4, 4, 2), (3, 2, 2, 2, 2), {"stride": 2}),
             (mx.conv_transpose1d, (2, 9, 4), (6, 3, 2), {"stride": 2, "groups": 2}),
         )
-        try:
-            # tile_rows=1 forces uniform tiles; 7 does not divide any output, so
-            # it exercises a partial final tile too.
-            for conv, in_shape, wt_shape, kwargs in cases:
-                for tile_rows in (1, 7):
-                    with self.subTest(
-                        conv=conv.__name__, tile_rows=tile_rows, **kwargs
-                    ):
-                        np.random.seed(0)
-                        x = mx.array(np.random.normal(size=in_shape).astype(np.float32))
-                        w = mx.array(np.random.normal(size=wt_shape).astype(np.float32))
-                        os.environ.pop(key, None)
+        # tile_rows=1 forces uniform tiles; 7 does not divide any output, so
+        # it exercises a partial final tile too.
+        for conv, in_shape, wt_shape, kwargs in cases:
+            for tile_rows in (1, 7):
+                with self.subTest(conv=conv.__name__, tile_rows=tile_rows, **kwargs):
+                    np.random.seed(0)
+                    x = mx.array(np.random.normal(size=in_shape).astype(np.float32))
+                    w = mx.array(np.random.normal(size=wt_shape).astype(np.float32))
+                    with mlx_tests.scoped_env(MLX_CONV_UNFOLD_TILE_ROWS=None):
                         untiled = conv(x, w, **kwargs)
                         mx.eval(untiled)
-                        os.environ[key] = str(tile_rows)
+                    with mlx_tests.scoped_env(MLX_CONV_UNFOLD_TILE_ROWS=str(tile_rows)):
                         tiled = conv(x, w, **kwargs)
                         mx.eval(tiled)
-                        self.assertTrue(np.allclose(untiled, tiled, atol=1e-4))
-        finally:
-            if prev is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = prev
+                    self.assertTrue(np.allclose(untiled, tiled, atol=1e-4))
 
 
 if __name__ == "__main__":
