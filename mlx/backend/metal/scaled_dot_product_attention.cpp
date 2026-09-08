@@ -780,28 +780,25 @@ std::tuple<bool, std::string> has_fused_kernel(
           << query_sequence_length << " and GQA factor " << gqa_factor << ".";
       return {false, msg.str()};
     }
-    // Head dim 512 sits on the generic vector kernel, whose cost is dominated
-    // by reading K/V. Default admission is limited to the measured decode
-    // surface: a single query, GQA factor 8, and no array mask.
-    // The threshold is read per call; setting it to zero deliberately expands
-    // admission for benchmarking and correctness coverage.
+    // Head dim 512 uses the generic vector kernel, reading K/V is its main
+    // cost. By default, use it only for one query, GQA factor 8, and no array
+    // mask.
     if (query_head_dim == 512) {
-      const int min_key_sequence_length =
-          env::get_var("MLX_SDPA_D512_MIN_KL", 1024);
-      const bool expand_admission = min_key_sequence_length == 0;
-      if (!expand_admission && query_sequence_length != 1) {
+      int min_key_sequence_length = env::get_var("MLX_SDPA_D512_MIN_KL", 1024);
+      bool always = (min_key_sequence_length == 0);
+      if (!always && query_sequence_length != 1) {
         msg << "the vector attention kernel for head dim 512 defaults to "
                "single-token queries; got query length "
             << query_sequence_length << ".";
         return {false, msg.str()};
       }
-      if (!expand_admission && gqa_factor != 8) {
+      if (!always && gqa_factor != 8) {
         msg << "the vector attention kernel for head dim 512 defaults to "
                "GQA factor 8; got GQA factor "
             << gqa_factor << ".";
         return {false, msg.str()};
       }
-      if (!expand_admission && has_arr_mask) {
+      if (!always && has_arr_mask) {
         msg << "the vector attention kernel for head dim 512 defaults to "
                "calls without array masks.";
         return {false, msg.str()};
