@@ -334,7 +334,7 @@ auto py_vmap(
                   msg << "[vmap] Invalid" << (output_axes ? " output " : " ")
                       << "vectorization axis " << axis
                       << " for array with shape " << x.shape();
-                  throw std::invalid_argument(msg.str());
+                  throw std::out_of_range(msg.str());
                 }
                 flat_axes.push_back(axis);
               } else if (nb::isinstance<nb::tuple>(inputs[1])) {
@@ -351,7 +351,7 @@ auto py_vmap(
                     msg << "[vmap] Invalid" << (output_axes ? " output " : " ")
                         << "vectorization axis " << axis
                         << " for array with shape " << x.shape();
-                    throw std::invalid_argument(msg.str());
+                    throw std::out_of_range(msg.str());
                   }
                   flat_axes.push_back(axis);
                 } else if (l.size() == 1 && l[0].is_none()) {

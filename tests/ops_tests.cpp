@@ -706,7 +706,7 @@ TEST_CASE("test transpose") {
   CHECK_EQ(y.shape(), Shape{1});
   CHECK_EQ(y.item<int>(), 1);
 
-  CHECK_THROWS_AS(transpose(x, {1}), std::invalid_argument);
+  CHECK_THROWS_AS(transpose(x, {1}), std::out_of_range);
   CHECK_THROWS_AS(transpose(x, {0, 0}), std::invalid_argument);
 
   // Works with empty array
@@ -4627,11 +4627,9 @@ TEST_CASE("test pad with an axes subset") {
   // An axis outside the array is rejected rather than indexed.
   for (auto mode : all) {
     CHECK_THROWS_AS(
-        pad(x, {5}, Shape{1}, Shape{1}, array(0.0f), mode),
-        std::invalid_argument);
+        pad(x, {5}, Shape{1}, Shape{1}, array(0.0f), mode), std::out_of_range);
     CHECK_THROWS_AS(
-        pad(x, {-5}, Shape{1}, Shape{1}, array(0.0f), mode),
-        std::invalid_argument);
+        pad(x, {-5}, Shape{1}, Shape{1}, array(0.0f), mode), std::out_of_range);
   }
 }
 
