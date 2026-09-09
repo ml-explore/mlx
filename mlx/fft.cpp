@@ -61,7 +61,7 @@ array fft_impl(
     std::ostringstream msg;
     msg << "[fftn] Invalid axis received for array with " << a.ndim()
         << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
 
   // In the following shape manipulations there are three cases to consider:
@@ -262,7 +262,7 @@ array fftshift_impl(
       std::ostringstream msg;
       msg << "[" << name << "] Invalid axis " << ax << " for array with "
           << a.ndim() << " dimensions.";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
     // Match NumPy's implementation
     int shift = a.shape(axis) / 2;

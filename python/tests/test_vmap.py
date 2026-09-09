@@ -9,8 +9,8 @@ import mlx_tests
 
 class TestVmap(mlx_tests.MLXTestCase):
     def test_basics(self):
-        # Can't vmap over scalars
-        with self.assertRaises(ValueError):
+        # Can't vmap over scalars, axis 0 is out of bounds for a 0d array
+        with self.assertRaises(IndexError):
             mx.vmap(mx.exp)(mx.array(1.0))
 
         # Invalid input
@@ -21,13 +21,13 @@ class TestVmap(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.vmap(mx.exp, in_axes="hello")(mx.array([0, 1]))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.vmap(mx.exp, in_axes=2)(mx.array([0, 1]))
 
         with self.assertRaises(ValueError):
             mx.vmap(mx.exp, out_axes="hello")(mx.array([0, 1]))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.vmap(mx.exp, out_axes=2)(mx.array([0, 1]))
 
     def test_unary(self):

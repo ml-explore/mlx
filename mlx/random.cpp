@@ -383,7 +383,7 @@ int get_valid_axis(int axis, int ndim) {
     std::ostringstream msg;
     msg << "[categorical] Invalid axis " << axis << " for logits with " << ndim
         << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
   return ax;
 }

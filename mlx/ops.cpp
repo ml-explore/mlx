@@ -482,7 +482,7 @@ array unflatten(
     std::ostringstream msg;
     msg << "[unflatten] Invalid axes " << ax << " for array with " << a.ndim()
         << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
 
   size_t size = 1;
@@ -817,7 +817,7 @@ void normalize_dynamic_slice_inputs(
       std::ostringstream msg;
       msg << prefix << " Invalid axis " << ax << " for array with dimension "
           << a.ndim() << ".";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
     ax = new_ax;
   }
@@ -1770,7 +1770,7 @@ array transpose(
       std::ostringstream msg;
       msg << "[transpose] Invalid axis (" << ax << ") for array with "
           << a.ndim() << " dimensions.";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
     if (shape[ax] != 0) {
       throw std::invalid_argument("[transpose] Repeat axes not allowed.");
@@ -2333,7 +2333,7 @@ array mean(
       std::ostringstream msg;
       msg << "[mean] axis " << axis << " is out of bounds for array with "
           << ndim << " dimensions.";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
   }
   auto dtype = at_least_float(a.dtype());
@@ -2367,7 +2367,7 @@ array median(
       std::ostringstream msg;
       msg << "[median] axis " << axis << " is out of bounds for array with "
           << ndim << " dimensions.";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
     set_axes.insert(axis < 0 ? axis + ndim : axis);
   }
@@ -3677,7 +3677,7 @@ array take(
     std::ostringstream msg;
     msg << "[take] Received invalid axis " << axis << " for array with "
         << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
 
   // Check for valid take
@@ -3722,7 +3722,7 @@ array take(const array& a, int index, int axis, StreamOrDevice s /* = {} */) {
     std::ostringstream msg;
     msg << "[take] Received invalid axis " << axis << " for array with "
         << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
 
   // Check for valid take
@@ -4249,7 +4249,7 @@ array diff(
   int ndim = static_cast<int>(a.ndim());
   int ax = axis < 0 ? axis + ndim : axis;
   if (ax < 0 || ax >= ndim) {
-    throw std::invalid_argument("[diff] Axis is out of bounds for the array.");
+    throw std::out_of_range("[diff] Axis is out of bounds for the array.");
   }
   if (n < 0) {
     throw std::invalid_argument("[diff] Order `n` must be non-negative.");
@@ -5796,7 +5796,7 @@ array vecdot(
   }
   int ax = axis < 0 ? axis + a.ndim() : axis;
   if (ax < 0 || ax >= a.ndim()) {
-    throw std::invalid_argument("[vecdot] axis is out of bounds.");
+    throw std::out_of_range("[vecdot] axis is out of bounds.");
   }
   if (axis < 0 ? axis + b.ndim() != ax : axis >= b.ndim()) {
     throw std::invalid_argument("[vecdot] axis is out of bounds.");
@@ -6677,7 +6677,7 @@ array roll(
       std::ostringstream msg;
       msg << "[roll] Invalid axis " << axes[i] << " for array with " << a.ndim()
           << " dimensions.";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
 
     auto sh = shift[i];
