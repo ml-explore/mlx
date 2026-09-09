@@ -8,7 +8,7 @@
 #include <utility>
 
 #include <fcntl.h>
-#ifdef _MSC_VER
+#ifdef _WIN32
 #include <io.h>
 #else
 #include <sys/stat.h>
@@ -79,20 +79,30 @@ class ParallelFileReader : public Reader {
   }
 
   size_t tell() override {
+#ifdef _WIN32
+    return _lseeki64(fd_, 0, SEEK_CUR);
+#else
     return lseek(fd_, 0, SEEK_CUR);
+#endif
   }
 
   // Warning: do not use this function from multiple threads as
   // it advances the file descriptor
   void seek(int64_t off, std::ios_base::seekdir way = std::ios_base::beg)
       override {
+    int origin;
     if (way == std::ios_base::beg) {
-      lseek(fd_, off, SEEK_SET);
+      origin = SEEK_SET;
     } else if (way == std::ios_base::end) {
-      lseek(fd_, off, SEEK_END);
+      origin = SEEK_END;
     } else {
-      lseek(fd_, off, SEEK_CUR);
+      origin = SEEK_CUR;
     }
+#ifdef _WIN32
+    _lseeki64(fd_, off, origin);
+#else
+    lseek(fd_, off, origin);
+#endif
   }
 
   // Warning: do not use this function from multiple threads as
@@ -159,19 +169,29 @@ class FileWriter : public Writer {
 
   size_t tell() override {
     check_open();
+#ifdef _WIN32
+    return _lseeki64(fd_, 0, SEEK_CUR);
+#else
     return lseek(fd_, 0, SEEK_CUR);
+#endif
   }
 
   void seek(int64_t off, std::ios_base::seekdir way = std::ios_base::beg)
       override {
     check_open();
+    int origin;
     if (way == std::ios_base::beg) {
-      lseek(fd_, off, SEEK_SET);
+      origin = SEEK_SET;
     } else if (way == std::ios_base::end) {
-      lseek(fd_, off, SEEK_END);
+      origin = SEEK_END;
     } else {
-      lseek(fd_, off, SEEK_CUR);
+      origin = SEEK_CUR;
     }
+#ifdef _WIN32
+    _lseeki64(fd_, off, origin);
+#else
+    lseek(fd_, off, origin);
+#endif
   }
 
   void write(const char* data, size_t n) override {

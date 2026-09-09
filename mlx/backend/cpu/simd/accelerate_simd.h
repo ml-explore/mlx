@@ -233,6 +233,16 @@ Simd<T, N> minimum(Simd<T, N> a, Simd<T, N> b) {
   return out;
 }
 
+// Integer division by zero gives 0. See the scalar divide in base_simd.h.
+template <typename T, int N>
+Simd<T, N> divide(Simd<T, N> a, Simd<T, N> b) {
+  if constexpr (std::is_integral_v<T>) {
+    return select(b == Simd<T, N>(0), Simd<T, N>(0), Simd<T, N>(a / b));
+  } else {
+    return a / b;
+  }
+}
+
 template <typename T, int N>
 Simd<T, N> remainder(Simd<T, N> a, Simd<T, N> b) {
   Simd<T, N> r;

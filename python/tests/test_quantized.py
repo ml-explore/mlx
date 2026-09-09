@@ -1670,6 +1670,49 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 )
             )
 
+    def test_gather_qmm_sorted_unaligned_k(self):
+        # Every case in test_gather_qmm_sorted uses K % 64 == 0, so the tail of
+        # the K loop is never exercised. When K is not a multiple of the block
+        # size the sorted path has to zero the partial tile correctly, otherwise
+        # it silently drops the tail contribution for part of the output.
+        L, D, E = 128, 256, 4
+        key = mx.random.key(0)
+        k1, k2, k3 = mx.random.split(key, 3)
+        on_gpu = mx.default_device() == mx.gpu
+
+        dtype = mx.float16 if on_gpu else mx.float32
+
+        for mode, group_size in (
+            ("affine", 32),
+            ("mxfp4", None),
+            ("mxfp8", None),
+            ("nvfp4", None),
+        ):
+            for K in (160, 288, 544):
+                with self.subTest(mode=mode, K=K):
+                    indices = mx.sort(
+                        (mx.random.uniform(shape=(L,), key=k1) * E).astype(mx.uint32)
+                    )
+                    x = (mx.random.normal((L, 1, K), key=k2) / K**0.5).astype(dtype)
+                    w = (mx.random.normal((E, D, K), key=k3) / K**0.5).astype(dtype)
+
+                    if mode == "affine":
+                        wq = mx.quantize(w, group_size=group_size, mode=mode)
+                    else:
+                        wq = mx.quantize(w, mode=mode)
+
+                    kwargs = dict(
+                        group_size=group_size,
+                        mode=mode,
+                        transpose=True,
+                        rhs_indices=indices,
+                    )
+                    y_sorted = mx.gather_qmm(x, *wq, sorted_indices=True, **kwargs)
+                    y_unsorted = mx.gather_qmm(x, *wq, sorted_indices=False, **kwargs)
+
+                    tol = 1e-3 if on_gpu else 1.5e-5
+                    self.assertLess((y_sorted - y_unsorted).abs().max(), tol)
+
     def test_gather_qmm_grad(self):
         def gather_qmm_ref(x, w, s, b, lhs, rhs, trans, sort):
             if lhs is not None:
@@ -1770,6 +1813,81 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     ).sum()
 
                 ds = mx.grad(gmm)(s, x, wq)
+
+    @unittest.skipIf(
+        not mx.metal.is_available(), "Global scale is only supported on Metal backend"
+    )
+    def test_gather_qmm_global_scale(self):
+        mx.random.seed(0)
+        N, K = 128, 256
+
+        def rel_err(got, expected):
+            # Per row
+            d = mx.abs(got.astype(mx.float32) - expected.astype(mx.float32))
+            scale = mx.abs(expected.astype(mx.float32))
+            axes = tuple(range(1, d.ndim))
+            return (d.max(axis=axes) / mx.maximum(scale.max(axis=axes), 1e-20)).max()
+
+        def quantize_experts(w):
+            """One tensor scale per expert."""
+            E = w.shape[0]
+            gs = mx.stack([mx.abs(w[e]).max().astype(mx.float32) for e in range(E)])
+            qs = [mx.quantize(w[e], mode="nvfp4", global_scale=gs[e]) for e in range(E)]
+            w_hat = mx.stack(
+                [
+                    mx.dequantize(
+                        q, sc, mode="nvfp4", global_scale=gs[e], dtype=w.dtype
+                    )
+                    for e, (q, sc) in enumerate(qs)
+                ]
+            )
+            return (
+                mx.stack([q for q, _ in qs]),
+                mx.stack([sc for _, sc in qs]),
+                gs,
+                w_hat,
+            )
+
+        tests = product(
+            [4, 128, 234],  # E
+            [mx.float32, mx.float16, mx.bfloat16],  # dtype
+            [True, False],  # transpose
+            [(32, 2, False), (1, 2, False), (256, 4, True)],  # M, B, sort
+        )
+        for E, dtype, transpose, (M, B, sort) in tests:
+            with self.subTest(E=E, dtype=dtype, transpose=transpose, M=M, B=B):
+                # Each expert has a different scale, so we multiply by a factor
+                # to make the experts have different magnitudes.
+                factors = mx.array(
+                    [[1, 2, 4, 8][e % 4] for e in range(E)], mx.float32
+                ).reshape((E, 1, 1))
+                wshape = (E, N, K) if transpose else (E, K, N)
+                w = (mx.random.normal(wshape) * factors).astype(dtype)
+                wq, s, gs, w_hat = quantize_experts(w)
+                self.assertEqual(gs.shape, (E,))
+
+                x = mx.random.normal((B, M, K)).astype(dtype)
+                indices = mx.random.randint(0, E, (B,))
+                if sort:
+                    indices = mx.sort(indices)
+
+                wg = w_hat[indices]
+                expected = x @ (wg.swapaxes(-1, -2) if transpose else wg)
+                kwargs = dict(
+                    rhs_indices=indices,
+                    transpose=transpose,
+                    mode="nvfp4",
+                    sorted_indices=sort,
+                )
+
+                out = mx.gather_qmm(x, wq, s, global_scale=gs, **kwargs)
+                tol = 1e-5 if dtype == mx.float32 else 3e-2
+                self.assertLess(rel_err(out, expected), tol)
+
+                # Each expert uses its own scale, not a neighbour's
+                rotated = mx.concatenate([gs[1:], gs[:1]])
+                wrong = mx.gather_qmm(x, wq, s, global_scale=rotated, **kwargs)
+                self.assertGreater(rel_err(wrong, expected), 0.5)
 
     def test_quantize_strided(self):
         N = 64

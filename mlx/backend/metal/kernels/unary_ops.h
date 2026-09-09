@@ -308,7 +308,7 @@ struct Round {
 struct Sigmoid {
   template <typename T>
   T operator()(T x) thread {
-    auto y = 1 / (1 + metal::exp(metal::abs(x)));
+    auto y = 1 / (1 + metal::precise::exp(metal::abs(x)));
     return (x < 0) ? y : 1 - y;
   }
 };
