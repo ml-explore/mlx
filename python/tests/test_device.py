@@ -114,6 +114,17 @@ class TestStream(mlx_tests.MLXTestCase):
         b = mx.add(x, y, stream=s_cpu)
         self.assertEqual(a.item(), b.item())
 
+    def test_reentrant_stream_context(self):
+        default = mx.default_stream(mx.default_device())
+        s = mx.new_stream(mx.default_device())
+        context = mx.stream(s)
+
+        with context:
+            with context:
+                self.assertEqual(mx.default_stream(mx.default_device()), s)
+            self.assertEqual(mx.default_stream(mx.default_device()), s)
+        self.assertEqual(mx.default_stream(mx.default_device()), default)
+
     def test_stream_context_exited_on_another_thread(self):
         # A generator suspended inside `mx.stream(...)` and abandoned is
         # finalized by the GC on whatever thread drops the last reference.
