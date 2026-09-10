@@ -589,10 +589,6 @@ struct QuantizedBlockLoader {
       (BCOLS_PACKED * BROWS < tgp_size) ? 1 : (BCOLS_PACKED * BROWS) / tgp_size;
   MLX_MTL_CONST short group_steps = group_size / BCOLS;
 
-  // BCOLS tiles the quantized dim, which is always a multiple of group_size,
-  // so a partial column extent is only possible when BCOLS does not divide
-  // group_size. Every affine group size is a multiple of the block, so the
-  // column bound below is dropped at compile time for all of them.
   MLX_MTL_CONST bool partial_cols = group_size % BCOLS != 0;
 
   static_assert(
@@ -654,10 +650,6 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    // src_tile_dim is (valid columns, valid rows), the convention the steel
-    // BlockLoader uses. bi is a row index, so it bounds against .y for every
-    // reduction_dim; the previous compare against .x could never fire for
-    // reduction_dim == 1, which let a partial row tile read past the source.
     if (bi >= src_tile_dim.y) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);

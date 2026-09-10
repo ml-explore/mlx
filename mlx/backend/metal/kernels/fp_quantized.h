@@ -163,10 +163,6 @@ struct QuantizedBlockLoader {
   MLX_MTL_CONST short group_steps = group_size < BCOLS ? 1 : group_size / BCOLS;
   MLX_MTL_CONST short scale_step = group_size < BCOLS ? BCOLS / group_size : 1;
 
-  // BCOLS tiles the quantized dim, which is always a multiple of group_size,
-  // so a partial column extent is only possible when BCOLS does not divide
-  // group_size. That is nvfp4 (16 against a 32-wide block) alone; for every
-  // other mode the column bound below is dropped at compile time.
   MLX_MTL_CONST bool partial_cols = group_size % BCOLS != 0;
 
   static_assert(
@@ -855,10 +851,6 @@ METAL_FUNC void fp_qmm_t_impl(
   loader_w_t loader_w(wl, scales, K, Ws, simd_gid, simd_lid);
   mma_t mma_op(simd_gid, simd_lid);
 
-  // K is a multiple of group_size, so it can only end in a partial tile when
-  // group_size does not divide BK. That is nvfp4 (group_size 16) alone; the
-  // other fp modes have group_size == BK, so the remainder tile below is
-  // discarded at compile time for them.
   constexpr bool partial_k = group_size % BK != 0;
   const int k_blocks = K_eff / BK;
   const short num_k = partial_k ? short(K_eff - k_blocks * BK) : short(0);
@@ -1001,10 +993,6 @@ METAL_FUNC void fp_qmm_n_impl(
   loader_w_t loader_w(wl, scales, N, Ws, simd_gid, simd_lid);
   mma_t mma_op(simd_gid, simd_lid);
 
-  // N is a multiple of group_size, so it can only end in a partial tile when
-  // group_size does not divide BN. That is nvfp4 (group_size 16) alone; for
-  // the other fp modes num_outs is always BN and the bounded loads below are
-  // discarded at compile time.
   constexpr bool partial_n = group_size % BN != 0;
   const short num_outs = partial_n ? short(min(BN, N - y_col)) : short(BN);
 
