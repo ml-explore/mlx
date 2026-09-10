@@ -4865,7 +4865,7 @@ void init_ops(nb::module_& m) {
               :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
             mode (str, optional): The quantization mode. Default: ``"affine"``.
             global_scale (array, optional): The per-input float32 scale used for
-              ``nvfp4`` quantization of ``w``. Only supported on Metal.
+              ``nvfp4`` quantization of ``w``. Only supported on the GPU.
               Default: ``None``.
             sorted_indices (bool, optional): May allow a faster implementation
               if the passed indices are sorted. Default: ``False``.
