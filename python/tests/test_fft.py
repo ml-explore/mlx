@@ -385,9 +385,9 @@ class TestFFT(mlx_tests.MLXTestCase):
     def test_fftshift_errors(self):
         # Test invalid axes
         x = mx.array(np.random.rand(4, 4).astype(np.float32))
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.fft.fftshift(x, axes=[2])
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.fft.fftshift(x, axes=[-3])
 
         # Test empty array
