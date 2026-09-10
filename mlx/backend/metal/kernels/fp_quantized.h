@@ -225,10 +225,6 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    // src_tile_dim is (valid columns, valid rows), the convention the steel
-    // BlockLoader uses. bi is a row index, so it bounds against .y for every
-    // reduction_dim; the previous compare against .x could never fire for
-    // reduction_dim == 1, which let a partial row tile read past the source.
     if (bi >= src_tile_dim.y) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
