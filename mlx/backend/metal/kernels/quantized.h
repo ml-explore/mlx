@@ -665,19 +665,6 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    // Each thread owns n_reads * pack_factor contiguous columns of one row,
-    // and a partial column extent is a whole number of quantization groups,
-    // hence a multiple of that span per the static_assert above, so a thread
-    // is either fully inside or fully outside the tile.
-    if constexpr (partial_cols) {
-      if (bj * pack_factor >= src_tile_dim.x) {
-        for (int i = 0; i < n_reads * pack_factor; i++) {
-          dst[i] = T(0);
-        }
-        return;
-      }
-    }
-
     T scale = *scales;
     T bias = *biases;
     for (int i = 0; i < n_reads; i++) {
