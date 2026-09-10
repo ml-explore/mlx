@@ -292,6 +292,120 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                         tol = 5e-3
                     self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_full_head_dim_512_nax(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+
+        D = 512
+        scale = D**-0.5
+        mx.random.seed(0)
+
+        q_probe = mx.random.normal(shape=(1, 2, 9, D)).astype(mx.bfloat16)
+        k_probe = mx.random.normal(shape=(1, 1, 31, D)).astype(mx.bfloat16)
+        v_probe = mx.random.normal(shape=(1, 1, 31, D)).astype(mx.bfloat16)
+        try:
+            mx.eval(
+                mx.fast.scaled_dot_product_attention(
+                    q_probe,
+                    k_probe,
+                    v_probe,
+                    scale=scale,
+                    force_fused=True,
+                )
+            )
+        except ValueError as e:
+            if "plus head dim 512 on NAX GPUs" not in str(e):
+                raise
+            self.skipTest("D512 full attention requires NAX")
+
+        cases = [
+            # Multiple query tiles with GQA.
+            (1, 8, 2, 257, 513, None, True),
+            # Multiple batches and a ragged final tile.
+            (2, 4, 1, 513, 777, None, True),
+            # Gemma 4 31B default route at the work threshold with sliced K/V.
+            (1, 32, 16, 1024, 1025, 1056, False),
+        ]
+        for dtype in (mx.float16, mx.bfloat16, mx.float32):
+            for B, Nq, Nkv, qL, kL, cache_len, force_fused in cases:
+                with self.subTest(
+                    dtype=dtype,
+                    B=B,
+                    Nq=Nq,
+                    Nkv=Nkv,
+                    qL=qL,
+                    kL=kL,
+                    cache_len=cache_len,
+                ):
+                    q = mx.random.normal(shape=(B, Nq, qL, D)).astype(dtype)
+                    if cache_len is None:
+                        k = mx.random.normal(shape=(B, Nkv, kL, D)).astype(dtype)
+                        v = mx.random.normal(shape=(B, Nkv, kL, D)).astype(dtype)
+                    else:
+                        k = mx.random.normal(shape=(B, Nkv, cache_len, D)).astype(
+                            dtype
+                        )[..., :kL, :]
+                        v = mx.random.normal(shape=(B, Nkv, cache_len, D)).astype(
+                            dtype
+                        )[..., :kL, :]
+
+                    ref = mlx_ref_attn(q, k, v, scale, "causal")
+                    out = mx.fast.scaled_dot_product_attention(
+                        q,
+                        k,
+                        v,
+                        scale=scale,
+                        mask="causal",
+                        force_fused=force_fused
+                        and (
+                            dtype != mx.float32
+                            or os.getenv("MLX_ENABLE_TF32", "1") != "0"
+                        ),
+                    )
+                    tol = 2e-3 if dtype != mx.bfloat16 else 1e-2
+                    self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
+        q = mx.random.normal(shape=(1, 8, 33, D)).astype(mx.bfloat16)
+        k = mx.random.normal(shape=(1, 2, 67, D)).astype(mx.bfloat16)
+        v = mx.random.normal(shape=(1, 2, 67, D)).astype(mx.bfloat16)
+        ref = mlx_ref_attn(q, k, v, scale)
+        out = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=scale, force_fused=True
+        )
+        self.assertTrue(mx.allclose(ref, out, atol=1e-2, rtol=1e-2))
+
+        bool_mask = mx.random.uniform(shape=(1, 1, 33, 67)) > 0.2
+        additive_mask = mx.where(bool_mask, 0.0, -1e4).astype(mx.bfloat16)
+        for mask in (bool_mask, additive_mask):
+            ref = mlx_ref_attn(q, k, v, scale, mask)
+            out = mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale, mask=mask, force_fused=True
+            )
+            self.assertTrue(mx.allclose(ref, out, atol=1e-2, rtol=1e-2))
+
+        q_same = mx.random.normal(shape=(1, 8, 33, D)).astype(mx.bfloat16)
+        k_same = mx.random.normal(shape=(1, 2, 67, D)).astype(mx.bfloat16)
+        v_slice = mx.random.normal(shape=(1, 2, 67, D // 4)).astype(mx.bfloat16)
+        v_same = mx.tile(v_slice, (1, 1, 1, 4))
+        out_same = mx.fast.scaled_dot_product_attention(
+            q_same, k_same, v_same, scale=scale, force_fused=True
+        )
+        for d_group in range(1, 4):
+            self.assertTrue(
+                mx.array_equal(
+                    out_same[..., : D // 4],
+                    out_same[..., d_group * D // 4 : (d_group + 1) * D // 4],
+                )
+            )
+
+        sinks = mx.random.normal(shape=(8,)).astype(mx.bfloat16)
+        ref = mlx_ref_attn(q, k, v, scale, sinks=sinks)
+        out = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=scale, sinks=sinks, force_fused=True
+        )
+        self.assertTrue(mx.allclose(ref, out, atol=1e-2, rtol=1e-2))
+
     def test_sdpa_vector_kv_transposed_head_seq(self):
         D = 64
         Nq = 4
@@ -965,9 +1079,9 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
         # No full attention fused kernels.
         with self.assertRaisesRegex(ValueError, "supports head dims"):
-            q, k, v = make_qkv(16, 512, 512)
+            q, k, v = make_qkv(16, 512, 1024)
             mx.fast.scaled_dot_product_attention(
-                q, k, v, scale=512**-0.5, force_fused=True
+                q, k, v, scale=1024**-0.5, force_fused=True
             )
         with self.assertRaisesRegex(
             ValueError, "query sequence to be no longer than the key sequence"
