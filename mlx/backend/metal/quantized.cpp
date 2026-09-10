@@ -868,37 +868,22 @@ void qmm_nax(
   std::string template_def;
   MTL::ComputePipelineState* kernel;
   if (transpose) {
-    kernel = global_scale ? get_qmm_nax_kernel_wrapped(
-                                d,
-                                kname,
-                                "qmm_t_nax",
-                                mode,
-                                type_string,
-                                group_size,
-                                bits,
-                                aligned,
-                                batched,
-                                bm,
-                                bk,
-                                bn,
-                                wm,
-                                wn,
-                                true)
-                          : get_qmm_nax_kernel_wrapped(
-                                d,
-                                kname,
-                                "qmm_t_nax",
-                                mode,
-                                type_string,
-                                group_size,
-                                bits,
-                                aligned,
-                                batched,
-                                bm,
-                                bk,
-                                bn,
-                                wm,
-                                wn);
+    kernel = get_qmm_nax_kernel_wrapped(
+        d,
+        kname,
+        "qmm_t_nax",
+        mode,
+        type_string,
+        group_size,
+        bits,
+        aligned,
+        batched,
+        bm,
+        bk,
+        bn,
+        wm,
+        wn,
+        global_scale.has_value());
   } else {
     kernel = get_qmm_nax_kernel_wrapped(
         d,
@@ -1121,27 +1106,17 @@ void qmm(
   std::string template_def;
   MTL::ComputePipelineState* kernel;
   if (transpose) {
-    kernel = global_scale ? get_quantized_kernel_wrapped(
-                                d,
-                                kname,
-                                "qmm_t",
-                                mode,
-                                type_string,
-                                group_size,
-                                bits,
-                                aligned,
-                                batched,
-                                true)
-                          : get_quantized_kernel_wrapped(
-                                d,
-                                kname,
-                                "qmm_t",
-                                mode,
-                                type_string,
-                                group_size,
-                                bits,
-                                aligned,
-                                batched);
+    kernel = get_quantized_kernel_wrapped(
+        d,
+        kname,
+        "qmm_t",
+        mode,
+        type_string,
+        group_size,
+        bits,
+        aligned,
+        batched,
+        global_scale.has_value());
   } else {
     kernel = get_quantized_kernel_wrapped(
         d, kname, "qmm_n", mode, type_string, group_size, bits, batched);
