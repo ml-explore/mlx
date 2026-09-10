@@ -49,6 +49,7 @@ void qmm_sm80(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& global_scale,
     const std::optional<array>& lhs_indices,
     const std::optional<array>& rhs_indices,
     array& out,

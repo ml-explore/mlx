@@ -57,6 +57,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         biases,
         std::nullopt,
         std::nullopt,
+        std::nullopt,
         out,
         bits_,
         group_size_,
@@ -190,10 +191,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         mode_,
         encoder.device());
   };
-  // qmm_sm80 does not apply global scales yet; route such calls to the
-  // naive kernel until it does.
-  bool can_use_qmm_sm80 =
-      !global_scale.has_value() && supports(supports_qmm_sm80);
+  bool can_use_qmm_sm80 = supports(supports_qmm_sm80);
   bool can_use_qmm_naive = supports(supports_qmm_naive);
   bool can_use_qmv = supports(supports_qmv);
 
@@ -204,6 +202,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         w,
         scales,
         biases,
+        global_scale,
         lhs_indices,
         rhs_indices,
         out,

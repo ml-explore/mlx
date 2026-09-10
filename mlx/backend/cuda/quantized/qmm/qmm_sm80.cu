@@ -28,6 +28,7 @@ void qmm_sm80(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& global_scale,
     const std::optional<array>& lhs_indices,
     const std::optional<array>& rhs_indices,
     array& out,
@@ -66,6 +67,9 @@ void qmm_sm80(
   if (biases) {
     encoder.set_input_array(*biases);
   }
+  if (global_scale) {
+    encoder.set_input_array(*global_scale);
+  }
   if (lhs_indices) {
     encoder.set_input_array(*lhs_indices);
   }
@@ -103,6 +107,7 @@ void qmm_sm80(
       gpu_ptr<void>(w),
       gpu_ptr<void>(scales),
       biases ? gpu_ptr<void>(*biases) : nullptr,
+      global_scale ? gpu_ptr<void>(*global_scale) : nullptr,
       lhs_indices ? gpu_ptr<void>(*lhs_indices) : nullptr,
       rhs_indices ? gpu_ptr<void>(*rhs_indices) : nullptr,
       gpu_ptr<void>(out),
