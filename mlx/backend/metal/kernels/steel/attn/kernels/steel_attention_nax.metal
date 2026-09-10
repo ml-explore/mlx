@@ -1,4 +1,4 @@
-// Copyright © 2024-25 Apple Inc.
+// Copyright © 2024-26 Apple Inc.
 
 // clang-format off
 #include "mlx/backend/metal/kernels/utils.h"
@@ -18,6 +18,7 @@
   attention_nax_dsplit, dtype, bq, bk, bd, wm, wn, mtype, float)
 
 #define instantiate_attn_shapes_helper(iname, itype, mname, mtype)         \
+    instantiate_attn_dsplit(iname, itype, 32, 32, 512, 2, 4, mname, mtype) \
     instantiate_attn_dsplit(iname, itype, 64, 32, 256, 4, 2, mname, mtype) \
     instantiate_attn(iname, itype, 64, 32, 128, 4, 1, mname, mtype)        \
     instantiate_attn(iname, itype, 64, 32,  96, 4, 1, mname, mtype)        \
@@ -31,6 +32,5 @@
 
 instantiate_attn_mask_helper(float16, half);
 instantiate_attn_mask_helper(bfloat16, bfloat);
-
 instantiate_attn_mask_helper(float32, float);
 // clang-format on
