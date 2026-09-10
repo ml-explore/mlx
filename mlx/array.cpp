@@ -208,34 +208,33 @@ void array::copy_shared_buffer(const array& other) {
   copy_shared_buffer(other, other.strides(), other.flags(), other.data_size());
 }
 
-void array::release(std::shared_ptr<ArrayDesc> previous) {
-  if (previous == nullptr) {
+void array::release(std::shared_ptr<ArrayDesc> desc) {
+  if (desc == nullptr) {
     return;
   }
 
   // Detached/detaching
-  if (previous->primitive == nullptr) {
+  if (desc->primitive == nullptr) {
     return;
   }
 
   // Break circular reference for non-detached arrays with siblings
-  if (auto n = previous->siblings.size(); n > 0) {
+  if (auto n = desc->siblings.size(); n > 0) {
     bool do_detach = true;
     // If all siblings have siblings.size() references except
     // the one we are currently releasing (which has siblings.size() + 1)
     // then there are no more external references
-    do_detach &= (previous.use_count() == (n + 1));
-    for (auto& s : previous->siblings) {
+    do_detach &= (desc.use_count() == (n + 1));
+    for (auto& s : desc->siblings) {
       do_detach &= (s.array_desc_.use_count() == n);
       if (!do_detach) {
         break;
       }
     }
     if (do_detach) {
-      for (auto& s : previous->siblings) {
+      for (auto& s : desc->siblings) {
         for (auto& ss : s.siblings()) {
-          // Set to null here to avoid descending into reset()
-          // for siblings
+          // Set to null here to avoid descending into reset() for siblings
           ss.array_desc_ = nullptr;
         }
         s.array_desc_->siblings.clear();

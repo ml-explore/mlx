@@ -713,7 +713,6 @@ TEST_CASE("test siblings circular references released by assignment") {
   CHECK(tracker.expired());
 }
 
-// https://github.com/ml-explore/mlx/pull/4453
 TEST_CASE("test siblings circular references released by overwrite") {
   std::weak_ptr<array::Data> tracker;
   auto fun = [&]() {
@@ -734,7 +733,6 @@ TEST_CASE("test siblings circular references released by overwrite") {
   CHECK(tracker.expired());
 }
 
-// https://github.com/ml-explore/mlx/pull/4453
 TEST_CASE("test assigning a sibling over the last reference keeps the cycle") {
   array key({1, 2});
   auto splits = split(key, 2);

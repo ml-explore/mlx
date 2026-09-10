@@ -84,25 +84,19 @@ class MLX_API array {
   array(const array& other) = default;
   array(array&& other) = default;
 
-  /**
-   * Assignment goes through release() so that the sibling reference cycle of a
-   * multi-output primitive is broken when the last external reference to it
-   * goes away by assignment rather than by destruction. Otherwise a cycle can
-   * outlive everything that used it and keep its inputs (including captured
-   * constants) alive forever.
-   */
-  array& operator=(array&& other) & noexcept {
+  /** Assignment goes through release() to break sibling reference cycle. */
+  array& operator=(const array& other) & {
     if (array_desc_ != other.array_desc_) {
-      // Take the new descriptor before releasing the old one: see release()
-      release(std::exchange(array_desc_, std::move(other.array_desc_)));
+      // Hold the old descriptor while assigning, and then release it. Otherwise
+      // when |this| and |other| are siblings they would be both destroyed.
+      release(std::exchange(array_desc_, other.array_desc_));
     }
     return *this;
   }
 
-  array& operator=(const array& other) & {
+  array& operator=(array&& other) & noexcept {
     if (array_desc_ != other.array_desc_) {
-      // Take the new descriptor before releasing the old one: see release()
-      release(std::exchange(array_desc_, other.array_desc_));
+      release(std::exchange(array_desc_, std::move(other.array_desc_)));
     }
     return *this;
   }
@@ -552,15 +546,8 @@ class MLX_API array {
   std::shared_ptr<ArrayDesc> array_desc_;
 
   /**
-   * Lets go of a descriptor, breaking the sibling reference cycle of a
-   * multi-output primitive if this was the last reference to it from outside
-   * that cycle.
-   *
-   * Callers take their new descriptor first (the std::exchange above),
-   * because the array being assigned may itself be a sibling of the one
-   * being released, reachable only through it. Released first, that cycle
-   * looks unreferenced, and the sibling list the new value lives in is
-   * cleared out from under it.
+   * Lets go of an ArrayDesc, breaking the sibling reference cycle of a
+   * multi-output primitive.
    */
   static void release(std::shared_ptr<ArrayDesc> desc);
 };
