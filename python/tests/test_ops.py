@@ -344,6 +344,50 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.dtype, mx.float32)
         self.assertEqual(z.item(), 6.0)
 
+    def test_floor_divide_integers_floor(self):
+        # Integer // truncated toward zero, so it disagreed with python and
+        # numpy whenever the operands had opposite signs.
+        av = [-7, 7, -7, 7, -1, 1, -5, 5, 6, -6]
+        bv = [2, 2, -2, -2, 3, -3, 3, -3, 3, 3]
+        got = mx.floor_divide(mx.array(av), mx.array(bv))
+        self.assertEqual(got.tolist(), [x // y for x, y in zip(av, bv)])
+
+        # The quotient comes from the truncating one plus a correction rather
+        # than from a - remainder(a, b), which can leave the dtype range: for
+        # int8 that numerator is 135 when a is 120 and b is -27.
+        for np_dtype in (np.int8, np.int16):
+            info = np.iinfo(np_dtype)
+            values = [info.min, info.min + 1, -1, 0, 1, 2, info.max - 1, info.max]
+            pairs = [
+                (x, y)
+                for x in values
+                for y in values
+                if y != 0 and not (x == info.min and y == -1)
+            ]
+            a_np = np.array([p[0] for p in pairs], np_dtype)
+            b_np = np.array([p[1] for p in pairs], np_dtype)
+            want = np.floor_divide(a_np.astype(np.int64), b_np.astype(np.int64)).astype(
+                np_dtype
+            )
+            got = mx.floor_divide(mx.array(a_np), mx.array(b_np))
+            self.assertEqual(got.tolist(), want.tolist(), msg=str(np_dtype))
+
+        # Unsigned division already floors and is unchanged.
+        au = np.array([0, 1, 7, 255], np.uint8)
+        bu = np.array([1, 2, 3, 7], np.uint8)
+        self.assertEqual(
+            mx.floor_divide(mx.array(au), mx.array(bu)).tolist(),
+            np.floor_divide(au, bu).tolist(),
+        )
+
+        # Floats keep going through floor(a / b).
+        af = np.array([7.5, -7.5, 7.5, -7.5], np.float32)
+        bf = np.array([2.0, 2.0, -2.0, -2.0], np.float32)
+        self.assertEqual(
+            mx.floor_divide(mx.array(af), mx.array(bf)).tolist(),
+            np.floor_divide(af, bf).tolist(),
+        )
+
     def test_divide(self):
         x = mx.array(2.0)
         y = mx.array(4.0)
