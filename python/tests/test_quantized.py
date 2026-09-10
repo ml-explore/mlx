@@ -715,7 +715,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     self.assertEqual(y_q.shape, y_hat.shape)
                     self.assertLess((y_q - y_hat).abs().max(), 2e-3)
 
-
     FP_TAIL_TOLS = {mx.float32: 1e-3, mx.float16: 5e-3, mx.bfloat16: 4e-2}
 
     def _fp_tail_dtypes(self):

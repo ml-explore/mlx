@@ -232,7 +232,6 @@ struct QuantizedBlockLoader {
       return;
     }
 
-
     T scale = dequantize_scale<T, group_size>(*scales);
     for (int i = 0; i < n_reads; i++) {
       dequantize<T, bits>(
