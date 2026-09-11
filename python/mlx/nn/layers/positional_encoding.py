@@ -127,14 +127,34 @@ class SinusoidalPositionalEncoding(Module):
 
 
 class ALiBi(Module):
+    """Implements Attention with Linear Biases (ALiBi).
+
+    ALiBi adds a static, non-learnable bias matrix to attention scores proportional
+    to the distance between query and key tokens.
+
+    For more details see `Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation <https://arxiv.org/abs/2108.12409>`_.
+    """
+
     @staticmethod
     def create_alibi_matrix(
         q_sequence_length: int,
         k_sequence_length: int,
         num_heads: int,
-        offset: int,
-        dtype=mx.float32,
-    ):
+        offset: int = 0,
+        dtype: mx.Dtype = mx.float32,
+    ) -> mx.array:
+        """Create the ALiBi bias matrix.
+
+        Args:
+            q_sequence_length (int): The query sequence length.
+            k_sequence_length (int): The key sequence length.
+            num_heads (int): The number of attention heads.
+            offset (int, optional): The position offset. Default: ``0``.
+            dtype (Dtype, optional): Data type of the output array. Default: ``mx.float32``.
+
+        Returns:
+            array: The ALiBi bias matrix.
+        """
         x1 = mx.arange(offset, q_sequence_length)
         x2 = mx.arange(0, k_sequence_length)
         distance_matrix = -mx.abs(
@@ -145,7 +165,17 @@ class ALiBi(Module):
         return alibi_mask
 
     @staticmethod
-    def create_alibi_slope(num_heads, dtype):
+    def create_alibi_slope(num_heads: int, dtype: mx.Dtype = mx.float32) -> mx.array:
+        """Create the geometric slopes for ALiBi across attention heads.
+
+        Args:
+            num_heads (int): The number of attention heads.
+            dtype (Dtype, optional): Data type of the output array. Default: ``mx.float32``.
+
+        Returns:
+            array: The slopes array expanded for head broadcasting.
+        """
+
         def get_slopes(n: int):
             if math.log2(n).is_integer():
                 start = 2 ** (-(2 ** -(math.log2(n) - 3)))
@@ -161,7 +191,22 @@ class ALiBi(Module):
         out = mx.array(slopes, dtype=dtype)
         return mx.expand_dims(out, axis=(-1, -2))
 
-    def __call__(self, attention_scores, offset=0, mask=None):
+    def __call__(
+        self,
+        attention_scores: mx.array,
+        offset: int = 0,
+        mask: Optional[mx.array] = None,
+    ) -> mx.array:
+        """Apply ALiBi matrix to attention scores.
+
+        Args:
+            attention_scores (array): The input attention scores.
+            offset (int, optional): The position offset. Default: ``0``.
+            mask (array, optional): An optional attention mask. Default: ``None``.
+
+        Returns:
+            array: The updated attention scores with ALiBi bias added.
+        """
         alibi_mask = ALiBi.create_alibi_matrix(
             q_sequence_length=attention_scores.shape[-2] + offset,
             k_sequence_length=attention_scores.shape[-1],
