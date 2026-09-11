@@ -235,13 +235,6 @@ class RingImpl {
         ((rank_ + size_ - 1) % size_) * n_bytes,
         ((rank_ + 1) % size_) * n_bytes};
 
-    // The size argument is the valid extent of the offset coordinate space,
-    // which ring_pass clamps copies against (size - offset). For all_gather
-    // the send/recv offsets are absolute positions in the full output buffer
-    // and every rank's region is complete, so the extent is the whole output
-    // (n_bytes * size_) - passing a single region's n_bytes made the clamp
-    // underflow to 0 for any rank whose peer region starts above offset 0
-    // (every rank but the one owning region 0 received only zeros).
     ring_pass<2, char>(
         lw,
         n_bytes * size_,
