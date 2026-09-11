@@ -1555,6 +1555,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    @unittest.skipIf(mx.cuda.is_available(), "Not implemented for CUDA")
     def test_gather_qqmm_global_scale_matrix_paths(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("Not implemented for CPU")
