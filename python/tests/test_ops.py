@@ -1674,6 +1674,11 @@ class TestOps(mlx_tests.MLXTestCase):
     def test_unstack(self):
         a_np = np.arange(6).reshape(3, 2)
         a = mx.array(a_np)
+
+        self.assertIsInstance(mx.unstack(a), tuple)
+        self.assertIsInstance(mx.unstack(a, axis=1), tuple)
+        self.assertEqual(mx.unstack(mx.zeros((0, 2)), axis=0), ())
+
         for axis in [0, 1, -1]:
             parts = mx.unstack(a, axis=axis)
             expected = np.unstack(a_np, axis=axis)
@@ -4078,6 +4083,16 @@ class TestOps(mlx_tests.MLXTestCase):
                 np_op = getattr(np, op)
                 mx_op = getattr(mx, op)
                 self.assertTrue(np.allclose(mx_op(x), np_op(x)))
+
+        if mx.metal.is_available() and mx.default_device() == mx.gpu:
+            x = mx.array(
+                [1e20 + 1e20j, 2.5e-20 - 3e-20j, 3e38 + 0j, 1e-19j], mx.complex64
+            )
+            for op in ["abs", "log"]:
+                with self.subTest(op=op):
+                    np_op = getattr(np, op)
+                    mx_op = getattr(mx, op)
+                    self.assertTrue(np.allclose(mx_op(x), np_op(x), rtol=1e-5))
 
         x = mx.array(
             [

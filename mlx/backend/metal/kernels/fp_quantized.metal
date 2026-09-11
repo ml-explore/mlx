@@ -47,6 +47,17 @@
       bits,       \
       aligned)
 
+#define instantiate_quantized_aligned_hgs(mode, name, type, aligned, group_size, bits) \
+  instantiate_quantized_aligned(mode, name, type, aligned, group_size, bits) \
+  instantiate_kernel( \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_alN_" #aligned "_hgs", \
+      fp_ ## name,    \
+      type,    \
+      group_size,      \
+      bits,       \
+      aligned,    \
+      true)
+
 #define instantiate_quantized_aligned_batched(mode, name, type, aligned, batched, group_size, bits) \
   instantiate_kernel( \
       #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_alN_" #aligned "_batch_" #batched, \
@@ -123,7 +134,20 @@
       bk,      \
       wm,      \
       wn,      \
-      transpose)
+      transpose) \
+  instantiate_kernel( \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_bm_" #bm "_bn_" #bn "_bk_" #bk "_wm_" #wm "_wn_" #wn "_hgs", \
+      func,    \
+      type,    \
+      group_size,      \
+      bits,       \
+      bm,      \
+      bn,      \
+      bk,      \
+      wm,      \
+      wn,      \
+      transpose, \
+      true)
 
 #define instantiate_quantized_batched_wrap(name, type, mode, group_size, bits) \
   instantiate_quantized_batched(mode, name, type, 1, group_size, bits)         \
@@ -142,8 +166,8 @@
   instantiate_quantized(mode, gather_qmm_n, type, group_size, bits)
 
 #define instantiate_quantized_all_aligned(type, mode, group_size, bits) \
-  instantiate_quantized_aligned(mode, gather_qmm_t, type, true, group_size, bits)      \
-  instantiate_quantized_aligned(mode, gather_qmm_t, type, false, group_size, bits)     \
+  instantiate_quantized_aligned_hgs(mode, gather_qmm_t, type, true, group_size, bits)  \
+  instantiate_quantized_aligned_hgs(mode, gather_qmm_t, type, false, group_size, bits) \
   instantiate_quantized_aligned_batched(mode, qmm_t, type, true, 1, group_size, bits)  \
   instantiate_quantized_aligned_batched(mode, qmm_t, type, true, 0, group_size, bits)  \
   instantiate_quantized_aligned_batched(mode, qmm_t, type, false, 1, group_size, bits) \

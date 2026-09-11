@@ -76,6 +76,9 @@ class ArrayAt {
 class ArrayPythonIterator {
  public:
   ArrayPythonIterator(mx::array x) : idx_(0), x_(std::move(x)) {
+    if (x_.ndim() == 0) {
+      throw nb::type_error("iter() 0-dimensional array.");
+    }
     if (x_.shape(0) > 0 && x_.shape(0) < 10) {
       splits_ = mx::split(x_, x_.shape(0));
     }
@@ -1046,9 +1049,10 @@ void init_array(nb::module_& m) {
       .def(
           "__bytes__",
           [](mx::array& a) {
-            a.eval();
+            auto c = mx::contiguous(a);
+            c.eval();
             return nb::bytes(
-                reinterpret_cast<const char*>(a.data<void>()), a.nbytes());
+                reinterpret_cast<const char*>(c.data<void>()), c.nbytes());
           })
       .def(
           "__format__",

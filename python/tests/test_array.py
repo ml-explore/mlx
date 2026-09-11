@@ -1068,6 +1068,10 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(y.tolist(), [3.0, 4.0])
         self.assertEqual(z.tolist(), [5.0, 6.0])
 
+        a = mx.array(3)
+        with self.assertRaises(TypeError):
+            list(a)
+
     def test_array_pickle(self):
         dtypes = [
             mx.int8,
@@ -2041,6 +2045,15 @@ class TestArray(mlx_tests.MLXTestCase):
         else:
             self.assertEqual(b"aaaaaaaaaa", ab[::2])
             self.assertEqual(b"abcdefghij", ab[1::2])
+
+        # Test bytes on non-contiguous arrays
+        a = mx.arange(10, dtype=mx.uint8)
+        self.assertEqual(bytes(a[::2]), b"\x00\x02\x04\x06\x08")
+        self.assertEqual(bytes(a[::-1]), b"\x09\x08\x07\x06\x05\x04\x03\x02\x01\x00")
+        b = mx.arange(6, dtype=mx.int32).reshape(2, 3).T
+        self.assertEqual(bytes(b), np.array(b).tobytes())
+        c = mx.broadcast_to(mx.array([1, 2], dtype=mx.uint8), (3, 2))
+        self.assertEqual(bytes(c), np.array(c).tobytes())
 
     def test_buffer_protocol_ref_counting(self):
         a = mx.arange(3)

@@ -156,11 +156,16 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
+  if (mode_ != QuantizationMode::Affine && inputs.size() == 6) {
+    throw std::runtime_error(
+        "[GatherQMM] Global scale is only supported on the Metal backend.");
+  }
+
   array x = ensure_row_contiguous(inputs[0], encoder, s);
   const array& w = inputs[1];
   const array& scales = inputs[2];
   std::optional<array> biases;
-  if (inputs.size() == 6) {
+  if (mode_ == QuantizationMode::Affine) {
     biases = inputs[3];
   }
   array lhs_indices =

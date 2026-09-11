@@ -122,6 +122,24 @@ class TestLoad(mlx_tests.MLXTestCase):
         except Exception:
             pass
 
+    def test_save_over_lazily_loaded_safetensors(self):
+        # The save must eval the lazy input before truncating the file it was
+        # loaded from. Shift the data so stale content cannot pass.
+        save_file = os.path.join(self.test_dir, "resave.safetensors")
+        mx.save_safetensors(save_file, {"a": mx.ones((4, 4))})
+        a = mx.load(save_file, stream=mx.cpu)["a"]
+        mx.save_safetensors(save_file, {"a": a + 1})
+        out = mx.load(save_file, stream=mx.cpu)["a"]
+        self.assertTrue(np.array_equal(np.array(out), 2 * np.ones((4, 4))))
+
+    def test_save_over_lazily_loaded_npy(self):
+        save_file = os.path.join(self.test_dir, "resave.npy")
+        mx.save(save_file, mx.ones((4, 4)))
+        a = mx.load(save_file, stream=mx.cpu)
+        mx.save(save_file, a + 2)
+        out = mx.load(save_file, stream=mx.cpu)
+        self.assertTrue(np.array_equal(np.array(out), 3 * np.ones((4, 4))))
+
     def test_save_and_load_safetensors(self):
         test_file = os.path.join(self.test_dir, "test.safetensors")
         with self.assertRaises(Exception):

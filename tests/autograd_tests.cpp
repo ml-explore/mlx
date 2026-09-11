@@ -749,7 +749,7 @@ TEST_CASE("test op vjps") {
 TEST_CASE("test gather and take grads") {
   // Check linear takes
   auto linear_f = [](array indices) {
-    auto fun_linear = [&indices](array input) { return take(input, indices); };
+    auto fun_linear = [indices](array input) { return take(input, indices); };
 
     return fun_linear;
   };
@@ -1530,5 +1530,35 @@ TEST_CASE("test masked_scatter autograd") {
 
     CHECK(array_equal(grads[0], array({0.f, 1.f, 1.f, 0.f}, {4})).item<bool>());
     CHECK(array_equal(grads[1], array({1.f, 1.f}, {2})).item<bool>());
+  }
+}
+
+TEST_CASE("test pad vjp with axes subset and negative axes") {
+  // Pad only the last axis, given as a negative index
+  {
+    auto x = ones({2, 3});
+    auto fun = [](array in) {
+      return pad(in, {-1}, {1}, {2}, array(0), "constant");
+    };
+    auto cotan = reshape(arange(12), {2, 6});
+    auto [out, dout] = vjp(fun, x, cotan);
+    CHECK_EQ(out.shape(), Shape{2, 6});
+    CHECK_EQ(dout.shape(), Shape{2, 3});
+    auto expected = slice(cotan, {0, 1}, {2, 4});
+    CHECK(array_equal(dout, expected).item<bool>());
+  }
+
+  // Pad sizes must be matched with axes by position, not by axis value
+  {
+    auto x = ones({2, 3});
+    auto fun = [](array in) {
+      return pad(in, {1, 0}, {1, 2}, {3, 0}, array(0), "constant");
+    };
+    auto cotan = reshape(arange(28), {4, 7});
+    auto [out, dout] = vjp(fun, x, cotan);
+    CHECK_EQ(out.shape(), Shape{4, 7});
+    CHECK_EQ(dout.shape(), Shape{2, 3});
+    auto expected = slice(cotan, {2, 1}, {4, 4});
+    CHECK(array_equal(dout, expected).item<bool>());
   }
 }

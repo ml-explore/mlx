@@ -1,7 +1,9 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
 #include "mlx/memory.h"
 #include <nanobind/nanobind.h>
+
+#include "python/src/trees.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;
@@ -16,6 +18,30 @@ void init_memory(nb::module_& m) {
 
       Note, this will not always match memory use reported by the system because
       it does not include cached memory buffers.
+      )pbdoc");
+  m.def(
+      "get_array_buffer_size",
+      [](const nb::args& args) {
+        std::vector<mx::array> arrays = tree_flatten(args, false);
+        nb::gil_scoped_release nogil;
+        return mx::get_array_buffer_size(arrays);
+      },
+      nb::arg(),
+      nb::sig("def get_array_buffer_size(*args) -> int"),
+      R"pbdoc(
+      Get the size of the buffers backing arrays in bytes.
+
+      Each unique buffer is counted once. The full allocator size of each
+      buffer is used, which can exceed the logical size of its arrays. Arrays
+      must be evaluated before calling this function. The result does not
+      include graph objects, cached buffers, or other non-buffer memory.
+
+      Args:
+        *args (arrays or trees of arrays): Each argument can be a single array
+          or a tree of arrays. Leaves which are not arrays are ignored.
+
+      Returns:
+        int: The size of the unique buffers in bytes.
       )pbdoc");
   m.def(
       "get_peak_memory",
@@ -61,6 +87,12 @@ void init_memory(nb::module_& m) {
 
       Returns:
         int: The previous memory limit in bytes.
+      )pbdoc");
+  m.def(
+      "get_memory_limit",
+      &mx::get_memory_limit,
+      R"pbdoc(
+      Get the current memory limit in bytes.
       )pbdoc");
   m.def(
       "set_cache_limit",

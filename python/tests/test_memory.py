@@ -1,4 +1,4 @@
-# Copyright © 2023-2024 Apple Inc.
+# Copyright © 2023-2026 Apple Inc.
 
 import unittest
 
@@ -7,6 +7,31 @@ import mlx_tests
 
 
 class TestMemory(mlx_tests.MLXTestCase):
+    def test_array_buffer_size(self):
+        a = mx.array([1.0, 2.0, 3.0, 4.0])
+        view = a[:1]
+        lazy = a + 1
+
+        with self.assertRaises(ValueError):
+            mx.get_array_buffer_size({"lazy": lazy})
+
+        mx.eval(view)
+        a_size = mx.get_array_buffer_size(a)
+        self.assertGreaterEqual(a_size, a.nbytes)
+        self.assertLess(view.nbytes, a.nbytes)
+        self.assertEqual(mx.get_array_buffer_size(), 0)
+        self.assertEqual(mx.get_array_buffer_size(view), a_size)
+        self.assertEqual(
+            mx.get_array_buffer_size({"a": a, "nested": (a, None)}), a_size
+        )
+        self.assertEqual(mx.get_array_buffer_size(mx.array([])), 0)
+
+        b = mx.array([5.0, 6.0])
+        self.assertEqual(
+            mx.get_array_buffer_size(a, b),
+            a_size + mx.get_array_buffer_size(b),
+        )
+
     def test_memory_info(self):
         old_limit = mx.set_cache_limit(0)
 
@@ -18,6 +43,7 @@ class TestMemory(mlx_tests.MLXTestCase):
         self.assertEqual(mx.set_cache_limit(old_limit), old_limit)
 
         old_limit = mx.set_memory_limit(10)
+        self.assertEqual(mx.get_memory_limit(), 10)
         self.assertEqual(mx.set_memory_limit(old_limit), 10)
         self.assertEqual(mx.set_memory_limit(old_limit), old_limit)
 

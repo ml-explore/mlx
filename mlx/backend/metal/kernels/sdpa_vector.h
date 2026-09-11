@@ -357,6 +357,7 @@ template <typename T, int D, int V, int G, int HPT>
   const int num_kv_heads = tpg.x;
   const int num_q_heads = num_kv_heads * G;
   const int base_head = batch_idx * num_q_heads + kv_head_idx * G;
+  const int kv_batch_head_idx = batch_idx * num_kv_heads + kv_head_idx;
 
   const int chunk = (N + blocks - 1) / blocks;
   const int kstart = block_idx * chunk;
@@ -365,9 +366,9 @@ template <typename T, int D, int V, int G, int HPT>
   const int s0 = kstart + cchunk * sub;
   const int s1 = min(kend, s0 + sub);
 
-  const device T* kp = keys + kv_head_idx * k_head_stride + s0 * k_seq_stride +
-      simd_lid * qk_per_thread;
-  const device T* vp = values + kv_head_idx * v_head_stride +
+  const device T* kp = keys + kv_batch_head_idx * k_head_stride +
+      s0 * k_seq_stride + simd_lid * qk_per_thread;
+  const device T* vp = values + kv_batch_head_idx * v_head_stride +
       s0 * v_seq_stride + simd_lid * v_per_thread;
 
   U q[HPT][qk_per_thread];

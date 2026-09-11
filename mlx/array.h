@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "mlx/allocator.h"
@@ -80,13 +81,22 @@ class MLX_API array {
   array& operator=(array&& other) && = delete;
 
   /** Default copy and move constructors otherwise. */
-  array& operator=(array&& other) & = default;
   array(const array& other) = default;
   array(array&& other) = default;
 
+  /** Assignment goes through release() to break sibling reference cycle. */
   array& operator=(const array& other) & {
-    if (this->id() != other.id()) {
-      this->array_desc_ = other.array_desc_;
+    if (array_desc_ != other.array_desc_) {
+      // Hold the old descriptor while assigning, and then release it. Otherwise
+      // when |this| and |other| are siblings they would be both destroyed.
+      release(std::exchange(array_desc_, other.array_desc_));
+    }
+    return *this;
+  }
+
+  array& operator=(array&& other) & noexcept {
+    if (array_desc_ != other.array_desc_) {
+      release(std::exchange(array_desc_, std::move(other.array_desc_)));
     }
     return *this;
   }
@@ -466,10 +476,12 @@ class MLX_API array {
   void copy_shared_buffer(const array& other);
 
   void overwrite_descriptor(const array& other) {
-    array_desc_ = other.array_desc_;
+    release(std::exchange(array_desc_, other.array_desc_));
   }
 
-  ~array();
+  ~array() {
+    release(std::move(array_desc_));
+  }
 
  private:
   // Initialize the arrays data
@@ -532,6 +544,12 @@ class MLX_API array {
   // the primitive which knows how to compute the array's data from its inputs
   // and the list of array's inputs for the primitive.
   std::shared_ptr<ArrayDesc> array_desc_;
+
+  /**
+   * Lets go of an ArrayDesc, breaking the sibling reference cycle of a
+   * multi-output primitive.
+   */
+  static void release(std::shared_ptr<ArrayDesc> desc);
 };
 
 template <typename T>

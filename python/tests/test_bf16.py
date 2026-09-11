@@ -141,6 +141,21 @@ class TestBF16(mlx_tests.MLXTestCase):
                             torch_op="a" + op,
                         )
 
+    def test_arithmetic_reduction_ops(self):
+        cases = {
+            "sum": np.ones((4096, 4), dtype=np.float32),
+            "prod": np.full((128, 4), 1.0078125, dtype=np.float32),
+        }
+        for op, values in cases.items():
+            with self.subTest(op=op):
+                x = mx.array(values, dtype=mx.bfloat16)
+                expected = mx.array(
+                    getattr(np, op)(values, axis=0, dtype=np.float32),
+                    dtype=mx.bfloat16,
+                )
+                actual = getattr(mx, op)(x, axis=0, stream=mx.cpu)
+                self.assertEqual(actual.tolist(), expected.tolist())
+
     def test_arg_reduction_ops(self):
         data = np.random.rand(10, 12, 13).astype(np.float32)
         x = mx.array(data).astype(mx.bfloat16)

@@ -1,10 +1,12 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
 #pragma once
 
 #include <cstdlib>
+#include <vector>
 
 #include "mlx/api.h"
+#include "mlx/array.h"
 
 namespace mlx::core {
 
@@ -14,6 +16,14 @@ namespace mlx::core {
  * it does not include cached memory buffers.
  * */
 MLX_API size_t get_active_memory();
+
+/* Get the size of the buffers backing the given arrays in bytes.
+ *
+ * Each unique buffer is counted once. The full allocator size of each buffer
+ * is used, which can exceed the logical size of its arrays. The arrays must be
+ * evaluated before calling this function.
+ * */
+MLX_API size_t get_array_buffer_size(const std::vector<array>& arrays);
 
 /* Get the peak amount of used memory in bytes.
  *
@@ -41,6 +51,9 @@ MLX_API size_t get_cache_memory();
  *
  * When Metal is available the memory limit defaults to 1.5 times the maximum
  * recommended working set size reported by the device.
+ *
+ * On native Windows with CUDA the memory limit is also bounded by the current
+ * video memory budget reported by the operating system.
  *
  * Returns the previous memory limit.
  * */
