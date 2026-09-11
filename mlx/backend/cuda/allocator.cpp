@@ -10,7 +10,7 @@
 #include "mlx/utils.h"
 
 #ifdef _WIN32
-#include "mlx/backend/cuda/windows_memory.h"
+#include "mlx/backend/cuda/wddm.h"
 #endif
 
 #include <cuda_runtime.h>
@@ -186,13 +186,12 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
   }
 
   // Find available buffer from cache.
-  auto memory_limit = get_memory_limit(device);
   std::unique_lock lock(mutex_);
   CudaBuffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
     // If we have a lot of memory pressure try to reclaim memory from the cache.
     int64_t mem_to_free =
-        get_active_memory() + get_cache_memory() + size - memory_limit;
+        get_active_memory() + get_cache_memory() + size - get_memory_limit();
     if (mem_to_free > 0) {
       buffer_cache_.release_cached_buffers(mem_to_free);
     }
@@ -345,17 +344,14 @@ void CudaAllocator::reset_peak_memory() {
   peak_memory_ = 0;
 }
 
-size_t CudaAllocator::get_memory_limit(int device) {
-#ifdef _WIN32
-  if (device >= 0 && device < static_cast<int>(mem_pools_.size())) {
-    return get_windows_memory_limit(memory_limit_, device, mem_pools_[device]);
-  }
-#endif
-  return memory_limit_;
-}
-
 size_t CudaAllocator::get_memory_limit() {
-  return get_memory_limit(default_device().index);
+#ifdef _WIN32
+  int device = default_device().index;
+  return std::min(
+      memory_limit_, get_wddm_memory_limit(device, mem_pools_[device]));
+#else
+  return memory_limit_;
+#endif
 }
 
 size_t CudaAllocator::set_memory_limit(size_t limit) {
@@ -379,23 +375,13 @@ void CudaAllocator::clear_cache() {
     std::lock_guard lk(mutex_);
     buffer_cache_.clear();
   }
-#ifdef _WIN32
-  int original_device = 0;
-  CHECK_CUDA_ERROR(cudaGetDevice(&original_device));
-  try {
-    for (size_t i = 0; i < mem_pools_.size(); ++i) {
-      if (mem_pools_[i]) {
-        cu::device(static_cast<int>(i)).make_current();
-        CHECK_CUDA_ERROR(cudaStreamSynchronize(free_streams_[i]));
-        CHECK_CUDA_ERROR(cudaMemPoolTrimTo(mem_pools_[i], 0));
-      }
+  for (size_t i = 0; i < mem_pools_.size(); ++i) {
+    if (mem_pools_[i]) {
+      cu::device(static_cast<int>(i)).make_current();
+      CHECK_CUDA_ERROR(cudaStreamSynchronize(free_streams_[i]));
+      CHECK_CUDA_ERROR(cudaMemPoolTrimTo(mem_pools_[i], 0));
     }
-  } catch (...) {
-    cu::device(original_device).make_current();
-    throw;
   }
-  cu::device(original_device).make_current();
-#endif
 }
 
 CudaAllocator& allocator() {

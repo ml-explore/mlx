@@ -79,6 +79,10 @@ target_sources(
 add_library(mlx_dirs OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/dirs.cpp)
 target_include_directories(mlx_dirs PRIVATE "${PROJECT_SOURCE_DIR}")
 target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:mlx_dirs>)
+# TODO: Remove after removing std::atomic_store/load.
+target_compile_definitions(
+  mlx_dirs
+  PUBLIC _SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/binary)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
@@ -183,7 +187,7 @@ set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
 
 # Configure Windows CUDA DLL loading.
 if(WIN32)
-  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/windows_memory.cpp)
+  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/wddm.cpp)
   target_link_libraries(mlx PRIVATE dxgi)
   set(MLX_CUDA_BIN_DIR
       ""

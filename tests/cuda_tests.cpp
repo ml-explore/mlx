@@ -1,8 +1,11 @@
 // Copyright © 2026 Apple Inc.
 
 #include "doctest/doctest.h"
-#include "mlx/backend/cuda/windows_memory.h"
 #include "mlx/mlx.h"
+
+#ifdef _WIN32
+#include "mlx/backend/cuda/wddm.h"
+#endif
 
 #include <cuda_runtime.h>
 
@@ -39,22 +42,20 @@ struct MemoryLimitGuard {
 
 } // namespace
 
-TEST_CASE("test WDDM memory limit") {
-  constexpr uint64_t gib = 1ULL << 30;
+constexpr uint64_t gib = 1ULL << 30;
 
+#ifdef _WIN32
+TEST_CASE("test memory limit from budget") {
   CHECK_EQ(
-      cu::compute_wddm_memory_limit(32 * gib, 24 * gib, 8 * gib, 6 * gib),
+      cu::memory_limit_from_budget(24 * gib, 8 * gib, 6 * gib),
       22 * gib - (24 * gib) / 20);
   CHECK_EQ(
-      cu::compute_wddm_memory_limit(16 * gib, 24 * gib, 8 * gib, 6 * gib),
-      16 * gib);
-  CHECK_EQ(
-      cu::compute_wddm_memory_limit(32 * gib, 24 * gib, 4 * gib, 6 * gib),
+      cu::memory_limit_from_budget(24 * gib, 4 * gib, 6 * gib),
       24 * gib - (24 * gib) / 20);
-  CHECK_EQ(cu::compute_wddm_memory_limit(32 * gib, 24 * gib, 25 * gib, 0), 0);
+  CHECK_EQ(cu::memory_limit_from_budget(24 * gib, 25 * gib, 0), 0);
 }
 
-TEST_CASE("test Windows memory limit query") {
+TEST_CASE("test wddm memory limit") {
   MemoryLimitGuard memory_limit{
       set_memory_limit(std::numeric_limits<size_t>::max())};
   cudaDeviceProp default_properties{};
@@ -65,27 +66,8 @@ TEST_CASE("test Windows memory limit query") {
       default_properties.luidDeviceNodeMask != 0) {
     CHECK_LT(default_limit, std::numeric_limits<size_t>::max());
   }
-
-  int device_count = 0;
-  REQUIRE_EQ(cudaGetDeviceCount(&device_count), cudaSuccess);
-  for (int device = 0; device < device_count; ++device) {
-    cudaDeviceProp properties{};
-    REQUIRE_EQ(cudaGetDeviceProperties(&properties, device), cudaSuccess);
-
-    cudaMemPool_t pool = nullptr;
-    if (properties.memoryPoolsSupported) {
-      REQUIRE_EQ(cudaDeviceGetDefaultMemPool(&pool, device), cudaSuccess);
-    }
-    auto limit = cu::get_windows_memory_limit(
-        std::numeric_limits<size_t>::max(), device, pool);
-    if (properties.memoryPoolsSupported && !properties.integrated &&
-        !properties.tccDriver && properties.luidDeviceNodeMask != 0) {
-      CHECK_LT(limit, std::numeric_limits<size_t>::max());
-    } else {
-      CHECK_EQ(limit, std::numeric_limits<size_t>::max());
-    }
-  }
 }
+#endif // _WIN32
 
 TEST_CASE("test clear cache trims CUDA pool") {
   if (!memory_pools_supported()) {
@@ -95,7 +77,7 @@ TEST_CASE("test clear cache trims CUDA pool") {
   cudaMemPool_t pool = nullptr;
   REQUIRE_EQ(cudaDeviceGetDefaultMemPool(&pool, 0), cudaSuccess);
 
-  CacheLimitGuard cache_limit{set_cache_limit(1ULL << 30)};
+  CacheLimitGuard cache_limit{set_cache_limit(gib)};
   clear_cache();
 
   uint64_t initial_reserved = 0;
