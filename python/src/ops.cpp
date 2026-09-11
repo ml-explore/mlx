@@ -2550,6 +2550,18 @@ void init_ops(nb::module_& m) {
             array: The transposed array.
       )pbdoc");
   m.def(
+      "matrix_transpose",
+      [](const mx::array& a, mx::StreamOrDevice s) {
+        return mx::matrix_transpose(a, s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def matrix_transpose(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+      R"pbdoc(
+      Transpose the last two dimensions of the array.)pbdoc");
+  m.def(
       "permute_dims",
       [](const mx::array& a,
          const std::optional<std::vector<int>>& axes,
@@ -6186,6 +6198,5 @@ void init_ops(nb::module_& m) {
   m.attr("cumulative_sum") = m.attr("cumsum");
   m.attr("empty") = m.attr("zeros");
   m.attr("empty_like") = m.attr("zeros_like");
-  m.attr("matrix_transpose") = m.attr("transpose");
   m.attr("pow") = m.attr("power");
 }
