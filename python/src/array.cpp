@@ -806,6 +806,7 @@ void init_array(nb::module_& m) {
           },
           "other"_a)
       .def("__neg__", [](const mx::array& a) { return -a; })
+      .def("__pos__", [](const mx::array& a) { return mx::copy(a); })
       .def("__bool__", [](mx::array& a) { return nb::bool_(to_scalar(a)); })
       .def(
           "__repr__",
