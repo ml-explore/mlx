@@ -5,6 +5,7 @@
 #include <type_traits>
 
 #include "mlx/array.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/primitives.h"
 
@@ -79,6 +80,33 @@ inline int get_work_per_thread(Dtype dtype, size_t size) {
 
 inline size_t ceildiv(size_t n, size_t m) {
   return (n + m - 1) / m;
+}
+
+inline array ensure_innermost_contiguous(
+    array& out,
+    const array& x,
+    const Stream& s,
+    bool relax_prev_stride = false) {
+  bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
+  if (relax_prev_stride && no_copy && x.ndim() > 1) {
+    auto stride = x.strides()[x.ndim() - 2];
+    no_copy &= (stride == 0 || stride == x.shape().back() || x.shape(-2) == 1);
+  }
+  if (no_copy) {
+    if (x.is_donatable()) {
+      out.copy_shared_buffer(x);
+    } else {
+      out.set_data(
+          allocator::malloc(x.data_size() * x.itemsize()),
+          x.data_size(),
+          x.strides(),
+          x.flags());
+    }
+    return x;
+  }
+  array x_copy = contiguous_copy_gpu(x, s);
+  out.copy_shared_buffer(x_copy);
+  return x_copy;
 }
 
 inline void check_kernel_threadgroup_size(

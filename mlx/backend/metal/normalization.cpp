@@ -22,31 +22,7 @@ void RMSNorm::eval_gpu(
   auto& out = outputs[0];
 
   // Make sure that the last dimension is contiguous
-  auto set_output = [&s, &out](const array& x) {
-    bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
-    if (no_copy && x.ndim() > 1) {
-      auto s = x.strides()[x.ndim() - 2];
-      no_copy &= (s == 0 || s == x.shape().back() || x.shape(-2) == 1);
-    }
-    if (no_copy) {
-      if (x.is_donatable()) {
-        out.copy_shared_buffer(x);
-      } else {
-        out.set_data(
-            allocator::malloc(x.data_size() * x.itemsize()),
-            x.data_size(),
-            x.strides(),
-            x.flags());
-      }
-      return x;
-    } else {
-      array x_copy = contiguous_copy_gpu(x, s);
-      out.copy_shared_buffer(x_copy);
-      return x_copy;
-    }
-  };
-
-  const array x = set_output(inputs[0]);
+  const array x = ensure_innermost_contiguous(out, inputs[0], s, true);
   const array& w = inputs[1];
 
   auto axis_size = static_cast<uint32_t>(x.shape().back());
@@ -224,31 +200,7 @@ void LayerNorm::eval_gpu(
   auto& out = outputs[0];
 
   // Make sure that the last dimension is contiguous
-  auto set_output = [&s, &out](const array& x) {
-    bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
-    if (no_copy && x.ndim() > 1) {
-      auto s = x.strides()[x.ndim() - 2];
-      no_copy &= (s == 0 || s == x.shape().back() || x.shape(-2) == 1);
-    }
-    if (no_copy) {
-      if (x.is_donatable()) {
-        out.copy_shared_buffer(x);
-      } else {
-        out.set_data(
-            allocator::malloc(x.data_size() * x.itemsize()),
-            x.data_size(),
-            x.strides(),
-            x.flags());
-      }
-      return x;
-    } else {
-      array x_copy = contiguous_copy_gpu(x, s);
-      out.copy_shared_buffer(x_copy);
-      return x_copy;
-    }
-  };
-
-  const array x = set_output(inputs[0]);
+  const array x = ensure_innermost_contiguous(out, inputs[0], s, true);
   const array& w = inputs[1];
   const array& b = inputs[2];
 
