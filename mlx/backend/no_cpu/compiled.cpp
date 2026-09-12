@@ -22,4 +22,11 @@ void Compiled::eval_cpu(
       "[Compiled::eval_cpu] CPU compilation not supported on the platform.");
 }
 
+void CompiledReduce::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error(
+      "[CompiledReduce::eval_cpu] CPU compilation not supported on the platform.");
+}
+
 } // namespace mlx::core
