@@ -1794,6 +1794,17 @@ array transpose(const array& a, StreamOrDevice s /* = {} */) {
   return transpose(a, std::move(axes), to_stream(s));
 }
 
+array matrix_transpose(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.ndim() < 2) {
+    throw std::invalid_argument(
+        "[matrix_transpose] Input array must have at least 2 dimensions.");
+  }
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  std::swap(axes[a.ndim() - 1], axes[a.ndim() - 2]);
+  return transpose(a, std::move(axes), to_stream(s));
+}
+
 array broadcast_to(
     const array& a,
     const Shape& shape,
