@@ -282,6 +282,18 @@ class TestReduce(mlx_tests.MLXTestCase):
                 getattr(np, op)(x_np, axis=1).tolist(),
             )
 
+    def test_col_reduce_large_stride(self):
+        x = mx.full((32, 2**29 + 17), 3, dtype=mx.int8)
+        out = mx.max(x, axis=0)
+        mx.eval(out)
+        self.assertEqual(mx.min(out).item(), 3)
+        self.assertEqual(mx.max(out).item(), 3)
+
+    def test_init_reduce_large_output(self):
+        out = mx.all(mx.zeros((0, 4, 2**30), dtype=mx.bool_), axis=0)
+        mx.eval(out)
+        self.assertTrue(mx.all(out).item())
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)
