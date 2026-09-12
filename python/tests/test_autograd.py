@@ -1261,6 +1261,48 @@ class TestAutograd(mlx_tests.MLXTestCase):
         expected[4:-5:-2] = tan_b
         self.assertTrue(mx.allclose(grad, expected))
 
+    def test_slice_grads_single_element(self):
+        # A strided slice selecting exactly one element must place each
+        # cotangent at the position the forward pass read it from, not over
+        # the whole half-open span (regression: the stride was collapsed to 1
+        # without narrowing stop, so the vjp re-derived a wider region).
+        def grad_of(fun, x):
+            return mx.grad(fun)(x)
+
+        # positive stride, first element of a length-2 axis
+        x = mx.zeros((2, 3))
+        Wa = mx.ones((1, 3))
+        Wb = mx.ones((1, 3)) * 2
+        fun = lambda z: (z[0::2] * Wa).sum() + (z[1::2] * Wb).sum()
+        g = grad_of(fun, x)
+        self.assertTrue(mx.allclose(g, mx.array([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])))
+
+        # positive stride, single element in a longer span
+        x = mx.zeros((8, 2))
+        W = mx.ones((1, 2))
+        g = grad_of(lambda z: (z[2:5:3] * W).sum(), x)
+        expected = mx.zeros((8, 2))
+        expected[2] = W
+        self.assertTrue(mx.allclose(g, expected))
+
+        # negative stride, single element
+        x = mx.zeros((2, 2))
+        W = mx.ones((1, 2))
+        g = grad_of(lambda z: (z[::-2] * W).sum(), x)
+        expected = mx.zeros((2, 2))
+        expected[1] = W
+        self.assertTrue(mx.allclose(g, expected))
+
+        # negative stride with start == 0 (cannot be expressed as a
+        # single-element negative-stride span; the unit-stride fallback must
+        # still land the cotangent at index 0)
+        x = mx.zeros((3, 2))
+        W = mx.ones((1, 2))
+        g = grad_of(lambda z: (z[0::-1] * W).sum(), x)
+        expected = mx.zeros((3, 2))
+        expected[0] = W
+        self.assertTrue(mx.allclose(g, expected))
+
     def test_leaks(self):
         for transform in [
             mx.grad,
