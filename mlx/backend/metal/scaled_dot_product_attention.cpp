@@ -538,7 +538,8 @@ void sdpa_vector_2pass(
   kname += "sdpa_vector_2pass_1";
   int gqa_factor = q.shape(1) / k.shape(1);
   bool gqa_dims =
-      (gqa_factor == 8 && (q.shape(-1) == 64 || q.shape(-1) == 128)) ||
+      (gqa_factor == 8 &&
+       (q.shape(-1) == 64 || q.shape(-1) == 128 || q.shape(-1) == 256)) ||
       ((gqa_factor == 12 || gqa_factor == 16) && q.shape(-1) == 128);
   if (!mask && !sinks && q.shape(2) == 1 &&
       q.shape(1) == gqa_factor * k.shape(1) && q.shape(-1) == v.shape(-1) &&

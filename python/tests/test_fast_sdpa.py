@@ -410,6 +410,31 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
                 self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    @unittest.skipUnless(mx.metal.is_available(), "Metal is not available")
+    def test_sdpa_vector_gqa_d256(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        mx.random.seed(0)
+        for dtype, atol in [
+            (mx.float32, 1e-4),
+            (mx.float16, 1e-3),
+            (mx.bfloat16, 5e-3),
+        ]:
+            for B, length in [(1, 8192), (1, 8201), (2, 8192), (2, 32768)]:
+                with self.subTest(dtype=dtype, B=B, length=length):
+                    q = mx.random.normal((B, 16, 1, 256)).astype(dtype)
+                    k = mx.random.normal((B, 2, length + 32, 256)).astype(dtype)
+                    v = mx.random.normal((B, 2, length + 32, 256)).astype(dtype)
+                    k, v = k[:, :, :length], v[:, :, :length]
+                    ref = mlx_primitives_sdpa(
+                        q.astype(mx.float32),
+                        mx.repeat(k.astype(mx.float32), 8, axis=1),
+                        mx.repeat(v.astype(mx.float32), 8, axis=1),
+                        256**-0.5,
+                    )
+                    out = mx.fast.scaled_dot_product_attention(q, k, v, scale=256**-0.5)
+                    self.assertTrue(mx.allclose(ref, out, atol=atol, rtol=1e-3))
+
     @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
     def test_sdpa_vector_head_dim_512(self):
         if mx.default_device() != mx.gpu:
