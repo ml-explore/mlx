@@ -2148,6 +2148,57 @@ void GatherQQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     global_scale_w = ensure_row_contiguous(gs_e, d, s);
   }
 
+  int B = out.size() / M / N;
+  bool use_matrix_kernels = has_global_scales && w_quantized &&
+      x.dtype() == bfloat16 && w_q.ndim() == 3 &&
+      K % (metal::is_nax_available() ? 64 : 32) == 0;
+
+  if (use_matrix_kernels && M == 1 && B >= 16 && right_sorted_) {
+    int E = w_q.size() / w_q.shape(-1) / w_q.shape(-2);
+    if (B / E >= 4) {
+      gather_qmm_rhs(
+          x,
+          w_q,
+          scales_w,
+          std::nullopt,
+          global_scale_w,
+          rhs_indices,
+          out,
+          true,
+          group_size_,
+          bits_,
+          x.size() / K,
+          N,
+          K,
+          d,
+          s,
+          mode);
+      return;
+    }
+  }
+
+  if (use_matrix_kernels && M >= get_qmv_batch_limit(K, N, d)) {
+    gather_qmm(
+        x,
+        w_q,
+        scales_w,
+        std::nullopt,
+        global_scale_w,
+        lhs_indices,
+        rhs_indices,
+        out,
+        true,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
+    return;
+  }
+
   gather_qmv(
       x,
       w_q,
