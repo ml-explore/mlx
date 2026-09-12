@@ -198,7 +198,7 @@ class RingImpl {
     size_t n_bytes_per_wire = (n_bytes + (2 * n_wires) - 1) / (2 * n_wires);
     dispatch_wires(n_wires, [&](int lw) {
       all_gather_wire(
-          out_ptr, n_bytes, static_cast<int64_t>(n_bytes_per_wire), lw);
+          out_ptr, n_bytes, static_cast<int64_t>(n_bytes_per_wire), n_wires, lw);
     });
   }
 
@@ -215,14 +215,21 @@ class RingImpl {
       char* out_ptr,
       int64_t n_bytes,
       int64_t n_bytes_per_wire,
+      int n_wires,
       int lw) {
-    // Both directions send the same contiguous slice of each rank's region.
-    int64_t slice = static_cast<int64_t>(lw) * n_bytes_per_wire;
-    int64_t wire_offset[2] = {slice, slice};
-    // Clamp to this wire's slice end so the last frame can't spill into the
-    // next wire's slice.
-    int64_t wire_end_bytes = std::min(n_bytes, slice + n_bytes_per_wire);
-    int64_t wire_end[2] = {wire_end_bytes, wire_end_bytes};
+    // Each rank's region is divided into 2 directional halves, each split
+    // into n_wires contiguous slices - mirroring all_reduce_wire. Without
+    // the lr term both directions cover the same lower-half slice and the
+    // upper half of every peer's region is never transferred.
+    int64_t wire_offset[2];
+    int64_t wire_end[2];
+    for (int lr = 0; lr < 2; lr++) {
+      wire_offset[lr] = lr * n_wires * n_bytes_per_wire +
+          static_cast<int64_t>(lw) * n_bytes_per_wire;
+      int64_t region_end =
+          std::min(n_bytes, (lr + 1) * n_wires * n_bytes_per_wire);
+      wire_end[lr] = std::min(region_end, wire_offset[lr] + n_bytes_per_wire);
+    }
     int64_t send_offset[2] = {rank_ * n_bytes, rank_ * n_bytes};
     int64_t recv_offset[2] = {
         ((rank_ + size_ - 1) % size_) * n_bytes,
@@ -230,7 +237,7 @@ class RingImpl {
 
     ring_pass<2, char>(
         lw,
-        n_bytes,
+        n_bytes * size_,
         n_bytes,
         n_bytes * size_,
         n_bytes_per_wire,
