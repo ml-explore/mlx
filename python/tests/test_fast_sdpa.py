@@ -292,6 +292,55 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                         tol = 5e-3
                     self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
+    # The shapes cover the causal D=256 window (512 <= qL < 1024,
+    # kL <= 1536) and its kL edge.
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_head_dim_256_causal_prefill_window(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        D, Nq, Nkv = 256, 16, 2
+        scale = D**-0.5
+        for dtype, (qL, kL) in product(
+            (mx.float16, mx.bfloat16),
+            ((512, 512), (512, 1536), (512, 1537), (768, 1024), (1023, 1536)),
+        ):
+            with self.subTest(dtype=dtype, qL=qL, kL=kL):
+                mx.random.seed(0)
+                q = (0.5 * mx.random.normal((1, Nq, qL, D))).astype(dtype)
+                k = (0.5 * mx.random.normal((1, Nkv, kL, D))).astype(dtype)
+                v = (0.5 * mx.random.normal((1, Nkv, kL, D))).astype(dtype)
+                ref = mlx_primitives_sdpa(
+                    q,
+                    mx.repeat(k, Nq // Nkv, axis=1),
+                    mx.repeat(v, Nq // Nkv, axis=1),
+                    scale,
+                    mask="causal",
+                )
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask="causal"
+                )
+                self.assertTrue(mx.allclose(ref, out, atol=5e-3, rtol=5e-3))
+
+        # Exercise batch/head strides, an odd tail and sinks on the new path.
+        for dtype in (mx.float16, mx.bfloat16):
+            with self.subTest(dtype=dtype, sinks=True):
+                q = mx.random.normal((2, 6, 513, D)).astype(dtype)
+                k = mx.random.normal((2, 2, 1057, D)).astype(dtype)[:, :, 1:1026]
+                v = mx.random.normal((2, 2, 1057, D)).astype(dtype)[:, :, 1:1026]
+                sinks = mx.linspace(5, 10, 6).astype(dtype)
+                ref = mlx_ref_attn(
+                    q.astype(mx.float32),
+                    k.astype(mx.float32),
+                    v.astype(mx.float32),
+                    scale,
+                    mask="causal",
+                    sinks=sinks.astype(mx.float32),
+                )
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask="causal", sinks=sinks
+                )
+                self.assertTrue(mx.allclose(ref, out, atol=5e-3, rtol=5e-3))
+
     def test_sdpa_vector_kv_transposed_head_seq(self):
         D = 64
         Nq = 4
