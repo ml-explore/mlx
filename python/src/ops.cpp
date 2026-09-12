@@ -2551,9 +2551,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "matrix_transpose",
-      [](const mx::array& a, mx::StreamOrDevice s) {
-        return mx::matrix_transpose(a, s);
-      },
+      &mx::matrix_transpose,
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
