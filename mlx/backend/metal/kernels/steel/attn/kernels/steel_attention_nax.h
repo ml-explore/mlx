@@ -1,4 +1,4 @@
-// Copyright © 2024-25 Apple Inc.
+// Copyright © 2024-26 Apple Inc.
 
 #include "mlx/backend/metal/kernels/steel/attn/nax.h"
 #include "mlx/backend/metal/kernels/steel/attn/params.h"
@@ -489,15 +489,10 @@ template <
 // Head-dim split attention kernel
 ///////////////////////////////////////////////////////////////////////////////
 
-// Variant of attention_nax for wide heads (bd = 256). There, the per-simdgroup
-// accumulator working set of attention_nax (TD output fragments plus the S
-// fragments) is what gates tensor-unit throughput, so this kernel splits the
-// head dim across the WN = 2 simdgroups of the second warp dimension: each
-// simdgroup of a pair owns one half of D for Q@K.T and one half of Dv for P@V,
-// halving its accumulator set. The pair exchanges its partial Q@K.T sums
-// through threadgroup memory, then both simdgroups run softmax redundantly on
-// the full S tile (the row statistics are cheap) and each accumulates P@V for
-// its own half of Dv.
+// Split wide heads across WN simdgroups to reduce the accumulator working set.
+// Each group owns one D slice. The groups exchange their partial Q@K.T scores
+// through threadgroup memory and reduce them in the same order. Each group then
+// runs softmax and accumulates its P@V slice.
 
 // clang-format off
 template <
@@ -556,9 +551,9 @@ template <
   constexpr short kU = 16;
 
   // The WM simdgroups along the first warp dimension split the Q sequence;
-  // the WN simdgroups along the second split the head dim. The exchange
-  // below reduces exactly one peer, so WN is fixed at 2.
-  static_assert(WN == 2, "The head-dim split kernel needs WN == 2");
+  // the WN simdgroups along the second split the head dim.
+  static_assert(
+      WN == 2 || WN == 4, "The head-dim split kernel needs WN == 2 or WN == 4");
   constexpr int kNWarps = WM;
   static_assert(
       BQ >= (kNWarps * kU) && BQ % (kNWarps * kU) == 0,
@@ -579,20 +574,20 @@ template <
   constexpr int BDh = BD / WN;
 
   static_assert(TDh % 2 == 0, "P@V accumulates output fragments in pairs");
-  static_assert(TK % 2 == 0, "S fragments are exchanged pair by pair");
+  static_assert(TK % 2 == 0, "S fragments are computed pair by pair");
 
   const short row_group = simd_group_id / WN;
-  const short d_half = simd_group_id % WN;
+  const short d_group = simd_group_id % WN;
 
   using otile_t = NAXTile<AccumType, TQ, TDh>;
   otile_t Otile;
   Otile.clear();
 
   const short tm = kU * TQ * row_group;
-  Q += tm * int(params->Q_strides[2]) + d_half * BDh;
-  K += d_half * BDh;
-  V += d_half * BDh;
-  O += tm * int(params->O_strides[2]) + d_half * BDh;
+  Q += tm * int(params->Q_strides[2]) + d_group * BDh;
+  K += d_group * BDh;
+  V += d_group * BDh;
+  O += tm * int(params->O_strides[2]) + d_group * BDh;
 
   constexpr short kRowsPT = otile_t::kRowsPerThread;
 
@@ -632,12 +627,11 @@ template <
   using stile_t = NAXTile<AccumType, TQ, TK>;
   constexpr short kEPF = stile_t::NAXFrag_t::kElemsPerFrag;
 
-  // One slot per (row group, half): a fragment pair in per-lane-linear
-  // layout. Both halves share the fragment-to-lane mapping, so the
-  // exchange needs no coordinate math.
-  threadgroup AccumType s_xchg[WM][WN][2 * kEPF * 32];
+  // One slot per (row group, D group) in per-lane-linear layout. All groups
+  // share the fragment-to-lane mapping.
+  threadgroup AccumType s_xchg[WM][WN][TK * kEPF * 32];
 
-  // Keep the simdgroup's Q half resident in registers for the whole KV
+  // Keep the simdgroup's Q slice resident in registers for the whole KV
   // loop: TDh fragments of T are cheap next to the accumulators.
   NAXTile<T, 1, 1> Qtiles[TDh];
   STEEL_PRAGMA_UNROLL
@@ -662,7 +656,7 @@ template <
     stile_t Stile;
     Stile.clear();
 
-    // S = Q @ K.T, this half of D only, exchanged pair by pair.
+    // S = Q @ K.T for this D slice.
     STEEL_PRAGMA_UNROLL
     for (short ik = 0; ik < TK; ik += 2) {
       STEEL_PRAGMA_UNROLL
@@ -686,26 +680,37 @@ template <
             Ktile.frag_at(1, 0),
             metal::true_type{});
       }
-
-      // Exchange the partial pair and reduce.
-      threadgroup AccumType* slot = s_xchg[row_group][d_half];
-      thread auto& s0 = Stile.frag_at(0, ik);
-      thread auto& s1 = Stile.frag_at(0, ik + 1);
-      const short base = short(simd_lane_id) * (2 * kEPF);
-      STEEL_PRAGMA_UNROLL
-      for (short i = 0; i < kEPF; i++) {
-        slot[base + i] = s0[i];
-        slot[base + kEPF + i] = s1[i];
-      }
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-      const threadgroup AccumType* peer = s_xchg[row_group][1 - d_half];
-      STEEL_PRAGMA_UNROLL
-      for (short i = 0; i < kEPF; i++) {
-        s0[i] += peer[base + i];
-        s1[i] += peer[base + kEPF + i];
-      }
-      threadgroup_barrier(mem_flags::mem_threadgroup);
     }
+
+    // Exchange all partial scores and reduce them in a fixed order.
+    threadgroup AccumType* slot = s_xchg[row_group][d_group];
+    const short base = short(simd_lane_id) * (TK * kEPF);
+    STEEL_PRAGMA_UNROLL
+    for (short ik = 0; ik < TK; ik++) {
+      thread auto& s = Stile.frag_at(0, ik);
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < kEPF; i++) {
+        slot[base + ik * kEPF + i] = s[i];
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    STEEL_PRAGMA_UNROLL
+    for (short ik = 0; ik < TK; ik++) {
+      thread auto& s = Stile.frag_at(0, ik);
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < kEPF; i++) {
+        s[i] = s_xchg[row_group][0][base + ik * kEPF + i];
+      }
+      STEEL_PRAGMA_UNROLL
+      for (short peer_group = 1; peer_group < WN; peer_group++) {
+        const threadgroup AccumType* peer = s_xchg[row_group][peer_group];
+        STEEL_PRAGMA_UNROLL
+        for (short i = 0; i < kEPF; i++) {
+          s[i] += peer[base + ik * kEPF + i];
+        }
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
 
     // Scale S
     STEEL_PRAGMA_UNROLL
@@ -826,7 +831,7 @@ template <
       }
     }
 
-    // Do softmax (redundantly per half; the row statistics are cheap)
+    // Do softmax in each D group; the row statistics are cheap.
     metal::vec<AccumType, kRowsPT> new_max;
     metal::vec<AccumType, kRowsPT> factor;
     STEEL_PRAGMA_UNROLL
@@ -854,7 +859,7 @@ template <
 
     simdgroup_barrier(mem_flags::mem_none);
 
-    // O = P @ V, this half of Dv only.
+    // O = P @ V for this D slice.
     STEEL_PRAGMA_UNROLL
     for (short id = 0; id < TDh; id += 2) {
       STEEL_PRAGMA_UNROLL
