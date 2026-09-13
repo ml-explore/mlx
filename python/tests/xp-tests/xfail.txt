@@ -1,4 +1,5 @@
-# Extensions (linalg, fft)
+# test_linalg.py
+## Missing Extensions  (linalg, fft)
 array_api_tests/test_linalg.py::test_cholesky
 array_api_tests/test_linalg.py::test_det
 array_api_tests/test_linalg.py::test_diagonal
@@ -28,10 +29,17 @@ array_api_tests/test_linalg.py::test_linalg_vecdot
 array_api_tests/test_linalg.py::test_vecdot
 array_api_tests/test_linalg.py::test_vecdot_conj
 array_api_tests/test_linalg.py::test_vector_norm
+array_api_tests/test_linalg.py::test_eigvals
+
+# test_fft.py
+## Missing Extensions (linalg, fft)
 array_api_tests/test_fft.py::test_hfft
 array_api_tests/test_fft.py::test_ihfft
 array_api_tests/test_fft.py::test_fftfreq
 array_api_tests/test_fft.py::test_rfftfreq
+
+# test_has_names.py
+## Missing Functions
 array_api_tests/test_has_names.py::test_has_names[linalg-diagonal]
 array_api_tests/test_has_names.py::test_has_names[linalg-matmul]
 array_api_tests/test_has_names.py::test_has_names[linalg-matrix_norm]
@@ -46,6 +54,23 @@ array_api_tests/test_has_names.py::test_has_names[linalg-vecdot]
 array_api_tests/test_has_names.py::test_has_names[linalg-vector_norm]
 array_api_tests/test_has_names.py::test_has_names[fft-hfft]
 array_api_tests/test_has_names.py::test_has_names[fft-ihfft]
+array_api_tests/test_has_names.py::test_has_names[elementwise-copysign]
+array_api_tests/test_has_names.py::test_has_names[elementwise-hypot]
+array_api_tests/test_has_names.py::test_has_names[elementwise-nextafter]
+array_api_tests/test_has_names.py::test_has_names[elementwise-signbit]
+array_api_tests/test_has_names.py::test_has_names[array_method-__pos__]
+array_api_tests/test_has_names.py::test_has_names[array_method-to_device]
+array_api_tests/test_has_names.py::test_has_names[array_attribute-device]
+array_api_tests/test_has_names.py::test_has_names[array_attribute-mT]
+array_api_tests/test_has_names.py::test_has_names[set-isin]
+array_api_tests/test_has_names.py::test_has_names[set-unique_all]
+array_api_tests/test_has_names.py::test_has_names[set-unique_counts]
+array_api_tests/test_has_names.py::test_has_names[set-unique_inverse]
+array_api_tests/test_has_names.py::test_has_names[set-unique_values]
+array_api_tests/test_has_names.py::test_has_names[searching-nonzero]
+
+# test_signatures.py
+## Missing Extensions (linalg, fft)
 array_api_tests/test_signatures.py::test_extension_func_signature[linalg.cholesky]
 array_api_tests/test_signatures.py::test_extension_func_signature[linalg.det]
 array_api_tests/test_signatures.py::test_extension_func_signature[linalg.diagonal]
@@ -70,129 +95,236 @@ array_api_tests/test_signatures.py::test_extension_func_signature[linalg.vecdot]
 array_api_tests/test_signatures.py::test_extension_func_signature[linalg.vector_norm]
 array_api_tests/test_signatures.py::test_extension_func_signature[fft.hfft]
 array_api_tests/test_signatures.py::test_extension_func_signature[fft.ihfft]
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.cholesky]
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.det]
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.eigh]
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.eigvalsh]
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.inv]
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.slogdet]
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.solve]
 
-# Missing functions
-array_api_tests/test_has_names.py::test_has_names[elementwise-copysign]
-array_api_tests/test_has_names.py::test_has_names[elementwise-hypot]
-array_api_tests/test_has_names.py::test_has_names[elementwise-nextafter]
-array_api_tests/test_has_names.py::test_has_names[elementwise-signbit]
-array_api_tests/test_has_names.py::test_has_names[array_method-__pos__]
-array_api_tests/test_has_names.py::test_has_names[array_method-to_device]
-array_api_tests/test_has_names.py::test_has_names[array_attribute-device]
-array_api_tests/test_has_names.py::test_has_names[array_attribute-mT]
-array_api_tests/test_operators_and_elementwise_functions.py::test_copysign
-array_api_tests/test_operators_and_elementwise_functions.py::test_hypot
-array_api_tests/test_operators_and_elementwise_functions.py::test_nextafter
-array_api_tests/test_operators_and_elementwise_functions.py::test_positive[__pos__]
-array_api_tests/test_operators_and_elementwise_functions.py::test_signbit
+## Missing functions
 array_api_tests/test_signatures.py::test_array_method_signature[__pos__]
 array_api_tests/test_signatures.py::test_array_method_signature[to_device]
-
-# Missing complex kernels
-array_api_tests/test_operators_and_elementwise_functions.py::test_acosh
-array_api_tests/test_operators_and_elementwise_functions.py::test_asinh
-array_api_tests/test_operators_and_elementwise_functions.py::test_atanh
-array_api_tests/test_operators_and_elementwise_functions.py::test_expm1
-
-# Missing arguments
-array_api_tests/test_inspection_functions.py::test_array_namespace_info_dtypes
-array_api_tests/test_statistical_functions.py::test_std
-array_api_tests/test_manipulation_functions.py::test_moveaxis
-array_api_tests/test_statistical_functions.py::test_var
-array_api_tests/test_manipulation_functions.py::test_repeat
-array_api_tests/test_manipulation_functions.py::test_reshape
-array_api_tests/test_operators_and_elementwise_functions.py::test_clip
-array_api_tests/test_data_type_functions.py::test_astype
-array_api_tests/test_data_type_functions.py::test_can_cast
-array_api_tests/test_data_type_functions.py::test_finfo[dtype0]
-array_api_tests/test_data_type_functions.py::test_finfo[dtype1]
-array_api_tests/test_searching_functions.py::test_searchsorted
-array_api_tests/test_searching_functions.py::test_searchsorted_with_scalars
-array_api_tests/test_signatures.py::test_func_signature[cumulative_sum]
-array_api_tests/test_signatures.py::test_func_signature[cumulative_prod]
-array_api_tests/test_signatures.py::test_func_signature[prod]
-array_api_tests/test_signatures.py::test_func_signature[std]
-array_api_tests/test_signatures.py::test_func_signature[sum]
-array_api_tests/test_signatures.py::test_func_signature[var]
+array_api_tests/test_signatures.py::test_func_signature[signbit]
+array_api_tests/test_signatures.py::test_func_signature[nextafter]
+array_api_tests/test_signatures.py::test_func_signature[hypot]
+array_api_tests/test_signatures.py::test_func_signature[copysign]
+array_api_tests/test_signatures.py::test_func_signature[nonzero]
 array_api_tests/test_signatures.py::test_func_signature[isin]
 array_api_tests/test_signatures.py::test_func_signature[unique_all]
 array_api_tests/test_signatures.py::test_func_signature[unique_counts]
 array_api_tests/test_signatures.py::test_func_signature[unique_inverse]
 array_api_tests/test_signatures.py::test_func_signature[unique_values]
-array_api_tests/test_signatures.py::test_func_signature[nonzero]
-array_api_tests/test_signatures.py::test_func_signature[searchsorted]
-array_api_tests/test_signatures.py::test_func_signature[asarray]
-array_api_tests/test_signatures.py::test_func_signature[empty_like]
-array_api_tests/test_signatures.py::test_func_signature[from_dlpack]
-array_api_tests/test_signatures.py::test_func_signature[full_like]
-array_api_tests/test_signatures.py::test_func_signature[ones_like]
-array_api_tests/test_signatures.py::test_func_signature[zeros_like]
-array_api_tests/test_signatures.py::test_func_signature[diff]
-array_api_tests/test_signatures.py::test_func_signature[permute_dims]
-array_api_tests/test_signatures.py::test_func_signature[reshape]
-array_api_tests/test_signatures.py::test_func_signature[argsort]
-array_api_tests/test_signatures.py::test_func_signature[sort]
-array_api_tests/test_signatures.py::test_func_signature[clip]
-array_api_tests/test_signatures.py::test_func_signature[copysign]
-array_api_tests/test_signatures.py::test_func_signature[hypot]
-array_api_tests/test_signatures.py::test_func_signature[nextafter]
-array_api_tests/test_signatures.py::test_func_signature[signbit]
 
-# Loss of precision in the complex plane
+## Missing arguments
+### Missing argument `include_initial`
+array_api_tests/test_signatures.py::test_func_signature[cumulative_sum]
+### Missing argument `include_initial`
+array_api_tests/test_signatures.py::test_func_signature[cumulative_prod]
+### Missing argument `dtype`
+array_api_tests/test_signatures.py::test_func_signature[prod]
+### Missing argument `correction`
+array_api_tests/test_signatures.py::test_func_signature[std]
+### Missing argument `dtype`
+array_api_tests/test_signatures.py::test_func_signature[sum]
+### Missing argument `correction`
+array_api_tests/test_signatures.py::test_func_signature[var]
+### Missing argument `sorter`
+array_api_tests/test_signatures.py::test_func_signature[searchsorted]
+### Missing argument `device`
+array_api_tests/test_signatures.py::test_func_signature[asarray]
+### Missing argument `device`
+array_api_tests/test_signatures.py::test_func_signature[empty_like]
+### Missing argument `device`
+array_api_tests/test_signatures.py::test_func_signature[from_dlpack]
+### Missing argument `device`
+array_api_tests/test_signatures.py::test_func_signature[full_like]
+### Missing argument `device`
+array_api_tests/test_signatures.py::test_func_signature[ones_like]
+### Missing argument `device`
+array_api_tests/test_signatures.py::test_func_signature[zeros_like]
+### Missing arguments `prepend` `append`
+array_api_tests/test_signatures.py::test_func_signature[diff]
+### rejects an integer `axes` argument
+array_api_tests/test_signatures.py::test_func_signature[permute_dims]
+### Missing argument `copy`
+array_api_tests/test_signatures.py::test_func_signature[reshape]
+### Missing arguments  `descending` `stable` 
+array_api_tests/test_signatures.py::test_func_signature[argsort]
+### Missing arguments `descending` `stable`
+array_api_tests/test_signatures.py::test_func_signature[sort]
+### Missing `min` argument
+array_api_tests/test_signatures.py::test_func_signature[clip]
+
+
+# test_operators_and_elementwise_functions.py
+## Missing functions
+array_api_tests/test_operators_and_elementwise_functions.py::test_copysign
+array_api_tests/test_operators_and_elementwise_functions.py::test_hypot
+array_api_tests/test_operators_and_elementwise_functions.py::test_nextafter
+array_api_tests/test_operators_and_elementwise_functions.py::test_positive[__pos__]
+array_api_tests/test_operators_and_elementwise_functions.py::test_signbit
+array_api_tests/test_operators_and_elementwise_functions.py::test_binary_with_scalars_real[nextafter]
+array_api_tests/test_operators_and_elementwise_functions.py::test_binary_with_scalars_real[hypot]
+array_api_tests/test_operators_and_elementwise_functions.py::test_binary_with_scalars_real[copysign]
+
+## Missing complex kernels
+array_api_tests/test_operators_and_elementwise_functions.py::test_acosh
+array_api_tests/test_operators_and_elementwise_functions.py::test_asinh
+array_api_tests/test_operators_and_elementwise_functions.py::test_atanh
+array_api_tests/test_operators_and_elementwise_functions.py::test_expm1
+
+## Missing arguments
+### edge case
+array_api_tests/test_operators_and_elementwise_functions.py::test_clip
+
+## Loss of precision in the complex plane
 array_api_tests/test_operators_and_elementwise_functions.py::test_acos
 array_api_tests/test_operators_and_elementwise_functions.py::test_asin
 array_api_tests/test_operators_and_elementwise_functions.py::test_atan
 
-# Other failures
-array_api_tests/test_inspection_functions.py::TestInspection::test_capabilities
-array_api_tests/test_array_object.py::test_setitem_masking
-array_api_tests/test_statistical_functions.py::test_cumulative_sum
-array_api_tests/test_statistical_functions.py::test_cumulative_prod
-array_api_tests/test_manipulation_functions.py::TestExpandDims::test_expand_dims
-array_api_tests/test_statistical_functions.py::test_prod
-array_api_tests/test_statistical_functions.py::test_sum
-array_api_tests/test_utility_functions.py::test_diff_append_prepend
-array_api_tests/test_creation_functions.py::test_asarray_arrays
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype4]
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype5]
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype6]
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype7]
-array_api_tests/test_data_type_functions.py::TestResultType::test_with_scalars
-array_api_tests/test_dlpack.py::test_from_dlpack
+## Other failures
+### wraps shift counts instead of returning zero for shifts >= the integer width
 array_api_tests/test_operators_and_elementwise_functions.py::test_bitwise_left_shift[bitwise_left_shift(x1, x2)]
+### wraps shift counts instead of returning zero for shifts >= the integer width
 array_api_tests/test_operators_and_elementwise_functions.py::test_bitwise_left_shift[__lshift__(x1, x2)]
+### wraps shift counts instead of returning zero for shifts >= the integer width
 array_api_tests/test_operators_and_elementwise_functions.py::test_bitwise_left_shift[__ilshift__(x1, x2)]
+### wraps shift counts instead of returning zero for shifts >= the integer width
 array_api_tests/test_operators_and_elementwise_functions.py::test_bitwise_right_shift[__rshift__(x1, x2)]
+### wraps shift counts instead of returning zero for shifts >= the integer width
 array_api_tests/test_operators_and_elementwise_functions.py::test_bitwise_right_shift[__irshift__(x1, x2)]
+### wraps shift counts instead of returning zero for shifts >= the integer width
 array_api_tests/test_operators_and_elementwise_functions.py::test_divide[divide(x1, x2)]
-array_api_tests/test_has_names.py::test_has_names[set-isin]
-array_api_tests/test_has_names.py::test_has_names[set-unique_all]
-array_api_tests/test_has_names.py::test_has_names[set-unique_counts]
-array_api_tests/test_has_names.py::test_has_names[set-unique_inverse]
-array_api_tests/test_has_names.py::test_has_names[set-unique_values]
-array_api_tests/test_has_names.py::test_has_names[searching-nonzero]
-array_api_tests/test_data_type_functions.py::test_broadcast_arrays
-array_api_tests/test_data_type_functions.py::TestBroadcastShapes::test_empty
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype0]
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype1]
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype2]
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype3]
+### wraps shift counts instead of returning zero for shifts >= the integer width
 array_api_tests/test_operators_and_elementwise_functions.py::test_divide[__truediv__(x1, x2)]
+### wraps shift counts instead of returning zero for shifts >= the integer width
 array_api_tests/test_operators_and_elementwise_functions.py::test_divide[__itruediv__(x1, x2)]
+### truncates toward zero instead of flooring negative results
 array_api_tests/test_operators_and_elementwise_functions.py::test_floor_divide[floor_divide(x1, x2)]
+### truncates toward zero instead of flooring negative results
 array_api_tests/test_operators_and_elementwise_functions.py::test_floor_divide[__floordiv__(x1, x2)]
+### truncates toward zero instead of flooring negative results
 array_api_tests/test_operators_and_elementwise_functions.py::test_floor_divide[__ifloordiv__(x1, x2)]
+### truncates toward zero instead of flooring negative results
 array_api_tests/test_operators_and_elementwise_functions.py::test_log1p
+### does not accept a scalar argument
 array_api_tests/test_operators_and_elementwise_functions.py::test_binary_with_scalars_real[atan2]
-array_api_tests/test_operators_and_elementwise_functions.py::test_binary_with_scalars_real[copysign]
-array_api_tests/test_operators_and_elementwise_functions.py::test_binary_with_scalars_real[hypot]
-array_api_tests/test_operators_and_elementwise_functions.py::test_binary_with_scalars_real[nextafter]
+
+# test_inspection_functions.py
+## Missing arguments
+### Missing argument `device`
+array_api_tests/test_inspection_functions.py::test_array_namespace_info_dtypes
+
+## Other failures
+### Missing attribute '__array_api_version__'
+array_api_tests/test_inspection_functions.py::TestInspection::test_capabilities
+
+# test_statistical_functions.py
+## Missing arguments
+### Missing argument `correction`
+array_api_tests/test_statistical_functions.py::test_std
+### Missing argument `correction`
+array_api_tests/test_statistical_functions.py::test_var
+### Missing argument `include_initial` and does not promote uint8 results to uint32
+array_api_tests/test_statistical_functions.py::test_cumulative_sum
+### Missing argument `include_initial` and does not promote uint8 results to uint32
+array_api_tests/test_statistical_functions.py::test_cumulative_prod
+### Missing argument `include_initial` and does not promote uint8 results to uint32
+array_api_tests/test_statistical_functions.py::test_prod
+### Missing argument `include_initial` and does not promote uint8 results to uint32
+array_api_tests/test_statistical_functions.py::test_sum
+
+# test_manipulation_functions.py
+## Missing arguments
+### Missing argument `copy`
+array_api_tests/test_manipulation_functions.py::test_reshape
+
+## Other failures
+### raises ValueError instead of the required IndexError
+array_api_tests/test_manipulation_functions.py::TestExpandDims::test_expand_dims
+### `repeats` only accepts int
+array_api_tests/test_manipulation_functions.py::test_repeat
+### `source` `destination` only accepts ints
+array_api_tests/test_manipulation_functions.py::test_moveaxis
+
+# test_data_type_functions.py
+## Missing arguments
+### Missing argument `copy`
+array_api_tests/test_data_type_functions.py::test_astype
+### 
+array_api_tests/test_data_type_functions.py::test_can_cast
+### 
+array_api_tests/test_data_type_functions.py::test_finfo[dtype0]
+### 
+array_api_tests/test_data_type_functions.py::test_finfo[dtype1]
+### Missing attribute `bits`
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype0]
+### Missing attribute `bits`
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype1]
+### Missing attribute `bits`
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype2]
+### Missing attribute `bits`
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype3]
+### Missing attribute `bits`
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype4]
+### Missing attribute `bits`
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype5]
+### Missing attribute `bits`
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype6]
+### Missing attribute `bits`
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype7]
+
+## Other failures
+### MLX result_type() does not accept Python scalar values alongside dtypes
+array_api_tests/test_data_type_functions.py::TestResultType::test_with_scalars
+### returns a list instead of the required tuple
+array_api_tests/test_data_type_functions.py::test_broadcast_arrays
+### MLX broadcast_shapes() requires at least one shape
+array_api_tests/test_data_type_functions.py::TestBroadcastShapes::test_empty
+
+
+# test_searching_functions.py
+## Missing arguments
+### Missing argument `sorter`
+array_api_tests/test_searching_functions.py::test_searchsorted
+### Missing argument `sorter`
+array_api_tests/test_searching_functions.py::test_searchsorted_with_scalars
+
+## Other failures
+### returns uint32 indices instead of the required default signed integer dtype
 array_api_tests/test_searching_functions.py::test_argmax
+### returns uint32 indices instead of the required default signed integer dtype
 array_api_tests/test_searching_functions.py::test_argmin
+
+# test_array_object.py
+## Other failures
+array_api_tests/test_array_object.py::test_setitem_masking
+
+# test_utility_functions.py
+## Misisng arguments
+### Missing argument `append` `prepend`
+array_api_tests/test_utility_functions.py::test_diff_append_prepend
+
+# test_creation_functions.py
+## Other failures
+### copy=False is not supported, https://github.com/ml-explore/mlx/pull/4036
+array_api_tests/test_creation_functions.py::test_asarray_arrays
+
+# test_dlpack.py
+## Other failures
+array_api_tests/test_dlpack.py::test_from_dlpack
+
+# test_sorting_functions.py
+## Missing attributes
+### Missing attribute `stable`
 array_api_tests/test_sorting_functions.py::test_argsort
+### Missing attribute `stable`
 array_api_tests/test_sorting_functions.py::test_sort
 
-# Special cases
+# test_special_cases.py
+## Special cases
 array_api_tests/test_special_cases.py::test_unary[expm1((real(x_i) is +0 or real(x_i) == -0) and imag(x_i) is +0) -> 0 + 0j]
 array_api_tests/test_special_cases.py::test_unary[expm1(isfinite(real(x_i)) and imag(x_i) is +infinity) -> NaN + NaN j]
 array_api_tests/test_special_cases.py::test_unary[expm1(isfinite(real(x_i)) and imag(x_i) is NaN) -> NaN + NaN j]
