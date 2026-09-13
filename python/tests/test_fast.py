@@ -548,6 +548,95 @@ class TestFast(mlx_tests.MLXTestCase):
                 self.assertEqual(out.shape, targets.shape)
                 self.assertLess(mx.abs(out - expected).max().item(), tolerances[dtype])
 
+    def test_cross_entropy_degenerate_rows(self):
+        def cross_entropy_ref(logits, targets):
+            score = mx.take_along_axis(logits, mx.expand_dims(targets, -1), -1).squeeze(
+                -1
+            )
+            return mx.logsumexp(logits.astype(mx.float32), axis=-1) - score.astype(
+                mx.float32
+            )
+
+        targets = mx.array([0, 1])
+        for name, logits in [
+            ("has +inf", mx.array([[1.0, float("inf"), 2.0], [1.0, 2.0, 3.0]])),
+            (
+                "masked",
+                mx.array([[0.5, float("-inf"), 2.0], [float("-inf"), 1.0, 3.0]]),
+            ),
+        ]:
+            out = mx.fast.cross_entropy(logits, targets)
+            expected = cross_entropy_ref(logits, targets)
+            self.assertTrue(mx.allclose(out, expected).item(), msg=name)
+
+        # An entirely masked row has no finite logsumexp, so the loss is nan
+        # both fused and unfused.
+        all_masked = mx.array([[float("-inf")] * 3, [1.0, 2.0, 3.0]])
+        out = mx.fast.cross_entropy(all_masked, targets)
+        self.assertTrue(mx.isnan(out[0]).item())
+        self.assertTrue(mx.isfinite(out[1]).item())
+
+    def test_cross_entropy_catastrophic_cancellation(self):
+        # Every logit in the row is equal, so the loss is exactly log(V). The
+        # fused kernel forms (max - x_target) before adding log(normalizer) and
+        # keeps that value, where computing logsumexp first would round it away.
+        # Only the fused kernel has this property, so there is nothing to check
+        # on the cpu, which always takes the decomposed fallback.
+        if mx.default_device() == mx.cpu:
+            self.skipTest("cross entropy is not fused on the cpu")
+        V = 4096
+        logits = mx.full((2, V), 1e30)
+        targets = mx.array([0, 5])
+        out = mx.fast.cross_entropy(logits, targets)
+        self.assertTrue(mx.allclose(out, mx.full((2,), math.log(V)), atol=1e-4).item())
+
+    def test_cross_entropy_non_contiguous(self):
+        def cross_entropy_ref(logits, targets):
+            score = mx.take_along_axis(logits, mx.expand_dims(targets, -1), -1).squeeze(
+                -1
+            )
+            return mx.logsumexp(logits.astype(mx.float32), axis=-1) - score.astype(
+                mx.float32
+            )
+
+        logits = mx.random.normal(shape=(1000, 8)).T
+        targets = mx.random.randint(0, 1000, shape=(8,))
+        self.assertTrue(
+            mx.allclose(
+                mx.fast.cross_entropy(logits, targets),
+                cross_entropy_ref(logits, targets),
+            ).item()
+        )
+
+        logits = mx.random.normal(shape=(4, 2048))[:, ::2]
+        targets = mx.random.randint(0, 1024, shape=(4,))
+        self.assertTrue(
+            mx.allclose(
+                mx.fast.cross_entropy(logits, targets),
+                cross_entropy_ref(logits, targets),
+            ).item()
+        )
+
+    def test_cross_entropy_grad_donated_input(self):
+        # The logits are produced inside the graph, so the vjp may write the
+        # gradient directly into that buffer.
+        def ref(logits, targets):
+            score = mx.take_along_axis(logits, mx.expand_dims(targets, -1), -1).squeeze(
+                -1
+            )
+            return mx.logsumexp(logits, axis=-1) - score
+
+        for V in [64, 4096, 32000]:
+            x = mx.random.normal(shape=(3, V), scale=2.0)
+            targets = mx.random.randint(0, V, shape=(3,))
+            g1 = mx.grad(lambda a, y: ref(a * 2.0 + 1.0, y).sum(), argnums=0)(
+                x, targets
+            )
+            g2 = mx.grad(
+                lambda a, y: mx.fast.cross_entropy(a * 2.0 + 1.0, y).sum(), argnums=0
+            )(x, targets)
+            self.assertLess(mx.abs(g1 - g2).max().item(), 1e-5)
+
     def test_cross_entropy_shape_checks(self):
         logits = mx.random.normal(shape=(4, 16))
         with self.assertRaises(ValueError):

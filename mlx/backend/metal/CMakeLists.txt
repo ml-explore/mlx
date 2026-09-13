@@ -39,6 +39,7 @@ if(MLX_METAL_JIT)
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/jit_kernels.cpp)
   make_jit_source(arange)
   make_jit_source(copy)
+  make_jit_source(cross_entropy)
   make_jit_source(unary)
   make_jit_source(binary)
   make_jit_source(binary_two)
@@ -124,6 +125,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/cross_entropy.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/custom_kernel.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp

@@ -360,6 +360,28 @@ MTL::ComputePipelineState* get_logsumexp_kernel(
   return d.get_kernel(kernel_name, lib);
 }
 
+MTL::ComputePipelineState* get_cross_entropy_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in) {
+  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
+  auto lib = d.get_library(lib_name, [&] {
+    // The library is keyed on the logits type: the loss is always float32.
+    auto t_str = get_type_string(in.dtype());
+    std::string kernel_source;
+    kernel_source = metal::utils();
+    kernel_source += metal::cross_entropy();
+    kernel_source +=
+        get_template_definition("block_" + lib_name, "cross_entropy", t_str);
+    kernel_source += get_template_definition(
+        "looped_" + lib_name, "cross_entropy_looped", t_str);
+    kernel_source +=
+        get_template_definition("vjp_" + lib_name, "cross_entropy_vjp", t_str);
+    return kernel_source;
+  });
+  return d.get_kernel(kernel_name, lib);
+}
+
 MTL::ComputePipelineState* get_scan_kernel(
     metal::Device& d,
     const std::string& kernel_name,
