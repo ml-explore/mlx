@@ -64,15 +64,15 @@ def cross_entropy(
         >>> nn.losses.cross_entropy(logits, targets)
         array([0.348587, 0.348587], dtype=float32)
         >>>
-        >>> # Half precision logits with class indices as targets. On CUDA a
+        >>> # Half precision logits with class indices as targets. On a GPU a
         >>> # fused kernel accumulates the reduction in float32:
         >>> logits = mx.array([[2.0, -1.0], [-1.0, 2.0]], mx.bfloat16)
         >>> targets = mx.array([0, 1])
         >>> nn.losses.cross_entropy(logits, targets)
-        array([0.0485873, 0.0485873], dtype=float32)
+        array([0.0485873, 0.0485873], dtype=bfloat16)
         >>>
-        >>> # Metal and the CPU reduce in the dtype of the logits, so upcast
-        >>> # them to get the same accuracy:
+        >>> # The cpu reduces in the dtype of the logits, so upcast them to get
+        >>> # the same accuracy:
         >>> nn.losses.cross_entropy(logits.astype(mx.float32), targets)
         array([0.0485873, 0.0485873], dtype=float32)
     """
@@ -95,9 +95,10 @@ def cross_entropy(
             f"Targets shape {targets.shape} does not match logits shape {logits.shape}."
         )
 
+    # Both GPU backends implement the fused kernel, which shifts by the row max
+    # internally, so the explicit shift below is only needed off the fast path.
     use_fast = (
-        mx.cuda.is_available()
-        and mx.default_device() == mx.gpu
+        mx.default_device() == mx.gpu
         and not targets_as_probs
         and label_smoothing == 0
         and axis in (-1, logits.ndim - 1)

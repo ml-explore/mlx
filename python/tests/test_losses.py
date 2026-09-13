@@ -9,6 +9,68 @@ import numpy as np
 
 
 class TestLosses(mlx_tests.MLXTestCase):
+    def test_cross_entropy_gpu_matches_cpu(self):
+        # On a gpu the class index path is handed to the fused kernel, which
+        # shifts by the row max itself instead of using the explicit shift the
+        # fallback applies. The two have to agree, including for the arguments
+        # that fall back on either device.
+        if mx.default_device() == mx.cpu:
+            self.skipTest("needs a gpu to compare against the cpu")
+
+        # cross_entropy picks the fast path off the default device, so switch
+        # the device rather than passing a stream.
+        def both_devices(*args, **kwargs):
+            gpu = nn.losses.cross_entropy(*args, **kwargs)
+            mx.set_default_device(mx.cpu)
+            try:
+                cpu = nn.losses.cross_entropy(*args, **kwargs)
+                mx.eval(cpu)
+            finally:
+                mx.set_default_device(mx.gpu)
+            mx.eval(gpu)
+            return gpu, cpu
+
+        for V in [2, 7, 4096, 4097]:
+            logits = mx.random.normal(shape=(4, V), scale=3.0)
+            targets = mx.random.randint(0, V, shape=(4,))
+            gpu, cpu = both_devices(logits, targets, reduction="none")
+            self.assertEqual(gpu.dtype, cpu.dtype)
+            self.assertTrue(mx.allclose(gpu, cpu, atol=1e-5), msg=f"V={V}")
+
+            # In half precision the two are allowed to differ, because the
+            # fused kernel accumulates in float32 while the fallback reduces in
+            # the dtype of the logits. Hold it to the stronger property: the
+            # fused result is never further from the float32 answer.
+            for dtype in [mx.float16, mx.bfloat16]:
+                half = logits.astype(dtype)
+                reference = nn.losses.cross_entropy(
+                    half.astype(mx.float32), targets, reduction="none"
+                )
+                gpu, cpu = both_devices(half, targets, reduction="none")
+                self.assertEqual(gpu.dtype, dtype)
+                gpu_err = mx.abs(gpu.astype(mx.float32) - reference).max().item()
+                cpu_err = mx.abs(cpu.astype(mx.float32) - reference).max().item()
+                self.assertLessEqual(gpu_err, cpu_err + 1e-6, msg=f"V={V} {dtype}")
+                self.assertLess(gpu_err, 0.2, msg=f"V={V} {dtype}")
+
+        # A large shared offset is where the fused and the decomposed paths
+        # could most easily disagree.
+        base = mx.array([[2.0, -1.0]])
+        for offset in [0.0, 1e4, 1e6]:
+            gpu, cpu = both_devices(base + offset, mx.array([0]), reduction="none")
+            self.assertTrue(mx.allclose(gpu, cpu, atol=1e-5), msg=f"offset={offset}")
+
+        # Arguments the fast path declines, so both devices decompose.
+        logits = mx.random.normal(shape=(4, 32))
+        targets = mx.random.randint(0, 32, shape=(4,))
+        for kwargs in [
+            {"label_smoothing": 0.1},
+            {"weights": mx.random.uniform(shape=(4,))},
+            {"reduction": "mean"},
+        ]:
+            gpu, cpu = both_devices(logits, targets, **kwargs)
+            self.assertTrue(mx.allclose(gpu, cpu, atol=1e-5), msg=str(kwargs))
+
     def test_cross_entropy(self):
         # No weights, no label smoothing
         logits = mx.array([[0.0, -float("inf")], [-float("inf"), 0.0]])
