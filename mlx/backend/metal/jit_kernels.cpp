@@ -360,6 +360,26 @@ MTL::ComputePipelineState* get_logsumexp_kernel(
   return d.get_kernel(kernel_name, lib);
 }
 
+MTL::ComputePipelineState* get_cross_entropy_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in) {
+  // Both kernels live in one library, so the name is not derived from
+  // kernel_name.
+  std::string lib_name = "cross_entropy_" + type_to_name(in);
+  auto lib = d.get_library(lib_name, [&] {
+    auto t_str = get_type_string(in.dtype());
+    std::string kernel_source = metal::utils();
+    kernel_source += metal::cross_entropy();
+    kernel_source += get_template_definition(
+        "cross_entropy_" + type_to_name(in), "cross_entropy", t_str);
+    kernel_source += get_template_definition(
+        "cross_entropy_vjp_" + type_to_name(in), "cross_entropy_vjp", t_str);
+    return kernel_source;
+  });
+  return d.get_kernel(kernel_name, lib);
+}
+
 MTL::ComputePipelineState* get_scan_kernel(
     metal::Device& d,
     const std::string& kernel_name,
