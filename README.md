@@ -1,5 +1,9 @@
 # MLX
 
+<p align="center">
+  <b>English</b> · <a href="README.zh.md">简体中文</a>
+</p>
+
 [**Quickstart**](#quickstart) | [**Installation**](#installation) |
 [**Documentation**](https://ml-explore.github.io/mlx/build/html/index.html) |
 [**Examples**](#examples)
