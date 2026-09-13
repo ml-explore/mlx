@@ -45,6 +45,22 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(out.dtype, mx.int32)
         self.assertTrue(mx.array_equal(out, mx.array([2, 4])))
 
+    def test_compile_sigmoid_matches_eager(self):
+        # Regression test: `Sigmoid` spelled an unqualified `metal::exp`, which
+        # the prebuilt metallib (-fno-fast-math) resolves to the precise
+        # implementation but a runtime-compiled kernel resolves to the fast
+        # approximation -- so a fused compiled chain returned a different, less
+        # accurate sigmoid than the eager primitive. `Exp` in the same header
+        # already spells `metal::precise::exp`.
+        x = mx.linspace(-12, 12, 4001)
+
+        for dtype in (mx.float32, mx.bfloat16):
+            xd = x.astype(dtype)
+            expected = mx.sigmoid(xd)
+            fused = mx.compile(lambda a: mx.sigmoid(a) * 1.0)(xd)
+            mx.eval(expected, fused)
+            self.assertTrue(mx.array_equal(fused, expected))
+
     def test_compile_nonfinite_constants(self):
         # Regression test: a non-finite scalar constant (NaN / infinity) baked
         # into a fused compiled kernel used to stream a bare token (e.g. `nan`)

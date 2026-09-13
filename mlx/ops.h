@@ -1626,6 +1626,7 @@ MLX_API array gather_qmm(
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
+    const std::optional<array>& global_scale = std::nullopt,
     bool sorted_indices = false,
     StreamOrDevice s = {});
 

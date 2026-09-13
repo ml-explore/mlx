@@ -617,8 +617,10 @@ std::unordered_map<int, CommandEncoder>& get_command_encoders() {
 }
 
 std::unordered_map<int, CommandEncoder>& get_global_command_encoders() {
-  static std::unordered_map<int, CommandEncoder> encoders;
-  return encoders;
+  // encoders are leaked intentionally as they would synchronize on process
+  // shutdown
+  static auto* encoders = new std::unordered_map<int, CommandEncoder>();
+  return *encoders;
 }
 
 } // namespace mlx::core::cu

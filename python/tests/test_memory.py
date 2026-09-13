@@ -1,4 +1,4 @@
-# Copyright © 2023-2024 Apple Inc.
+# Copyright © 2023-2026 Apple Inc.
 
 import unittest
 
@@ -43,6 +43,7 @@ class TestMemory(mlx_tests.MLXTestCase):
         self.assertEqual(mx.set_cache_limit(old_limit), old_limit)
 
         old_limit = mx.set_memory_limit(10)
+        self.assertEqual(mx.get_memory_limit(), 10)
         self.assertEqual(mx.set_memory_limit(old_limit), 10)
         self.assertEqual(mx.set_memory_limit(old_limit), old_limit)
 
