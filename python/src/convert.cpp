@@ -250,7 +250,10 @@ mx::array metal_nd_array_to_mlx(
 
   if (copy) {
     auto result = mx::astype(out, dst_dtype, true, mx::Device::gpu);
-    result.eval();
+    {
+      nb::gil_scoped_release nogil;
+      result.eval();
+    }
     return result;
   }
   return out;
