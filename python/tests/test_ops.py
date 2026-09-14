@@ -3123,10 +3123,12 @@ class TestOps(mlx_tests.MLXTestCase):
             mx.searchsorted(mx.array([1.0, 2.0]), mx.array([1.0]), side="middle")
 
     def test_unique(self):
-        # size is required, and the exact size trims the padding away
+        # size is required
         a = mx.array([2, 1, 2, 3, 1])
         with self.assertRaises(TypeError):
             mx.unique(a)
+
+        # passing the correct size (number of unique values) produces a sorted array
         self.assertTrue(mx.array_equal(mx.unique(a, 3), mx.array([1, 2, 3])))
         self.assertEqual(mx.unique(a, 3).dtype, mx.int32)
 
@@ -3180,15 +3182,18 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(inverse.shape, (0,))
         self.assertEqual(counts.shape, (0,))
 
-        # an empty input has no smallest element to default the fill value to
-        with self.assertRaises(ValueError):
-            mx.unique(mx.array([], mx.float32), 3)
+        # empty input is handled correctly when given a fill_value
         self.assertTrue(
             mx.array_equal(
                 mx.unique(mx.array([], mx.float32), 3, fill_value=7),
                 mx.array([7.0, 7.0, 7.0]),
             )
         )
+
+        # empty input has no smallest element to default without a fill_value
+        # and produces an error
+        with self.assertRaises(ValueError):
+            mx.unique(mx.array([], mx.float32), 3)
 
         # every element identical, and every element distinct
         values, counts = mx.unique(mx.full((7,), 4, mx.int32), 7, False, True)
@@ -3214,6 +3219,16 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(values[:2], mx.array([1.0, 2.0])))
         self.assertTrue(bool(mx.all(mx.isnan(values[2:]))))
 
+        # NaN sorts last, so it is never the default fill
+        # note that mx.min(a) would return `nan` but we keep
+        # parity with jax which pads with the min of the sorted
+        # array in this case.
+        values = mx.unique(mx.array([3.0, 1.0, nan, 2.0], mx.float32), 6)
+        self.assertTrue(mx.array_equal(values[:3], mx.array([1.0, 2.0, 3.0])))
+        self.assertTrue(bool(mx.isnan(values[3])))
+        self.assertTrue(mx.array_equal(values[4:], mx.array([1.0, 1.0])))
+
+        # Compare the output with np.unique
         rng = np.random.RandomState(0)
         for n in (1, 2, 17, 1000, 5000):
             a_np = rng.randint(-20, 20, size=n).astype(np.int32)
@@ -3234,7 +3249,7 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertTrue(np.array_equal(np.array(padded)[: len(v_np)], v_np))
             self.assertEqual(mx.sum(pad_counts > 0).item(), len(v_np))
 
-        # non contiguous input
+        # test various non-contiguous slices
         base_np = rng.randint(0, 5, size=(4, 6)).astype(np.int32)
         base = mx.array(base_np)
         for v_mx, v_np in [
@@ -3257,6 +3272,7 @@ class TestOps(mlx_tests.MLXTestCase):
         batched = mx.vmap(lambda x: mx.unique(x, 3))(mx.stack([c, c[::-1]]))
         self.assertTrue(mx.array_equal(batched, mx.stack([mx.unique(c, 3)] * 2)))
 
+        # Test input validation
         with self.assertRaises(ValueError):
             mx.unique(a, -1)
         with self.assertRaises(ValueError):

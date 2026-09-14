@@ -2951,6 +2951,7 @@ std::vector<array> unique(
     bool return_counts /* = false */,
     const std::optional<array>& fill_value /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
+  // Validate args
   if (size < 0) {
     std::ostringstream msg;
     msg << "[unique] Received negative size " << size << ".";
@@ -2958,15 +2959,18 @@ std::vector<array> unique(
   }
   if (fill_value && fill_value->size() != 1) {
     std::ostringstream msg;
-    msg << "[unique] Fill value must be a scalar but got shape "
+    msg << "[unique] Fill value must be a scalar, but got shape "
         << fill_value->shape() << ".";
     throw std::invalid_argument(msg.str());
   }
-  auto flat = flatten(a, s);
-  int n = flat.size();
+  const auto flat = flatten(a, s);
+  const int n = flat.size();
 
+  // Handle the edge case of an empty array.
+  // The output is to be filled with `fill_value`.
   if (n == 0) {
-    // There is no smallest element to take the default fill value from.
+    // There is no smallest element to take the default fill value from
+    // so we throw (similar to jax)
     if (size > 0 && !fill_value) {
       throw std::invalid_argument(
           "[unique] A fill value is required for an empty input with a"
@@ -2989,27 +2993,34 @@ std::vector<array> unique(
     return out;
   }
 
-  auto order = argsort(flat, 0, s);
-  auto sorted = take(flat, order, 0, s);
+  // Sort the array
+  const auto order = argsort(flat, 0, s);
+  const auto sorted = take(flat, order, 0, s);
 
-  // True where a new unique value starts in the sorted array.
-  auto boundary = concatenate(
+  // Do edge detection on the sorted array to get a mask with
+  // true where a new unique value starts in the sorted array.
+  const auto boundary = concatenate(
       {array({true}),
        not_equal(
            slice(sorted, {1}, {n}, s), slice(sorted, {0}, {n - 1}, s), s)},
       0,
       s);
 
-  // Index of the unique value each sorted position belongs to.
-  auto group = subtract(
+  // Cumulative sum on boundary to get to the index of the unique
+  // value each sorted position belongs to.
+  const auto group = subtract(
       cumsum(astype(boundary, uint32, s), 0, false, true, s),
       array(1, uint32),
       s);
 
   // A buffer that fits every group index keeps the scatter in bounds.
-  int buffer_size = std::max(n, size);
-  auto fill = fill_value ? astype(*fill_value, flat.dtype(), s) : min(flat, s);
+  const int buffer_size = std::max(n, size);
+  // Use the minimum of the array to pad the result if size is bigger
+  // than the sorted array.
+  const auto fill = fill_value ? astype(*fill_value, flat.dtype(), s)
+                               : slice(sorted, {0}, {1}, s);
 
+  // Build the output arrays
   std::vector<array> out;
   out.push_back(slice(
       scatter(
@@ -3026,6 +3037,9 @@ std::vector<array> unique(
         scatter(zeros({n}, uint32, s), order, expand_dims(group, 1, s), 0, s);
     out.push_back(reshape(inverse, a.shape(), s));
   }
+  // If output is padded with fill value, counts is padded with zeros
+  // so that ``count.sum() == a.size()`` holds if output was not
+  // truncated.
   if (return_counts) {
     out.push_back(slice(
         scatter_add(
