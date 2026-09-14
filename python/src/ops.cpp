@@ -1560,16 +1560,16 @@ void init_ops(nb::module_& m) {
       "stream"_a = nb::none(),
       R"pbdoc(
         Return the Bartlett window.
-
+        
         The Bartlett window is a taper formed by using a weighted cosine.
 
         .. math::
           w(n) = 1 - \frac{2|n - (M-1)/2|}{M-1}
            \qquad 0 \le n \le M-1
-
+        
         Args:
             M (int): Number of points in the output window.
-
+            
         Returns:
             array: The window, with the maximum value normalized to one (the value one
                    appears only if the number of samples is odd).
@@ -1582,16 +1582,16 @@ void init_ops(nb::module_& m) {
       "stream"_a = nb::none(),
       R"pbdoc(
         Return the Hanning window.
-
+        
         The Hanning window is a taper formed by using a weighted cosine.
 
         .. math::
           w(n) = 0.5 - 0.5 \cos\left(\frac{2\pi n}{M-1}\right)
            \qquad 0 \le n \le M-1
-
+        
         Args:
             M (int): Number of points in the output window.
-
+            
         Returns:
             array: The window, with the maximum value normalized to one (the value one
                    appears only if the number of samples is odd).
@@ -1629,16 +1629,16 @@ void init_ops(nb::module_& m) {
           "def blackman(M: int, *, stream: StreamOrDevice = None) -> array"), // <--- J'ai rajouté ça
       R"pbdoc(
         Return the Blackman window.
-
+        
         The Blackman window is a taper formed by using the first three terms of a summation of cosines.
 
         .. math::
           w(n) = 0.42 - 0.5 \cos\left(\frac{2\pi n}{M-1}\right) + 0.08 \cos\left(\frac{4\pi n}{M-1}\right)
            \qquad 0 \le n \le M-1
-
+        
         Args:
             M (int): Number of points in the output window.
-
+            
         Returns:
             array: The window, with the maximum value normalized to one (the value one
                    appears only if the number of samples is odd).
@@ -3271,17 +3271,26 @@ void init_ops(nb::module_& m) {
       R"pbdoc(
         Returns the sorted unique elements of the flattened array.
 
-        The output has the given ``size``, so ``a`` is not evaluated. Unlike
-        NumPy, the size is never inferred from the values and must be provided.
-        Entries past the last unique element hold ``fill_value``. The count of
-        a padded entry is ``0``, so ``mx.sum(counts > 0)`` gives the number of
-        unique elements.
+        The shape of the output does not depend on the values in ``a``, so
+        ``a`` is not evaluated. Unlike NumPy, the size is never inferred from
+        the values and must be provided.
+
+        Entries past the last unique element hold ``fill_value`` and their
+        count is ``0``, so ``mx.sum(counts > 0)`` gives the number of unique
+        elements as long as the output is not truncated.
+
+        A truncated output keeps the smallest ``size`` unique elements, and
+        ``inverse`` and ``counts`` then stop describing all of ``a`` and stop
+        agreeing with each other: the counts of the dropped elements are gone,
+        while their indices in ``inverse`` are clamped to the last entry.
+        ``inverse`` is meaningless for a ``size`` of ``0``, since there is no
+        element left for it to point at.
 
         Args:
             a (array): Input array.
-            size (int): The size of the output. If the size is smaller than the
-            number of unique elements of ``a``, the output will be truncated.
-            If the size is larger, it will be padded with ``fill_value``.
+            size (int): The size of the output. If the size is smaller than
+              the number of unique elements of ``a``, the output is truncated.
+              If it is larger, the output is padded with ``fill_value``.
             return_inverse (bool, optional): If ``True``, also return the
               indices of the unique array that rebuild ``a``. The indices have
               the same shape as ``a``. Default: ``False``.

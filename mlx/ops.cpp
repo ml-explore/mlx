@@ -2959,7 +2959,7 @@ std::vector<array> unique(
   }
   if (fill_value && fill_value->size() != 1) {
     std::ostringstream msg;
-    msg << "[unique] Fill value must be a scalar, but got shape "
+    msg << "[unique] Fill value must have one element, but got shape "
         << fill_value->shape() << ".";
     throw std::invalid_argument(msg.str());
   }
@@ -2981,7 +2981,7 @@ std::vector<array> unique(
         size == 0 ? flat
                   : full(
                         {size},
-                        astype(*fill_value, flat.dtype(), s),
+                        astype(reshape(*fill_value, {}, s), flat.dtype(), s),
                         flat.dtype(),
                         s));
     if (return_inverse) {
@@ -2993,9 +2993,13 @@ std::vector<array> unique(
     return out;
   }
 
-  // Sort the array
-  const auto order = argsort(flat, 0, s);
-  const auto sorted = take(flat, order, 0, s);
+  // Sort the array. The argsort is only needed to build the inverse, and the
+  // indices it feeds are not differentiable.
+  std::optional<array> order;
+  if (return_inverse) {
+    order = stop_gradient(argsort(flat, 0, s), s);
+  }
+  const auto sorted = order ? take(flat, *order, 0, s) : sort(flat, 0, s);
 
   // Do edge detection on the sorted array to get a mask with
   // true where a new unique value starts in the sorted array.
@@ -3007,34 +3011,61 @@ std::vector<array> unique(
       s);
 
   // Cumulative sum on boundary to get to the index of the unique
-  // value each sorted position belongs to.
-  const auto group = subtract(
-      cumsum(astype(boundary, uint32, s), 0, false, true, s),
-      array(1, uint32),
+  // value each sorted position belongs to. It indexes the output, so it is
+  // not differentiable.
+  const auto group = stop_gradient(
+      subtract(
+          cumsum(astype(boundary, uint32, s), 0, false, true, s),
+          array(1, uint32),
+          s),
       s);
 
   // A buffer that fits every group index keeps the scatter in bounds.
   const int buffer_size = std::max(n, size);
-  // Use the minimum of the array to pad the result if size is bigger
-  // than the sorted array.
-  const auto fill = fill_value ? astype(*fill_value, flat.dtype(), s)
-                               : slice(sorted, {0}, {1}, s);
+  // Use the smallest element of the sorted array to pad the result if size is
+  // bigger than the number of unique values.
+  const auto fill = fill_value
+      ? astype(reshape(*fill_value, {}, s), flat.dtype(), s)
+      : slice(sorted, {0}, {1}, s);
+
+  // Scatter positions in the sorted array rather than the values themselves:
+  // a GPU scatter rejects 8 byte types such as int64. A slot holds its
+  // position plus one, so a zero marks a slot no unique value landed in.
+  // Only the first position of a group is non-zero, so the max over a group
+  // picks it without depending on the order duplicate indices are written in.
+  const auto slots = stop_gradient(
+      slice(
+          scatter_max(
+              zeros({buffer_size}, uint32, s),
+              group,
+              expand_dims(
+                  where(
+                      boundary,
+                      add(arange(n, uint32, s), array(1, uint32), s),
+                      array(0, uint32),
+                      s),
+                  1,
+                  s),
+              0,
+              s),
+          {0},
+          {size},
+          s),
+      s);
+  const auto used = greater(slots, array(0, uint32), s);
+  const auto positions =
+      subtract(maximum(slots, array(1, uint32), s), array(1, uint32), s);
 
   // Build the output arrays
   std::vector<array> out;
-  out.push_back(slice(
-      scatter(
-          full({buffer_size}, fill, flat.dtype(), s),
-          group,
-          expand_dims(sorted, 1, s),
-          0,
-          s),
-      {0},
-      {size},
-      s));
+  out.push_back(where(used, take(sorted, positions, 0, s), fill, s));
   if (return_inverse) {
-    auto inverse =
-        scatter(zeros({n}, uint32, s), order, expand_dims(group, 1, s), 0, s);
+    // Clamp so that the indices stay inside a truncated output. Without a
+    // truncation every group index is already smaller than size.
+    const auto clamped =
+        minimum(group, array(std::max(size - 1, 0), uint32), s);
+    auto inverse = scatter(
+        zeros({n}, uint32, s), *order, expand_dims(clamped, 1, s), 0, s);
     out.push_back(reshape(inverse, a.shape(), s));
   }
   // If output is padded with fill value, counts is padded with zeros

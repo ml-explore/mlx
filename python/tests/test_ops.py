@@ -3277,6 +3277,49 @@ class TestOps(mlx_tests.MLXTestCase):
             mx.unique(a, -1)
         with self.assertRaises(ValueError):
             mx.unique(a, 3, fill_value=mx.array([1, 2]))
+        # any one element array fill value works, whatever its rank
+        for fv in (7, mx.array(7), mx.array([7]), mx.array([[7]])):
+            self.assertTrue(
+                mx.array_equal(mx.unique(a, 4, fill_value=fv), mx.array([1, 2, 3, 7]))
+            )
+
+        # inverse is clamped, so it points nowhere when size is zero
+        values, inverse = mx.unique(a, 0, True)
+        self.assertEqual(values.size, 0)
+        self.assertTrue(mx.array_equal(inverse, mx.zeros(a.shape, mx.uint32)))
+
+        # 8 byte types have to avoid a scatter on the data, since the GPU
+        # scatter does not support them
+        for dtype in (mx.int64, mx.uint64, mx.complex64):
+            values, inverse, counts = mx.unique(
+                mx.array([3, 1, 2, 1], dtype), 4, True, True
+            )
+            self.assertEqual(values.dtype, dtype)
+            self.assertTrue(mx.array_equal(values, mx.array([1, 2, 3, 1], dtype)))
+            self.assertTrue(mx.array_equal(inverse, mx.array([2, 0, 1, 0])))
+            self.assertTrue(mx.array_equal(counts, mx.array([2, 1, 1, 0])))
+        # the dtype numpy hands over by default
+        self.assertTrue(
+            mx.array_equal(mx.unique(mx.array(np.arange(5)), 5), mx.arange(5))
+        )
+
+        # truncation clamps the inverse so that it stays in range, otherwise
+        # values[inverse] reads past the end of the output
+        values, inverse = mx.unique(a, 2, True)
+        self.assertTrue(mx.array_equal(values, mx.array([1, 2])))
+        self.assertTrue(bool(mx.all(inverse < values.size)))
+        self.assertTrue(mx.array_equal(values[inverse], mx.array([2, 1, 2, 2, 1])))
+
+        # the gradient credits the first occurrence of each unique value
+        grad = mx.grad(lambda x: mx.sum(mx.unique(x, 3)))(
+            mx.array([3.0, 1.0, 2.0, 1.0])
+        )
+        self.assertTrue(mx.array_equal(grad, mx.array([1.0, 1.0, 1.0, 0.0])))
+        # and a padded output routes the padding to that same element
+        grad = mx.grad(lambda x: mx.sum(mx.unique(x, 4)))(
+            mx.array([3.0, 1.0, 2.0, 1.0])
+        )
+        self.assertTrue(mx.array_equal(grad, mx.array([1.0, 2.0, 1.0, 0.0])))
 
     @unittest.skipIf(
         os.getenv("LOW_MEMORY", None) is not None,
