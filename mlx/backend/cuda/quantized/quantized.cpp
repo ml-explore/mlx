@@ -1,4 +1,4 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
 #include "mlx/backend/cuda/quantized/quantized.h"
 #include "mlx/backend/cuda/device.h"
@@ -164,9 +164,13 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   array x = ensure_row_contiguous(inputs[0], encoder, s);
   const array& w = inputs[1];
   const array& scales = inputs[2];
+  // Affine gets biases at index 3, nvfp4 an optional global scale.
   std::optional<array> biases;
+  std::optional<array> global_scale;
   if (mode_ == QuantizationMode::Affine) {
     biases = inputs[3];
+  } else if (inputs.size() == 6) {
+    global_scale = ensure_row_contiguous(inputs[3], encoder, s);
   }
   array lhs_indices =
       ensure_row_contiguous(inputs[inputs.size() - 2], encoder, s);
@@ -193,8 +197,23 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   };
   bool can_use_qmm_sm80 = supports(supports_qmm_sm80);
   bool can_use_qmm_naive = supports(supports_qmm_naive);
+  bool can_use_fp_gather_qmv =
+      !global_scale && supports(supports_fp_gather_qmv);
   bool can_use_qmv = supports(supports_qmv);
 
+  auto call_fp_gather_qmv = [&]() {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    fp_gather_qmv(
+        x,
+        w,
+        scales,
+        lhs_indices,
+        rhs_indices,
+        out,
+        bits_,
+        group_size_,
+        encoder);
+  };
   auto call_qmm_sm80 = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
     qmm_sm80(
@@ -242,6 +261,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         mode_,
         encoder);
   };
+
+  if (can_use_fp_gather_qmv) {
+    call_fp_gather_qmv();
+    return;
+  }
 
   if (can_use_qmm_sm80) {
     if (can_use_qmv && (M * B < 8)) {
