@@ -3140,7 +3140,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(inverse, mx.array([1, 0, 1, 2, 0])))
         self.assertTrue(mx.array_equal(counts, mx.array([2, 2, 1, 0])))
         self.assertEqual(inverse.dtype, mx.uint32)
-        self.assertEqual(counts.dtype, mx.uint32)
+        self.assertEqual(counts.dtype, mx.int32)
 
         # zero counts mark the padding, so they give the number of uniques
         counts = mx.unique(a, a.size, False, True)[1]

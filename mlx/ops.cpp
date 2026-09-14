@@ -2988,7 +2988,7 @@ std::vector<array> unique(
       out.push_back(zeros(a.shape(), uint32, s));
     }
     if (return_counts) {
-      out.push_back(zeros({size}, uint32, s));
+      out.push_back(zeros({size}, int32, s));
     }
     return out;
   }
@@ -3074,9 +3074,9 @@ std::vector<array> unique(
   if (return_counts) {
     out.push_back(slice(
         scatter_add(
-            zeros({buffer_size}, uint32, s),
+            zeros({buffer_size}, int32, s),
             group,
-            ones({n, 1}, uint32, s),
+            ones({n, 1}, int32, s),
             0,
             s),
         {0},

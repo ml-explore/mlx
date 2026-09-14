@@ -3318,7 +3318,7 @@ void init_ops(nb::module_& m) {
             >>> inverse
             array([1, 0, 1, 2, 0], dtype=uint32)
             >>> counts
-            array([2, 2, 1, 0], dtype=uint32)
+            array([2, 2, 1, 0], dtype=int32)
       )pbdoc");
   m.def(
       "broadcast_to",
