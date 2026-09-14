@@ -1888,6 +1888,7 @@ class Scan : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS();
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
   const char* name() const override {
     switch (reduce_type_) {
