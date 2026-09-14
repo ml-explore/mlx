@@ -3203,17 +3203,20 @@ class TestOps(mlx_tests.MLXTestCase):
         expect(values, [5])
         self.assertEqual(inverse.shape, ())
 
-        # an empty input has no smallest element, so it needs a fill value
+        # an empty input needs a fill value if size > 0
         e = mx.array([], mx.float32)
         values, inverse, counts = mx.unique(e, 0, True, True)
         self.assertEqual(values.dtype, mx.float32)
         self.assertEqual((values.shape, inverse.shape, counts.shape), ((0,),) * 3)
         with self.assertRaises(ValueError):
             mx.unique(e, 3)
-        values, inverse = mx.unique(e, 3, True, fill_value=7)
-        expect(values, [7.0, 7.0, 7.0])
-        # its inverse is empty as well, so the reconstruction stays valid
-        self.assertEqual(values[inverse].shape, (0,))
+        # the reconstruction stays valid even with size 0
+        for size, want in ((0, []), (3, [7.0, 7.0, 7.0])):
+            values, inverse = mx.unique(e, size, True, fill_value=7)
+            expect(values, want)
+            rebuilt = values[inverse]
+            mx.eval(rebuilt)
+            self.assertEqual(rebuilt.shape, (0,))
 
         # every element identical, and every element distinct
         values, counts = mx.unique(mx.full((7,), 4, mx.int32), 7, False, True)
@@ -3252,6 +3255,10 @@ class TestOps(mlx_tests.MLXTestCase):
         expect(values[:3], [1.0, 2.0, 3.0])
         self.assertTrue(bool(mx.isnan(values[3])))
         expect(values[4:], [1.0, 1.0])
+        # with nothing but NaN there is no other element to fall back on, so
+        # the default fill is NaN as well
+        values = mx.unique(mx.array([nan, nan], mx.float32), 5)
+        self.assertTrue(bool(mx.all(mx.isnan(values))))
 
         # the gradient credits the first occurrence of each unique value, and
         # padding routes to that same element
@@ -3269,8 +3276,13 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(
             mx.array_equal(mx.compile(lambda x: mx.unique(x, 3))(a), mx.unique(a, 3))
         )
-        batched = mx.vmap(lambda x: mx.unique(x, 3))(mx.stack([a, a[::-1]]))
-        self.assertTrue(mx.array_equal(batched, mx.stack([mx.unique(a, 3)] * 2)))
+        # the batch rows must have different unique sets, otherwise broadcasting
+        # one row over the batch would pass
+        rows = mx.array([[2, 1, 2, 3, 1], [7, 7, 5, 5, 9]])
+        values, inverse, counts = mx.vmap(lambda x: mx.unique(x, 3, True, True))(rows)
+        expect(values, [[1, 2, 3], [5, 7, 9]])
+        expect(inverse, [[1, 0, 1, 2, 0], [1, 1, 0, 0, 2]])
+        expect(counts, [[2, 2, 1], [2, 2, 1]])
 
         # compare against numpy on random inputs
         rng = np.random.RandomState(0)
@@ -3294,7 +3306,8 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertTrue(np.array_equal(np.array(padded)[: len(v_np)], v_np))
                 self.assertEqual(mx.sum(pad_counts > 0).item(), len(v_np))
 
-        # non contiguous inputs are read in the output order
+        # non contiguous inputs are flattened over their logical elements,
+        # broadcast multiplicity included, not over their backing memory
         base_np = rng.randint(0, 5, size=(4, 6)).astype(np.int32)
         base = mx.array(base_np)
         for v_mx, v_np in (

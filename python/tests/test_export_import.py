@@ -335,13 +335,15 @@ class TestExportImport(mlx_tests.MLXTestCase):
     def test_export_unique(self):
         path = os.path.join(self.test_dir, "fn.mlxfn")
 
-        # the fixed output size is what makes this exportable
-        for size, fill_value in ((10, None), (4, -1)):
+        # the fixed output size is what makes this exportable. The input is
+        # fixed so that the padded, exact and truncated cases are all covered
+        # rather than left to chance.
+        x = mx.array([3, 1, 2, 1, 3, 2, 1, 0, 2, 1])  # four unique values
+        for size, fill_value in ((10, None), (6, -1), (4, None), (2, None)):
 
             def fun(a):
                 return mx.unique(a, size, True, True, fill_value=fill_value)
 
-            x = mx.random.randint(0, 5, shape=(10,))
             mx.export_function(path, fun, x)
             imported_fun = mx.import_function(path)
             expected = fun(x)

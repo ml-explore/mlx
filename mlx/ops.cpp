@@ -2967,9 +2967,8 @@ std::vector<array> unique(
   const int n = flat.size();
 
   // Handle the edge case of an empty array.
-  // The output is to be filled with `fill_value`.
   if (n == 0) {
-    // Throw as is no smallest element to take the default fill value from.
+    // Without an element there is no default fill value.
     if (size > 0 && !fill_value) {
       throw std::invalid_argument(
           "[unique] A fill value is required for an empty input with a"
@@ -2992,7 +2991,7 @@ std::vector<array> unique(
     return out;
   }
 
-  // Sort the array. Not differentiable.
+  // Sort the array. The values stay differentiable, the permutation does not.
   std::optional<array> order;
   if (return_inverse) {
     order = stop_gradient(argsort(flat, 0, s), s);
@@ -3008,7 +3007,8 @@ std::vector<array> unique(
       0,
       s);
 
-  // Cumsum on boundary gets the index of unique elements. Not differentiable.
+  // Cumsum on boundary gives each sorted element the index of the unique
+  // value it belongs to. It indexes the output, so it is not differentiable.
   const auto group = stop_gradient(
       subtract(
           cumsum(astype(boundary, uint32, s), 0, false, true, s),
@@ -3059,8 +3059,8 @@ std::vector<array> unique(
         zeros({n}, uint32, s), *order, expand_dims(clamped, 1, s), 0, s);
     out.push_back(reshape(inverse, a.shape(), s));
   }
-  // If output is padded with fill value, counts is padded with zeros
-  // so that ``count.sum() == a.size()`` holds when output is not truncated.
+  // Padding entries count zero, so counts sum to the input size unless the
+  // output was truncated.
   if (return_counts) {
     out.push_back(slice(
         scatter_add(

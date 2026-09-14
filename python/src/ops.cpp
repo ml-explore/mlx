@@ -3286,6 +3286,9 @@ void init_ops(nb::module_& m) {
         ``inverse`` is meaningless for a ``size`` of ``0``, since there is no
         element left for it to point at.
 
+        This op builds on ``mx.sort``, so a ``bool`` input needs the CPU
+        stream, which is where ``mx.sort`` supports it.
+
         Args:
             a (array): Input array.
             size (int): The size of the output. If the size is smaller than
@@ -3298,8 +3301,7 @@ void init_ops(nb::module_& m) {
               of times each unique element occurs in ``a``. Default: ``False``.
             fill_value (scalar or array, optional): The value of the entries
               past the last unique element. If ``None``, this defaults to the
-              minimum unique value.
-              Default: ``None``.
+              first of the sorted unique elements. Default: ``None``.
 
         Returns:
             array or tuple(array, ...): The sorted unique elements. If
