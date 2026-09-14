@@ -505,6 +505,7 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     int,
     int,
     int,
+    int,
     const array&,
     bool) {
   return d.get_kernel(kernel_name, hash_name, func_consts);
