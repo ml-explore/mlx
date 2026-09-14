@@ -2944,6 +2944,103 @@ array topk(const array& a, int k, int axis, StreamOrDevice s /* = {}*/) {
   return slice(a_partitioned, slice_starts, slice_ends, s);
 }
 
+std::vector<array> unique(
+    const array& a,
+    int size,
+    bool return_inverse /* = false */,
+    bool return_counts /* = false */,
+    const std::optional<array>& fill_value /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  if (size < 0) {
+    std::ostringstream msg;
+    msg << "[unique] Received negative size " << size << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (fill_value && fill_value->size() != 1) {
+    std::ostringstream msg;
+    msg << "[unique] Fill value must be a scalar but got shape "
+        << fill_value->shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  auto flat = flatten(a, s);
+  int n = flat.size();
+
+  if (n == 0) {
+    // There is no smallest element to take the default fill value from.
+    if (size > 0 && !fill_value) {
+      throw std::invalid_argument(
+          "[unique] A fill value is required for an empty input with a"
+          " non-zero size.");
+    }
+    std::vector<array> out;
+    out.push_back(
+        size == 0 ? flat
+                  : full(
+                        {size},
+                        astype(*fill_value, flat.dtype(), s),
+                        flat.dtype(),
+                        s));
+    if (return_inverse) {
+      out.push_back(zeros(a.shape(), uint32, s));
+    }
+    if (return_counts) {
+      out.push_back(zeros({size}, uint32, s));
+    }
+    return out;
+  }
+
+  auto order = argsort(flat, 0, s);
+  auto sorted = take(flat, order, 0, s);
+
+  // True where a new unique value starts in the sorted array.
+  auto boundary = concatenate(
+      {array({true}),
+       not_equal(
+           slice(sorted, {1}, {n}, s), slice(sorted, {0}, {n - 1}, s), s)},
+      0,
+      s);
+
+  // Index of the unique value each sorted position belongs to.
+  auto group = subtract(
+      cumsum(astype(boundary, uint32, s), 0, false, true, s),
+      array(1, uint32),
+      s);
+
+  // A buffer that fits every group index keeps the scatter in bounds.
+  int buffer_size = std::max(n, size);
+  auto fill = fill_value ? astype(*fill_value, flat.dtype(), s) : min(flat, s);
+
+  std::vector<array> out;
+  out.push_back(slice(
+      scatter(
+          full({buffer_size}, fill, flat.dtype(), s),
+          group,
+          expand_dims(sorted, 1, s),
+          0,
+          s),
+      {0},
+      {size},
+      s));
+  if (return_inverse) {
+    auto inverse =
+        scatter(zeros({n}, uint32, s), order, expand_dims(group, 1, s), 0, s);
+    out.push_back(reshape(inverse, a.shape(), s));
+  }
+  if (return_counts) {
+    out.push_back(slice(
+        scatter_add(
+            zeros({buffer_size}, uint32, s),
+            group,
+            ones({n, 1}, uint32, s),
+            0,
+            s),
+        {0},
+        {size},
+        s));
+  }
+  return out;
+}
+
 array logsumexp(const array& a, bool keepdims, StreamOrDevice s /* = {}*/) {
   std::vector<int> axes(a.ndim());
   std::iota(axes.begin(), axes.end(), 0);

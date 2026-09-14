@@ -332,6 +332,24 @@ class TestExportImport(mlx_tests.MLXTestCase):
             out = imported_fun(x, y)[0]
             self.assertTrue(mx.array_equal(expected, out))
 
+    def test_export_unique(self):
+        path = os.path.join(self.test_dir, "fn.mlxfn")
+
+        # the fixed output size is what makes this exportable
+        for size, fill_value in ((10, None), (4, -1)):
+
+            def fun(a):
+                return mx.unique(a, size, True, True, fill_value=fill_value)
+
+            x = mx.random.randint(0, 5, shape=(10,))
+            mx.export_function(path, fun, x)
+            imported_fun = mx.import_function(path)
+            expected = fun(x)
+            out = imported_fun(x)
+            self.assertEqual(len(out), len(expected))
+            for e, o in zip(expected, out):
+                self.assertTrue(mx.array_equal(e, o))
+
     def test_export_conv(self):
         path = os.path.join(self.test_dir, "fn.mlxfn")
 

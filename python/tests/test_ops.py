@@ -3122,6 +3122,146 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.searchsorted(mx.array([1.0, 2.0]), mx.array([1.0]), side="middle")
 
+    def test_unique(self):
+        # size is required, and the exact size trims the padding away
+        a = mx.array([2, 1, 2, 3, 1])
+        with self.assertRaises(TypeError):
+            mx.unique(a)
+        self.assertTrue(mx.array_equal(mx.unique(a, 3), mx.array([1, 2, 3])))
+        self.assertEqual(mx.unique(a, 3).dtype, mx.int32)
+
+        # the flattened input size always holds every unique element
+        self.assertTrue(mx.array_equal(mx.unique(a, a.size), mx.array([1, 2, 3, 1, 1])))
+
+        values, inverse, counts = mx.unique(a, 4, True, True, fill_value=0)
+        self.assertTrue(mx.array_equal(values, mx.array([1, 2, 3, 0])))
+        self.assertTrue(mx.array_equal(inverse, mx.array([1, 0, 1, 2, 0])))
+        self.assertTrue(mx.array_equal(counts, mx.array([2, 2, 1, 0])))
+        self.assertEqual(inverse.dtype, mx.uint32)
+        self.assertEqual(counts.dtype, mx.uint32)
+
+        # zero counts mark the padding, so they give the number of uniques
+        counts = mx.unique(a, a.size, False, True)[1]
+        self.assertEqual(mx.sum(counts > 0).item(), 3)
+
+        # only the requested extras come back
+        self.assertEqual(len(mx.unique(a, 3, True)), 2)
+        self.assertEqual(len(mx.unique(a, 3, False, True)), 2)
+
+        # a size larger than the input pads further
+        self.assertTrue(
+            mx.array_equal(
+                mx.unique(a, 7, fill_value=-1),
+                mx.array([1, 2, 3, -1, -1, -1, -1]),
+            )
+        )
+
+        # a size smaller than the number of unique elements keeps the smallest
+        self.assertTrue(mx.array_equal(mx.unique(a, 2), mx.array([1, 2])))
+        counts = mx.unique(a, 2, False, True)[1]
+        self.assertTrue(mx.array_equal(counts, mx.array([2, 2])))
+
+        # the input is flattened, but the inverse keeps the input shape
+        b = mx.array([[3, 1, 3], [2, 1, 4]])
+        values, inverse = mx.unique(b, 4, True)
+        self.assertTrue(mx.array_equal(values, mx.array([1, 2, 3, 4])))
+        self.assertEqual(inverse.shape, (2, 3))
+        self.assertTrue(mx.array_equal(values[inverse], b))
+
+        # 0-d input
+        values, inverse = mx.unique(mx.array(5), 1, True)
+        self.assertTrue(mx.array_equal(values, mx.array([5])))
+        self.assertEqual(inverse.shape, ())
+
+        # empty input with a zero size
+        values, inverse, counts = mx.unique(mx.array([], mx.float32), 0, True, True)
+        self.assertEqual(values.shape, (0,))
+        self.assertEqual(values.dtype, mx.float32)
+        self.assertEqual(inverse.shape, (0,))
+        self.assertEqual(counts.shape, (0,))
+
+        # an empty input has no smallest element to default the fill value to
+        with self.assertRaises(ValueError):
+            mx.unique(mx.array([], mx.float32), 3)
+        self.assertTrue(
+            mx.array_equal(
+                mx.unique(mx.array([], mx.float32), 3, fill_value=7),
+                mx.array([7.0, 7.0, 7.0]),
+            )
+        )
+
+        # every element identical, and every element distinct
+        values, counts = mx.unique(mx.full((7,), 4, mx.int32), 7, False, True)
+        self.assertTrue(mx.array_equal(values, mx.full((7,), 4, mx.int32)))
+        self.assertTrue(mx.array_equal(counts, mx.array([7, 0, 0, 0, 0, 0, 0])))
+        self.assertTrue(mx.array_equal(mx.unique(mx.arange(6), 6), mx.arange(6)))
+
+        # floats, including negatives and a repeated zero
+        f = mx.array([0.0, -1.5, 2.25, -1.5, 0.0], mx.float32)
+        self.assertTrue(mx.array_equal(mx.unique(f, 3), mx.array([-1.5, 0.0, 2.25])))
+
+        # None selects the default fill
+        self.assertTrue(
+            mx.array_equal(mx.unique(a, 5, fill_value=None), mx.unique(a, 5))
+        )
+
+        # a fill value is cast to the input dtype
+        self.assertEqual(mx.unique(f, 4, fill_value=1).dtype, mx.float32)
+
+        # like torch, NaN never equals itself so each one is kept
+        nan = float("nan")
+        values = mx.unique(mx.array([1.0, nan, 2.0, nan], mx.float32), 4)
+        self.assertTrue(mx.array_equal(values[:2], mx.array([1.0, 2.0])))
+        self.assertTrue(bool(mx.all(mx.isnan(values[2:]))))
+
+        rng = np.random.RandomState(0)
+        for n in (1, 2, 17, 1000, 5000):
+            a_np = rng.randint(-20, 20, size=n).astype(np.int32)
+            a_mx = mx.array(a_np)
+            v_np, i_np, c_np = np.unique(a_np, return_inverse=True, return_counts=True)
+            values, inverse, counts = mx.unique(a_mx, len(v_np), True, True)
+            self.assertTrue(np.array_equal(np.array(values), v_np))
+            self.assertTrue(
+                np.array_equal(np.array(inverse).reshape(-1), i_np.reshape(-1))
+            )
+            self.assertTrue(np.array_equal(np.array(counts), c_np))
+            # the inverse rebuilds the input
+            self.assertTrue(mx.array_equal(values[inverse], a_mx))
+
+            # a padded size holds the same elements up front
+            padded, pad_counts = mx.unique(a_mx, n, False, True)
+            self.assertEqual(padded.shape, (n,))
+            self.assertTrue(np.array_equal(np.array(padded)[: len(v_np)], v_np))
+            self.assertEqual(mx.sum(pad_counts > 0).item(), len(v_np))
+
+        # non contiguous input
+        base_np = rng.randint(0, 5, size=(4, 6)).astype(np.int32)
+        base = mx.array(base_np)
+        for v_mx, v_np in [
+            (base.T, base_np.T),
+            (base[::2], base_np[::2]),
+            (base[::-1], base_np[::-1]),
+            (base[:, ::-1], base_np[:, ::-1]),
+            (mx.broadcast_to(base[0], (3, 6)), np.broadcast_to(base_np[0], (3, 6))),
+        ]:
+            expected = np.unique(v_np)
+            self.assertTrue(
+                np.array_equal(np.array(mx.unique(v_mx, len(expected))), expected)
+            )
+
+        # the output size is static, so this composes with the transforms
+        c = mx.array([2, 1, 2, 3, 1])
+        self.assertTrue(
+            mx.array_equal(mx.compile(lambda x: mx.unique(x, 3))(c), mx.unique(c, 3))
+        )
+        batched = mx.vmap(lambda x: mx.unique(x, 3))(mx.stack([c, c[::-1]]))
+        self.assertTrue(mx.array_equal(batched, mx.stack([mx.unique(c, 3)] * 2)))
+
+        with self.assertRaises(ValueError):
+            mx.unique(a, -1)
+        with self.assertRaises(ValueError):
+            mx.unique(a, 3, fill_value=mx.array([1, 2]))
+
     @unittest.skipIf(
         os.getenv("LOW_MEMORY", None) is not None,
         "This test requires a lot of memory",

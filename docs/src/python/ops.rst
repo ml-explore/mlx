@@ -203,6 +203,7 @@ Operations
    triu
    trunc
    unflatten
+   unique
    unstack
    vecdot
    var

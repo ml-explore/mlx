@@ -3237,6 +3237,81 @@ void init_ops(nb::module_& m) {
             array: The top ``k`` elements from the input.
       )pbdoc");
   m.def(
+      "unique",
+      [](const mx::array& a,
+         int size,
+         bool return_inverse,
+         bool return_counts,
+         const std::optional<ScalarOrArray>& fill_value,
+         mx::StreamOrDevice s) -> nb::object {
+        std::optional<mx::array> fill_value_ = std::nullopt;
+        if (fill_value) {
+          fill_value_ = to_array(fill_value.value(), a.dtype());
+        }
+        auto out =
+            mx::unique(a, size, return_inverse, return_counts, fill_value_, s);
+        if (out.size() == 1) {
+          return nb::cast(out.at(0));
+        }
+        nb::list result;
+        for (auto& o : out) {
+          result.append(o);
+        }
+        return nb::tuple(result);
+      },
+      nb::arg(),
+      "size"_a,
+      "return_inverse"_a = false,
+      "return_counts"_a = false,
+      "fill_value"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def unique(a: array, /, size: int, return_inverse: bool = False, return_counts: bool = False, fill_value: scalar | array | None = None, *, stream: StreamOrDevice = None) -> array | tuple[array, ...]"),
+      R"pbdoc(
+        Returns the sorted unique elements of the flattened array.
+
+        The output has the given ``size``, so ``a`` is not evaluated. Unlike
+        NumPy, the size is never inferred from the values and must be given.
+        Entries past the last unique element hold ``fill_value``. The count of
+        a padded entry is ``0``, so ``mx.sum(counts > 0)`` gives the number of
+        unique elements.
+
+        Args:
+            a (array): Input array.
+            size (int): The size of the output. Use the size of the flattened
+              ``a`` to hold every unique element. A smaller size keeps only the
+              smallest ``size`` unique elements.
+            return_inverse (bool, optional): If ``True``, also return the
+              indices of the unique array that rebuild ``a``. The indices have
+              the same shape as ``a``. Default: ``False``.
+            return_counts (bool, optional): If ``True``, also return the number
+              of times each unique element occurs in ``a``. Default: ``False``.
+            fill_value (scalar or array, optional): The value of the entries
+              past the last unique element. If ``None``, defaults to the
+              smallest element of ``a``, which an empty ``a`` does not have.
+              Default: ``None``.
+
+        Returns:
+            array or tuple(array, ...): The sorted unique elements. If
+            ``return_inverse`` or ``return_counts`` is ``True``, a tuple with
+            the requested arrays in the order values, inverse, counts.
+
+        Example:
+            >>> a = mx.array([2, 1, 2, 3, 1])
+            >>> mx.unique(a, 3)
+            array([1, 2, 3], dtype=int32)
+            >>> mx.unique(a, 5)
+            array([1, 2, 3, 1, 1], dtype=int32)
+            >>> values, inverse, counts = mx.unique(a, 4, True, True, fill_value=0)
+            >>> values
+            array([1, 2, 3, 0], dtype=int32)
+            >>> inverse
+            array([1, 0, 1, 2, 0], dtype=uint32)
+            >>> counts
+            array([2, 2, 1, 0], dtype=uint32)
+      )pbdoc");
+  m.def(
       "broadcast_to",
       [](const ScalarOrArray& a, const mx::Shape& shape, mx::StreamOrDevice s) {
         return mx::broadcast_to(to_array(a), shape, s);
