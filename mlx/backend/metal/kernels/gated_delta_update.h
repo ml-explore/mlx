@@ -3,9 +3,6 @@
 #include <metal_stdlib>
 #include "mlx/backend/metal/kernels/utils.h"
 
-#include <MetalPerformancePrimitives/MetalPerformancePrimitives.h>
-#include <metal_tensor>
-
 #define AT(TILE, IDX) TILE.thread_elements()[IDX]
 #define SUB(TILE0, TILE1, TILE2)                \
   {                                             \
