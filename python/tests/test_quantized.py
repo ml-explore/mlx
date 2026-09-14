@@ -320,6 +320,52 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    @unittest.skipIf(
+        not mx.metal.is_available(), "Global scale is only supported on Metal backend"
+    )
+    def test_qqmm_global_scale_matrix_kernels(self):
+        mx.random.seed(0)
+        dtype = mx.bfloat16
+        for M, N, K in product(
+            [32, 64],
+            [128, 130],
+            [96, 128],
+        ):
+            with self.subTest(shape=(M, N, K)):
+                x = mx.random.normal((M, K)).astype(dtype)
+                w = mx.random.normal((N, K)).astype(dtype)
+                global_scale_x = mx.max(mx.abs(x)).astype(mx.float32)
+                global_scale_w = mx.max(mx.abs(w)).astype(mx.float32)
+                x_hat = mx.dequantize(
+                    *mx.quantize(x, mode="nvfp4", global_scale=global_scale_x),
+                    mode="nvfp4",
+                    dtype=dtype,
+                    global_scale=global_scale_x,
+                )
+                w_q, scales = mx.quantize(w, mode="nvfp4", global_scale=global_scale_w)
+                w_hat = mx.dequantize(
+                    w_q,
+                    scales,
+                    mode="nvfp4",
+                    dtype=dtype,
+                    global_scale=global_scale_w,
+                )
+
+                expected = x_hat @ mx.swapaxes(w_hat, -1, -2)
+                actual = mx.qqmm(
+                    x,
+                    w_q,
+                    scales,
+                    mode="nvfp4",
+                    global_scale_x=global_scale_x,
+                    global_scale_w=global_scale_w,
+                )
+                delta = mx.abs(actual.astype(mx.float32) - expected.astype(mx.float32))
+                relative_error = delta.max() / mx.maximum(
+                    mx.abs(expected.astype(mx.float32)).max(), 1e-20
+                )
+                self.assertLess(relative_error, 3e-2)
+
     def test_qmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
