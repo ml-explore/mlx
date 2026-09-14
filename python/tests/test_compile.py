@@ -7,6 +7,7 @@ import math
 import threading
 from functools import partial, wraps
 from io import StringIO
+from itertools import product
 
 import mlx.core as mx
 import mlx_tests
@@ -650,6 +651,33 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         cfun = mx.compile(fun, shapeless=True)
         self.assertTrue(mx.array_equal(fun(x2), cfun(x2)))
+
+    def test_shapeless_compile_scan(self):
+        ops = (mx.cumsum, mx.cumprod, mx.cummin, mx.cummax, mx.logcumsumexp)
+        for op, axis, reverse, inclusive in product(
+            ops, (0, 1, -1), (False, True), (False, True)
+        ):
+            with self.subTest(
+                op=op.__name__, axis=axis, reverse=reverse, inclusive=inclusive
+            ):
+                scan = partial(op, axis=axis, reverse=reverse, inclusive=inclusive)
+                trace_count = 0
+
+                def fun(x):
+                    nonlocal trace_count
+                    trace_count += 1
+                    return scan(x)
+
+                cfun = mx.compile(fun, shapeless=True)
+                for shape in ((3, 4), (5, 7), (1, 2), (2, 1)):
+                    with self.subTest(shape=shape):
+                        x = mx.arange(math.prod(shape), dtype=mx.float32)
+                        x = ((x % 7 - 3) / 4).reshape(shape)
+                        expected = scan(x)
+                        actual = cfun(x)
+                        self.assertEqual(actual.shape, x.shape)
+                        self.assertEqualArray(actual, expected, atol=1e-6, rtol=1e-6)
+                        self.assertEqual(trace_count, 1)
 
     def test_shapeless_compile_unflatten(self):
         x = mx.zeros((1, 1, 4 * 32))
