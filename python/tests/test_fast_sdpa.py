@@ -930,14 +930,34 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 test_grad(loss_slow, loss_fast, [q, k, v])
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_d256_default_metal(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        mx.random.seed(0)
+
+        for dtype in (mx.float16, mx.bfloat16):
+            with self.subTest(dtype=dtype):
+                q = (0.5 * mx.random.normal((1, 2, 2048, 256))).astype(dtype)
+                k = (0.5 * mx.random.normal((1, 1, 2048, 256))).astype(dtype)
+                v = (0.5 * mx.random.normal((1, 1, 2048, 256))).astype(dtype)
+                scale = 256**-0.5
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask="causal")
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask="causal"
+                )
+                tol = 1e-2 if dtype == mx.bfloat16 else 1e-3
+                self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
     def test_sdpa_force_fused_metal(self):
         if mx.default_device() != mx.gpu:
             self.skipTest("requires GPU")
+        mx.random.seed(0)
 
-        def make_qkv(qL, kL, D, qH=8, kH=8):
-            q = mx.random.normal((1, qH, qL, D), mx.float16)
-            k = mx.random.normal((1, kH, kL, D), mx.float16)
-            v = mx.random.normal((1, kH, kL, D), mx.float16)
+        def make_qkv(qL, kL, D, qH=8, kH=8, dtype=mx.float16):
+            q = mx.random.normal((1, qH, qL, D), dtype)
+            k = mx.random.normal((1, kH, kL, D), dtype)
+            v = mx.random.normal((1, kH, kL, D), dtype)
             return q, k, v
 
         # Full attention kernel.
@@ -950,6 +970,33 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     q, k, v, scale=scale, mask=mask, force_fused=True
                 )
                 self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
+
+        for dtype, mask_kind in product(
+            (mx.bfloat16, mx.float32), (None, "causal", "bool", "additive")
+        ):
+            with self.subTest(head_dim=256, dtype=dtype, mask=mask_kind):
+                q, k, v = make_qkv(9, 31, 256, 8, 4, dtype)
+                if mask_kind == "bool":
+                    mask = mx.random.uniform(shape=(1, 8, 9, 31)) > 0.2
+                elif mask_kind == "additive":
+                    mask = mx.random.normal((1, 8, 9, 31), dtype)
+                else:
+                    mask = mask_kind
+                scale = 256**-0.5
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask=mask, force_fused=True
+                )
+                tol = 1e-2 if dtype == mx.bfloat16 else 1e-3
+                self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
+        q, k, _ = make_qkv(9, 31, 256, 8, 4, mx.bfloat16)
+        v_half = mx.random.normal((1, 4, 31, 128), mx.bfloat16)
+        v = mx.concatenate((v_half, v_half), axis=-1)
+        out = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=256**-0.5, force_fused=True
+        )
+        self.assertTrue(mx.array_equal(out[..., :128], out[..., 128:]))
 
         # Vector attention kernel.
         for D in (192, 256, 512):
