@@ -752,9 +752,6 @@ std::tuple<bool, std::string> has_fused_kernel(
       return {false, msg.str()};
     }
     if (asymmetric) {
-      if (env::get_var("MLX_SDPA_NAX_D96_V64", 1) == 0) {
-        return {false, "the (96, 64) NAX kernel is disabled."};
-      }
       if (!metal::is_nax_available() ||
           (q.dtype() == float32 && !env::enable_tf32())) {
         return {
@@ -786,10 +783,6 @@ std::tuple<bool, std::string> has_fused_kernel(
           << "query head dim " << query_head_dim << " and value head dim "
           << value_head_dim << ".";
       return {false, msg.str()};
-    }
-    if (query_head_dim == 96 && value_head_dim == 64 &&
-        env::get_var("MLX_SDPA_VECTOR_D96_V64", 1) == 0) {
-      return {false, "the (96, 64) vector kernel is disabled."};
     }
     if (query_sequence_length > key_sequence_length) {
       msg << "the vector attention kernel requires the query sequence to be "
