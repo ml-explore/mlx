@@ -1,4 +1,4 @@
-// Copyright © 2024-25 Apple Inc.
+// Copyright © 2024-26 Apple Inc.
 
 #include "mlx/backend/metal/kernels/steel/attn/attn.h"
 
@@ -119,8 +119,10 @@ template <
   constexpr short tgp_mem_0 = (BK + padK) * (BD);
   constexpr short tgp_mem_1 = BK * (BD + padV);
   constexpr short tgp_mem_s = tgp_mem_0 > tgp_mem_1 ? tgp_mem_0 : tgp_mem_1;
+  constexpr bool q_in_registers = WN == 2 && (BK == 32 || sizeof(T) == 4);
+  constexpr short q_tgp_mem_s = q_in_registers ? 1 : BQ * (BD + padQ);
 
-  threadgroup T Q_smem[BQ * (BD + padQ)];
+  threadgroup T Q_smem[q_tgp_mem_s];
   threadgroup T KV_smem[tgp_mem_s];
 
   threadgroup T* Qs = Q_smem;
@@ -168,8 +170,13 @@ template <
   // Prepare MMA tiles
   constexpr short kFragSize = 8; // MMAFrag size
   using MMAFrag_acc_t = BaseMMAFrag<AccumType, kFragSize, kFragSize>;
+  using MMAInType = metal::conditional_t<WN == 2, T, AccumType>;
+  using MMAFrag_in_t = BaseMMAFrag<MMAInType, kFragSize, kFragSize>;
 
-  constexpr int kNWarps = WM * WN;
+  static_assert(WN == 1 || WN == 2, "WN must be 1 or 2");
+  static_assert(BD % WN == 0, "The head dim must split evenly across WN");
+
+  constexpr int kNWarps = WM;
   static_assert(
       BQ >= (kNWarps * kFragSize) && BQ % (kNWarps * kFragSize) == 0,
       "Each simdgroup must host atleast 1 simdgroup matrix along Q sequence.");
@@ -180,14 +187,17 @@ template <
   constexpr int TK = BK / kFragSize;
   // HeadDim frags (all warps load the same frags)
   constexpr int TD = BD / kFragSize;
+  constexpr int TDh = TD / WN;
+  constexpr int BDh = BD / WN;
 
   static_assert(TQ == 1, "Check TQ");
 
-  MMATile<AccumType, TQ, 1, MMAFrag_acc_t> Qtile;
-  MMATile<AccumType, 1, TK, MMAFrag_acc_t> Ktile;
+  MMATile<MMAInType, TQ, 1, MMAFrag_in_t> Qtile;
+  MMATile<MMAInType, 1, TK, MMAFrag_in_t> Ktile;
   MMATile<AccumType, TQ, TK, MMAFrag_acc_t> Stile;
-  MMATile<AccumType, 1, 1, MMAFrag_acc_t> Vtile;
-  MMATile<AccumType, TQ, TD, MMAFrag_acc_t> Otile;
+  MMATile<MMAInType, 1, 1, MMAFrag_in_t> Vtile;
+  MMATile<AccumType, TQ, TDh, MMAFrag_acc_t> Otile;
+  MMATile<MMAInType, 1, 1, MMAFrag_in_t> Qtiles[q_in_registers ? TDh : 1];
 
   Otile.clear();
 
@@ -195,22 +205,45 @@ template <
   const short2 simd_coord = MMAFrag_acc_t::get_coord(simd_lane_id);
   const short sm = simd_coord.y;
   const short sn = simd_coord.x;
-  const short tm = kFragSize * TQ * simd_group_id;
+  const short row_group = simd_group_id / WN;
+  const short d_half = simd_group_id % WN;
+  const short tm = kFragSize * TQ * row_group;
 
-  const short Qs_offset = (tm + sm) * LDQ_tgp + sn;
-  const short Ks_offset = sm * LDK_tgp + sn;
-  const short Vs_offset = sm * LDV_tgp + sn;
+  const short Qs_offset = (tm + sm) * LDQ_tgp + d_half * BDh + sn;
+  const short Ks_offset = d_half * BDh * LDK_tgp + sm * LDK_tgp + sn;
+  const short Vs_offset = sm * LDV_tgp + d_half * BDh + sn;
 
   constexpr short Qs_tile_stride = kFragSize;
   constexpr short Ks_tile_stride = kFragSize * LDK_tgp;
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  // Load Q blocks
-  if (!align_Q && int(tid.x) == (params->NQ_aligned)) {
-    loader_q.load_safe(short2(BD, params->qL_rem));
+  if constexpr (!q_in_registers) {
+    if (!align_Q && int(tid.x) == (params->NQ_aligned)) {
+      loader_q.load_safe(short2(BD, params->qL_rem));
+    } else {
+      loader_q.load_unsafe();
+    }
   } else {
-    loader_q.load_unsafe();
+    STEEL_PRAGMA_UNROLL
+    for (short dd = 0; dd < TDh; dd++) {
+      const device T* q_src = Q + (tm + sm) * params->Q_strides[2] +
+          d_half * BDh + dd * kFragSize + sn;
+      if (!align_Q && int(tid.x) == (params->NQ_aligned)) {
+        MMAFrag_in_t::load_safe(
+            Qtiles[dd].frag_at(0, 0),
+            q_src,
+            params->Q_strides[2],
+            Int<1>{},
+            params->qL_rem - (tm + sm),
+            BDh - (dd * kFragSize + sn),
+            Int<0>{},
+            Int<0>{});
+      } else {
+        MMAFrag_in_t::load(
+            Qtiles[dd].frag_at(0, 0), q_src, params->Q_strides[2], Int<1>{});
+      }
+    }
   }
 
   // Init row reduction variables
@@ -262,17 +295,51 @@ template <
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
     STEEL_PRAGMA_UNROLL
-    for (short dd = 0; dd < TD; dd++) {
+    for (short dd = 0; dd < TDh; dd++) {
       simdgroup_barrier(mem_flags::mem_none);
 
-      Qtile.template load<T, 1, 1, LDQ_tgp, 1>(
-          &Qs[Qs_offset + dd * Qs_tile_stride]);
+      if constexpr (!q_in_registers) {
+        Qtile.template load<T, 1, 1, LDQ_tgp, 1>(
+            &Qs[Qs_offset + dd * Qs_tile_stride]);
+      }
       Ktile.template load<T, 1, 1, LDK_tgp, 1>(
           &Ks[Ks_offset + dd * Ks_tile_stride]);
 
       simdgroup_barrier(mem_flags::mem_none);
 
-      tile_matmad(Stile, Qtile, Ktile, Stile);
+      if constexpr (!q_in_registers) {
+        tile_matmad(Stile, Qtile, Ktile, Stile);
+      } else {
+        tile_matmad(Stile, Qtiles[dd], Ktile, Stile);
+      }
+    }
+
+    if constexpr (WN == 2) {
+      constexpr int s_xchg_stride = decltype(Stile)::kElemsPerTile * 32;
+      constexpr int s_xchg_size = WM * WN * s_xchg_stride;
+      static_assert(
+          s_xchg_size * sizeof(AccumType) <= tgp_mem_s * sizeof(T),
+          "The score exchange must fit in KV_smem");
+
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      threadgroup AccumType* s_xchg =
+          reinterpret_cast<threadgroup AccumType*>(KV_smem);
+      threadgroup AccumType* slot =
+          s_xchg + (row_group * WN + d_half) * s_xchg_stride;
+      const short base = short(simd_lane_id) * decltype(Stile)::kElemsPerTile;
+
+      STEEL_PRAGMA_UNROLL
+      for (short ii = 0; ii < decltype(Stile)::kElemsPerTile; ii++) {
+        slot[base + ii] = Stile.elems()[ii];
+      }
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+
+      const threadgroup AccumType* peer =
+          s_xchg + (row_group * WN + 1 - d_half) * s_xchg_stride;
+      STEEL_PRAGMA_UNROLL
+      for (short ii = 0; ii < decltype(Stile)::kElemsPerTile; ii++) {
+        Stile.elems()[ii] += peer[base + ii];
+      }
     }
 
     // Apply scale in float32
@@ -425,7 +492,7 @@ template <
     STEEL_PRAGMA_UNROLL
     for (short iq = 0; iq < TQ; iq++) {
       STEEL_PRAGMA_UNROLL
-      for (short id = 0; id < TD; id++) {
+      for (short id = 0; id < TDh; id++) {
         STEEL_PRAGMA_UNROLL
         for (short ik = 0; ik < TK; ik++) {
           if constexpr (BD >= 128) {
@@ -461,10 +528,10 @@ template <
   threadgroup_barrier(mem_flags::mem_none);
 
   // Store results
-  O += (tm + sm) * params->O_strides[2] + sn;
+  O += (tm + sm) * params->O_strides[2] + d_half * BDh + sn;
 
   if (!align_Q && int(tid.x) == (params->NQ_aligned)) {
-    auto dst_tile_dims = short2(BD - sn, params->qL_rem - (tm + sm));
+    auto dst_tile_dims = short2(BDh - sn, params->qL_rem - (tm + sm));
 
     if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
       return;
