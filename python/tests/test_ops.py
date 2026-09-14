@@ -3146,6 +3146,15 @@ class TestOps(mlx_tests.MLXTestCase):
         counts = mx.unique(a, a.size, False, True)[1]
         self.assertEqual(mx.sum(counts > 0).item(), 3)
 
+        # counts.sum() == a.size if and only if the output was not truncated,
+        # and is smaller when it was
+        for size in (3, 4, 5, 7):
+            counts = mx.unique(a, size, False, True)[1]
+            self.assertEqual(mx.sum(counts).item(), a.size)
+        for size in (1, 2):
+            counts = mx.unique(a, size, False, True)[1]
+            self.assertLess(mx.sum(counts).item(), a.size)
+
         # only the requested extras come back
         self.assertEqual(len(mx.unique(a, 3, True)), 2)
         self.assertEqual(len(mx.unique(a, 3, False, True)), 2)
@@ -3181,6 +3190,14 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(values.dtype, mx.float32)
         self.assertEqual(inverse.shape, (0,))
         self.assertEqual(counts.shape, (0,))
+        # the inverse is empty too, so the reconstruction stays valid
+        self.assertEqual(values[inverse].shape, (0,))
+        empty_values, empty_inverse = mx.unique(
+            mx.array([], mx.float32), 3, True, fill_value=7
+        )
+        self.assertEqual(empty_values.shape, (3,))
+        self.assertEqual(empty_inverse.shape, (0,))
+        self.assertEqual(empty_values[empty_inverse].shape, (0,))
 
         # empty input is handled correctly when given a fill_value
         self.assertTrue(
@@ -3283,13 +3300,20 @@ class TestOps(mlx_tests.MLXTestCase):
                 mx.array_equal(mx.unique(a, 4, fill_value=fv), mx.array([1, 2, 3, 7]))
             )
 
-        # inverse is clamped, so it points nowhere when size is zero
+        # inverse indices are clamped to size. If size is 0, this means an all zero array.
         values, inverse = mx.unique(a, 0, True)
         self.assertEqual(values.size, 0)
         self.assertTrue(mx.array_equal(inverse, mx.zeros(a.shape, mx.uint32)))
+        # the clamp has no index to clamp to, so this is the one case where
+        # values[inverse] is not a valid array
+        with self.assertRaises(ValueError):
+            mx.eval(values[inverse])
+        for shape in ((2, 3), ()):
+            values, inverse = mx.unique(mx.zeros(shape, mx.int32), 0, True)
+            with self.assertRaises(ValueError):
+                mx.eval(values[inverse])
 
-        # 8 byte types have to avoid a scatter on the data, since the GPU
-        # scatter does not support them
+        # check unique support 64 bit types
         for dtype in (mx.int64, mx.uint64, mx.complex64):
             values, inverse, counts = mx.unique(
                 mx.array([3, 1, 2, 1], dtype), 4, True, True
@@ -3298,10 +3322,20 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertTrue(mx.array_equal(values, mx.array([1, 2, 3, 1], dtype)))
             self.assertTrue(mx.array_equal(inverse, mx.array([2, 0, 1, 0])))
             self.assertTrue(mx.array_equal(counts, mx.array([2, 1, 1, 0])))
-        # the dtype numpy hands over by default
+
+        # in particular, the int64 dtype numpy hands over by default
         self.assertTrue(
             mx.array_equal(mx.unique(mx.array(np.arange(5)), 5), mx.arange(5))
         )
+
+        # bool only works on the cpu stream, since the metal sort has no bool
+        # kernel to build on
+        values, inverse, counts = mx.unique(
+            mx.array([True, False, True]), 2, True, True, stream=mx.cpu
+        )
+        self.assertTrue(mx.array_equal(values, mx.array([False, True])))
+        self.assertTrue(mx.array_equal(inverse, mx.array([1, 0, 1])))
+        self.assertTrue(mx.array_equal(counts, mx.array([1, 2])))
 
         # truncation clamps the inverse so that it stays in range, otherwise
         # values[inverse] reads past the end of the output
@@ -3315,6 +3349,9 @@ class TestOps(mlx_tests.MLXTestCase):
             mx.array([3.0, 1.0, 2.0, 1.0])
         )
         self.assertTrue(mx.array_equal(grad, mx.array([1.0, 1.0, 1.0, 0.0])))
+        # the leading duplicate is the one credited, not a later one
+        grad = mx.grad(lambda x: mx.sum(mx.unique(x, 2)))(mx.array([1.0, 1.0, 2.0]))
+        self.assertTrue(mx.array_equal(grad, mx.array([1.0, 0.0, 1.0])))
         # and a padded output routes the padding to that same element
         grad = mx.grad(lambda x: mx.sum(mx.unique(x, 4)))(
             mx.array([3.0, 1.0, 2.0, 1.0])

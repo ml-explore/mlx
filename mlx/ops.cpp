@@ -2969,8 +2969,7 @@ std::vector<array> unique(
   // Handle the edge case of an empty array.
   // The output is to be filled with `fill_value`.
   if (n == 0) {
-    // There is no smallest element to take the default fill value from
-    // so we throw (similar to jax)
+    // Throw as is no smallest element to take the default fill value from.
     if (size > 0 && !fill_value) {
       throw std::invalid_argument(
           "[unique] A fill value is required for an empty input with a"
@@ -2993,16 +2992,15 @@ std::vector<array> unique(
     return out;
   }
 
-  // Sort the array. The argsort is only needed to build the inverse, and the
-  // indices it feeds are not differentiable.
+  // Sort the array. Not differentiable.
   std::optional<array> order;
   if (return_inverse) {
     order = stop_gradient(argsort(flat, 0, s), s);
   }
   const auto sorted = order ? take(flat, *order, 0, s) : sort(flat, 0, s);
 
-  // Do edge detection on the sorted array to get a mask with
-  // true where a new unique value starts in the sorted array.
+  // Edge detection on the sorted array, true where a new unique
+  // value starts in the sorted array.
   const auto boundary = concatenate(
       {array({true}),
        not_equal(
@@ -3010,9 +3008,7 @@ std::vector<array> unique(
       0,
       s);
 
-  // Cumulative sum on boundary to get to the index of the unique
-  // value each sorted position belongs to. It indexes the output, so it is
-  // not differentiable.
+  // Cumsum on boundary gets the index of unique elements. Not differentiable.
   const auto group = stop_gradient(
       subtract(
           cumsum(astype(boundary, uint32, s), 0, false, true, s),
@@ -3020,19 +3016,14 @@ std::vector<array> unique(
           s),
       s);
 
-  // A buffer that fits every group index keeps the scatter in bounds.
-  const int buffer_size = std::max(n, size);
-  // Use the smallest element of the sorted array to pad the result if size is
-  // bigger than the number of unique values.
+  // Use smallest element of the sorted array (index 0) as padding by default.
   const auto fill = fill_value
       ? astype(reshape(*fill_value, {}, s), flat.dtype(), s)
       : slice(sorted, {0}, {1}, s);
 
-  // Scatter positions in the sorted array rather than the values themselves:
-  // a GPU scatter rejects 8 byte types such as int64. A slot holds its
-  // position plus one, so a zero marks a slot no unique value landed in.
-  // Only the first position of a group is non-zero, so the max over a group
-  // picks it without depending on the order duplicate indices are written in.
+  const int buffer_size = std::max(n, size);
+  // Scatter positions rather than values in the sorted array (64 bit values
+  // would fail to scatter on the GPU).
   const auto slots = stop_gradient(
       slice(
           scatter_max(
@@ -3056,7 +3047,7 @@ std::vector<array> unique(
   const auto positions =
       subtract(maximum(slots, array(1, uint32), s), array(1, uint32), s);
 
-  // Build the output arrays
+  // Build the output arrays.
   std::vector<array> out;
   out.push_back(where(used, take(sorted, positions, 0, s), fill, s));
   if (return_inverse) {
@@ -3064,13 +3055,12 @@ std::vector<array> unique(
     // truncation every group index is already smaller than size.
     const auto clamped =
         minimum(group, array(std::max(size - 1, 0), uint32), s);
-    auto inverse = scatter(
+    const auto inverse = scatter(
         zeros({n}, uint32, s), *order, expand_dims(clamped, 1, s), 0, s);
     out.push_back(reshape(inverse, a.shape(), s));
   }
   // If output is padded with fill value, counts is padded with zeros
-  // so that ``count.sum() == a.size()`` holds if output was not
-  // truncated.
+  // so that ``count.sum() == a.size()`` holds when output is not truncated.
   if (return_counts) {
     out.push_back(slice(
         scatter_add(
