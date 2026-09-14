@@ -1,6 +1,7 @@
 // Copyright © 2026 Apple Inc.
 
 #include "mlx/backend/cuda/device/cute_dequant.cuh"
+#include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cuda/cmath>
 
@@ -32,7 +33,7 @@ inline constexpr auto make_smem_layouts(CtaTiler cta_tiler) {
 
   // Define the A/B smem layouts (static).
   auto swizzle_ab = composition(Swizzle<3,3,3>{},
-                                Layout<Shape <_8,Shape <_8, _8>>,
+                                Layout<cute::Shape <_8,cute::Shape <_8, _8>>,
                                        Stride<_8,Stride<_1,_64>>>{});
   auto bP = Int<3>{}; // pipeline
   auto sA_layout = tile_to_shape(swizzle_ab, make_shape(bM, bK, bP));
@@ -53,9 +54,9 @@ inline constexpr auto make_tiled_mma() {
       SM80_16x8x16_F32F16F16F32_TN,
       SM80_16x8x16_F32BF16BF16F32_TN>;
   if constexpr (TileM >= 32) {
-    return make_tiled_mma(Atom{}, Layout<Shape<_2,_2,_1>>{}, Tile<_32,_32,_16>{});
+    return make_tiled_mma(Atom{}, Layout<cute::Shape<_2,_2,_1>>{}, Tile<_32,_32,_16>{});
   } else {
-    return make_tiled_mma(Atom{}, Layout<Shape<_1,_4,_1>>{}, Tile<_16,_32,_16>{});
+    return make_tiled_mma(Atom{}, Layout<cute::Shape<_1,_4,_1>>{}, Tile<_16,_32,_16>{});
   }
 }
 
@@ -80,6 +81,7 @@ CUTE_DEVICE void qmm_sm80_mainloop(
     TensorS gS,
     TensorZ gZ,
     TensorC gC,
+    const float* global_scale,
     int m_max_coord,
     int thread_idx) {
   // Get the types of operands.
@@ -265,6 +267,15 @@ CUTE_DEVICE void qmm_sm80_mainloop(
   // Epilogue.
   CUTE_UNROLL
   for (int i = 0; i < size(tCrC_accu); i++) {
+    if constexpr (
+        cuda::std::is_same_v<Quant, cutlass::float_e2m1_t> &&
+        cuda::std::is_same_v<Scale, cutlass::float_e4m3_t>) {
+      // Only nvfp4 supports global scale.
+      if (global_scale) {
+        tCrC(i) = Element(tCrC_accu(i) * (*global_scale / (F8E4M3_MAX * F4E2M1_MAX)));
+        continue;
+      }
+    }
     tCrC(i) = Element(tCrC_accu(i));
   }
   copy(r2s_copy_c, r2s_tCrC, r2s_tCsC);
@@ -289,6 +300,7 @@ void qmm_sm80_kernel(
     const Quant* B,
     const Scale* S,
     const Element* Z,
+    const float* global_scale,
     const uint32_t* lhs_indices,
     const uint32_t* rhs_indices,
     Element* C,
@@ -322,6 +334,10 @@ void qmm_sm80_kernel(
   // For gather, use index lookup for input batch slicing.
   uint32_t a_batch = lhs_indices ? lhs_indices[l_coord] : l_coord;
   uint32_t b_batch = rhs_indices ? rhs_indices[l_coord] : l_coord;
+  // The global scale is per gathered expert; a non-gathered call has one.
+  if (global_scale && rhs_indices) {
+    global_scale += b_batch;
+  }
 
   // Get batch slice.
   Tensor mA = mA_mkl(_,_,a_batch); // (M,K)
@@ -351,6 +367,7 @@ void qmm_sm80_kernel(
       gS,
       gZ,
       gC,
+      global_scale,
       m_max_coord,
       thread_idx);
 }
