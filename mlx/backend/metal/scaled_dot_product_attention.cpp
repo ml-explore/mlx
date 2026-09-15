@@ -29,6 +29,7 @@ void sdpa_full_self_attention_nax(
   using namespace mlx::steel;
 
   int bd = q.shape(-1);
+  int bv = v.shape(-1);
   int bq = 64;
   int bk = 32;
 
@@ -98,6 +99,7 @@ void sdpa_full_self_attention_nax(
       bk,
       "_bd",
       bd,
+      (bv == bd ? "" : "_bv" + std::to_string(bv)),
       "_wm",
       wm,
       "_wn",
@@ -131,6 +133,7 @@ void sdpa_full_self_attention_nax(
       bq,
       bk,
       bd,
+      bv,
       wm,
       wn,
       (has_mask ? *mask : q),
@@ -733,16 +736,29 @@ std::tuple<bool, std::string> has_fused_kernel(
 
   std::ostringstream msg;
   if (query_sequence_length > 8) {
-    const bool supported_head_dim = query_head_dim == value_head_dim &&
-        (query_head_dim == 64 || query_head_dim == 72 || query_head_dim == 80 ||
-         query_head_dim == 96 || query_head_dim == 128 ||
-         query_head_dim == 192 || query_head_dim == 256);
+    const bool asymmetric = query_head_dim == 96 && value_head_dim == 64;
+    const bool supported_head_dim = asymmetric ||
+        (query_head_dim == value_head_dim &&
+         (query_head_dim == 64 || query_head_dim == 72 ||
+          query_head_dim == 80 || query_head_dim == 96 ||
+          query_head_dim == 128 || query_head_dim == 192 ||
+          query_head_dim == 256));
     if (!supported_head_dim) {
       msg << "the full attention kernel supports head dims "
           << "{64, 72, 80, 96, 128, 192, 256} with matching query/value head "
-          << "dims; got query head dim " << query_head_dim
-          << " and value head dim " << value_head_dim << ".";
+          << "dims, or (query, value) head dims (96, 64) with NAX; got query "
+          << "head dim " << query_head_dim << " and value head dim "
+          << value_head_dim << ".";
       return {false, msg.str()};
+    }
+    if (asymmetric) {
+      if (!metal::is_nax_available() ||
+          (q.dtype() == float32 && !env::enable_tf32())) {
+        return {
+            false,
+            "the (96, 64) full attention kernel requires NAX and "
+            "TF32 for float32 inputs."};
+      }
     }
     if (has_mask && !has_arr_mask &&
         !(query_sequence_length <= key_sequence_length && do_causal)) {
@@ -758,11 +774,12 @@ std::tuple<bool, std::string> has_fused_kernel(
          (query_head_dim == 64 || query_head_dim == 96 ||
           query_head_dim == 128 || query_head_dim == 192 ||
           query_head_dim == 256 || query_head_dim == 512)) ||
-        (query_head_dim == 192 && value_head_dim == 128);
+        (query_head_dim == 192 && value_head_dim == 128) ||
+        (query_head_dim == 96 && value_head_dim == 64);
     if (!supported_head_dim) {
       msg << "the vector attention kernel supports head dims "
           << "{64, 96, 128, 192, 256, 512} with matching query/value head "
-          << "dims, or query head dim 192 with value head dim 128; got "
+          << "dims, or (query, value) head dims (96, 64) or (192, 128); got "
           << "query head dim " << query_head_dim << " and value head dim "
           << value_head_dim << ".";
       return {false, msg.str()};
