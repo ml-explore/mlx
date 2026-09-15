@@ -75,6 +75,33 @@ void get_slice_params(
       nb::getattr(in_slice, "stop"), strides < 0 ? -axis_size - 1 : axis_size);
 }
 
+// Resolve negative bounds and clamp into range, mirroring CPython's
+// PySlice_AdjustIndices. Needed wherever a slice is expanded into an explicit
+// arange, since out-of-range bounds would otherwise be used verbatim.
+void adjust_slice_bounds(
+    mx::ShapeElem& start,
+    mx::ShapeElem& end,
+    mx::ShapeElem stride,
+    int axis_size) {
+  if (start < 0) {
+    start += axis_size;
+    if (start < 0) {
+      start = (stride < 0) ? -1 : 0;
+    }
+  } else if (start >= axis_size) {
+    start = (stride < 0) ? axis_size - 1 : axis_size;
+  }
+
+  if (end < 0) {
+    end += axis_size;
+    if (end < 0) {
+      end = (stride < 0) ? -1 : 0;
+    }
+  } else if (end >= axis_size) {
+    end = (stride < 0) ? axis_size - 1 : axis_size;
+  }
+}
+
 mx::array get_int_index(nb::object idx, int axis_size) {
   int idx_ = safe_to_int32(idx);
   idx_ = (idx_ < 0) ? idx_ + axis_size : idx_;
@@ -155,9 +182,7 @@ mx::array mlx_gather_nd(
       get_slice_params(
           start, end, stride, nb::cast<nb::slice>(idx), src.shape(i));
 
-      // Handle negative indices
-      start = (start < 0) ? start + src.shape(i) : start;
-      end = (end < 0) ? end + src.shape(i) : end;
+      adjust_slice_bounds(start, end, stride, src.shape(i));
 
       gather_indices.push_back(arange(start, end, stride, mx::uint32));
       num_slices++;
@@ -686,9 +711,7 @@ mlx_scatter_args_nd(
       get_slice_params(
           start, end, stride, nb::cast<nb::slice>(pyidx), axis_size);
 
-      // Handle negative indices
-      start = (start < 0) ? start + axis_size : start;
-      end = (end < 0) ? end + axis_size : end;
+      adjust_slice_bounds(start, end, stride, axis_size);
 
       mx::Shape idx_shape(idx_ndim, 1);
 
