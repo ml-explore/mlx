@@ -878,6 +878,25 @@ MLX_API array topk(const array& a, int k, StreamOrDevice s = {});
 /** Returns topk elements of the array along a given axis. */
 MLX_API array topk(const array& a, int k, int axis, StreamOrDevice s = {});
 
+/**
+ * Returns the sorted unique elements of the flattened array, and optionally
+ * the inverse indices and the counts. The output has the given size, and
+ * is truncated if ``size`` is smaller than the number of unique values.
+ * If ``size`` is larger, the result is padded with ``fill_value``, or the
+ * first of the sorted unique values if no fill value is provided. An empty
+ * input has none, so it throws unless ``size`` is zero or a fill value is
+ * given.
+ * A truncated output loses the counts of the values it drops, and its inverse
+ * indices are clamped to the last entry.
+ */
+MLX_API std::vector<array> unique(
+    const array& a,
+    int size,
+    bool return_inverse = false,
+    bool return_counts = false,
+    const std::optional<array>& fill_value = std::nullopt,
+    StreamOrDevice s = {});
+
 /** Cumulative logsumexp of an array. */
 MLX_API array logcumsumexp(
     const array& a,
