@@ -92,6 +92,7 @@
 
 #define instantiate_quantized_all_batched(type, group_size, bits) \
   instantiate_quantized_batched_wrap(affine_qmv_fast, type, group_size, bits)     \
+  instantiate_quantized_batched_wrap(affine_qmv_fast_rows, type, group_size, bits)     \
   instantiate_quantized_batched_wrap(affine_qmv, type, group_size, bits)     \
   instantiate_quantized_batched_wrap(affine_qvm, type, group_size, bits)     \
   instantiate_quantized_batched_wrap(affine_qmm_n, type, group_size, bits)

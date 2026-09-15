@@ -753,7 +753,7 @@ METAL_FUNC void qmv_quad_impl(
   }
 }
 
-template <typename T, int group_size, int bits>
+template <typename T, int group_size, int bits, bool partial_rows = false>
 METAL_FUNC void qmv_fast_impl(
     const device uint32_t* w,
     const device T* scales,
@@ -787,6 +787,18 @@ METAL_FUNC void qmv_fast_impl(
   const int out_row = tid.y * (num_simdgroups * results_per_simdgroup) +
       simd_gid * results_per_simdgroup;
 
+  // With partial rows the output size need not be a multiple of 8. Rows of the
+  // last SIMD-group that fall past the output reuse the weights of the last
+  // valid output row, so the reduction loop needs no per-row bounds check, and
+  // are not stored.
+  int last_row = results_per_simdgroup - 1;
+  if constexpr (partial_rows) {
+    if (out_row >= out_vec_size) {
+      return;
+    }
+    last_row = min(last_row, out_vec_size - 1 - out_row);
+  }
+
   ws += out_row * in_vec_size_w + simd_lid * packs_per_thread * bytes_per_pack;
   scales += out_row * in_vec_size_g + simd_lid / scale_step_per_thread;
   biases += out_row * in_vec_size_g + simd_lid / scale_step_per_thread;
@@ -797,9 +809,13 @@ METAL_FUNC void qmv_fast_impl(
     U sum = load_vector<T, U, values_per_thread, bits>(x, x_thread);
 
     for (int row = 0; row < results_per_simdgroup; row++) {
-      auto wl = (const device uint8_t*)(ws + row * in_vec_size_w);
-      const device T* sl = scales + row * in_vec_size_g;
-      const device T* bl = biases + row * in_vec_size_g;
+      int src = row;
+      if constexpr (partial_rows) {
+        src = min(row, last_row);
+      }
+      auto wl = (const device uint8_t*)(ws + src * in_vec_size_w);
+      const device T* sl = scales + src * in_vec_size_g;
+      const device T* bl = biases + src * in_vec_size_g;
 
       U s = sl[0];
       U b = bl[0];
@@ -814,7 +830,7 @@ METAL_FUNC void qmv_fast_impl(
 
   for (int row = 0; row < results_per_simdgroup; row++) {
     result[row] = simd_sum(result[row]);
-    if (simd_lid == 0) {
+    if (simd_lid == 0 && row <= last_row) {
       y[row] = static_cast<T>(result[row]);
     }
   }
@@ -1643,6 +1659,64 @@ template <
         tid);
   }
   qmv_fast_impl<T, group_size, bits>(
+      w,
+      scales,
+      biases,
+      x,
+      y,
+      in_vec_size,
+      out_vec_size,
+      tid,
+      simd_gid,
+      simd_lid);
+}
+
+template <
+    typename T,
+    int group_size,
+    int bits,
+    bool batched,
+    bool has_global_scale = false,
+    int results_per_simdgroup = 4>
+[[kernel]] void affine_qmv_fast_rows(
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
+    device T* y [[buffer(4)]],
+    const constant int& in_vec_size [[buffer(5)]],
+    const constant int& out_vec_size [[buffer(6)]],
+    const constant int& x_batch_ndims [[buffer(7)]],
+    const constant int* x_shape [[buffer(8)]],
+    const constant int64_t* x_strides [[buffer(9)]],
+    const constant int& w_batch_ndims [[buffer(10)]],
+    const constant int* w_shape [[buffer(11)]],
+    const constant int64_t* w_strides [[buffer(12)]],
+    const constant int64_t* s_strides [[buffer(13)]],
+    const constant int64_t* b_strides [[buffer(14)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  if (batched) {
+    int M = x_shape[x_batch_ndims];
+    adjust_matrix_offsets<T>(
+        x,
+        w,
+        scales,
+        biases,
+        y,
+        out_vec_size * M,
+        x_batch_ndims,
+        x_shape,
+        x_strides,
+        w_batch_ndims,
+        w_shape,
+        w_strides,
+        s_strides,
+        b_strides,
+        tid);
+  }
+  qmv_fast_impl<T, group_size, bits, true>(
       w,
       scales,
       biases,
