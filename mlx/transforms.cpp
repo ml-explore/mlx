@@ -80,14 +80,16 @@ thread_local int detail::RetainGraph::tracing_counter{0};
 array eval_impl(std::vector<array> outputs, bool async) {
   std::deque<array> tape;
 
-  // Make an effort to choose a good output stream
-  Stream stream = default_stream(default_device());
-  for (auto& o : outputs) {
-    if (o.status() == array::Status::unscheduled && o.has_primitive()) {
-      stream = o.primitive().stream();
-      break;
+  // Make an effort to choose a good output stream, and only create the default
+  // stream when there is no other choice.
+  Stream stream = [&outputs]() {
+    for (auto& o : outputs) {
+      if (o.status() == array::Status::unscheduled && o.has_primitive()) {
+        return o.primitive().stream();
+      }
     }
-  }
+    return default_stream(default_device());
+  }();
 
   // Map of array id that needs fence and stream it's computed on
   std::unordered_map<uintptr_t, std::pair<uint32_t, bool>> needs_fence;

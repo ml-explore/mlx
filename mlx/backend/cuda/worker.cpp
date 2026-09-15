@@ -3,42 +3,30 @@
 #include "mlx/backend/cuda/worker.h"
 #include "mlx/backend/cuda/device.h"
 
+#include <thread>
+
 namespace mlx::core::cu {
 
 Worker::Worker(Device& d)
     : signal_stream_(d),
-      signal_event_(d, cudaEventDisableTiming | cudaEventBlockingSync) {}
-
-Worker::~Worker() = default;
-
-void Worker::start() {
-  // Note that |shared_from_this| can not be called in constructor.
-  worker_ = std::thread(&Worker::thread_fn, shared_from_this());
-  // Detach the thread and let it free itself after finishing tasks.
+      signal_event_(d, cudaEventDisableTiming | cudaEventBlockingSync),
+      state_(std::make_shared<State>()) {
+  // Detach the thread and let it free the state after finishing tasks.
   // This is to avoid deadlock when joining threads on exit on Windows:
   // https://developercommunity.visualstudio.com/t/1654756
-  worker_.detach();
+  std::thread(&State::thread_fn, state_).detach();
 }
 
-void Worker::stop() {
+Worker::~Worker() {
   {
-    std::lock_guard lock(mtx_);
-    stop_ = true;
+    std::lock_guard lock(state_->mtx);
+    state_->stop = true;
   }
-  cond_.notify_one();
+  state_->cond.notify_one();
 }
 
 void Worker::add_task(std::function<void()> task) {
   pending_tasks_.push_back(std::move(task));
-}
-
-void Worker::signal(void* data) {
-  auto w = static_cast<Worker*>(data);
-  {
-    std::lock_guard lock(w->mtx_);
-    w->signaled_batch_++;
-  }
-  w->cond_.notify_one();
 }
 
 void Worker::commit(cudaStream_t stream) {
@@ -47,30 +35,41 @@ void Worker::commit(cudaStream_t stream) {
     return;
   }
   {
-    std::lock_guard lock(mtx_);
+    std::lock_guard lock(state_->mtx);
     // Move pending tasks into ready tasks
-    worker_tasks_[++committed_batch_] = std::move(pending_tasks_);
+    state_->worker_tasks[++committed_batch_] = std::move(pending_tasks_);
   }
   signal_event_.record(stream);
   signal_event_.wait(signal_stream_);
-  CHECK_CUDA_ERROR(cudaLaunchHostFunc(signal_stream_, signal, this));
+  CHECK_CUDA_ERROR(
+      cudaLaunchHostFunc(signal_stream_, State::signal, state_.get()));
 }
 
-void Worker::thread_fn() {
+// static
+void Worker::State::signal(void* data) {
+  auto state = static_cast<State*>(data);
+  {
+    std::lock_guard lock(state->mtx);
+    state->signaled_batch++;
+  }
+  state->cond.notify_one();
+}
+
+void Worker::State::thread_fn() {
   uint64_t current_batch = 0;
   while (true) {
     Tasks tasks;
     {
-      std::unique_lock<std::mutex> lk(mtx_);
-      cond_.wait(lk, [this, current_batch] {
-        return this->signaled_batch_ > current_batch || this->stop_;
+      std::unique_lock<std::mutex> lk(mtx);
+      cond.wait(lk, [this, current_batch] {
+        return this->signaled_batch > current_batch || this->stop;
       });
-      if (stop_) {
+      if (stop) {
         return;
       }
-      current_batch = signaled_batch_;
-      auto end = worker_tasks_.upper_bound(current_batch);
-      for (auto it = worker_tasks_.begin(); it != end; ++it) {
+      current_batch = signaled_batch;
+      auto end = worker_tasks.upper_bound(current_batch);
+      for (auto it = worker_tasks.begin(); it != end; ++it) {
         if (tasks.empty()) {
           tasks = std::move(it->second);
         } else {
@@ -78,7 +77,7 @@ void Worker::thread_fn() {
               it->second.begin(), it->second.end(), std::back_inserter(tasks));
         }
       }
-      worker_tasks_.erase(worker_tasks_.begin(), end);
+      worker_tasks.erase(worker_tasks.begin(), end);
     }
     // Make sure tasks are cleared before the next wait
     for (int i = 0; i < tasks.size(); ++i) {
