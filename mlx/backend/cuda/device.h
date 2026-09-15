@@ -146,7 +146,7 @@ class CommandEncoder {
   Device& device_;
   CudaStream stream_;
   CudaGraph graph_;
-  std::shared_ptr<Worker> worker_;
+  std::unique_ptr<Worker> worker_;
   int node_count_{0};
   bool in_concurrent_{false};
   std::vector<cudaGraphNode_t> from_nodes_;
