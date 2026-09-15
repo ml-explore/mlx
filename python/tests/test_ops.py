@@ -3137,6 +3137,7 @@ class TestOps(mlx_tests.MLXTestCase):
     )
     def test_large_contiguous_binary(self):
         # VectorScalar used int size, so n >= 2**31 wrote nothing.
+        mx.clear_cache()
         n = 2**31
         a = mx.full((n,), 3, dtype=mx.uint8, stream=mx.cpu)
         out = mx.add(a, mx.array(1, mx.uint8), stream=mx.cpu)
