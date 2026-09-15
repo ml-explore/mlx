@@ -242,6 +242,27 @@ inline auto output_grid_for_col_reduce(
   return get_2d_grid_dims(out_shape, out_strides);
 }
 
+// Metal silently truncates a grid dimension past UINT32_MAX threads, so a
+// column reduction too wide for one dispatch is split into several, each
+// covering the BN-wide column blocks starting at column_offset.
+inline void dispatch_col_reduce(
+    CommandEncoder& compute_encoder,
+    int64_t n_columns,
+    int BN,
+    int threadgroup_size,
+    size_t grid_y,
+    size_t grid_z) {
+  const int64_t n_blocks = (n_columns + BN - 1) / BN;
+  const int64_t max_blocks = UINT32_MAX / threadgroup_size;
+  const MTL::Size group_dims(threadgroup_size, 1, 1);
+  for (int64_t start = 0; start < n_blocks; start += max_blocks) {
+    const int64_t blocks = std::min(max_blocks, n_blocks - start);
+    compute_encoder.set_bytes(start * BN, 11);
+    compute_encoder.dispatch_threads(
+        MTL::Size(threadgroup_size * blocks, grid_y, grid_z), group_dims);
+  }
+}
+
 std::pair<Dtype, Dtype> remap_reduce_types(
     const array& in,
     const std::string& op_name) {
@@ -315,11 +336,10 @@ void init_reduce(
   std::string kname = func_name;
   concatenate(kname, "_", op_name, type_to_name(out_type));
   auto kernel = get_reduce_init_kernel(d, kname, func_name, op_name, out_type);
-  size_t nthreads = out.size();
-  MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
+  MTL::Size grid_dims = get_2d_grid_dims(out.shape(), out.strides());
   NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  if (thread_group_size > nthreads) {
-    thread_group_size = nthreads;
+  if (thread_group_size > grid_dims.width) {
+    thread_group_size = grid_dims.width;
   }
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -728,8 +748,7 @@ void strided_reduce_longcolumn(
   second_args.reduce_strides.push_back(out.size());
   second_args.reduce_ndim++;
   int BN = 32;
-  grid_dims = MTL::Size(256 * ((out.size() + BN - 1) / BN), 1, 1);
-  group_dims = MTL::Size(256, 1, 1);
+  int threadgroup_size = 256;
 
   // Set the 2nd kernel
   func_name = "col_reduce_looped";
@@ -755,7 +774,7 @@ void strided_reduce_longcolumn(
   compute_encoder.set_input_array(intermediate, 0);
   compute_encoder.set_output_array(out, 1);
   second_args.encode(compute_encoder);
-  compute_encoder.dispatch_threads(grid_dims, group_dims);
+  dispatch_col_reduce(compute_encoder, out.size(), BN, threadgroup_size, 1, 1);
 }
 
 void strided_reduce_looped(
@@ -778,11 +797,6 @@ void strided_reduce_looped(
   int BN = 32;
   int BM = 1024 / BN;
   int threadgroup_size = 8 * 32;
-  MTL::Size grid_dims(
-      threadgroup_size * ((args.reduction_stride + BN - 1) / BN),
-      out_grid_size.width,
-      out_grid_size.height);
-  MTL::Size group_dims(threadgroup_size, 1, 1);
 
   // Set the kernel
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
@@ -820,7 +834,13 @@ void strided_reduce_looped(
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(out, 1);
   args.encode(compute_encoder);
-  compute_encoder.dispatch_threads(grid_dims, group_dims);
+  dispatch_col_reduce(
+      compute_encoder,
+      args.reduction_stride,
+      BN,
+      threadgroup_size,
+      out_grid_size.width,
+      out_grid_size.height);
 }
 
 void strided_reduce_2pass(
@@ -855,11 +875,6 @@ void strided_reduce_2pass(
   int BN = 32;
   int BM = 1024 / BN;
   int threadgroup_size = 8 * 32;
-  MTL::Size grid_dims(
-      threadgroup_size * ((args.reduction_stride + BN - 1) / BN),
-      out_grid_size.width * outer_blocks,
-      out_grid_size.height);
-  MTL::Size group_dims(threadgroup_size, 1, 1);
 
   // Set the kernel
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
@@ -897,15 +912,20 @@ void strided_reduce_2pass(
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(intermediate, 1);
   args.encode(compute_encoder);
-  compute_encoder.set_bytes(out_size, 11);
-  compute_encoder.dispatch_threads(grid_dims, group_dims);
+  compute_encoder.set_bytes(out_size, 12);
+  dispatch_col_reduce(
+      compute_encoder,
+      args.reduction_stride,
+      BN,
+      threadgroup_size,
+      out_grid_size.width * outer_blocks,
+      out_grid_size.height);
 
   // Make the 2nd pass arguments and grid_dims
   ColReduceArgs second_args(intermediate);
   second_args.reduce_shape.push_back(outer_blocks);
   second_args.reduce_strides.push_back(out.size());
   second_args.reduce_ndim++;
-  grid_dims = MTL::Size(threadgroup_size * ((out.size() + BN - 1) / BN), 1, 1);
 
   // Set the 2nd kernel
   func_name = "col_reduce_looped";
@@ -931,7 +951,7 @@ void strided_reduce_2pass(
   compute_encoder.set_input_array(intermediate, 0);
   compute_encoder.set_output_array(out, 1);
   second_args.encode(compute_encoder);
-  compute_encoder.dispatch_threads(grid_dims, group_dims);
+  dispatch_col_reduce(compute_encoder, out.size(), BN, threadgroup_size, 1, 1);
 }
 
 void strided_reduce_general_dispatch(
