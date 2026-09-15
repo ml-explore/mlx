@@ -198,7 +198,11 @@ class RingImpl {
     size_t n_bytes_per_wire = (n_bytes + (2 * n_wires) - 1) / (2 * n_wires);
     dispatch_wires(n_wires, [&](int lw) {
       all_gather_wire(
-          out_ptr, n_bytes, static_cast<int64_t>(n_bytes_per_wire), n_wires, lw);
+          out_ptr,
+          n_bytes,
+          static_cast<int64_t>(n_bytes_per_wire),
+          n_wires,
+          lw);
     });
   }
 
