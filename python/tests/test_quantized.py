@@ -670,6 +670,36 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmv_affine_bias_sum_precision(self):
+        # The bias contributes bias * sum(x), and a sum accumulated in the input
+        # type loses the small values: the sum of [1, 1 / denom, -1, 0] cancels
+        # to zero.
+        for n, k, gs, dtype, sign, bits in product(
+            [1, 4, 8, 12],
+            [64, 96, 512],
+            [32, 64],
+            [mx.bfloat16, mx.float16],
+            [-1, 1],
+            [2, 3, 4, 5, 6, 8],
+        ):
+            if k % gs:
+                continue
+            with self.subTest(n=n, k=k, gs=gs, dtype=dtype, sign=sign, bits=bits):
+                # 1 / denom is exactly half an ulp at 1.0, so 1 + 1 / denom
+                # rounds back to 1 (ties-to-even) in the input type.
+                denom = 2048 if dtype == mx.float16 else 256
+                x = mx.tile(mx.array([1, 1 / denom, -1, 0], dtype), k // 4)
+                x = (sign * x).reshape(1, k)
+                # Zero scales and unit biases dequantize to all ones, so the
+                # product is exactly sum(x) = sign * k / (4 * denom).
+                q = mx.zeros((n, k * bits // 32), mx.uint32)
+                scales = mx.zeros((n, k // gs), dtype)
+                biases = mx.ones((n, k // gs), dtype)
+                y = mx.quantized_matmul(x, q, scales, biases, group_size=gs, bits=bits)
+                expected = mx.full((1, n), sign * k / (4 * denom), dtype)
+                self.assertTrue(mx.array_equal(y, expected).item())
+
     def test_fp_qmv(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
