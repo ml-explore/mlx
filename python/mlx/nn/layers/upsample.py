@@ -302,6 +302,13 @@ def upsample_linear(
             indices_fn=_linear_aa_indices,
             align_corners=align_corners,
         )
+    if not antialias and not align_corners:
+        return _interpolate_separable(
+            x=x,
+            scale_factor=scale_factor,
+            indices_fn=_linear_indices,
+            align_corners=align_corners,
+        )
     return _interpolate(
         x=x,
         scale_factor=scale_factor,
