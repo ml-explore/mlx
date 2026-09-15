@@ -60,12 +60,13 @@ struct Dequantize {
 };
 
 template <typename U, int bits>
-inline void dequantize(uint8_t w, float scale, threadgroup U* w_local) {
+inline void dequantize(uint8_t w, U scale, threadgroup U* w_local) {
+  const float s = float(scale);
   if constexpr (bits == 4) {
-    w_local[0] = static_cast<U>(scale * Dequantize<4, float>{}(w));
-    w_local[1] = static_cast<U>(scale * Dequantize<4, float>{}(w >> 4));
+    w_local[0] = static_cast<U>(s * Dequantize<4, float>{}(w));
+    w_local[1] = static_cast<U>(s * Dequantize<4, float>{}(w >> 4));
   } else {
-    w_local[0] = static_cast<U>(scale * Dequantize<8, float>{}(w));
+    w_local[0] = static_cast<U>(s * Dequantize<8, float>{}(w));
   }
 }
 
@@ -77,8 +78,7 @@ template <
     short reduction_dim,
     short tgp_size,
     short group_size,
-    short bits,
-    bool has_global_scale = false>
+    short bits>
 struct QuantizedBlockLoader {
   MLX_MTL_CONST short pack_factor = get_pack_factor<8, bits>();
   MLX_MTL_CONST short bytes_per_pack = get_bytes_per_pack();
@@ -106,9 +106,6 @@ struct QuantizedBlockLoader {
   threadgroup T* dst;
   const device uint8_t* src;
   const device uint8_t* scales;
-  // nvfp4 tensor scale, folded into the group scale as fp_dequantize does.
-  // Kept in float: it is ~1e-5, so in fp16 small scales lose most bits.
-  float inv_scale_enc = 1.0f;
 
   QuantizedBlockLoader(
       const device uint8_t* src_,
@@ -116,8 +113,7 @@ struct QuantizedBlockLoader {
       const int src_ld_,
       threadgroup T* dst_,
       ushort simd_group_id [[simdgroup_index_in_threadgroup]],
-      ushort simd_lane_id [[thread_index_in_simdgroup]],
-      const device float* global_scale = nullptr) thread
+      ushort simd_lane_id [[thread_index_in_simdgroup]]) thread
       : src_ld(src_ld_),
         tile_stride(
             reduction_dim ? BCOLS_PACKED* bytes_per_pack
@@ -130,11 +126,7 @@ struct QuantizedBlockLoader {
         dst(dst_ + bi * dst_ld + bj * pack_factor),
         src(src_ + bi * src_ld * bytes_per_pack / pack_factor +
             bj * bytes_per_pack),
-        scales(scales_ + bi * src_ld / group_size + group_id) {
-    if constexpr (has_global_scale) {
-      inv_scale_enc = *global_scale / (F8E4M3_MAX * F4E2M1_MAX);
-    }
-  }
+        scales(scales_ + bi * src_ld / group_size + group_id) {}
 
   void load_unsafe() const thread {
     if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
@@ -143,8 +135,7 @@ struct QuantizedBlockLoader {
 
     int k = 0;
     for (int i = 0; i < n_steps_per_read; i++) {
-      float scale =
-          float(dequantize_scale<T, group_size>(scales[i])) * inv_scale_enc;
+      T scale = dequantize_scale<T, group_size>(scales[i]);
       for (int j = 0; j < n_reads_per_scale; j++) {
         dequantize<T, bits>(
             src[k * bytes_per_pack], scale, dst + k * pack_factor);
@@ -167,8 +158,7 @@ struct QuantizedBlockLoader {
 
     int k = 0;
     for (int i = 0; i < n_steps_per_read; i++) {
-      float scale =
-          float(dequantize_scale<T, group_size>(scales[i])) * inv_scale_enc;
+      T scale = dequantize_scale<T, group_size>(scales[i]);
       for (int j = 0; j < n_reads_per_scale; j++) {
         dequantize<T, bits>(
             src[k * bytes_per_pack], scale, dst + k * pack_factor);
@@ -188,6 +178,19 @@ struct QuantizedBlockLoader {
 };
 
 using namespace mlx::steel;
+
+template <bool has_global_scale, typename Tile>
+METAL_FUNC void apply_global_scale(
+    thread Tile& tile,
+    const device float* global_scale) {
+  if constexpr (has_global_scale) {
+    const float inv_scale_enc = *global_scale / (F8E4M3_MAX * F4E2M1_MAX);
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < Tile::kElemsPerTile; i++) {
+      tile.elems()[i] *= inv_scale_enc;
+    }
+  }
+}
 
 template <
     typename T,
@@ -234,8 +237,7 @@ METAL_FUNC void fp_qmm_t_impl(
       1,
       WM * WN * SIMD_SIZE,
       group_size,
-      bits,
-      has_global_scale>;
+      bits>;
 
   // Set the block
   const int K_w = K * bytes_per_pack / pack_factor;
@@ -251,7 +253,7 @@ METAL_FUNC void fp_qmm_t_impl(
   y += y_row * static_cast<int64_t>(N) + y_col;
 
   // Make the weight loader
-  loader_w_t loader_w(wl, scales, K, Ws, simd_gid, simd_lid, global_scale);
+  loader_w_t loader_w(wl, scales, K, Ws, simd_gid, simd_lid);
 
   constexpr short SM = BM / WM;
   constexpr short SN = BN / WN;
@@ -325,6 +327,7 @@ METAL_FUNC void fp_qmm_t_impl(
 
       // Store results to device memory
       threadgroup_barrier(mem_flags::mem_threadgroup);
+      apply_global_scale<has_global_scale>(Dtile, global_scale);
 
       if constexpr (kAlignedM.value && kAlignedN.value) {
         Dtile.store(y + tm * N + tn, N);
@@ -381,8 +384,7 @@ METAL_FUNC void fp_qmm_n_impl(
       0,
       WM * WN * SIMD_SIZE,
       group_size,
-      bits,
-      has_global_scale>;
+      bits>;
 
   // Set the block
   const int K_w = K * bytes_per_pack / pack_factor;
@@ -400,7 +402,7 @@ METAL_FUNC void fp_qmm_n_impl(
   // Make the x loader and mma operation
   // const short num_els = min(BM, M - y_row);
   // const short num_outs = min(BN, N - y_col);
-  loader_w_t loader_w(wl, scales, K, Ws, simd_gid, simd_lid, global_scale);
+  loader_w_t loader_w(wl, scales, K, Ws, simd_gid, simd_lid);
 
   constexpr short SM = BM / WM;
   constexpr short SN = BN / WN;
@@ -456,6 +458,7 @@ METAL_FUNC void fp_qmm_n_impl(
 
   // Store results to device memory
   threadgroup_barrier(mem_flags::mem_threadgroup);
+  apply_global_scale<has_global_scale>(Dtile, global_scale);
 
   Dtile.store(y + tm * N + tn, N);
 }
@@ -865,8 +868,7 @@ template <
       transpose,
       WM * WN * SIMD_SIZE,
       group_size,
-      bits,
-      has_global_scale>;
+      bits>;
 
   threadgroup Wtype Ws[transpose ? BN * BK_padded : BK * BN_padded];
 
@@ -958,8 +960,7 @@ template <
         transpose ? K : N,
         Ws,
         simd_group_id,
-        simd_lane_id,
-        global_scale + index);
+        simd_lane_id);
 
     dispatch_bool(align_M || !is_unaligned_sm, [&](auto kAlignedM) {
       dispatch_bool(align_N || !is_unaligned_bn, [&](auto kAlignedN) {
@@ -1048,6 +1049,7 @@ template <
         }
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
+        apply_global_scale<has_global_scale>(Dtile, global_scale + index);
 
         // Store results to device memory
         if constexpr (kAlignedN.value) {
