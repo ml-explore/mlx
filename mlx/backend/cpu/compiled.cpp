@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <dlfcn.h>
+#include <cassert>
 #include <filesystem>
 #include <fstream>
 #include <list>
@@ -289,6 +290,30 @@ inline void build_kernel(
 
   // Finish the kernel
   os << "}" << std::endl;
+}
+
+void CompiledReduce::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  auto& encoder = cpu::get_command_encoder(stream());
+  assert(outputs.size() == 1);
+  const auto& compiled_tape = tape();
+  std::vector<array> prefix_tape(
+      compiled_tape.begin(), compiled_tape.end() - 1);
+  Compiled prefix(
+      stream(),
+      this->inputs(),
+      {prefix_tape.back()},
+      prefix_tape,
+      constant_ids());
+  array prefix_out(
+      prefix.output_shapes(inputs)[0], prefix_tape.back().dtype(), nullptr, {});
+  std::vector<array> prefix_outputs{std::move(prefix_out)};
+  prefix.eval_cpu(inputs, prefix_outputs);
+  encoder.add_temporary(prefix_outputs[0]);
+
+  auto& reduce = static_cast<Reduce&>(compiled_tape.back().primitive());
+  reduce.eval_cpu(prefix_outputs, outputs[0]);
 }
 
 void Compiled::eval_cpu(
