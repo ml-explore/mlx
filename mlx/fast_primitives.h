@@ -1,4 +1,4 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2024-2026 Apple Inc.
 
 #include <optional>
 #include <variant>
@@ -289,6 +289,7 @@ class ScaledDotProductAttention : public Custom {
       bool has_mask,
       bool has_arr_mask,
       bool do_causal,
+      bool has_sinks,
       bool is_training,
       bool output_logsumexp,
       bool force_fused,
