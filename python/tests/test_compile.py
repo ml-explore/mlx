@@ -89,7 +89,7 @@ class TestCompile(mlx_tests.MLXTestCase):
 
     def test_compile_float_constant_precision(self):
         x = mx.ones((4,), dtype=mx.float32)
-        for constant in (1 / 3, 128**-0.5, 2**-0.5):
+        for constant in (1 / 3, 128**-0.5, 0.7071067811865476):
             fun = lambda x, constant=constant: (x * x) * constant
             self.assertTrue(mx.array_equal(mx.compile(fun)(x), fun(x)))
 
