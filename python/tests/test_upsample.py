@@ -312,6 +312,83 @@ class TestUpsample(mlx_tests.MLXTestCase):
                         1e-6,
                     )
 
+    def test_matmul_gather_path_parity(self):
+        from mlx.nn.layers import upsample
+
+        indices_fns = {
+            "linear": upsample._linear_indices,
+            "cubic": upsample._cubic_indices,
+        }
+        # (mode, idim, scale_factor) straddling the matmul routing thresholds
+        cases = [
+            ("linear", (16, 16), (2.0, 2.0)),
+            ("linear", (11, 21), (3.0, 2.0)),
+            ("linear", (200, 200), (2.0, 2.0)),
+            ("linear", (16, 16), (0.5, 0.5)),
+            ("linear", (16,), (4.0,)),
+            ("cubic", (16, 16), (2.0, 2.0)),
+            ("cubic", (64, 64), (2.0, 2.0)),
+        ]
+        for mode, idim, scale in cases:
+            for align_corners in (False, True):
+                with self.subTest(
+                    mode=mode, idim=idim, scale=scale, align_corners=align_corners
+                ):
+                    np.random.seed(0)
+                    in_np = np.random.normal(-1.0, 1.0, (2, *idim, 3)).astype(
+                        np.float32
+                    )
+                    in_mx = mx.array(in_np)
+                    out_gather = upsample._interpolate(
+                        in_mx, scale, indices_fns[mode], align_corners
+                    )
+                    out_matmul = upsample._interpolate_matmul(
+                        in_mx, scale, indices_fns[mode], align_corners
+                    )
+                    self.assertEqual(out_gather.shape, out_matmul.shape)
+                    self.assertTrue(
+                        mx.allclose(out_gather, out_matmul, atol=1e-5).item()
+                    )
+
+    def test_matmul_gather_grad_parity(self):
+        from mlx.nn.layers import upsample
+
+        np.random.seed(0)
+        in_mx = mx.array(np.random.normal(-1.0, 1.0, (2, 8, 16, 3)).astype(np.float32))
+        scale = (10.0, 10.0)
+
+        def loss_gather(x):
+            return (
+                upsample._interpolate(x, scale, upsample._linear_indices) ** 2
+            ).mean()
+
+        def loss_matmul(x):
+            return (
+                upsample._interpolate_matmul(x, scale, upsample._linear_indices) ** 2
+            ).mean()
+
+        grad_gather = mx.grad(loss_gather)(in_mx)
+        grad_matmul = mx.grad(loss_matmul)(in_mx)
+        self.assertTrue(mx.allclose(grad_gather, grad_matmul, atol=1e-5).item())
+
+    def test_matmul_path_routing(self):
+        from mlx.nn.layers import upsample
+
+        max_linear = upsample._MATMUL_MAX_INPUT_SIZE_LINEAR
+        max_cubic = upsample._MATMUL_MAX_INPUT_SIZE_CUBIC
+        # (spatial dims, scale, max_size, expected)
+        cases = [
+            ((max_linear, max_linear), (2.0, 2.0), max_linear, True),
+            ((max_linear + 1, max_linear), (2.0, 2.0), max_linear, False),
+            ((16, 16), (0.5, 2.0), max_linear, False),
+            ((16, 16), (1.0, 1.0), max_linear, True),
+            ((max_cubic, max_cubic), (2.0, 2.0), max_cubic, True),
+            ((max_cubic + 1, max_cubic), (2.0, 2.0), max_cubic, False),
+        ]
+        for dims, scale, max_size, expected in cases:
+            with self.subTest(dims=dims, scale=scale, max_size=max_size):
+                self.assertEqual(upsample._use_matmul(dims, scale, max_size), expected)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
