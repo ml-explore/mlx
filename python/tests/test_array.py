@@ -1041,10 +1041,13 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual((a > 1).tolist(), [False, False, True])
         self.assertEqual((a >= 1).tolist(), [False, True, True])
 
-    def test_array_neg(self):
+    def test_array_unary_ops(self):
         a = mx.array([-1.0, 4.0, 0.0])
 
         self.assertEqual((-a).tolist(), [1.0, -4.0, 0.0])
+
+        self.assertEqual((+a).tolist(), [-1.0, 4.0, 0.0])
+        assert +a is not a
 
     def test_array_type_cast(self):
         a = mx.array([0.1, 2.3, -1.3])
