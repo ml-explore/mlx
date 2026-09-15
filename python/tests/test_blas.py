@@ -1,8 +1,9 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
+import os
 import unittest
-from itertools import permutations
+from itertools import product
 
 import mlx.core as mx
 import mlx_tests
@@ -1608,6 +1609,61 @@ class TestBlas(mlx_tests.MLXTestCase):
         s = mx.reshape(s, (2, 2, 4, 2))
         c = mx.segmented_mm(a, a.T, s)
         self.assertEqual(c.shape, (2, 2, 4, 10, 10))
+
+    @unittest.skipIf("CI" in os.environ, "No device that supports grouped_mm in CI")
+    def test_grouped_mm(self):
+        def token_offsets(sizes):
+            offsets = [sum(sizes[:g]) for g in range(len(sizes))]
+            return mx.array(offsets, mx.int32).reshape(len(sizes), 1, 1)
+
+        def grouped_mm_ref(a, b, sizes):
+            c = []
+            lo = 0
+            for g, size in enumerate(sizes):
+                if size > 0:
+                    c.append(a[lo : lo + size] @ b[g])
+                lo += size
+            return mx.concatenate(c, axis=0)
+
+        K, N = 64, 32
+        allocations = [
+            [16, 16, 16, 16],
+            [5, 11, 1, 47],
+            [5, 11, 1, 47, 15],
+            [0, 7, 9, 0],
+            [0, 0, 0, 24],
+            [64],
+        ]
+        # in cudnn's grouped matmul tf32 can't be disabled.
+        # So we only test float16 and bfloat16 for now.
+        dtypes = [(mx.float16, 1e-3), (mx.bfloat16, 1e-2)]
+
+        for allocation, b_transposed, a_transposed, (dtype, tol) in product(
+            allocations, (True, False), (True, False), dtypes
+        ):
+            with self.subTest(
+                sizes=allocation,
+                b_transposed=b_transposed,
+                a_transposed=a_transposed,
+                dtype=dtype,
+            ):
+                E = len(allocation)
+                T = sum(allocation)
+                a_shape = (K, T) if a_transposed else (T, K)
+                b_shape = (E, N, K) if b_transposed else (E, K, N)
+                a = mx.random.normal(a_shape, dtype=dtype)
+                b = mx.random.normal(b_shape, dtype=dtype)
+                if a_transposed:
+                    a = a.swapaxes(-1, -2)
+                if b_transposed:
+                    b = b.swapaxes(-1, -2)
+                offsets = token_offsets(allocation)
+
+                c1 = grouped_mm_ref(a, b, allocation)
+                c2 = mx.grouped_mm(a, b, token_offsets=offsets)
+                self.assertEqual(c2.shape, (T, N))
+                self.assertEqual(c2.dtype, dtype)
+                self.assertTrue(mx.allclose(c1, c2, rtol=tol, atol=tol))
 
     def test_gemv_gemm_same_precision(self):
         mx.random.seed(0)
