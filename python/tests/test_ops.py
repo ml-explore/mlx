@@ -378,6 +378,31 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.dtype, mx.int32)
         self.assertEqual(z.item(), 2)
 
+    def test_floor_divide(self):
+        a = [4, 5, -1, -6]
+        b = [-2, 3, 2, -3]
+
+        mx_int_float_dtypes = mx.__array_namespace_info__().dtypes(
+            kind=("signed integer", "real floating")
+        )
+        np_int_float_dtypes = np.__array_namespace_info__().dtypes(
+            kind=("signed integer", "real floating")
+        )
+
+        for kind, dtype in mx_int_float_dtypes.items():
+            with self.subTest(dtype=dtype):
+                result = mx.floor_divide(
+                    mx.array(a, dtype=dtype), mx.array(b, dtype=dtype)
+                )
+                expected = np.floor_divide(
+                    np.array(a, dtype=np_int_float_dtypes[kind]),
+                    np.array(b, dtype=np_int_float_dtypes[kind]),
+                )
+                self.assertEqual(result.tolist(), expected.tolist())
+
+                result = mx.array(a, dtype=dtype) // mx.array(b, dtype=dtype)
+                self.assertEqual(result.tolist(), expected.tolist())
+
     def test_remainder(self):
         # Complex is not supported and has to say so rather than quietly
         # computing a componentwise remainder, which no other library defines
