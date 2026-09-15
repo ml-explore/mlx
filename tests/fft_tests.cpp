@@ -134,6 +134,9 @@ TEST_CASE("test real ffts") {
 TEST_CASE("test fftn") {
   auto x = zeros({5, 5, 5});
   CHECK_THROWS_AS(fft::fftn(x, {}, {0, 3}), std::invalid_argument);
+  // Matching n/axes sizes so the bounds check is what trips.
+  CHECK_THROWS_AS(fft::fftn(x, {5, 5}, {0, 3}), std::out_of_range);
+  CHECK_THROWS_AS(fft::fftn(x, {5, 5}, {0, -4}), std::out_of_range);
   CHECK_THROWS_AS(fft::fftn(x, {}, {0, -4}), std::invalid_argument);
   CHECK_THROWS_AS(fft::fftn(x, {}, {0, 0}), std::invalid_argument);
   CHECK_THROWS_AS(fft::fftn(x, {5, 5, 5}, {0}), std::invalid_argument);
@@ -388,8 +391,8 @@ TEST_CASE("test fftshift and ifftshift") {
   CHECK(array_equal(y, expected).item<bool>());
 
   // Test error cases
-  CHECK_THROWS_AS(fft::fftshift(x, {3}), std::invalid_argument);
-  CHECK_THROWS_AS(fft::fftshift(x, {-5}), std::invalid_argument);
-  CHECK_THROWS_AS(fft::ifftshift(x, {3}), std::invalid_argument);
-  CHECK_THROWS_AS(fft::ifftshift(x, {-5}), std::invalid_argument);
+  CHECK_THROWS_AS(fft::fftshift(x, {3}), std::out_of_range);
+  CHECK_THROWS_AS(fft::fftshift(x, {-5}), std::out_of_range);
+  CHECK_THROWS_AS(fft::ifftshift(x, {3}), std::out_of_range);
+  CHECK_THROWS_AS(fft::ifftshift(x, {-5}), std::out_of_range);
 }
