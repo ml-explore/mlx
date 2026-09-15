@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 #include <cassert>
 #include <numeric>
 
@@ -934,6 +934,7 @@ array scaled_dot_product_attention(
           has_mask,
           has_arr_mask,
           do_causal,
+          has_sinks,
           is_training,
           output_logsumexp,
           force_fused,

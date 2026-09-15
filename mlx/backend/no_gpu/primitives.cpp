@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #include "mlx/primitives.h"
 #include "mlx/distributed/primitives.h"
@@ -30,6 +30,7 @@ bool fast::ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    bool has_sinks,
     bool is_training,
     bool output_logsumexp,
     bool force_fused,
