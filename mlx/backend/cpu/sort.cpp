@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cmath>
 #include <numeric>
 
 #include "mlx/backend/common/utils.h"
@@ -19,9 +18,9 @@ namespace {
 template <typename T>
 bool nan_aware_less(T a, T b) {
   if constexpr (is_floating_point_v<T> || std::is_same_v<T, complex64_t>) {
-    if (std::isnan(a))
+    if (mlx::core::isnan(a))
       return false;
-    if (std::isnan(b))
+    if (mlx::core::isnan(b))
       return true;
   }
   return a < b;
@@ -206,10 +205,10 @@ void argsort(const array& in, array& out, int axis) {
       auto v2 = data_ptr[b * in_stride];
 
       // Handle NaNs (place them at the end)
-      if constexpr (is_floating_point_v<T>) {
-        if (std::isnan(v1))
+      if constexpr (is_floating_point_v<T> || std::is_same_v<T, complex64_t>) {
+        if (mlx::core::isnan(v1))
           return false;
-        if (std::isnan(v2))
+        if (mlx::core::isnan(v2))
           return true;
       }
 
@@ -315,10 +314,10 @@ void argpartition(const array& in, array& out, int axis, int kth) {
       auto v2 = data_ptr[b * in_stride];
 
       // Handle NaNs (place them at the end)
-      if constexpr (is_floating_point_v<T>) {
-        if (std::isnan(v1))
+      if constexpr (is_floating_point_v<T> || std::is_same_v<T, complex64_t>) {
+        if (mlx::core::isnan(v1))
           return false;
-        if (std::isnan(v2))
+        if (mlx::core::isnan(v2))
           return true;
       }
 
