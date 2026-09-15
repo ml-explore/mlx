@@ -16,7 +16,7 @@ namespace mlx::core {
 template <typename Op>
 struct VectorScalar {
   template <typename T, typename U>
-  void operator()(const T* a, const T* b, U* dst, int size) {
+  void operator()(const T* a, const T* b, U* dst, size_t size) {
     T scalar = *b;
     constexpr int N = simd::max_size<T>;
     while (size >= N) {
@@ -36,7 +36,7 @@ struct VectorScalar {
 template <typename Op>
 struct ScalarVector {
   template <typename T, typename U>
-  void operator()(const T* a, const T* b, U* dst, int size) {
+  void operator()(const T* a, const T* b, U* dst, size_t size) {
     T scalar = *a;
     constexpr int N = simd::max_size<T>;
     while (size >= N) {
@@ -56,7 +56,7 @@ struct ScalarVector {
 template <typename Op>
 struct VectorVector {
   template <typename T, typename U>
-  void operator()(const T* a, const T* b, U* dst, int size) {
+  void operator()(const T* a, const T* b, U* dst, size_t size) {
     constexpr int N = simd::max_size<T>;
     while (size >= N) {
       simd::store(dst, Op{}(simd::load<T, N>(a), simd::load<T, N>(b)));
