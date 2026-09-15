@@ -2106,7 +2106,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def tri(n: int, m: int, k: int, dtype: Dtype | None = None, *, stream: StreamOrDevice = None) -> array"),
+          "def tri(n: int, m: int | None = None, k: int = 0, dtype: Dtype | None = None, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         An array with ones at and below the given diagonal and zeros elsewhere.
 
@@ -2128,7 +2128,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def tril(x: array, k: int, *, stream: StreamOrDevice = None) -> array"),
+          "def tril(x: array, k: int = 0, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Zeros the array above the given diagonal.
 
@@ -2148,7 +2148,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def triu(x: array, k: int, *, stream: StreamOrDevice = None) -> array"),
+          "def triu(x: array, k: int = 0, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Zeros the array below the given diagonal.
 
@@ -5153,7 +5153,7 @@ void init_ops(nb::module_& m) {
       "sorted_indices"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def gather_mm(a: array, b: array, /, lhs_indices: array, rhs_indices: array, *, sorted_indices: bool = False, stream: StreamOrDevice = None) -> array"),
+          "def gather_mm(a: array, b: array, /, lhs_indices: array | None = None, rhs_indices: array | None = None, *, sorted_indices: bool = False, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Matrix multiplication with matrix-level gather.
 
