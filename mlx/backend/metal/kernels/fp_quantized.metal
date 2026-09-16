@@ -68,6 +68,17 @@
       aligned, \
       batched)
 
+#define instantiate_quantized_aligned_batched_hgs(mode, name, type, aligned, batched, group_size, bits) \
+  instantiate_kernel( \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_alN_" #aligned "_batch_" #batched "_hgs", \
+      fp_ ## name,    \
+      type,    \
+      group_size,      \
+      bits,       \
+      aligned, \
+      batched, \
+      true)
+
 #define instantiate_quantized_qmv_fast(mode, type, results, batched, group_size, bits) \
   instantiate_kernel( \
       #mode "_qmv_fast_" #type "_gs_" #group_size "_b_" #bits "_r_" #results "_batch_" #batched, \
@@ -173,6 +184,10 @@
   instantiate_quantized_aligned_batched(mode, qmm_t, type, false, 1, group_size, bits) \
   instantiate_quantized_aligned_batched(mode, qmm_t, type, false, 0, group_size, bits)
 
+#define instantiate_quantized_qmm_hgs(type) \
+  instantiate_quantized_aligned_batched_hgs(nvfp4, qmm_t, type, true, 0, 16, 4)  \
+  instantiate_quantized_aligned_batched_hgs(nvfp4, qmm_t, type, false, 0, 16, 4)
+
 #define instantiate_quantized_all_quad(type, mode, group_size, bits) \
   instantiate_quantized_quad(mode, qmv_quad, type, 64, 1, group_size, bits)  \
   instantiate_quantized_quad(mode, qmv_quad, type, 64, 0, group_size, bits)  \
@@ -245,4 +260,5 @@
 instantiate_quantized_types(float)
 instantiate_quantized_types(bfloat16_t)
 instantiate_quantized_types(float16_t)
+instantiate_quantized_qmm_hgs(bfloat16_t)
     // clang-format on
