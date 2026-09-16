@@ -218,7 +218,7 @@ template <
     int bits,
     int group_size,
     bool use_mx_scale>
-__global__ void fp_qmv_gather(
+__global__ void fp_gather_qmv(
     const uint32_t* mat,
     const uint8_t* scales,
     const T* vec,
@@ -380,7 +380,7 @@ bool supports_fp_gather_qmv(
   if (!w.flags().row_contiguous || !scales.flags().row_contiguous) {
     return false;
   }
-  // Four packed words per thread beat the qmm kernels from K = 1024 on.
+  // Four packed words fill a warp at K = 1024; shorter K uses the qmm kernels.
   int k = x.shape(-1);
   if (k < 1024 || k % 32 != 0) {
     return false;
@@ -423,11 +423,11 @@ void fp_gather_qmv(
       int n = fp_qmv_n_per_thread(mat_ptr, vec_ptr, K, bits);
       dispatch_1_2_4(n, [&](auto n) {
         auto kernel =
-            cu::fp_qmv_gather<T, rows_per_block, n.value, 4, 32, true>;
+            cu::fp_gather_qmv<T, rows_per_block, n.value, 4, 32, true>;
         if (bits == 8) {
-          kernel = cu::fp_qmv_gather<T, rows_per_block, n.value, 8, 32, true>;
+          kernel = cu::fp_gather_qmv<T, rows_per_block, n.value, 8, 32, true>;
         } else if (group_size == 16) {
-          kernel = cu::fp_qmv_gather<T, rows_per_block, n.value, 4, 16, false>;
+          kernel = cu::fp_gather_qmv<T, rows_per_block, n.value, 4, 16, false>;
         }
         encoder.add_kernel_node(
             kernel,

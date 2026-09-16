@@ -197,21 +197,9 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool can_use_qmm_naive = supports(supports_qmm_naive);
   bool can_use_fp_gather_qmv =
       !global_scale && supports(supports_fp_gather_qmv);
-  bool can_use_qmv = supports(supports_qmv);
-
-  auto call_fp_gather_qmv = [&]() {
-    out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    fp_gather_qmv(
-        x,
-        w,
-        scales,
-        lhs_indices,
-        rhs_indices,
-        out,
-        bits_,
-        group_size_,
-        encoder);
-  };
+  bool can_use_qmv = supports(supports_qmv) || can_use_fp_gather_qmv;
+  // fp_gather_qmv wins at any batch size, gather_qmv only under 8 rows.
+  bool prefer_qmv = can_use_fp_gather_qmv || (can_use_qmv && M * B < 8);
   auto call_qmm_sm80 = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
     qmm_sm80(
@@ -246,6 +234,19 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   };
   auto call_qmv = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    if (can_use_fp_gather_qmv) {
+      fp_gather_qmv(
+          x,
+          w,
+          scales,
+          lhs_indices,
+          rhs_indices,
+          out,
+          bits_,
+          group_size_,
+          encoder);
+      return;
+    }
     gather_qmv(
         x,
         w,
@@ -261,13 +262,8 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         encoder);
   };
 
-  if (can_use_fp_gather_qmv) {
-    call_fp_gather_qmv();
-    return;
-  }
-
   if (can_use_qmm_sm80) {
-    if (can_use_qmv && (M * B < 8)) {
+    if (prefer_qmv) {
       call_qmv();
     } else {
       call_qmm_sm80();
@@ -276,7 +272,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   if (can_use_qmm_naive) {
-    if (can_use_qmv && (M * B < 8)) {
+    if (prefer_qmv) {
       call_qmv();
     } else {
       call_qmm_naive();
