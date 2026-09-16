@@ -109,3 +109,13 @@ TEST_CASE("test clear cache trims CUDA pool") {
       cudaSuccess);
   CHECK_LT(final_reserved, allocated_reserved);
 }
+
+TEST_CASE("test eval after cuda error") {
+  auto s = default_stream(Device::gpu);
+  // A failed allocation sets a CUDA error on the calling thread.
+  CHECK_THROWS(eval(zeros({1 << 20, 1 << 20}, float32, s)));
+  // The error must not resurface in later evaluations.
+  auto a = ones({4}, float32, s);
+  CHECK_NOTHROW(eval(a));
+  CHECK(array_equal(a, ones({4})).item<bool>());
+}

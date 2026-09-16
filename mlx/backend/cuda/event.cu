@@ -341,7 +341,8 @@ void Event::wait() {
   } else {
     event.atomic->wait(value());
   }
-  CHECK_CUDA_ERROR(cudaPeekAtLastError());
+  // Check for errors during kernel execution and reset the error state.
+  CHECK_CUDA_ERROR(cudaGetLastError());
   check_error();
 }
 

@@ -2065,6 +2065,12 @@ class TestArray(mlx_tests.MLXTestCase):
         mv = None
         self.assertIsNone(wr())
 
+    def test_buffer_protocol_eval_error(self):
+        # Errors from evaluating the array are raised instead of aborting
+        a = mx.linalg.inv(mx.zeros((2, 2)), stream=mx.cpu)
+        with self.assertRaises(RuntimeError):
+            memoryview(a)
+
     def test_array_view_ref_counting(self):
         a = mx.arange(3)
         wr = weakref.ref(a)
