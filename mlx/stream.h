@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <optional>
 #include <tuple>
 #include <vector>
 
@@ -28,6 +29,9 @@ struct MLX_API ThreadLocalStream : public Stream {
 
 /** Get the default stream of current thread for the given device. */
 MLX_API Stream default_stream(Device d);
+
+/** Get the default stream of current thread if it exists. */
+std::optional<Stream> default_stream_if_exists(Device d);
 
 /** Make the stream the default for its device on current thread. */
 MLX_API void set_default_stream(Stream s);
