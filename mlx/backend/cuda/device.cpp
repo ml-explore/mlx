@@ -212,7 +212,11 @@ CommandEncoder::CommandEncoder(Device& d)
 }
 
 CommandEncoder::~CommandEncoder() {
-  synchronize();
+  try {
+    synchronize();
+  } catch (...) {
+    // Synchronizing can fail when the CUDA runtime is shutting down.
+  }
 }
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
@@ -488,6 +492,8 @@ void CommandEncoder::commit() {
 
 void CommandEncoder::synchronize() {
   CHECK_CUDA_ERROR(cudaStreamSynchronize(stream_));
+  // Commit first so the handler below runs after all pending tasks.
+  commit();
   auto p = std::make_shared<std::promise<void>>();
   std::future<void> f = p->get_future();
   add_completed_handler([p = std::move(p)]() { p->set_value(); });

@@ -31,8 +31,8 @@ class Worker {
  private:
   using Tasks = std::vector<std::function<void()>>;
 
-  // State shared with the detached worker thread. The thread may free it at
-  // any time after the Worker is gone, so it must not own CUDA resources.
+  // State shared with the detached worker thread, which may outlive the Worker
+  // and free the state after the CUDA runtime is gone.
   struct State {
     static void signal(void* data);
     void thread_fn();

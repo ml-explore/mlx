@@ -50,6 +50,10 @@ Stream default_stream(Device d) {
   return s.value();
 }
 
+std::optional<Stream> default_stream_if_exists(Device d) {
+  return default_stream_storage(d);
+}
+
 void set_default_stream(Stream s) {
   if (!gpu::is_available() && s.device == Device::gpu) {
     throw std::invalid_argument(
