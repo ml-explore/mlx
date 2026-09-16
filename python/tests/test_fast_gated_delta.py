@@ -242,8 +242,6 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 self.assertTrue(dtype == out.dtype, msg="Out " + msg)
                 self.assertTrue(hf.dtype == mx.float32, msg="State " + msg)
 
-    # The chunk size only selects between Metal kernels. Other backends always
-    # use the fallback, so both sides of the comparison would be identical.
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_sequential(self):
         os.environ["GATED_DELTA_CHUNK"] = "0"
