@@ -242,7 +242,9 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 self.assertTrue(dtype == out.dtype, msg="Out " + msg)
                 self.assertTrue(hf.dtype == mx.float32, msg="State " + msg)
 
-    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
+    # The chunk size only selects between Metal kernels. Other backends always
+    # use the fallback, so both sides of the comparison would be identical.
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_sequential(self):
         os.environ["GATED_DELTA_CHUNK"] = "0"
         for dims in self.gpu_dims:
@@ -255,7 +257,7 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4), msg="State " + msg
             )
 
-    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_simdgroup(self):
         os.environ["GATED_DELTA_CHUNK"] = "8"
         for dims in self.gpu_dims:
@@ -268,7 +270,7 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4), msg="State " + msg
             )
 
-    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_nax(self):
         os.environ["GATED_DELTA_CHUNK"] = "16"
         for dims in self.gpu_dims:
