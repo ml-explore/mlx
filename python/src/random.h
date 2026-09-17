@@ -9,6 +9,9 @@
 namespace mx = mlx::core;
 namespace nb = nanobind;
 
+// Clear the `mx.random.state` python object in current thread.
+void reset_random_state();
+
 // The process-global `mx.random.state` sentinel.
 nb::object random_state_sentinel();
 

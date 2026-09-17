@@ -9,11 +9,11 @@ template <typename T, typename U, int N = WorkPerThread<U>::n>
   index *= N;
   if (N > 1 && index + N > size) {
     for (int i = 0; index + i < size; ++i) {
-      dst[index + i] = static_cast<U>(src[0]);
+      dst[index + i] = cast_to<U>(src[0]);
     }
   } else {
     for (int i = 0; i < N; ++i) {
-      dst[index + i] = static_cast<U>(src[0]);
+      dst[index + i] = cast_to<U>(src[0]);
     }
   }
 }
@@ -27,11 +27,11 @@ template <typename T, typename U, int N = WorkPerThread<U>::n>
   index *= N;
   if (N > 1 && index + N > size) {
     for (int i = 0; index + i < size; ++i) {
-      dst[index + i] = static_cast<U>(src[index + i]);
+      dst[index + i] = cast_to<U>(src[index + i]);
     }
   } else {
     for (int i = 0; i < N; ++i) {
-      dst[index + i] = static_cast<U>(src[index + i]);
+      dst[index + i] = cast_to<U>(src[index + i]);
     }
   }
 }
@@ -46,11 +46,11 @@ template <typename T, typename U, int N = WorkPerThread<U>::n>
   int64_t offset = N * (index.x + grid_dim.x * int64_t(index.y));
   if (N > 1 && offset + N > size) {
     for (int i = 0; offset + i < size; ++i) {
-      dst[offset + i] = static_cast<U>(src[0]);
+      dst[offset + i] = cast_to<U>(src[0]);
     }
   } else {
     for (int i = 0; i < N; ++i) {
-      dst[offset + i] = static_cast<U>(src[0]);
+      dst[offset + i] = cast_to<U>(src[0]);
     }
   }
 }
@@ -65,11 +65,11 @@ template <typename T, typename U, int N = WorkPerThread<U>::n>
   int64_t offset = N * (index.x + grid_dim.x * int64_t(index.y));
   if (N > 1 && offset + N > size) {
     for (int i = 0; offset + i < size; ++i) {
-      dst[offset + i] = static_cast<U>(src[offset + i]);
+      dst[offset + i] = cast_to<U>(src[offset + i]);
     }
   } else {
     for (int i = 0; i < N; ++i) {
-      dst[offset + i] = static_cast<U>(src[offset + i]);
+      dst[offset + i] = cast_to<U>(src[offset + i]);
     }
   }
 }
@@ -81,7 +81,7 @@ template <typename T, typename U, typename IdxT = int64_t>
     constant const int64_t& src_stride [[buffer(3)]],
     uint index [[thread_position_in_grid]]) {
   auto src_idx = elem_to_loc_1<IdxT>(index, src_stride);
-  dst[index] = static_cast<U>(src[src_idx]);
+  dst[index] = cast_to<U>(src[src_idx]);
 }
 
 template <typename T, typename U, typename IdxT = int64_t>
@@ -93,7 +93,7 @@ template <typename T, typename U, typename IdxT = int64_t>
     uint2 grid_dim [[threads_per_grid]]) {
   auto src_idx = elem_to_loc_2<IdxT>(index, src_strides);
   IdxT dst_idx = index.x + IdxT(grid_dim.x) * index.y;
-  dst[dst_idx] = static_cast<U>(src[src_idx]);
+  dst[dst_idx] = cast_to<U>(src[src_idx]);
 }
 
 template <typename T, typename U, typename IdxT = int64_t>
@@ -106,7 +106,7 @@ template <typename T, typename U, typename IdxT = int64_t>
   auto src_idx = elem_to_loc_3<IdxT>(index, src_strides);
   IdxT dst_idx =
       index.x + IdxT(grid_dim.x) * (index.y + IdxT(grid_dim.y) * index.z);
-  dst[dst_idx] = static_cast<U>(src[src_idx]);
+  dst[dst_idx] = cast_to<U>(src[src_idx]);
 }
 
 template <typename T, typename U, int N = 1, typename IdxT = int64_t>
@@ -123,14 +123,14 @@ template <typename T, typename U, int N = 1, typename IdxT = int64_t>
   if (N == 1) {
     IdxT dst_idx =
         index.x + grid_dim.x * (index.y + IdxT(grid_dim.y) * index.z);
-    dst[dst_idx] = static_cast<U>(src[src_idx]);
+    dst[dst_idx] = cast_to<U>(src[src_idx]);
     return;
   }
   auto xshape = src_shape[ndim - 1];
   IdxT dst_idx = N * index.x + xshape * (index.y + IdxT(grid_dim.y) * index.z);
   auto src_xstride = src_strides[ndim - 1];
   for (int i = 0; i < N && (int(N * index.x) + i) < xshape; ++i) {
-    dst[dst_idx + i] = static_cast<U>(src[src_idx]);
+    dst[dst_idx + i] = cast_to<U>(src[src_idx]);
     src_idx += src_xstride;
   }
 }
@@ -144,7 +144,7 @@ template <typename T, typename U, typename IdxT = int64_t>
     uint index [[thread_position_in_grid]]) {
   auto src_idx = elem_to_loc_1<IdxT>(index, src_stride);
   auto dst_idx = elem_to_loc_1<IdxT>(index, dst_stride);
-  dst[dst_idx] = static_cast<U>(src[src_idx]);
+  dst[dst_idx] = cast_to<U>(src[src_idx]);
 }
 
 template <typename T, typename U, typename IdxT = int64_t>
@@ -156,7 +156,7 @@ template <typename T, typename U, typename IdxT = int64_t>
     uint2 index [[thread_position_in_grid]]) {
   auto src_idx = elem_to_loc_2<IdxT>(index, src_strides);
   auto dst_idx = elem_to_loc_2<IdxT>(index, dst_strides);
-  dst[dst_idx] = static_cast<U>(src[src_idx]);
+  dst[dst_idx] = cast_to<U>(src[src_idx]);
 }
 
 template <typename T, typename U, typename IdxT = int64_t>
@@ -168,7 +168,7 @@ template <typename T, typename U, typename IdxT = int64_t>
     uint3 index [[thread_position_in_grid]]) {
   auto src_idx = elem_to_loc_3<IdxT>(index, src_strides);
   auto dst_idx = elem_to_loc_3<IdxT>(index, dst_strides);
-  dst[dst_idx] = static_cast<U>(src[src_idx]);
+  dst[dst_idx] = cast_to<U>(src[src_idx]);
 }
 
 template <typename T, typename U, int N = 1, typename IdxT = int64_t>
@@ -187,14 +187,14 @@ template <typename T, typename U, int N = 1, typename IdxT = int64_t>
       dst_strides,
       ndim);
   if (N == 1) {
-    dst[idx.y] = static_cast<U>(src[idx.x]);
+    dst[idx.y] = cast_to<U>(src[idx.x]);
     return;
   }
   IdxT src_xstride = src_strides[ndim - 1];
   IdxT dst_xstride = dst_strides[ndim - 1];
   auto xshape = src_shape[ndim - 1];
   for (int i = 0; i < N && (int(N * index.x) + i) < xshape; ++i) {
-    dst[idx.y] = static_cast<U>(src[idx.x]);
+    dst[idx.y] = cast_to<U>(src[idx.x]);
     idx.x += src_xstride;
     idx.y += dst_xstride;
   }
@@ -211,7 +211,7 @@ template <typename T, typename U, typename IdxT = int64_t>
     uint index [[thread_position_in_grid]]) {
   auto src_idx = elem_to_loc_1<IdxT>(index, src_stride);
   auto dst_idx = elem_to_loc_1<IdxT>(index, dst_stride);
-  dst[dst_idx + dst_offset] = src[src_idx + src_offset];
+  dst[dst_idx + dst_offset] = cast_to<U>(src[src_idx + src_offset]);
 }
 
 template <typename T, typename U, typename IdxT = int64_t>
@@ -225,7 +225,7 @@ template <typename T, typename U, typename IdxT = int64_t>
     uint2 index [[thread_position_in_grid]]) {
   auto src_idx = elem_to_loc_2<IdxT>(index, src_strides);
   auto dst_idx = elem_to_loc_2<IdxT>(index, dst_strides);
-  dst[dst_idx + dst_offset] = src[src_idx + src_offset];
+  dst[dst_idx + dst_offset] = cast_to<U>(src[src_idx + src_offset]);
 }
 
 template <typename T, typename U, typename IdxT = int64_t>
@@ -239,7 +239,7 @@ template <typename T, typename U, typename IdxT = int64_t>
     uint3 index [[thread_position_in_grid]]) {
   auto src_idx = elem_to_loc_3<IdxT>(index, src_strides);
   auto dst_idx = elem_to_loc_3<IdxT>(index, dst_strides);
-  dst[dst_idx + dst_offset] = src[src_idx + src_offset];
+  dst[dst_idx + dst_offset] = cast_to<U>(src[src_idx + src_offset]);
 }
 
 template <typename T, typename U, int N = 1, typename IdxT = int64_t>
@@ -262,14 +262,14 @@ template <typename T, typename U, int N = 1, typename IdxT = int64_t>
       dst_strides,
       ndim);
   if (N == 1) {
-    dst[idx.y] = src[idx.x];
+    dst[idx.y] = cast_to<U>(src[idx.x]);
     return;
   }
   IdxT src_xstride = src_strides[ndim - 1];
   IdxT dst_xstride = dst_strides[ndim - 1];
   auto xshape = src_shape[ndim - 1];
   for (int i = 0; i < N && (int(N * index.x) + i) < xshape; ++i) {
-    dst[idx.y] = src[idx.x];
+    dst[idx.y] = cast_to<U>(src[idx.x]);
     idx.x += src_xstride;
     idx.y += dst_xstride;
   }

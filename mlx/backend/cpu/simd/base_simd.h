@@ -13,6 +13,7 @@
 #include <intrin.h> // For _BitScanReverse
 #endif
 
+#include "mlx/types/complex.h"
 #include "mlx/types/half_types.h"
 
 namespace mlx::core::simd {
@@ -56,19 +57,6 @@ void store(T* dst, Simd<T, N> x) {
   *(Simd<T, N>*)dst = x;
 }
 
-template <typename, typename = void>
-constexpr bool is_complex = false;
-
-template <typename T>
-constexpr bool is_complex<T, std::void_t<decltype(std::declval<T>().real())>> =
-    true;
-
-// std::is_signed_v is false for the custom float16_t/bfloat16_t types, so it
-// skips the floored-mod sign correction for them.
-template <typename T>
-inline constexpr bool is_signed_v = std::is_signed_v<T> ||
-    std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>;
-
 template <typename T>
 Simd<T, 1> rint(Simd<T, 1> in) {
   if constexpr (is_complex<T>) {
@@ -97,7 +85,6 @@ Simd<T, 1> recip(Simd<T, 1> in) {
 
 DEFAULT_UNARY(operator-, std::negate{})
 DEFAULT_UNARY(operator!, std::logical_not{})
-DEFAULT_UNARY(abs, std::abs)
 DEFAULT_UNARY(acos, std::acos)
 DEFAULT_UNARY(acosh, std::acosh)
 DEFAULT_UNARY(asin, std::asin)
@@ -115,6 +102,15 @@ DEFAULT_UNARY(sinh, std::sinh)
 DEFAULT_UNARY(sqrt, std::sqrt)
 DEFAULT_UNARY(tan, std::tan)
 DEFAULT_UNARY(tanh, std::tanh)
+
+template <typename T>
+Simd<T, 1> abs(Simd<T, 1> in) {
+  if constexpr (std::is_unsigned_v<T>) {
+    return in;
+  } else {
+    return std::abs(in.value);
+  }
+}
 
 template <typename T>
 Simd<T, 1> log1p(Simd<T, 1> in) {
@@ -164,7 +160,7 @@ auto imag(Simd<T, 1> in) -> Simd<decltype(std::imag(in.value)), 1> {
 }
 template <typename T>
 Simd<bool, 1> isnan(Simd<T, 1> in) {
-  return std::isnan(in.value);
+  return mlx::core::isnan(in.value);
 }
 
 #define DEFAULT_BINARY(OP)                                                 \
@@ -208,12 +204,29 @@ Simd<T, 1> clz(Simd<T, 1> x_) {
 #endif
 }
 
+// Integer division by zero traps on x86 and returns 0 on arm64. Define the
+// quotient as 0 on all platforms, which keeps a == (a / b) * b + (a % b).
+template <typename T>
+Simd<T, 1> divide(Simd<T, 1> a_, Simd<T, 1> b_) {
+  T a = a_.value;
+  T b = b_.value;
+  if constexpr (std::is_integral_v<T>) {
+    if (b == 0) {
+      return T(0);
+    }
+  }
+  return a / b;
+}
+
 template <typename T>
 Simd<T, 1> remainder(Simd<T, 1> a_, Simd<T, 1> b_) {
   T a = a_.value;
   T b = b_.value;
   T r;
   if constexpr (std::is_integral_v<T>) {
+    if (b == 0) {
+      return a;
+    }
     r = a % b;
   } else {
     r = std::remainder(a, b);
@@ -258,6 +271,11 @@ Simd<T, 1> pow(Simd<T, 1> a, Simd<T, 1> b) {
     return std::pow(base, exp);
   } else {
     T res = 1;
+    if constexpr (std::is_signed_v<T>) {
+      if (exp < 0) {
+        return 0;
+      }
+    }
     while (exp) {
       if (exp & 1) {
         res *= base;

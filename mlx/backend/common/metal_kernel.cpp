@@ -37,9 +37,11 @@ Stream resolve_metal_kernel_stream(StreamOrDevice s) {
   // recorded in the graph on a placeholder GPU stream. The importing process
   // remaps it to one of its own streams.
   auto* device = std::get_if<Device>(&s);
+  auto* device_type = std::get_if<Device::DeviceType>(&s);
   auto* stream = std::get_if<Stream>(&s);
   auto* tl_stream = std::get_if<ThreadLocalStream>(&s);
   if ((device && *device != Device::gpu) ||
+      (device_type && *device_type != Device::gpu) ||
       (stream && stream->device != Device::gpu) ||
       (tl_stream && tl_stream->device != Device::gpu)) {
     throw std::invalid_argument("[metal_kernel] Only supports the GPU.");
@@ -281,27 +283,18 @@ CustomKernelFunction metal_kernel(
              std::optional<float> init_value = std::nullopt,
              bool verbose = false,
              StreamOrDevice s_ = {}) {
-    if (inputs.size() != input_names.size()) {
+    auto check_size = [](size_t actual, size_t expected, const char* name) {
+      if (actual == expected) {
+        return;
+      }
       std::ostringstream msg;
-      msg << "[metal_kernel] Expected `inputs` to have size "
-          << input_names.size() << " but got size " << inputs.size() << "."
-          << std::endl;
+      msg << "[metal_kernel] Expected `" << name << "` to have size "
+          << expected << " but got size " << actual << "." << std::endl;
       throw std::invalid_argument(msg.str());
-    }
-    if (output_shapes.size() != output_names.size()) {
-      std::ostringstream msg;
-      msg << "[metal_kernel] Expected `output_shapes` to have size "
-          << output_names.size() << " but got size " << output_shapes.size()
-          << "." << std::endl;
-      throw std::invalid_argument(msg.str());
-    }
-    if (output_dtypes.size() != output_names.size()) {
-      std::ostringstream msg;
-      msg << "[metal_kernel] Expected `output_dtypes` to have size "
-          << output_names.size() << " but got size " << output_dtypes.size()
-          << "." << std::endl;
-      throw std::invalid_argument(msg.str());
-    }
+    };
+    check_size(inputs.size(), input_names.size(), "inputs");
+    check_size(output_shapes.size(), output_names.size(), "output_shapes");
+    check_size(output_dtypes.size(), output_names.size(), "output_dtypes");
 
     auto s = resolve_metal_kernel_stream(s_);
 

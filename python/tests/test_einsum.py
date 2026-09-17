@@ -65,6 +65,39 @@ class TestEinsum(mlx_tests.MLXTestCase):
             mx_path = mx.einsum_path(case, *inputs)
             self.assertEqual(np_path[0][1:], mx_path[0])
 
+    def test_scalar_operands(self):
+        # An empty subscript is a scalar operand. A trailing one used to be
+        # dropped by the parser, so "i,->i" looked like a single input.
+        s1 = mx.array(2.0)
+        s2 = mx.array(3.0)
+        v = mx.random.uniform(shape=(3,))
+        m = mx.random.uniform(shape=(2, 3))
+
+        cases = [
+            ("->", (s1,)),
+            (",->", (s1, s2)),
+            (",,->", (s1, s2, s1)),
+            ("i,->i", (v, s1)),
+            (",i->i", (s1, v)),
+            ("ij,->ij", (m, s1)),
+            (",ij->ij", (s1, m)),
+            ("i,,->i", (v, s1, s2)),
+        ]
+        for spec, operands in cases:
+            mx_out = mx.einsum(spec, *operands)
+            np_out = np.einsum(spec, *[np.array(o) for o in operands])
+            self.assertEqual(mx_out.shape, np_out.shape)
+            self.assertTrue(np.allclose(mx_out, np_out, rtol=1e-4, atol=1e-4))
+
+        # Operand count still has to match the number of subscripts
+        with self.assertRaises(ValueError):
+            mx.einsum(",->", s1)
+        with self.assertRaises(ValueError):
+            mx.einsum("i,->i", v)
+        # An empty subscript requires a 0-d operand
+        with self.assertRaises(ValueError):
+            mx.einsum(",->", v, s1)
+
     def test_simple_einsum(self):
         a = mx.arange(4 * 4).reshape(4, 4)
         a_mx = mx.einsum("ii->i", a)
@@ -188,7 +221,6 @@ class TestEinsum(mlx_tests.MLXTestCase):
         a = mx.full((5, 1), 1.0)
         b = mx.full((8, 2), 1.0)
         a_mx = mx.einsum("ab,bc->c", a, b)
-        return
         a_np = np.einsum("ab,bc->c", a, b)
         self.assertTrue(np.array_equal(a_mx, a_np))
 
@@ -357,6 +389,40 @@ class TestEinsum(mlx_tests.MLXTestCase):
             inputs = inputs_for_case(test_case[0])
             with self.assertRaises(ValueError):
                 mx.einsum(test_case[1], *inputs)
+
+    def test_ellipses_broadcast(self):
+        # Size 1 batch dimensions covered by an ellipsis have to broadcast
+        # against the other operands, including when the smaller operand
+        # comes first.
+        shape_pairs = [
+            ((1, 3, 4), (2, 4, 5)),
+            ((2, 3, 4), (1, 4, 5)),
+            ((1, 1, 3, 4), (5, 2, 4, 5)),
+            ((5, 1, 3, 4), (1, 2, 4, 5)),
+        ]
+        for sa, sb in shape_pairs:
+            a = mx.random.uniform(shape=sa)
+            b = mx.random.uniform(shape=sb)
+            mx_out = mx.einsum("...ij,...jk->...ik", a, b)
+            np_out = np.einsum("...ij,...jk->...ik", np.array(a), np.array(b))
+            self.assertEqual(mx_out.shape, np_out.shape)
+            self.assertTrue(np.allclose(mx_out, np_out, rtol=1e-4, atol=1e-4))
+
+        for sa, sb in [((1, 4), (5, 4)), ((5, 4), (1, 4))]:
+            a = mx.random.uniform(shape=sa)
+            b = mx.random.uniform(shape=sb)
+            mx_out = mx.einsum("...i,...i->...", a, b)
+            np_out = np.einsum("...i,...i->...", np.array(a), np.array(b))
+            self.assertEqual(mx_out.shape, np_out.shape)
+            self.assertTrue(np.allclose(mx_out, np_out, rtol=1e-4, atol=1e-4))
+
+        # Same thing with explicit labels rather than an ellipsis
+        a = mx.random.uniform(shape=(1, 3, 4))
+        b = mx.random.uniform(shape=(2, 4, 5))
+        mx_out = mx.einsum("bij,bjk->bik", a, b)
+        np_out = np.einsum("bij,bjk->bik", np.array(a), np.array(b))
+        self.assertEqual(mx_out.shape, np_out.shape)
+        self.assertTrue(np.allclose(mx_out, np_out, rtol=1e-4, atol=1e-4))
 
 
 if __name__ == "__main__":

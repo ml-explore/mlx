@@ -364,6 +364,29 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         optim_no_momentum = opt.Muon(learning_rate=1e-2, momentum=0.0)
         optim_no_momentum.apply_gradients(grads, params)
 
+    def test_weight_decay_keeps_inputs_unchanged(self):
+        # Weight decay must not write into the gradients or the parameters
+        # that the caller passed in.
+        params = {"w": mx.ones((3, 3))}
+        grads = {"w": mx.full((3, 3), 2.0)}
+
+        optimizer = opt.SGD(learning_rate=1e-2, weight_decay=0.1)
+        optimizer.apply_gradients(grads, params)
+        self.assertTrue(mx.array_equal(grads["w"], mx.full((3, 3), 2.0)))
+        self.assertTrue(mx.array_equal(params["w"], mx.ones((3, 3))))
+
+        optimizer = opt.Adafactor(learning_rate=1e-2, weight_decay=0.1)
+        optimizer.apply_gradients(grads, params)
+        self.assertTrue(mx.array_equal(grads["w"], mx.full((3, 3), 2.0)))
+        self.assertTrue(mx.array_equal(params["w"], mx.ones((3, 3))))
+
+        # The same gradients applied twice give the same update
+        optimizer = opt.SGD(learning_rate=1e-2, weight_decay=0.1)
+        first = optimizer.apply_gradients(grads, params)
+        optimizer = opt.SGD(learning_rate=1e-2, weight_decay=0.1)
+        second = optimizer.apply_gradients(grads, params)
+        self.assertTrue(mx.array_equal(first["w"], second["w"]))
+
     def test_compiled_optimizer(self):
         model = nn.Linear(10, 10)
         x = mx.random.uniform(shape=(2, 10))
@@ -562,6 +585,9 @@ class TestSchedulers(mlx_tests.MLXTestCase):
             "Gradients were not scaled correctly during clipping.",
         )
 
+        with self.assertRaises(ValueError):
+            opt.clip_grad_norm(small_grads, -1.0)
+
     def test_init_from_state(self):
         class Model(nn.Module):
             def __init__(self):
@@ -609,6 +635,27 @@ class TestSchedulers(mlx_tests.MLXTestCase):
         self.assertEqual((len(sgd_states) - 2) * 2, len(adam_states) - 2)
         self.assertFalse(any("bias" in k for k, v in adam_states))
         self.assertFalse(any("weight" in k for k, v in sgd_states))
+
+    def test_multi_optimizer_with_parameterless_layers(self):
+        mx.random.seed(0)
+        # test a sequential that has a no parameter module like ReLU
+        model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4))
+        mx.eval(model.parameters())
+
+        optimizer = opt.MultiOptimizer(
+            [opt.Muon(learning_rate=0.01), opt.AdamW(learning_rate=0.01)],
+            [lambda _, w: w.ndim >= 2],
+        )
+
+        loss_and_grad = nn.value_and_grad(model, lambda m, x: m(x).sum())
+        _, grads = loss_and_grad(model, mx.ones((1, 4)))
+        optimizer.update(model, grads)
+
+        w, b = model.layers[0].weight, model.layers[0].bias
+        optimizer.update(model, grads)
+        mx.eval(model.parameters())
+        self.assertFalse(mx.array_equal(w, model.layers[0].weight))
+        self.assertFalse(mx.array_equal(b, model.layers[0].bias))
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@
 #include <ostream>
 #include <vector>
 
+#include "mlx/backend/cuda/cuda.h"
 #include "mlx/linalg.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -12,6 +13,18 @@ namespace mlx::core::linalg {
 
 void check_cpu_stream(const StreamOrDevice& s, const std::string& prefix) {
   if (to_stream(s).device == Device::gpu) {
+    throw std::invalid_argument(
+        prefix +
+        " This op is not yet supported on the GPU. "
+        "Explicitly pass a CPU stream to run it.");
+  }
+}
+
+// For ops that have a CUDA implementation but no Metal one yet.
+void check_cpu_or_cuda_stream(
+    const StreamOrDevice& s,
+    const std::string& prefix) {
+  if (to_stream(s).device == Device::gpu && !cu::is_available()) {
     throw std::invalid_argument(
         prefix +
         " This op is not yet supported on the GPU. "
@@ -166,7 +179,14 @@ array norm(
     bool keepdims /* = false */,
     StreamOrDevice s /* = {} */) {
   if (!axis) {
-    return norm(flatten(a, s), std::vector<int>{0}, keepdims, s);
+    auto out = norm(flatten(a, s), std::vector<int>{0}, keepdims, s);
+    if (keepdims) {
+      // The flatten above collapses the input to one dimension, so keepdims
+      // has to restore the rank of the original array rather than the
+      // flattened one.
+      out = reshape(out, Shape(a.ndim(), 1), s);
+    }
+    return out;
   }
 
   if (axis.value().size() > 2) {
@@ -329,7 +349,7 @@ array cholesky(
     const array& a,
     bool upper /* = false */,
     StreamOrDevice s /* = {} */) {
-  check_cpu_stream(s, "[linalg::cholesky]");
+  check_cpu_or_cuda_stream(s, "[linalg::cholesky]");
   check_float(a.dtype(), "[linalg::cholesky]");
   if (a.ndim() < 2) {
     std::ostringstream msg;
@@ -360,6 +380,15 @@ array pinv(const array& a, StreamOrDevice s /* = {} */) {
     msg << "[linalg::pinv] Arrays must have >= 2 dimensions. Received array "
         << "with " << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
+  }
+
+  // The cutoff below reduces over the singular values, which cannot run on an
+  // empty array. Nothing needs computing anyway, and the result is the shape
+  // of the transposed input, like numpy.
+  if (a.size() == 0) {
+    auto out_shape = a.shape();
+    std::swap(out_shape[a.ndim() - 1], out_shape[a.ndim() - 2]);
+    return zeros(std::move(out_shape), a.dtype(), s);
   }
 
   int m = a.shape(-2);
@@ -431,12 +460,8 @@ array cross(
     int axis /* = -1 */,
     StreamOrDevice s /* = {} */) {
   auto check_ax = [axis](const array& arr) {
-    if (axis >= static_cast<int>(arr.ndim()) || axis + arr.ndim() < 0) {
-      std::ostringstream msg;
-      msg << "[linalg::cross] axis " << axis << " invalid for array with "
-          << arr.ndim() << " dimensions.";
-      throw std::invalid_argument(msg.str());
-    }
+    // Normalizes and validates the axis, including negative out of bounds ones
+    normalize_axis_index(axis, arr.ndim(), "[linalg::cross] ");
     if (arr.shape(axis) < 2 || arr.shape(axis) > 3) {
       throw std::invalid_argument(
           "[linalg::cross] The specified axis must have size 2 or 3.");

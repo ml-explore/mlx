@@ -7,6 +7,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <thread>
 #include <variant>
 
 #include "mlx/api.h"
@@ -17,14 +18,20 @@
 
 namespace mlx::core {
 
-using StreamOrDevice =
-    std::variant<std::monostate, Stream, ThreadLocalStream, Device>;
+using StreamOrDevice = std::variant<
+    std::monostate,
+    Stream,
+    ThreadLocalStream,
+    Device,
+    Device::DeviceType>;
 MLX_API Stream to_stream(StreamOrDevice s);
 MLX_API Stream to_stream(StreamOrDevice s, Device default_);
 
 struct StreamContext {
  public:
-  StreamContext(StreamOrDevice s) : _stream(default_stream(default_device())) {
+  StreamContext(StreamOrDevice s)
+      : _stream(default_stream(default_device())),
+        _owner(std::this_thread::get_id()) {
     if (std::holds_alternative<std::monostate>(s)) {
       throw std::runtime_error(
           "[StreamContext] Invalid argument, please specify a stream or device.");
@@ -34,13 +41,21 @@ struct StreamContext {
     set_default_stream(_s);
   }
 
-  ~StreamContext() {
+  // noexcept(false) so the thread check below can throw. A destructor that
+  // throws while another exception unwinds this thread calls std::terminate.
+  ~StreamContext() noexcept(false) {
+    if (std::this_thread::get_id() != _owner) {
+      throw std::runtime_error(
+          "[StreamContext] Destroyed in a different thread than it was "
+          "constructed in.");
+    }
     set_default_device(_stream.device);
     set_default_stream(_stream);
   }
 
  private:
   Stream _stream;
+  std::thread::id _owner;
 };
 
 struct MLX_API PrintOptions {
@@ -185,6 +200,21 @@ inline int max_mb_per_buffer(int default_value) {
   static int max_mb_per_buffer_ =
       get_var("MLX_MAX_MB_PER_BUFFER", default_value);
   return max_mb_per_buffer_;
+}
+
+// Per-set residency-set size, as a percentage of the device's recommended
+// max working-set size. Controls only how wired memory is distributed across
+// residency sets, never how much is wired; see metal::ResidencySets. A value
+// <= 0 or >= 100 puts everything in a single set.
+inline int residency_set_max_pct() {
+  static int residency_set_max_pct_ = get_var("MLX_RESIDENCY_SET_MAX_PCT", 5);
+  return residency_set_max_pct_;
+}
+
+// Log each residency set as it is created.
+inline bool residency_debug() {
+  static bool residency_debug_ = get_var("MLX_RESIDENCY_DEBUG", 0);
+  return residency_debug_;
 }
 
 inline bool metal_fast_synch() {

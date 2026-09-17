@@ -15,6 +15,7 @@
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/steel/gemm/params.h"
 #include "mlx/backend/metal/matmul.h"
+#include "mlx/backend/metal/reduce.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -207,11 +208,25 @@ void steel_matmul_regular_axpby_nax(
 
   // Temp routing for larger devices
   char devc = d.get_architecture().back();
-  if (devc == 's' || devc == 'c' || devc == 'd') {
+  if (devc == 's' || devc == 'c') {
     bk = (K >= 8192 && K > (M + N)) ? 64 : 256;
 
     bm = 64;
     wm = 2;
+  } else if (devc == 'd') {
+    if (N > M) {
+      bm = 128;
+      bn = 64;
+
+      wm = 4;
+      wn = 2;
+    } else {
+      bm = 64;
+      bn = 128;
+
+      wm = 2;
+      wn = 4;
+    }
   }
 
   // Prepare kernel name
@@ -278,8 +293,10 @@ void steel_matmul_regular_axpby_nax(
 
   // TODO: Explore device-based tuning for swizzle
   int swizzle_log = tm <= 3 ? 0 : 1;
-  if (devc == 's' || devc == 'c' || devc == 'd') {
+  if (devc == 's' || devc == 'c') {
     swizzle_log = 2;
+  } else if (devc == 'd') {
+    swizzle_log = (M > N) ? 0 : 2;
   }
 
   // Prepare steel matmul params
@@ -680,6 +697,33 @@ void steel_gemm_splitk_axpby_nax(
   int wm = 4, wn = 4;
   int split_k_partition_size = 4096;
 
+  // Temp routing for larger devices
+  char devc = d.get_architecture().back();
+  if (devc == 'd') {
+    if (M <= 2048 && N <= 2048) {
+      bm = 64;
+      bn = 64;
+
+      wm = 2;
+      wn = 2;
+
+      split_k_partition_size = 2048;
+      bk = 256;
+    } else if (N > M) {
+      bm = 128;
+      bn = 64;
+
+      wm = 4;
+      wn = 2;
+    } else {
+      bm = 64;
+      bn = 128;
+
+      wm = 2;
+      wn = 4;
+    }
+  }
+
   if ((M + N) / 2 < 512 || K <= 4096) {
     bm = bn = 64;
     bk = 256;
@@ -753,6 +797,9 @@ void steel_gemm_splitk_axpby_nax(
   int tm = (M + bm - 1) / bm;
 
   int swizzle_log = tm <= 3 ? 0 : 1;
+  if (devc == 'd') {
+    swizzle_log = (M > N) ? 0 : 1;
+  }
 
   // Compute swizzled tile counts
   int tile = 1 << swizzle_log;
@@ -1039,6 +1086,54 @@ void steel_matmul_axpby(
 ///////////////////////////////////////////////////////////////////////////////
 // GEMV dispatch
 ///////////////////////////////////////////////////////////////////////////////
+
+void dot_product(
+    const Stream& s,
+    metal::Device& d,
+    const array& a,
+    const array& b,
+    array& out,
+    int K,
+    std::vector<array>& copies) {
+  constexpr int thread_group_size = 512;
+  constexpr int items_per_thread = 32;
+  constexpr int simd_groups = thread_group_size / 32;
+  auto& compute_encoder = metal::get_command_encoder(s);
+  std::string kname = "dot_product_" + type_to_name(a);
+  concatenate(
+      kname,
+      "_it",
+      items_per_thread,
+      "_tg",
+      thread_group_size,
+      "_sg",
+      simd_groups);
+  auto kernel = d.get_kernel(kname);
+
+  int n = K;
+  int threads = (n + items_per_thread - 1) / items_per_thread;
+  int blocks = (threads + thread_group_size - 1) / thread_group_size;
+
+  array partials({blocks}, float32, nullptr, {});
+  partials.set_data(allocator::malloc(partials.nbytes()));
+  copies.push_back(partials);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_output_array(partials, 2);
+  compute_encoder.set_bytes(n, 3);
+  compute_encoder.dispatch_threads(
+      MTL::Size(size_t(blocks) * thread_group_size, 1, 1),
+      MTL::Size(thread_group_size, 1, 1));
+
+  array tempResult(out.shape(), float32, nullptr, {});
+  tempResult.set_data(allocator::malloc(tempResult.nbytes()));
+  copies.push_back(tempResult);
+  all_reduce_dispatch(partials, tempResult, "sum", compute_encoder, d, s);
+  copy_gpu(tempResult, out, CopyType::Scalar, s);
+
+  compute_encoder.add_temporaries(std::move(copies));
+}
 
 template <bool CHECK_AB = true>
 void gemv_axbpy(
@@ -1455,6 +1550,17 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   /////////////////////////////////////////////////////////////////////////////
   // Gemv specialization
 
+  if (M == 1 && N == 1 && batch_size_out == 1 && a.flags().row_contiguous &&
+      b.flags().row_contiguous && a.dtype() != complex64) {
+    return dot_product(
+        /* const Stream& s = */ s,
+        /* metal::Device& d = */ d,
+        /* const array& a = */ a,
+        /* const array& b = */ b,
+        /* array& out = */ out,
+        /* int K = */ K,
+        /* std::vector<array>& copies = */ copies);
+  }
   // The wide gemv route streams the weight matrix once per <= 5 input
   // vectors instead of running a row-padded GEMM tile.
   if (!a_transposed && b_transposed &&

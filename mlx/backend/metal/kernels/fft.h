@@ -45,19 +45,47 @@ STEEL_CONST int rader_5_steps_ [[function_constant(18)]];
 STEEL_CONST int rader_4_steps_ [[function_constant(19)]];
 STEEL_CONST int rader_3_steps_ [[function_constant(20)]];
 STEEL_CONST int rader_2_steps_ [[function_constant(21)]];
+STEEL_CONST bool use_bluestein_twiddle_table_ [[function_constant(22)]];
+
+// Generate the compact radix-8 Stockham twiddle table used by the fused
+// 4096-point Bluestein convolution. The first p=1 stage needs no twiddles;
+// the remaining stages contribute 8, 64, and 512 entries.
+[[kernel]] void generate_bluestein_twiddles(
+    device float2* twiddles [[buffer(0)]],
+    uint index [[thread_position_in_grid]]) {
+  uint p;
+  uint k;
+  if (index < 8) {
+    p = 8;
+    k = index;
+  } else if (index < 72) {
+    p = 64;
+    k = index - 8;
+  } else {
+    p = 512;
+    k = index - 72;
+  }
+  twiddles[index] = get_twiddle<float>(k, 8 * p);
+}
 
 // See "radix.h" for radix codelets.
 template <typename T>
 using RadixFunc = void (*)(thread vec<T, 2>*, thread vec<T, 2>*);
 
 // Perform a single radix n butterfly with appropriate twiddles
-template <typename T, int radix, RadixFunc<T> radix_func>
+template <
+    typename T,
+    bool use_twiddle_table,
+    int radix,
+    RadixFunc<T> radix_func>
 METAL_FUNC void radix_butterfly(
     int i,
     int p,
+    int twiddle_offset,
     thread vec<T, 2>* x,
     thread short* indices,
-    thread vec<T, 2>* y) {
+    thread vec<T, 2>* y,
+    const device vec<T, 2>* twiddles) {
   // i: the index in the overall DFT that we're processing.
   // p: the size of the DFTs we're merging at this step.
   // m: how many threads are working on this DFT.
@@ -76,7 +104,12 @@ METAL_FUNC void radix_butterfly(
 
   // Apply twiddles
   if (p > 1) {
-    vec<T, 2> twiddle_1 = get_twiddle<T>(k, radix * p);
+    vec<T, 2> twiddle_1;
+    if constexpr (use_twiddle_table) {
+      twiddle_1 = twiddles[twiddle_offset + k];
+    } else {
+      twiddle_1 = get_twiddle<T>(k, radix * p);
+    }
     vec<T, 2> twiddle = twiddle_1;
     x[1] = complex_mul<T>(x[1], twiddle);
 
@@ -97,17 +130,23 @@ METAL_FUNC void radix_butterfly(
 
 // Perform all the radix steps required for a
 // particular radix size n.
-template <typename T, int radix, RadixFunc<T> radix_func>
+template <
+    typename T,
+    bool use_twiddle_table,
+    int radix,
+    RadixFunc<T> radix_func>
 METAL_FUNC void radix_n_steps(
     int i,
     thread int* p,
+    thread int* twiddle_offset,
     int m,
     int n,
     int num_steps,
     thread vec<T, 2>* inputs,
     thread short* indices,
     thread vec<T, 2>* values,
-    threadgroup vec<T, 2>* buf) {
+    threadgroup vec<T, 2>* buf,
+    const device vec<T, 2>* twiddles) {
   int m_r = n / radix;
   // When combining different sized radices, we have to do
   // multiple butterflies in a single thread.
@@ -127,8 +166,14 @@ METAL_FUNC void radix_n_steps(
         for (int r = 0; r < radix; r++) {
           inputs[r] = buf[index + r * m_r];
         }
-        radix_butterfly<T, radix, radix_func>(
-            index, *p, inputs, indices + t * radix, values + t * radix);
+        radix_butterfly<T, use_twiddle_table, radix, radix_func>(
+            index,
+            *p,
+            *twiddle_offset,
+            inputs,
+            indices + t * radix,
+            values + t * radix,
+            twiddles);
       }
     }
 
@@ -147,24 +192,41 @@ METAL_FUNC void radix_n_steps(
 
     // Wait until all threads have written back to threadgroup mem
     threadgroup_barrier(mem_flags::mem_threadgroup);
+    if constexpr (use_twiddle_table) {
+      if (*p > 1) {
+        *twiddle_offset += *p;
+      }
+    }
     *p *= radix;
   }
 }
 
-#define RADIX_STEP(radix, radix_func, num_steps) \
-  radix_n_steps<T, radix, radix_func<T>>(        \
-      fft_idx, p, m, n, num_steps, inputs, indices, values, buf);
+#define RADIX_STEP(radix, radix_func, num_steps)             \
+  radix_n_steps<T, use_twiddle_table, radix, radix_func<T>>( \
+      fft_idx,                                               \
+      p,                                                     \
+      &twiddle_offset,                                       \
+      m,                                                     \
+      n,                                                     \
+      num_steps,                                             \
+      inputs,                                                \
+      indices,                                               \
+      values,                                                \
+      buf,                                                   \
+      twiddles);
 
-template <typename T, bool rader = false>
+template <typename T, bool rader = false, bool use_twiddle_table = false>
 METAL_FUNC void perform_fft(
     int fft_idx,
     thread int* p,
     int m,
     int n,
-    threadgroup vec<T, 2>* buf) {
+    threadgroup vec<T, 2>* buf,
+    const device vec<T, 2>* twiddles = nullptr) {
   vec<T, 2> inputs[MAX_RADIX];
   short indices[MAX_OUTPUT_SIZE];
   vec<T, 2> values[MAX_OUTPUT_SIZE];
+  int twiddle_offset = 0;
 
   RADIX_STEP(2, radix2, rader ? rader_2_steps_ : radix_2_steps_);
   RADIX_STEP(3, radix3, rader ? rader_3_steps_ : radix_3_steps_);
@@ -325,7 +387,18 @@ template <int tg_mem_size, typename in_T, typename out_T>
   int x_sum_index = metal::min(fft_idx, rader_m - 1);
   buf[x_sum_index] = buf[rader_m + x_sum_index * (rader_n - 1)];
 
-  vec<scalar_T, 2> inv = {1.0f, -1.0f};
+  // The convolution is conjugated and scaled by 1/(rader_n - 1) exactly once
+  // each. Float lanes apply the scale after the inverse FFT, preserving the
+  // existing float code generation; reduced lanes apply it before, so the
+  // intermediates cannot overflow the narrow lane range.
+  scalar_T rader_inv_r = static_cast<scalar_T>(1.0f / (rader_n - 1));
+  vec<scalar_T, 2> convolution_factor = {1.0f, -1.0f};
+  vec<scalar_T, 2> convolution_inv_factor = {rader_inv_r, -rader_inv_r};
+  if constexpr (!metal::is_same_v<scalar_T, float>) {
+    convolution_factor = convolution_inv_factor;
+    convolution_inv_factor = {1.0f, -1.0f};
+  }
+
   for (int e = 0; e < elems_per_thread_; e++) {
     short index = metal::min(fft_idx * elems_per_thread_ + e, max_index);
     short interleaved_index =
@@ -339,7 +412,7 @@ template <int tg_mem_size, typename in_T, typename out_T>
 
   for (int e = 0; e < elems_per_thread_; e++) {
     short index = metal::min(fft_idx * elems_per_thread_ + e, max_index);
-    buf[rader_m + index] = temp[e] * inv;
+    buf[rader_m + index] = temp[e] * convolution_factor;
   }
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -349,13 +422,10 @@ template <int tg_mem_size, typename in_T, typename out_T>
   perform_fft<scalar_T, /*rader=*/true>(
       fft_idx, &p, m, n - rader_m, buf + rader_m);
 
-  scalar_T rader_inv_r = static_cast<scalar_T>(1.0f / (rader_n - 1));
-  vec<scalar_T, 2> rader_inv_factor = {rader_inv_r, -rader_inv_r};
-
   for (int e = 0; e < elems_per_thread_; e++) {
     short index = metal::min(fft_idx * elems_per_thread_ + e, n - rader_m - 1);
     short diff_index = index / (rader_n - 1) - x_0_index;
-    temp[e] = buf[rader_m + index] * rader_inv_factor + x_0[diff_index];
+    temp[e] = buf[rader_m + index] * convolution_inv_factor + x_0[diff_index];
   }
 
   // Use the sum of elements that was computed in the first FFT
@@ -429,21 +499,49 @@ template <int tg_mem_size, typename in_T, typename out_T>
   int m = grid.z; // Threads per DFT
   int tg_idx = elem.y * n; // Index of this DFT in threadgroup
   threadgroup vec<scalar_T, 2>* buf = &shared_in[tg_idx];
+  const device vec<scalar_T, 2>* twiddles = w_q + n;
 
   // fft
-  perform_fft<scalar_T>(fft_idx, &p, m, n, buf);
+  if constexpr (
+      tg_mem_size == 4096 && metal::is_same_v<in_T, float2> &&
+      metal::is_same_v<out_T, float2>) {
+    if (use_bluestein_twiddle_table_) {
+      perform_fft<scalar_T, false, true>(fft_idx, &p, m, n, buf, twiddles);
+    } else {
+      perform_fft<scalar_T>(fft_idx, &p, m, n, buf);
+    }
+  } else {
+    perform_fft<scalar_T>(fft_idx, &p, m, n, buf);
+  }
 
-  vec<scalar_T, 2> inv = {1.0f, -1.0f};
+  vec<scalar_T, 2> convolution_factor = {1.0f, -1.0f};
+  if constexpr (!metal::is_same_v<scalar_T, float>) {
+    // Reduced lanes normalize the convolution before the inverse FFT so the
+    // intermediates cannot overflow; the write path then only conjugates.
+    scalar_T inv_n = static_cast<scalar_T>(1.0f / n);
+    convolution_factor = {inv_n, -inv_n};
+  }
   for (int t = 0; t < elems_per_thread_; t++) {
     int index = fft_idx + t * m;
-    buf[index] = complex_mul<scalar_T>(buf[index], w_q[index]) * inv;
+    buf[index] =
+        complex_mul<scalar_T>(buf[index], w_q[index]) * convolution_factor;
   }
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
   // ifft
   p = 1;
-  perform_fft<scalar_T>(fft_idx, &p, m, n, buf);
+  if constexpr (
+      tg_mem_size == 4096 && metal::is_same_v<in_T, float2> &&
+      metal::is_same_v<out_T, float2>) {
+    if (use_bluestein_twiddle_table_) {
+      perform_fft<scalar_T, false, true>(fft_idx, &p, m, n, buf, twiddles);
+    } else {
+      perform_fft<scalar_T>(fft_idx, &p, m, n, buf);
+    }
+  } else {
+    perform_fft<scalar_T>(fft_idx, &p, m, n, buf);
+  }
 
   read_writer.write_padded(length, w_k);
 }

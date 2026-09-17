@@ -32,6 +32,28 @@ bool fast::ScaledDotProductAttention::use_fallback(
     bool do_causal,
     bool is_training,
     bool output_logsumexp,
+    bool force_fused,
+    Stream s) {
+  if (force_fused) {
+    throw std::invalid_argument(
+        "[scaled_dot_product_attention] force_fused=True but no fused "
+        "kernel is available in CPU backend.");
+  }
+  return true;
+}
+
+bool fast::ScaledDotProductAttentionVJP::use_fallback(
+    const array& q,
+    Stream s) {
+  return true;
+}
+
+bool fast::GatedDeltaUpdate::use_fallback(
+    const int Hk,
+    const int Dk,
+    const int Hv,
+    const int Dv,
+    const bool has_mask,
     Stream s) {
   return true;
 }
@@ -52,6 +74,27 @@ bool fast::ScaledDotProductAttention::supports_bool_mask() {
 
 bool fast::ScaledDotProductAttentionVJP::use_fallback(
     const array& q,
+    Stream s) {
+  return true;
+}
+
+
+bool fast::GatedDeltaUpdate::use_fallback(
+    const int Hk,
+    const int Dk,
+    const int Hv,
+    const int Dv,
+    const bool has_mask,
+    Stream s) {
+  return true;
+}
+
+bool fast::GatedDeltaUpdateVJP::use_fallback(
+    const int Hk,
+    const int Dk,
+    const int Hv,
+    const int Dv,
+    const bool has_mask,
     Stream s) {
   return true;
 }
@@ -154,6 +197,7 @@ NO_GPU(Round)
 NO_GPU(Scan)
 NO_GPU(Scatter)
 NO_GPU(ScatterAxis)
+NO_GPU(SearchSorted)
 NO_GPU(Select)
 NO_GPU(SegmentedMM)
 NO_GPU(Sigmoid)
@@ -183,6 +227,8 @@ NO_GPU(View)
 NO_GPU(MaskedScatter)
 
 namespace fast {
+NO_GPU_USE_FALLBACK(CrossEntropy)
+NO_GPU_MULTI(CrossEntropyVJP)
 NO_GPU_USE_FALLBACK(LayerNorm)
 NO_GPU_MULTI(LayerNormVJP)
 NO_GPU_USE_FALLBACK(RMSNorm)

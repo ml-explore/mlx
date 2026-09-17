@@ -410,6 +410,28 @@ class TestLayers(mlx_tests.MLXTestCase):
         outputs = layer(inputs1, inputs2)
         self.assertEqual(outputs.shape, (10, 6))
 
+    def test_norm_eps_validation(self):
+        # eps is added under a square root. A negative one makes rsqrt take the
+        # root of a negative number, so the layer emits NaN for whichever
+        # elements have a small enough variance, which is only a partial NaN and
+        # easy to miss. Zero is rejected too: it leaves rsqrt(0) for any input
+        # whose variance is zero, which is a whole NaN row. This matches the eps
+        # guards the optimizers already carry.
+        builders = (
+            ("LayerNorm", lambda eps: nn.LayerNorm(16, eps=eps)),
+            ("RMSNorm", lambda eps: nn.RMSNorm(16, eps=eps)),
+            ("GroupNorm", lambda eps: nn.GroupNorm(4, 16, eps=eps)),
+            ("InstanceNorm", lambda eps: nn.InstanceNorm(16, eps=eps)),
+            ("BatchNorm", lambda eps: nn.BatchNorm(16, eps=eps)),
+        )
+        for name, build in builders:
+            for eps in (-1.0, -1e-30, 0.0):
+                with self.assertRaisesRegex(ValueError, "must be positive"):
+                    build(eps)
+            # Anything positive still constructs, including a very small eps.
+            for eps in (1e-30, 1e-5, 1.0):
+                build(eps)
+
     def test_group_norm(self):
         x = mx.arange(100, dtype=mx.float32)
         x = x.reshape(1, 10, 10, 1)
@@ -671,6 +693,21 @@ class TestLayers(mlx_tests.MLXTestCase):
         ]
         self.assertTrue(x.shape == y.shape)
         self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
+        # Reduced-precision statistics must not overflow for finite feature maps.
+        checkerboard = np.indices((4, 4, 4)).sum(axis=0) % 2
+        x = mx.array(
+            np.stack(
+                [
+                    np.where(checkerboard, -512, 512),
+                    np.where(checkerboard, -256, 256),
+                ],
+                axis=-1,
+            ).astype(np.float16)
+        )[None]
+        y = nn.InstanceNorm(dims=2)(x)
+        self.assertEqual(y.dtype, mx.float16)
+        self.assertTrue(mx.allclose(y.min(), mx.array(-1.0, dtype=mx.float16)))
+        self.assertTrue(mx.allclose(y.max(), mx.array(1.0, dtype=mx.float16)))
         # Test repr
         self.assertTrue(str(inorm) == "InstanceNorm(3, eps=1e-05, affine=False)")
         # Raise for inputs without spatial dimensions
@@ -1071,6 +1108,13 @@ class TestLayers(mlx_tests.MLXTestCase):
                 with self.assertRaises(ValueError):
                     nn.SinusoidalPositionalEncoding(dims)
 
+        # An explicit scale=0.0 must be respected rather than falling back
+        # to the default, since 0.0 is falsy but a valid scale value.
+        m = nn.SinusoidalPositionalEncoding(16, scale=0.0)
+        self.assertEqual(m.scale, 0.0)
+        y = m(x)
+        self.assertTrue(mx.array_equal(y, mx.zeros_like(y)))
+
     def test_sigmoid(self):
         x = mx.array([1.0, 0.0, -1.0])
         y1 = mx.sigmoid(x)
@@ -1208,6 +1252,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
+
+        # Equal logits normalize to log(1/n) whatever their magnitude
+        for v in [1e0, 1e4, 1e8, 1e20, 1e36]:
+            y = nn.log_softmax(mx.array([[v, v]]))
+            self.assertTrue(mx.allclose(y, mx.full((1, 2), -0.6931472), atol=1e-5))
 
     def test_log_sigmoid(self):
         x = mx.array([1.0, -1.0, 0.0])

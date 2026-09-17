@@ -166,21 +166,32 @@ template <typename T, int N_READS = RMS_N_READS>
     constant float& eps,
     constant uint& axis_size,
     constant uint& w_stride,
+    constant uint& n_rows,
+    constant uint& rows_per_group,
     uint gid [[threadgroup_position_in_grid]],
     uint lid [[thread_position_in_threadgroup]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
-  // Advance the input pointers
-  x += gid * size_t(axis_size) + lid * N_READS;
-  g += gid * size_t(axis_size) + lid * N_READS;
   w += w_stride * lid * N_READS;
+  float thread_w[N_READS];
+  if (lid * N_READS + N_READS <= axis_size) {
+    for (int i = 0; i < N_READS; i++) {
+      thread_w[i] = w[w_stride * i];
+    }
+  } else {
+    for (int i = 0; i < N_READS; i++) {
+      thread_w[i] =
+          (lid * N_READS + i < axis_size) ? (float)w[w_stride * i] : 0;
+    }
+  }
 
   // Allocate registers for the computation and accumulators
   float thread_x[N_READS];
-  float thread_w[N_READS];
   float thread_g[N_READS];
-  float sumx2 = 0;
-  float sumgwx = 0;
+  float gw_acc[N_READS];
+  for (int i = 0; i < N_READS; i++) {
+    gw_acc[i] = 0;
+  }
 
   // Allocate shared memory to implement the reduction
   constexpr int SIMD_SIZE = 32;
@@ -189,75 +200,99 @@ template <typename T, int N_READS = RMS_N_READS>
   threadgroup float local_normalizer[1];
   threadgroup float local_meangwx[1];
 
-  // Read and accumulate locally
-  if (lid * N_READS + N_READS <= axis_size) {
-    for (int i = 0; i < N_READS; i++) {
-      thread_x[i] = x[i];
-      thread_w[i] = w[w_stride * i];
-      thread_g[i] = g[i];
+  uint row_end = gid * rows_per_group + rows_per_group;
+  if (row_end > n_rows) {
+    row_end = n_rows;
+  }
+  for (uint row = gid * rows_per_group; row < row_end; ++row) {
+    const device T* x_in = x + size_t(row) * axis_size + lid * N_READS;
+    const device T* g_in = g + size_t(row) * axis_size + lid * N_READS;
 
-      sumx2 += thread_x[i] * thread_x[i];
-      sumgwx += thread_x[i] * thread_w[i] * thread_g[i];
-    }
-  } else {
-    for (int i = 0; i < N_READS; i++) {
-      if ((lid * N_READS + i) < axis_size) {
-        thread_x[i] = x[i];
-        thread_w[i] = w[w_stride * i];
-        thread_g[i] = g[i];
+    float sumx2 = 0;
+    float sumgwx = 0;
+
+    // Read and accumulate locally
+    if (lid * N_READS + N_READS <= axis_size) {
+      for (int i = 0; i < N_READS; i++) {
+        thread_x[i] = x_in[i];
+        thread_g[i] = g_in[i];
 
         sumx2 += thread_x[i] * thread_x[i];
         sumgwx += thread_x[i] * thread_w[i] * thread_g[i];
       }
-    }
-  }
+    } else {
+      for (int i = 0; i < N_READS; i++) {
+        if ((lid * N_READS + i) < axis_size) {
+          thread_x[i] = x_in[i];
+          thread_g[i] = g_in[i];
 
-  // Accumulate across threads
-  sumx2 = simd_sum(sumx2);
-  sumgwx = simd_sum(sumgwx);
-  if (simd_group_id == 0) {
-    local_sumx2[simd_lane_id] = 0;
-    local_sumgwx[simd_lane_id] = 0;
-  }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (simd_lane_id == 0) {
-    local_sumx2[simd_group_id] = sumx2;
-    local_sumgwx[simd_group_id] = sumgwx;
-  }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (simd_group_id == 0) {
-    sumx2 = simd_sum(local_sumx2[simd_lane_id]);
-    sumgwx = simd_sum(local_sumgwx[simd_lane_id]);
-    if (simd_lane_id == 0) {
-      local_meangwx[0] = sumgwx / axis_size;
-      local_normalizer[0] = metal::precise::rsqrt(sumx2 / axis_size + eps);
-    }
-  }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  float meangwx = local_meangwx[0];
-  float normalizer = local_normalizer[0];
-  float normalizer3 = normalizer * normalizer * normalizer;
-
-  // Write the outputs
-  gx += gid * size_t(axis_size) + lid * N_READS;
-  gw += gid * size_t(axis_size) + lid * N_READS;
-  if (lid * N_READS + N_READS <= axis_size) {
-    for (int i = 0; i < N_READS; i++) {
-      gx[i] = static_cast<T>(
-          thread_g[i] * thread_w[i] * normalizer -
-          thread_x[i] * meangwx * normalizer3);
-      if (has_w) {
-        gw[i] = static_cast<T>(thread_g[i] * thread_x[i] * normalizer);
+          sumx2 += thread_x[i] * thread_x[i];
+          sumgwx += thread_x[i] * thread_w[i] * thread_g[i];
+        }
       }
     }
-  } else {
-    for (int i = 0; i < N_READS; i++) {
-      if ((lid * N_READS + i) < axis_size) {
-        gx[i] = static_cast<T>(
+
+    // Accumulate across threads
+    sumx2 = simd_sum(sumx2);
+    sumgwx = simd_sum(sumgwx);
+    if (simd_group_id == 0) {
+      local_sumx2[simd_lane_id] = 0;
+      local_sumgwx[simd_lane_id] = 0;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (simd_lane_id == 0) {
+      local_sumx2[simd_group_id] = sumx2;
+      local_sumgwx[simd_group_id] = sumgwx;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (simd_group_id == 0) {
+      sumx2 = simd_sum(local_sumx2[simd_lane_id]);
+      sumgwx = simd_sum(local_sumgwx[simd_lane_id]);
+      if (simd_lane_id == 0) {
+        local_meangwx[0] = sumgwx / axis_size;
+        local_normalizer[0] = metal::precise::rsqrt(sumx2 / axis_size + eps);
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    float meangwx = local_meangwx[0];
+    float normalizer = local_normalizer[0];
+    float normalizer3 = normalizer * normalizer * normalizer;
+
+    // Write the outputs
+    device T* gx_out = gx + size_t(row) * axis_size + lid * N_READS;
+    if (lid * N_READS + N_READS <= axis_size) {
+      for (int i = 0; i < N_READS; i++) {
+        gx_out[i] = static_cast<T>(
             thread_g[i] * thread_w[i] * normalizer -
             thread_x[i] * meangwx * normalizer3);
         if (has_w) {
-          gw[i] = static_cast<T>(thread_g[i] * thread_x[i] * normalizer);
+          gw_acc[i] += thread_g[i] * thread_x[i] * normalizer;
+        }
+      }
+    } else {
+      for (int i = 0; i < N_READS; i++) {
+        if ((lid * N_READS + i) < axis_size) {
+          gx_out[i] = static_cast<T>(
+              thread_g[i] * thread_w[i] * normalizer -
+              thread_x[i] * meangwx * normalizer3);
+          if (has_w) {
+            gw_acc[i] += thread_g[i] * thread_x[i] * normalizer;
+          }
+        }
+      }
+    }
+  }
+
+  if (has_w) {
+    gw += size_t(gid) * axis_size + lid * N_READS;
+    if (lid * N_READS + N_READS <= axis_size) {
+      for (int i = 0; i < N_READS; i++) {
+        gw[i] = static_cast<T>(gw_acc[i]);
+      }
+    } else {
+      for (int i = 0; i < N_READS; i++) {
+        if ((lid * N_READS + i) < axis_size) {
+          gw[i] = static_cast<T>(gw_acc[i]);
         }
       }
     }

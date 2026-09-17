@@ -57,6 +57,24 @@ TEST_CASE("test gpu full") {
   }
 }
 
+TEST_CASE("test gpu strided scan grid") {
+  // Regression for #4419 strided_scan writes out of bounds.
+  std::vector<float> values(72, 1.0f);
+  auto x = array(values.data(), {72});
+  x = transpose(reshape(x, {2, 9, 4}, Device::gpu), {0, 2, 1}, Device::gpu);
+  x = cumsum(x, -1, false, true, Device::gpu);
+
+  auto causal = tril(ones({9, 9}, float32, Device::gpu), 0, Device::gpu);
+  auto relative = subtract(
+      expand_dims(x, -1, Device::gpu),
+      expand_dims(x, -2, Device::gpu),
+      Device::gpu);
+  eval(relative, causal);
+
+  auto expected = tri(9, 9, 0, float32, Device::cpu);
+  CHECK(array_equal(causal, expected, Device::cpu).item<bool>());
+}
+
 TEST_CASE("test gpu astype") {
   array x = array({-4, -3, -2, -1, 0, 1, 2, 3});
   // Check all types work
@@ -478,6 +496,32 @@ TEST_CASE("test gpu validation") {
   eval(argmax(x));
 
   eval(scatter_max(array(1), {}, array(2), std::vector<int>{}));
+}
+
+TEST_CASE("test dynamic slice update waits for its start") {
+  // Regression for #3880: a donated array-valued start could be read
+  // stale when a command-buffer boundary lands between its producer
+  // and the dynamic slice. The boundary occurs when the buffer's op
+  // or memory limits split the graph (or with MLX_MAX_OPS_PER_BUFFER
+  // set low); without a split the checks still assert the correct
+  // update position.
+  auto source = ones({2, 1 << 26}, int32);
+  auto target = zeros({4, 4}, int32);
+  auto update = full({1, 1}, 7, int32);
+  eval(source, target, update);
+
+  {
+    auto recycled = zeros({2}, int32);
+    eval(recycled);
+  }
+
+  auto out = [&] {
+    auto start = max(source, 1, false);
+    return slice_update(target, update, start, {0, 1});
+  }();
+
+  CHECK_EQ(slice(out, {1, 1}, {2, 2}).item<int>(), 7);
+  CHECK_EQ(slice(out, {0, 0}, {1, 1}).item<int>(), 0);
 }
 
 TEST_CASE("test gpu int32 shape overflow errors") {

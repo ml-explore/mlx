@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <sstream>
+#include <vector>
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
@@ -9,15 +10,17 @@
 
 #include "mlx/stream.h"
 #include "mlx/utils.h"
+#include "python/src/random.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
-// Create the StreamContext on enter and delete on exit.
+// Create a StreamContext on enter and delete it on exit. The contexts are
+// stacked, so the same object can be entered more than once.
 class PyStreamContext {
  public:
-  PyStreamContext(mx::StreamOrDevice s) : _inner(nullptr) {
+  PyStreamContext(mx::StreamOrDevice s) {
     if (std::holds_alternative<std::monostate>(s)) {
       throw std::runtime_error(
           "[StreamContext] Invalid argument, please specify a stream or device.");
@@ -26,19 +29,33 @@ class PyStreamContext {
   }
 
   void enter() {
-    _inner = new mx::StreamContext(_s);
+    _contexts.push_back(new mx::StreamContext(_s));
   }
 
   void exit() {
-    if (_inner != nullptr) {
-      delete _inner;
-      _inner = nullptr;
+    if (_contexts.empty()) {
+      return;
+    }
+    auto* inner = _contexts.back();
+    _contexts.pop_back();
+    // the destructor can throw, inner is freed regardless.
+    delete inner;
+  }
+
+  // ~StreamContext throws when destroyed on a different thread, which Python
+  // cannot control
+  ~PyStreamContext() {
+    while (!_contexts.empty()) {
+      try {
+        exit();
+      } catch (...) {
+      }
     }
   }
 
  private:
   mx::StreamOrDevice _s;
-  mx::StreamContext* _inner;
+  std::vector<mx::StreamContext*> _contexts;
 };
 
 void init_stream(nb::module_& m) {
@@ -88,6 +105,7 @@ void init_stream(nb::module_& m) {
       "default_stream",
       &mx::default_stream,
       "device"_a,
+      nb::sig("def default_stream(device: Device | DeviceType) -> Stream"),
       R"pbdoc(Get the device's default stream.)pbdoc");
   m.def(
       "set_default_stream",
@@ -106,6 +124,7 @@ void init_stream(nb::module_& m) {
       "new_stream",
       &mx::new_stream,
       "device"_a,
+      nb::sig("def new_stream(device: Device | DeviceType) -> Stream"),
       R"pbdoc(
         Make a new stream on the given device.
 
@@ -116,6 +135,8 @@ void init_stream(nb::module_& m) {
       "new_thread_unsafe_stream",
       &mx::new_thread_unsafe_stream,
       "device"_a,
+      nb::sig(
+          "def new_thread_unsafe_stream(device: Device | DeviceType) -> Stream"),
       R"pbdoc(
         Make a new stream that can be used in any thread.
 
@@ -128,10 +149,16 @@ void init_stream(nb::module_& m) {
       "new_thread_local_stream",
       &mx::new_thread_local_stream,
       "device"_a,
+      nb::sig(
+          "def new_thread_local_stream(device: Device | DeviceType) -> ThreadLocalStream"),
       R"pbdoc(Make a new stream that will be unique per thread.)pbdoc");
   m.def(
       "clear_streams",
-      &mx::clear_streams,
+      []() {
+        reset_random_state();
+        nb::gil_scoped_release nogil;
+        mx::clear_streams();
+      },
       R"pbdoc(Destroy all streams created in current thread.)pbdoc");
 
   nb::class_<PyStreamContext>(m, "StreamContext", R"pbdoc(
@@ -180,6 +207,7 @@ void init_stream(nb::module_& m) {
   m.def(
       "synchronize",
       [](mx::StreamOrDevice s) {
+        nb::gil_scoped_release nogil;
         if (std::holds_alternative<std::monostate>(s)) {
           mx::synchronize();
         } else {

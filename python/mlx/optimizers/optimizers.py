@@ -274,7 +274,7 @@ class SGD(Optimizer):
         optimizer state."""
 
         if self.weight_decay != 0:
-            gradient += self.weight_decay * parameter
+            gradient = gradient + self.weight_decay * parameter
 
         if self.momentum <= 0:
             return parameter - self.learning_rate.astype(gradient.dtype) * gradient
@@ -499,6 +499,16 @@ class Adam(Optimizer):
     ):
         super().__init__()
 
+        for i, beta in enumerate(betas):
+            if not 0.0 <= beta < 1.0:
+                raise ValueError(
+                    f"Adam beta{i + 1} should be in [0, 1), {beta} was provided "
+                    "instead"
+                )
+
+        if not 0.0 <= eps:
+            raise ValueError(f"Adam epsilon should be >=0, {eps} was provided instead")
+
         self._maybe_schedule("learning_rate", learning_rate)
         self.betas = betas
         self.eps = eps
@@ -620,10 +630,6 @@ class Adamax(Adam):
         eps: float = 1e-8,
     ):
         super().__init__(learning_rate, betas, eps)
-        if not 0.0 <= eps:
-            raise ValueError(
-                f"Epsilon value should be >=0, {self.eps} was provided instead"
-            )
 
     def init_single(self, parameter: mx.array, state: dict):
         """Initialize optimizer state"""
@@ -682,6 +688,13 @@ class Lion(Optimizer):
         weight_decay: float = 0.0,
     ):
         super().__init__()
+
+        for i, beta in enumerate(betas):
+            if not 0.0 <= beta < 1.0:
+                raise ValueError(
+                    f"Lion beta{i + 1} should be in [0, 1), {beta} was provided "
+                    "instead"
+                )
 
         self._maybe_schedule("learning_rate", learning_rate)
         self.betas = betas
@@ -843,7 +856,7 @@ class Adafactor(Optimizer):
             update = exp_avg
 
         if self.weight_decay != 0:
-            parameter += parameter * (-self.weight_decay * learning_rate)
+            parameter = parameter + parameter * (-self.weight_decay * learning_rate)
         return parameter - update
 
 
@@ -968,6 +981,9 @@ def clip_grad_norm(grads, max_norm):
         (dict, float): The possibly rescaled gradients and the original
         gradient norm.
     """
+    if max_norm < 0:
+        raise ValueError(f"max_norm should be >=0, {max_norm} was provided instead")
+
     norm_squared = tree_reduce(lambda acc, g: acc + g.square().sum(), grads, 0.0)
     total_norm = mx.sqrt(norm_squared)
     normalizer = mx.minimum(max_norm / (total_norm + 1e-6), 1.0)

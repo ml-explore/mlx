@@ -30,7 +30,6 @@ runs:
     - name: Test local packages
       shell: bash
       run: |
-        echo "::group::Test local packages"
         # Fall back to PyPI if PyTorch index has issues.
         uv pip install torch --torch-backend=cpu
         uv pip install numpy
@@ -47,5 +46,4 @@ runs:
           echo "No matching backend wheel to install"
           exit 1
         fi
-        python -m unittest discover -v python/tests
-        echo "::endgroup::"
+        uv run python/tests/run.py -v --failfast

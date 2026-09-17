@@ -3,6 +3,7 @@
 
 #include "mlx/backend/common/broadcasting.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
@@ -99,50 +100,10 @@ void NumberOfElements::eval(const std::vector<array>& inputs, array& out) {
     numel = 1.0 / numel;
   }
 
-  switch (out.dtype()) {
-    case bool_:
-      *out.data<bool>() = static_cast<bool>(numel);
-      break;
-    case uint8:
-      *out.data<uint8_t>() = static_cast<uint8_t>(numel);
-      break;
-    case uint16:
-      *out.data<uint16_t>() = static_cast<uint16_t>(numel);
-      break;
-    case uint32:
-      *out.data<uint32_t>() = static_cast<uint32_t>(numel);
-      break;
-    case uint64:
-      *out.data<uint64_t>() = static_cast<uint64_t>(numel);
-      break;
-    case int8:
-      *out.data<int8_t>() = static_cast<int8_t>(numel);
-      break;
-    case int16:
-      *out.data<int16_t>() = static_cast<int16_t>(numel);
-      break;
-    case int32:
-      *out.data<int32_t>() = static_cast<int32_t>(numel);
-      break;
-    case int64:
-      *out.data<int64_t>() = static_cast<int64_t>(numel);
-      break;
-    case float16:
-      *out.data<float16_t>() = static_cast<float16_t>(numel);
-      break;
-    case float32:
-      *out.data<float>() = static_cast<float>(numel);
-      break;
-    case bfloat16:
-      *out.data<bfloat16_t>() = static_cast<bfloat16_t>(numel);
-      break;
-    case float64:
-      *out.data<double>() = static_cast<double>(numel);
-      break;
-    case complex64:
-      *out.data<complex64_t>() = static_cast<complex64_t>(numel);
-      break;
-  }
+  dispatch_all_types(out.dtype(), [&](auto type_tag) {
+    using T = MLX_GET_TYPE(type_tag);
+    *out.data<T>() = static_cast<T>(numel);
+  });
 }
 
 std::pair<bool, Strides> prepare_reshape(const array& in, const array& out) {

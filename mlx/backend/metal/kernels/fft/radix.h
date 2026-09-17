@@ -38,10 +38,11 @@ METAL_FUNC metal::vec<T, 2> complex_mul_conj(
 template <typename T>
 METAL_FUNC metal::vec<T, 2> get_twiddle(int k, int p) {
   // Derive phase evaluation precision from the scalar lane and Metal's pi
-  // constant. Reduced lanes currently promote to float for fast trig.
+  // constant. Reduced lanes currently promote to float for fast trig, then
+  // narrow the result to the lane type explicitly.
   using phase_T = decltype(M_PI_F * T(0));
   phase_T theta = -phase_T(2) * phase_T(k) * phase_T(M_PI_F) / phase_T(p);
-  return {metal::fast::cos(theta), metal::fast::sin(theta)};
+  return {T(metal::fast::cos(theta)), T(metal::fast::sin(theta))};
 }
 
 template <typename T>
@@ -193,8 +194,8 @@ METAL_FUNC void radix10(
     thread metal::vec<T, 2>* x,
     thread metal::vec<T, 2>* y) {
   metal::vec<T, 2> w[4];
-  w[0] = {0.8090169943749475, -0.5877852522924731};
-  w[1] = {0.30901699437494745, -0.9510565162951535};
+  w[0] = {T(0.8090169943749475), T(-0.5877852522924731)};
+  w[1] = {T(0.30901699437494745), T(-0.9510565162951535)};
   w[2] = {-w[1].x, w[1].y};
   w[3] = {-w[0].x, w[0].y};
 

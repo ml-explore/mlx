@@ -2003,6 +2003,16 @@ TEST_CASE("test arithmetic binary ops") {
   y = array(false);
   CHECK(std::isnan(divide(x, y).item<float>()));
 
+  // Integer division by zero gives quotient 0 and remainder a.
+  if (default_device() == Device::cpu) {
+    for (auto dt : {int8, int16, int32, int64, uint8, uint16, uint32, uint64}) {
+      auto num = astype(array({7, 0, 5}, {3}), dt);
+      auto den = zeros({3}, dt);
+      CHECK(array_equal(floor_divide(num, den), zeros({3}, dt)).item<bool>());
+      CHECK(array_equal(remainder(num, den), num).item<bool>());
+    }
+  }
+
   // Check maximum and minimum
   x = array(1.0f);
   y = array(0.0f);
@@ -2890,6 +2900,44 @@ TEST_CASE("test as_strided op") {
   CHECK(array_equal(y, expected).item<bool>());
 }
 
+TEST_CASE("test sort and scan on empty arrays") {
+  // These must be evaluated, not only shape checked, to reach the kernel.
+  auto check_empty = [](const array& r, Shape shape, Dtype dt) {
+    auto out = r;
+    eval(out);
+    CHECK_EQ(out.shape(), shape);
+    CHECK_EQ(out.dtype(), dt);
+    CHECK_EQ(out.size(), 0);
+  };
+
+  for (auto dt : {float32, int32, uint32, bool_}) {
+    auto x = zeros({0}, dt);
+    check_empty(sort(x), Shape{0}, dt);
+    check_empty(argsort(x), Shape{0}, uint32);
+    check_empty(cumsum(x), Shape{0}, dt == bool_ ? int32 : dt);
+    check_empty(cumprod(x), Shape{0}, dt);
+    check_empty(cummax(x), Shape{0}, dt);
+    check_empty(cummin(x), Shape{0}, dt);
+  }
+
+  // Empty along the sorted axis, non-empty elsewhere.
+  auto x = zeros({3, 0}, float32);
+  check_empty(sort(x, 1), Shape{3, 0}, float32);
+  check_empty(argsort(x, 1), Shape{3, 0}, uint32);
+  check_empty(cumsum(x, 1), Shape{3, 0}, float32);
+
+  // Empty on another axis, so the sorted axis itself is non-empty.
+  x = zeros({0, 3}, float32);
+  check_empty(sort(x, 1), Shape{0, 3}, float32);
+  check_empty(argsort(x, 1), Shape{0, 3}, uint32);
+  check_empty(cumsum(x, 1), Shape{0, 3}, float32);
+
+  // Non-contiguous empty input reaches the strided path.
+  x = transpose(zeros({4, 0}, float32));
+  check_empty(sort(x, 1), Shape{0, 4}, float32);
+  check_empty(cumsum(x, 1), Shape{0, 4}, float32);
+}
+
 TEST_CASE("test scan op") {
   auto x = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, {2, 3});
   auto y = cumsum(x, 1, false, true);
@@ -2949,6 +2997,40 @@ TEST_CASE("test scan op") {
   y = vmap(fun, 1, 1)(x);
   expected = array({1.0f, 2.0f, 4.0f, 6.0f, 9.0f, 12.0f, 16.0f, 20.0f}, {4, 2});
   CHECK(array_equal(y, expected).item<bool>());
+
+  // Scanning an empty axis is a no-op
+  x = zeros({2, 0});
+  y = cumsum(x, 1);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{2, 0});
+  y = cummax(x, 1);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{2, 0});
+  x = zeros({0, 2});
+  y = cumsum(x, 0);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{0, 2});
+  y = cummin(x, 0);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{0, 2});
+}
+
+TEST_CASE("test sort op") {
+  // Sorting an empty axis is a no-op
+  auto x = zeros({2, 0});
+  auto y = sort(x, 1);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{2, 0});
+  y = argsort(x, 1);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{2, 0});
+  x = zeros({0, 2});
+  y = sort(x, 0);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{0, 2});
+  y = argsort(x, 0);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{0, 2});
 }
 
 TEST_CASE("test pad") {
@@ -2978,6 +3060,49 @@ TEST_CASE("test pad") {
        0.0f},
       {4, 4});
   CHECK(array_equal(padded_x, expected).item<bool>());
+
+  // reflect padding (mirror without repeating the edge value)
+  x = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, {5});
+  CHECK(array_equal(
+            pad(x, {{2, 2}}, array(0.0f), "reflect"),
+            array({3.0f, 2.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 4.0f, 3.0f}, {9}))
+            .item<bool>());
+  CHECK(array_equal(
+            pad(x, {{0, 3}}, array(0.0f), "reflect"),
+            array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 4.0f, 3.0f, 2.0f}, {8}))
+            .item<bool>());
+
+  // symmetric padding (mirror repeating the edge value)
+  CHECK(array_equal(
+            pad(x, {{2, 2}}, array(0.0f), "symmetric"),
+            array({2.0f, 1.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 5.0f, 4.0f}, {9}))
+            .item<bool>());
+  CHECK(array_equal(
+            pad(x, {{3, 0}}, array(0.0f), "symmetric"),
+            array({3.0f, 2.0f, 1.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, {8}))
+            .item<bool>());
+
+  // multi-reflect: pad larger than the axis repeats the reflection (numpy
+  // parity)
+  x = array({1.0f, 2.0f, 3.0f}, {3});
+  CHECK(array_equal(
+            pad(x, {{5, 5}}, array(0.0f), "reflect"),
+            array(
+                {2.0f,
+                 1.0f,
+                 2.0f,
+                 3.0f,
+                 2.0f,
+                 1.0f,
+                 2.0f,
+                 3.0f,
+                 2.0f,
+                 1.0f,
+                 2.0f,
+                 3.0f,
+                 2.0f},
+                {13}))
+            .item<bool>());
 }
 
 TEST_CASE("test power") {
@@ -3305,11 +3430,27 @@ TEST_CASE("test linspace") {
   auto expected = array({0.0f, 2.5f, 5.0f, 7.5f, 10.0f}, {5});
   CHECK(array_equal(x, expected).item<bool>());
 
-  x = linspace(0, 10, 5, int32);
+  x = linspace(0, 10, 5, true, int32);
   expected = array({0, 2, 5, 7, 10}, {5});
   CHECK(array_equal(x, expected).item<bool>());
 
   x = linspace(0, 1, 0);
+  expected = array(std::initializer_list<float>{}, {0});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 10, 5, false);
+  expected = array({0.0f, 2.0f, 4.0f, 6.0f, 8.0f}, {5});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 10, 5, false, int32);
+  expected = array({0, 2, 4, 6, 8}, {5});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(1, 10, 1, false);
+  expected = array({1.0f}, {1});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 1, 0, false);
   expected = array(std::initializer_list<float>{}, {0});
   CHECK(array_equal(x, expected).item<bool>());
 }
@@ -4430,6 +4571,76 @@ TEST_CASE("test conv shape overflow") {
   CHECK_EQ(
       conv_transpose2d(in_t, wt, {2, 2}, {1, 1}, {1, 1}, {1, 1}).shape(),
       Shape{1, 8, 8, 1});
+}
+
+TEST_CASE("test pad with an axes subset") {
+  // edge_pad ignored `axes` and indexed the pad sizes by array axis, so it
+  // read past the end of those vectors and placed the input on the wrong
+  // axes. reflect and symmetric indexed by position but did not normalize a
+  // negative axis.
+  auto x = reshape(arange(24.0f), {2, 3, 4});
+  auto all = {"constant", "edge", "reflect", "symmetric"};
+
+  // Padding a subset of the axes matches the equivalent all-axes spelling.
+  for (auto mode : all) {
+    CHECK(array_equal(
+              pad(x, {1}, Shape{1}, Shape{2}, array(0.0f), mode),
+              pad(x,
+                  {0, 1, 2},
+                  Shape{0, 1, 0},
+                  Shape{0, 2, 0},
+                  array(0.0f),
+                  mode))
+              .item<bool>());
+  }
+
+  // A negative axis matches its non-negative spelling.
+  for (auto mode : all) {
+    CHECK(array_equal(
+              pad(x, {-2}, Shape{1}, Shape{2}, array(0.0f), mode),
+              pad(x, {1}, Shape{1}, Shape{2}, array(0.0f), mode))
+              .item<bool>());
+  }
+
+  // The order of `axes` does not change the result.
+  auto y = reshape(arange(25.0f), {5, 5});
+  for (auto mode : all) {
+    CHECK(array_equal(
+              pad(y, {1, 0}, Shape{1, 2}, Shape{1, 2}, array(0.0f), mode),
+              pad(y, {0, 1}, Shape{2, 1}, Shape{2, 1}, array(0.0f), mode))
+              .item<bool>());
+  }
+
+  // An ndim past SmallVector's inline capacity puts the pad sizes on the heap,
+  // where the old read ran off the end of the allocation.
+  std::vector<int> wide_axes(11);
+  std::iota(wide_axes.begin(), wide_axes.end(), 0);
+  auto wide =
+      pad(zeros(Shape(34, 1)),
+          wide_axes,
+          Shape(11, 1),
+          Shape(11, 0),
+          array(0.0f),
+          "edge");
+  CHECK_EQ(wide.size(), 2048);
+
+  // An axis outside the array is rejected rather than indexed.
+  for (auto mode : all) {
+    CHECK_THROWS_AS(
+        pad(x, {5}, Shape{1}, Shape{1}, array(0.0f), mode),
+        std::invalid_argument);
+    CHECK_THROWS_AS(
+        pad(x, {-5}, Shape{1}, Shape{1}, array(0.0f), mode),
+        std::invalid_argument);
+  }
+}
+
+TEST_CASE("test pad shape overflow") {
+  // A padding sum that overflows int32 is rejected, not wrapped.
+  // https://github.com/ml-explore/mlx/issues/3611
+  const int imax = 2147483647;
+  CHECK_THROWS_AS(
+      pad(zeros({8}), {0}, Shape{imax}, Shape{imax}), std::overflow_error);
 }
 
 TEST_CASE("test fp8 conversion") {

@@ -15,10 +15,7 @@ runs:
   steps:
     - name: Install dependencies
       shell: bash
-      run: |
-        echo "::group::Install dependencies"
-        uv pip install 'build<=1.4.2' setuptools
-        echo "::endgroup::"
+      run: uv pip install build setuptools
 
     - name: Build wheel
       shell: bash
@@ -26,17 +23,13 @@ runs:
         DEBUG: 1
         CMAKE_ARGS: ${{ inputs.cmake-args }}
         MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
-      run: |
-        echo "::group::Build wheel"
-        python -m build -w
-        echo "::endgroup::"
+      run: python -m build -w
 
     - name: Build CPP only
       shell: bash
       env:
         MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
-        echo "::group::Build CPP only"
         if ${{ contains(inputs.cmake-args, 'CMAKE_BUILD_TYPE') }} ; then
           cmake . -B build ${{ inputs.cmake-args }}
         else
@@ -44,4 +37,3 @@ runs:
             -DCMAKE_BUILD_TYPE=Debug
         fi
         cmake --build build -j $(sysctl -n hw.physicalcpu)
-        echo "::endgroup::"

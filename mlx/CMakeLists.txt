@@ -18,6 +18,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/transforms.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/memory.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/backend/metal/metal.h)
 
 # Define MLX_VERSION only in the version.cpp file.
@@ -27,11 +28,13 @@ target_include_directories(mlx_version PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:mlx_version>)
 
 # Do not export symbols by default.
-set_target_properties(
-  mlx mlx_version
-  PROPERTIES VISIBILITY_INLINES_HIDDEN ON
-             CXX_VISIBILITY_PRESET hidden
-             CUDA_VISIBILITY_PRESET hidden)
+if(NOT MLX_EXPORT_ALL_SYMBOLS)
+  set_target_properties(
+    mlx mlx_version
+    PROPERTIES VISIBILITY_INLINES_HIDDEN ON
+               CXX_VISIBILITY_PRESET hidden
+               CUDA_VISIBILITY_PRESET hidden)
+endif()
 
 # Define MLX_EXPORT for shared libraries, MLX_STATIC for static libraries.
 set_target_properties(mlx PROPERTIES DEFINE_SYMBOL MLX_EXPORT)
@@ -52,6 +55,9 @@ endif()
 if(WIN32)
   # windows.h defines min/max macros that conflict with std::min/std::max.
   target_compile_definitions(mlx PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  # TODO: Remove after removing std::atomic_store/load.
+  target_compile_definitions(
+    mlx PUBLIC _SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING)
 endif()
 if(MSVC)
   # Unicode support in fmt does not compile in .cu files.

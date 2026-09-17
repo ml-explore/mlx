@@ -48,6 +48,7 @@ if(MLX_METAL_JIT)
   make_jit_source(softmax)
   make_jit_source(scan)
   make_jit_source(sort)
+  make_jit_source(searchsorted kernels/sort.h)
   make_jit_source(
     reduce kernels/reduction/reduce_all.h kernels/reduction/reduce_col.h
     kernels/reduction/reduce_row.h kernels/reduction/reduce_init.h)

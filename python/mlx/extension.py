@@ -30,13 +30,14 @@ class CMakeBuild(build_ext):
         debug = int(os.environ.get("DEBUG", 0)) if self.debug is None else self.debug
         cfg = "Debug" if debug else "Release"
 
-        # Set Python_EXECUTABLE instead if you use PYBIND11_FINDPYTHON
-        # EXAMPLE_VERSION_INFO shows you how to pass a value into the C++ code
-        # from Python.
+        # Point CMake at the interpreter running the build. Otherwise
+        # find_package(Python) picks whichever interpreter it finds first,
+        # which is not the one nanobind and mlx are installed into.
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}{os.sep}",
             f"-DCMAKE_BUILD_TYPE={cfg}",
             "-DBUILD_SHARED_LIBS=ON",
+            f"-DPython_EXECUTABLE={sys.executable}",
         ]
         build_args = []
         # Adding CMake arguments set as environment variable

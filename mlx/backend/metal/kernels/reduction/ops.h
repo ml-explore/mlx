@@ -133,6 +133,15 @@ struct Sum {
     mlx_atomic_fetch_add_explicit(out, val, offset);
   }
 
+  void atomic_update(
+      device mlx_atomic<complex64_t>* out,
+      complex64_t val,
+      size_t offset = 0) thread {
+    auto out_lanes = reinterpret_cast<device mlx_atomic<float>*>(out);
+    mlx_atomic_fetch_add_explicit(out_lanes, val.real, 2 * offset);
+    mlx_atomic_fetch_add_explicit(out_lanes, val.imag, 2 * offset + 1);
+  }
+
   // Operator
   U operator()(U a, U b) thread {
     return a + b;

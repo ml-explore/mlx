@@ -38,20 +38,28 @@ MLX_API array arange(int start, int stop, int step, StreamOrDevice s = {});
 MLX_API array arange(int start, int stop, StreamOrDevice s = {});
 MLX_API array arange(int stop, StreamOrDevice s = {});
 
-/** A 1D array of `num` evenly spaced numbers in the range `[start, stop]` */
+/**
+ * A 1D array of `num` evenly spaced numbers in the range `[start, stop]`, or
+ * in the half-open range `[start, stop)` when `endpoint` is false.
+ */
 MLX_API array linspace(
+    double start,
+    double stop,
+    int num,
+    bool endpoint,
+    Dtype dtype = float32,
+    StreamOrDevice s = {});
+inline array linspace(
     double start,
     double stop,
     int num = 50,
     Dtype dtype = float32,
-    StreamOrDevice s = {});
+    StreamOrDevice s = {}) {
+  return linspace(start, stop, num, true, dtype, s);
+}
 
 /** Convert an array to the given data type. */
-MLX_API array
-astype(array a, Dtype dtype, std::optional<bool> copy, StreamOrDevice s = {});
-inline array astype(array a, Dtype dtype, StreamOrDevice s = {}) {
-  return astype(std::move(a), dtype, std::nullopt, s);
-}
+MLX_API array astype(array a, Dtype dtype, StreamOrDevice s = {});
 
 /** Create a view of an array with the given shape and strides. */
 MLX_API array as_strided(
@@ -857,6 +865,13 @@ MLX_API array argpartition(const array& a, int kth, StreamOrDevice s = {});
 MLX_API array
 argpartition(const array& a, int kth, int axis, StreamOrDevice s = {});
 
+/** Find the indices of `values` in `sorted_sequence`. */
+MLX_API array searchsorted(
+    const array& sorted_sequence,
+    const array& values,
+    const std::string& side = "left",
+    StreamOrDevice s = {});
+
 /** Returns topk elements of the flattened array. */
 MLX_API array topk(const array& a, int k, StreamOrDevice s = {});
 
@@ -1611,6 +1626,7 @@ MLX_API array gather_qmm(
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
+    const std::optional<array>& global_scale = std::nullopt,
     bool sorted_indices = false,
     StreamOrDevice s = {});
 

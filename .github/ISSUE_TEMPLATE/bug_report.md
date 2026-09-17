@@ -1,11 +1,13 @@
 ---
 name: Bug report
-about: Create a report about an issue you've encountered
+about: Create a report about a bug you've encountered
 title: "[BUG] "
 labels: ''
 assignees: ''
 
 ---
+
+☑️ I understand it is strictly prohibited to use AI to write issues.
 
 **Describe the bug**
 A clear and concise description of what the bug is.

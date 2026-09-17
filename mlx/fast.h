@@ -24,6 +24,10 @@ MLX_API array layer_norm(
     float eps,
     StreamOrDevice s = {});
 
+/** Fused cross entropy with class indices as targets. */
+MLX_API array
+cross_entropy(const array& logits, const array& targets, StreamOrDevice s = {});
+
 MLX_API array rope(
     const array& x,
     int dims,
@@ -53,6 +57,17 @@ MLX_API array scaled_dot_product_attention(
     const std::string& mask_mode = "",
     std::optional<array> mask_arr = {},
     const std::optional<array>& sinks = {},
+    bool force_fused = false,
+    StreamOrDevice s = {});
+
+MLX_API std::vector<array> gated_delta_update(
+    const array& queries,
+    const array& keys,
+    const array& values,
+    const array& gates,
+    const array& beta_,
+    const std::optional<array>& initial_state = std::nullopt,
+    const std::optional<array>& mask = std::nullopt,
     StreamOrDevice s = {});
 
 MLX_API std::vector<array> gated_delta_update(

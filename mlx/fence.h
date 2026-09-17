@@ -32,8 +32,13 @@ class Fence {
   void update(Stream stream, const array& x, bool cross_device);
   void wait(Stream stream, const array& x);
 
+  template <typename T>
+  auto& cast() const {
+    return *static_cast<T*>(fence_.get());
+  }
+
  private:
-  std::shared_ptr<void> fence_{nullptr};
+  std::shared_ptr<void> fence_;
 };
 
 } // namespace mlx::core

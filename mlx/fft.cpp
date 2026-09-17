@@ -240,10 +240,16 @@ array irfftn(
   return fft_impl(a, true, true, norm, s);
 }
 
-array fftshift(
+namespace {
+
+// Shared implementation for fftshift/ifftshift: validates axes and computes
+// the per-axis roll amount, differing only in shift sign and error prefix.
+array fftshift_impl(
+    const char* name,
     const array& a,
     const std::vector<int>& axes,
-    StreamOrDevice s /* = {} */) {
+    bool inverse,
+    StreamOrDevice s) {
   if (axes.empty()) {
     return a;
   }
@@ -254,41 +260,32 @@ array fftshift(
     int axis = ax < 0 ? ax + a.ndim() : ax;
     if (axis < 0 || axis >= a.ndim()) {
       std::ostringstream msg;
-      msg << "[fftshift] Invalid axis " << ax << " for array with " << a.ndim()
-          << " dimensions.";
+      msg << "[" << name << "] Invalid axis " << ax << " for array with "
+          << a.ndim() << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
     // Match NumPy's implementation
-    shifts.push_back(a.shape(axis) / 2);
+    int shift = a.shape(axis) / 2;
+    shifts.push_back(inverse ? -shift : shift);
   }
 
   return roll(a, shifts, axes, s);
+}
+
+} // namespace
+
+array fftshift(
+    const array& a,
+    const std::vector<int>& axes,
+    StreamOrDevice s /* = {} */) {
+  return fftshift_impl("fftshift", a, axes, false, s);
 }
 
 array ifftshift(
     const array& a,
     const std::vector<int>& axes,
     StreamOrDevice s /* = {} */) {
-  if (axes.empty()) {
-    return a;
-  }
-
-  Shape shifts;
-  for (int ax : axes) {
-    // Convert negative axes to positive
-    int axis = ax < 0 ? ax + a.ndim() : ax;
-    if (axis < 0 || axis >= a.ndim()) {
-      std::ostringstream msg;
-      msg << "[ifftshift] Invalid axis " << ax << " for array with " << a.ndim()
-          << " dimensions.";
-      throw std::invalid_argument(msg.str());
-    }
-    // Match NumPy's implementation
-    int size = a.shape(axis);
-    shifts.push_back(-(size / 2));
-  }
-
-  return roll(a, shifts, axes, s);
+  return fftshift_impl("ifftshift", a, axes, true, s);
 }
 
 // Default versions that operate on all axes

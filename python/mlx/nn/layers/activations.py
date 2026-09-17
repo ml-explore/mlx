@@ -68,6 +68,10 @@ def log_softmax(x, axis=-1):
 
     Applies :math:`x - \log \sum_i e^{x_i}` element wise.
     """
+    # Shift by the max first. Subtracting the logsumexp of x directly loses the
+    # normalizer, since adding it to a large max rounds away before the
+    # subtraction happens.
+    x = x - mx.stop_gradient(mx.max(x, axis=axis, keepdims=True))
     return x - mx.logsumexp(x, axis=axis, keepdims=True)
 
 

@@ -30,11 +30,11 @@ struct fp8_e4m3 {
   }
 
   operator float16_t() thread {
-    uint16_t v = (bits & 127) << 7;
-    half converted = as_type<half>(v);
-    converted *= 256.0;
-    auto sign = bits & 128;
-    return (sign ? -converted : converted);
+    uint16_t v = bits & 127;
+    uint16_t sign_bit = ((uint16_t)((bits >> 7) & 1)) << 15;
+    uint16_t u = (v << 7) | (((v + 1) >> 7) << 14) | sign_bit;
+    half converted = as_type<half>(u);
+    return converted * 256.0;
   }
 
   operator bfloat16_t() thread {
@@ -78,3 +78,14 @@ struct fp8_e8m0 {
 
   uint8_t bits;
 };
+
+// Smallest E8M0 >= x. Scales are amax/max_element, so rounding one down
+// leaves the block's largest elements outside the element range, where they
+// saturate. Matches the CUDA backend, which rounds up via cutlass ue8m0.
+inline float mx_scale_round_up(float x) {
+  fp8_e8m0 s(x);
+  if (s.bits < 0xFE && float(s) < x) {
+    s.bits += 1;
+  }
+  return float(s);
+}

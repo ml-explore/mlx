@@ -63,6 +63,18 @@ def cross_entropy(
         >>> targets = mx.array([[0.9, 0.1], [0.1, 0.9]])
         >>> nn.losses.cross_entropy(logits, targets)
         array([0.348587, 0.348587], dtype=float32)
+        >>>
+        >>> # Half precision logits with class indices as targets. On CUDA a
+        >>> # fused kernel accumulates the reduction in float32:
+        >>> logits = mx.array([[2.0, -1.0], [-1.0, 2.0]], mx.bfloat16)
+        >>> targets = mx.array([0, 1])
+        >>> nn.losses.cross_entropy(logits, targets)
+        array([0.0485873, 0.0485873], dtype=float32)
+        >>>
+        >>> # Metal and the CPU reduce in the dtype of the logits, so upcast
+        >>> # them to get the same accuracy:
+        >>> nn.losses.cross_entropy(logits.astype(mx.float32), targets)
+        array([0.0485873, 0.0485873], dtype=float32)
     """
     if label_smoothing < 0 or label_smoothing >= 1:
         raise ValueError(f"Label smoothing must be in [0, 1), got {label_smoothing}.")
@@ -83,26 +95,38 @@ def cross_entropy(
             f"Targets shape {targets.shape} does not match logits shape {logits.shape}."
         )
 
-    if targets_as_probs:
-        score = mx.sum(logits * targets, axis=axis)
+    use_fast = (
+        mx.cuda.is_available()
+        and mx.default_device() == mx.gpu
+        and not targets_as_probs
+        and label_smoothing == 0
+        and axis in (-1, logits.ndim - 1)
+        and mx.issubdtype(logits.dtype, mx.floating)
+        and mx.issubdtype(targets.dtype, mx.integer)
+    )
+
+    if use_fast:
+        loss = mx.fast.cross_entropy(logits, targets).astype(logits.dtype)
     else:
-        score = mx.take_along_axis(logits, mx.expand_dims(targets, axis), axis).squeeze(
-            axis
-        )
+        logits = logits - mx.stop_gradient(mx.max(logits, axis=axis, keepdims=True))
 
-    logsumexp_logits = mx.logsumexp(logits, axis=axis)
-    if label_smoothing > 0:
-        # Adjust the true class score with label smoothing
-        adjusted_score = (1 - label_smoothing) * score
+        if targets_as_probs:
+            score = mx.sum(logits * targets, axis=axis)
+        else:
+            score = mx.take_along_axis(
+                logits, mx.expand_dims(targets, axis), axis
+            ).squeeze(axis)
 
-        # Calculate the mean logit across the classes for smoothed loss
-        mean_logits = logits.mean(axis=axis)
-        smoothed_loss = -mean_logits * label_smoothing
+        logsumexp_logits = mx.logsumexp(logits, axis=axis)
+        if label_smoothing > 0:
+            adjusted_score = (1 - label_smoothing) * score
 
-        # Combine the adjusted score and smoothed loss with the logsumexp logits
-        loss = logsumexp_logits - adjusted_score + smoothed_loss
-    else:
-        loss = logsumexp_logits - score
+            mean_logits = logits.mean(axis=axis)
+            smoothed_loss = -mean_logits * label_smoothing
+
+            loss = logsumexp_logits - adjusted_score + smoothed_loss
+        else:
+            loss = logsumexp_logits - score
 
     # Apply weights if provided
     if weights is not None:

@@ -43,6 +43,7 @@ option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
 option(MLX_BUILD_PYTHON_STUBS "Build stub files for python bindings" ON)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(MLX_USE_CCACHE "Use CCache for compilation cache when available" ON)
+option(MLX_EXPORT_ALL_SYMBOLS "Export all symbols in the library" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 option(USE_SYSTEM_FMT "Use system's provided fmt library" OFF)
 option(USE_ASAN "Enable AddressSanitizer (ASan)" OFF)
@@ -363,7 +364,7 @@ target_include_directories(
 if(MLX_BUILD_CPU
    AND ${CMAKE_SYSTEM_NAME} MATCHES "Darwin"
    AND DEFINED MACOS_SDK_VERSION
-   AND MACOS_SDK_VERSION GREATER_EQUAL 26.2)
+   AND MACOS_SDK_VERSION VERSION_GREATER_EQUAL 26.2)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx/distributed/jaccl/lib
                    ${CMAKE_BINARY_DIR}/jaccl)
 endif()
@@ -395,7 +396,7 @@ if(MLX_BUILD_PYTHON_BINDINGS)
   FetchContent_Declare(
     nanobind
     GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-    GIT_TAG v2.13.0
+    GIT_TAG v3.0.1
     GIT_SHALLOW TRUE
     EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(nanobind)

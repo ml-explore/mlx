@@ -57,7 +57,7 @@ class MetalAllocator : public allocator::Allocator {
   friend MetalAllocator& allocator();
 
   NS::SharedPtr<MTL::Heap> heap_;
-  ResidencySet& residency_set_;
+  ResidencySets& residency_sets_;
 
   // Caching allocator
   BufferCache<MTL::Buffer> buffer_cache_;

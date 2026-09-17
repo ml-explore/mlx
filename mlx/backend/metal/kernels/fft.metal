@@ -38,18 +38,22 @@
       real)
 
 // clang-format off
-#define instantiate_ffts(tg_mem_size)                        \
-  instantiate_fft(tg_mem_size, float2, float2) \
+#define instantiate_c2c_ffts(tg_mem_size, complex_T) \
+  instantiate_fft(tg_mem_size, complex_T, complex_T) \
+  instantiate_rader(tg_mem_size, complex_T, complex_T) \
+  instantiate_bluestein(tg_mem_size, complex_T, complex_T) \
+  instantiate_four_step(tg_mem_size, complex_T, complex_T, 0, /*real=*/false) \
+  instantiate_four_step(tg_mem_size, complex_T, complex_T, 1, /*real=*/false)
+
+#define instantiate_ffts(tg_mem_size) \
+  instantiate_c2c_ffts(tg_mem_size, float2) \
+  instantiate_c2c_ffts(tg_mem_size, complex32_t) \
   instantiate_fft(tg_mem_size, float, float2) \
   instantiate_fft(tg_mem_size, float2, float) \
-  instantiate_rader(tg_mem_size, float2, float2) \
   instantiate_rader(tg_mem_size, float, float2) \
   instantiate_rader(tg_mem_size, float2, float) \
-  instantiate_bluestein(tg_mem_size, float2, float2) \
   instantiate_bluestein(tg_mem_size, float, float2) \
   instantiate_bluestein(tg_mem_size, float2, float) \
-  instantiate_four_step(tg_mem_size, float2, float2, 0, /*real=*/false) \
-  instantiate_four_step(tg_mem_size, float2, float2, 1, /*real=*/false) \
   instantiate_four_step(tg_mem_size, float, float2, 0, /*real=*/true) \
   instantiate_four_step(tg_mem_size, float2, float2, 1, /*real=*/true) \
   instantiate_four_step(tg_mem_size, float2, float2, 0, /*real=*/true) \

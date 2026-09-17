@@ -273,6 +273,21 @@ std::pair<Dtype, Dtype> remap_reduce_types(
     }
     return {in.dtype(), in.dtype()};
   } else if (op_name == "and" || op_name == "or") {
+    // Integers can be tested as whatever type has the same width, since only
+    // their bits matter. Floats cannot: -0.0 compares equal to zero but has a
+    // bit set, so it has to be tested as a float. complex64 stays on the
+    // integer path, since testing it as a complex would only look at the real
+    // part and miss 1j.
+    switch (in.dtype()) {
+      case float16:
+        return {float16, bool_};
+      case bfloat16:
+        return {bfloat16, bool_};
+      case float32:
+        return {float32, bool_};
+      default:
+        break;
+    }
     if (in.dtype().size() == 1) {
       return {bool_, bool_};
     } else if (in.dtype().size() == 2) {
@@ -292,6 +307,9 @@ void init_reduce(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
+  if (out.size() == 0) {
+    return;
+  }
   auto [_, out_type] = remap_reduce_types(out, op_name);
   const std::string func_name = "init_reduce";
   std::string kname = func_name;
@@ -957,7 +975,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   // When all the reduced axes have size 1 at runtime, which can happen with
   // shapeless compilation, the reduction is the identity so just cast-copy
   // the input to the output.
-  if (out.size() == in.size()) {
+  if (in.size() > 0 && out.size() == in.size()) {
     CopyType ctype =
         in.flags().contiguous ? CopyType::Vector : CopyType::General;
     copy_gpu(in, out, ctype, stream());

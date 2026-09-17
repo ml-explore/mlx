@@ -1,5 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
+#include <algorithm>
+
 #include "mlx/allocator.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
@@ -89,7 +91,7 @@ struct SVDWork<
 
     if (info != 0) {
       std::stringstream ss;
-      ss << "svd_impl: sgesvdx_ failed with code " << info;
+      ss << "[SVD::eval_cpu] SVD failed with error code " << info;
       throw std::runtime_error(ss.str());
     }
   }
@@ -179,7 +181,7 @@ struct SVDWork<std::complex<float>> {
 
     if (info != 0) {
       std::stringstream ss;
-      ss << "svd_impl: sgesvdx_ failed with code " << info;
+      ss << "[SVD::eval_cpu] SVD failed with error code " << info;
       throw std::runtime_error(ss.str());
     }
   }
@@ -205,6 +207,33 @@ void svd_impl(
   const int K = std::min(M, N);
 
   using R = typename SVDWork<T>::R;
+
+  // Nothing to decompose when either dimension is zero; LAPACK rejects
+  // lda = 0. The singular values are empty but the factors are not when only
+  // one of the dimensions is zero, so fill them with the identity like LAPACK
+  // does, which keeps them orthonormal.
+  if (M == 0 || N == 0) {
+    auto& encoder = cpu::get_command_encoder(stream);
+    for (auto& o : outputs) {
+      o.set_data(allocator::malloc(o.nbytes()));
+      if (o.size() == 0) {
+        continue;
+      }
+      encoder.set_output_array(o);
+      encoder.dispatch([o = array::unsafe_weak_copy(o)]() mutable {
+        auto ptr = o.data<T>();
+        const size_t size = o.size();
+        const int n = o.shape(-1);
+        std::fill_n(ptr, size, T(0));
+        for (size_t i = 0; i < size; i += static_cast<size_t>(n) * n) {
+          for (int j = 0; j < n; ++j) {
+            ptr[i + static_cast<size_t>(j) * n + j] = T(1);
+          }
+        }
+      });
+    }
+    return;
+  }
 
   size_t num_matrices = a.size() / (M * N);
 

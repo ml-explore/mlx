@@ -2,46 +2,30 @@
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
 
 void print_constant(std::ostream& os, const array& x) {
-  switch (x.dtype()) {
-    case float32:
-      return print_float_constant<float>(os, x);
-    case float16:
-      return print_float_constant<float16_t>(os, x);
-    case bfloat16:
-      return print_float_constant<bfloat16_t>(os, x);
-    case float64:
-      return print_float_constant<double>(os, x);
-    case complex64:
-      return print_complex_constant<complex64_t>(os, x);
-    case int8:
-      os << static_cast<int32_t>(x.item<int8_t>());
-      return;
-    case int16:
-      return print_int_constant<int16_t>(os, x);
-    case int32:
-      return print_int_constant<int32_t>(os, x);
-    case int64:
-      return print_int_constant<int64_t>(os, x);
-    case uint8:
-      os << static_cast<uint32_t>(x.item<uint8_t>());
-      return;
-    case uint16:
-      return print_int_constant<uint16_t>(os, x);
-    case uint32:
-      return print_int_constant<uint32_t>(os, x);
-    case uint64:
-      return print_int_constant<uint64_t>(os, x);
-    case bool_:
+  dispatch_all_types(x.dtype(), [&](auto type_tag) {
+    using T = MLX_GET_TYPE(type_tag);
+    if constexpr (std::is_same_v<T, bool>) {
       os << std::boolalpha << x.item<bool>();
-      return;
-    default:
+    } else if constexpr (std::is_same_v<T, int8_t>) {
+      os << static_cast<int32_t>(x.item<int8_t>());
+    } else if constexpr (std::is_same_v<T, uint8_t>) {
+      os << static_cast<uint32_t>(x.item<uint8_t>());
+    } else if constexpr (is_complex<T>) {
+      print_complex_constant<T>(os, x);
+    } else if constexpr (is_floating_point_v<T>) {
+      print_float_constant<T>(os, x);
+    } else if constexpr (std::is_integral_v<T>) {
+      print_int_constant<T>(os, x);
+    } else {
       throw std::runtime_error("Unsupported constant type");
-  }
+    }
+  });
 }
 
 std::string get_type_string(Dtype d) {

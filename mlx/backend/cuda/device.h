@@ -138,6 +138,8 @@ class CommandEncoder {
     std::string id;
   };
 
+  void commit_impl();
+  void clear_graph_state();
   void insert_graph_dependencies(GraphNode node);
   void insert_graph_dependencies(std::vector<GraphNode> nodes);
 

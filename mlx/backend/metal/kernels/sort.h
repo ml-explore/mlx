@@ -388,8 +388,11 @@ template <
   using ValT = typename sort_kernel::ValT;
   using IdxT = typename sort_kernel::IdxT;
 
-  auto in_block_idx = elem_to_loc(tid.y, nc_shape, in_nc_strides, nc_dim);
-  auto out_block_idx = elem_to_loc(tid.y, nc_shape, out_nc_strides, nc_dim);
+  // Signed offsets: a non-sorted axis may have a negative stride.
+  auto in_block_idx =
+      elem_to_loc<int64_t>(tid.y, nc_shape, in_nc_strides, nc_dim);
+  auto out_block_idx =
+      elem_to_loc<int64_t>(tid.y, nc_shape, out_nc_strides, nc_dim);
   inp += in_block_idx;
   out += out_block_idx;
 
@@ -532,7 +535,8 @@ template <
       BLOCK_THREADS,
       N_PER_THREAD>;
 
-  auto block_idx = elem_to_loc(tid.y, nc_shape, nc_strides, nc_dim);
+  // Signed offset: a non-sorted axis may have a negative stride.
+  auto block_idx = elem_to_loc<int64_t>(tid.y, nc_shape, nc_strides, nc_dim);
   inp += block_idx;
   out_vals += tid.y * size_sorted_axis;
   out_idxs += tid.y * size_sorted_axis;

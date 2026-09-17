@@ -7,6 +7,7 @@
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/gemm.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
@@ -97,24 +98,11 @@ void matmul_general(
     return;
   }
 
-  if (out.dtype() == float32) {
-    matmul_dispatch<float>(
+  dispatch_inexact_types(out.dtype(), "[Matmul::eval_cpu]", [&](auto type_tag) {
+    using T = MLX_GET_TYPE(type_tag);
+    matmul_dispatch<T>(
         a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta, stream);
-  } else if (out.dtype() == float16) {
-    matmul_dispatch<float16_t>(
-        a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta, stream);
-  } else if (out.dtype() == bfloat16) {
-    matmul_dispatch<bfloat16_t>(
-        a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta, stream);
-  } else if (out.dtype() == float64) {
-    matmul_dispatch<double>(
-        a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta, stream);
-  } else if (out.dtype() == complex64) {
-    matmul_dispatch<complex64_t>(
-        a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta, stream);
-  } else {
-    throw std::runtime_error("[Matmul::eval_cpu] Invalid type.");
-  }
+  });
   cpu::get_command_encoder(stream).add_temporaries(std::move(temps));
 }
 

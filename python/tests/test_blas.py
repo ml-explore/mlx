@@ -538,6 +538,37 @@ class TestBlas(mlx_tests.MLXTestCase):
                                     )
                                     self.assertTrue(np.array_equal(c_mlx, c_npy))
 
+    def test_dot_product(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("requires GPU")
+
+        def run_test(dtype, size, offset, atol):
+            with self.subTest(dtype=str(dtype), size=size, offset=offset):
+                np.random.seed(42)
+                scale = size**-0.5
+                a_mx = mx.array(
+                    np.random.normal(0.0, scale, size + offset).astype(np.float32)
+                ).astype(dtype)[offset:]
+                b_mx = mx.array(
+                    np.random.normal(0.0, scale, size + offset).astype(np.float32)
+                ).astype(dtype)[offset:]
+
+                expected = np.inner(
+                    np.array(a_mx.astype(mx.float32)),
+                    np.array(b_mx.astype(mx.float32)),
+                )
+                actual = np.array(mx.inner(a_mx, b_mx).astype(mx.float32))
+                self.assertTrue(np.allclose(actual, expected, atol=atol))
+
+        for dtype, atol in (
+            (mx.float32, 1e-5),
+            (mx.float16, 2e-3),
+            (mx.bfloat16, 2e-3),
+        ):
+            for size in (1023, 1024, 1025, 16385, 131072, 1000000):
+                for offset in (0, 1):
+                    run_test(dtype, size, offset, atol)
+
     def test_wide_matmul(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("requires GPU")

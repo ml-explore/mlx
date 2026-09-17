@@ -97,6 +97,67 @@ class RMSNormVJP : public Custom {
   float eps_;
 };
 
+// loss is always fp32 and the logits never have to be upcast in the graph.
+class CrossEntropy : public Custom {
+ public:
+  CrossEntropy(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback)
+      : Custom(stream, std::move(fallback)) {}
+
+  static bool use_fallback(Stream stream);
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_NAME(CrossEntropy)
+  bool is_equivalent(const Primitive& other) const override {
+    return true;
+  }
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    return {inputs[1].shape()};
+  }
+
+  auto state() const {
+    return std::monostate{};
+  }
+};
+
+class CrossEntropyVJP : public Custom {
+ public:
+  CrossEntropyVJP(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback)
+      : Custom(stream, std::move(fallback)) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(CrossEntropyVJP)
+  bool is_equivalent(const Primitive& other) const override {
+    return true;
+  }
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+  auto state() const {
+    return std::monostate{};
+  }
+};
+
 class LayerNorm : public Custom {
  public:
   LayerNorm(
@@ -212,12 +273,14 @@ class ScaledDotProductAttention : public Custom {
       float scale,
       bool do_causal,
       bool has_sinks,
-      bool output_logsumexp)
+      bool output_logsumexp,
+      bool force_fused)
       : Custom(stream, std::move(fallback)),
         scale_(scale),
         do_causal_(do_causal),
         has_sinks_(has_sinks),
-        output_logsumexp_(output_logsumexp) {}
+        output_logsumexp_(output_logsumexp),
+        force_fused_(force_fused) {}
 
   static bool use_fallback(
       const array& q,
@@ -228,6 +291,7 @@ class ScaledDotProductAttention : public Custom {
       bool do_causal,
       bool is_training,
       bool output_logsumexp,
+      bool force_fused,
       Stream s);
   static bool supports_bool_mask();
 
@@ -251,7 +315,12 @@ class ScaledDotProductAttention : public Custom {
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
     return std::make_tuple(
-        nullptr, scale_, do_causal_, has_sinks_, output_logsumexp_);
+        nullptr,
+        scale_,
+        do_causal_,
+        has_sinks_,
+        output_logsumexp_,
+        force_fused_);
   }
 
  private:
@@ -259,6 +328,7 @@ class ScaledDotProductAttention : public Custom {
   bool do_causal_;
   bool has_sinks_;
   bool output_logsumexp_;
+  bool force_fused_;
 };
 
 class ScaledDotProductAttentionVJP : public Custom {

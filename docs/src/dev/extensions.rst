@@ -711,7 +711,7 @@ build utilities defined in :mod:`mlx.extension`:
             package_data={"mlx_sample_extensions": ["*.so", "*.dylib", "*.metallib"]},
             extras_require={"dev":[]},
             zip_safe=False,
-            python_requires=">=3.8",
+            python_requires=">=3.10",
         )
 
 .. note::

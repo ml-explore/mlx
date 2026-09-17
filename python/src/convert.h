@@ -14,24 +14,6 @@ namespace nb = nanobind;
 
 namespace nanobind {
 
-template <>
-struct ndarray_traits<mx::float16_t> {
-  static constexpr bool is_complex = false;
-  static constexpr bool is_float = true;
-  static constexpr bool is_bool = false;
-  static constexpr bool is_int = false;
-  static constexpr bool is_signed = true;
-};
-
-template <>
-struct ndarray_traits<mx::bfloat16_t> {
-  static constexpr bool is_complex = false;
-  static constexpr bool is_float = true;
-  static constexpr bool is_bool = false;
-  static constexpr bool is_int = false;
-  static constexpr bool is_signed = true;
-};
-
 namespace detail {
 
 template <>
@@ -70,6 +52,7 @@ mx::array nd_array_to_mlx(
 nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a);
 nb::ndarray<> mlx_to_dlpack(
     const mx::array& a,
+    bool force_copy,
     std::optional<std::tuple<int, int>> dl_device);
 
 nb::object to_scalar(mx::array& a);

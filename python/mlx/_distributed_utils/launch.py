@@ -121,11 +121,12 @@ class RemoteProcess(CommandProcess):
         # Change the working directory if one was requested. Otherwise attempt to
         # change to the current one but don't fail if it wasn't possible.
         d = cwd or os.getcwd()
-        script += f"if [[ -d {repr(d)} ]]; then "
-        script += f"  cd {repr(d)}; "
+        qd = shlex.quote(d)
+        script += f"if [[ -d {qd} ]]; then "
+        script += f"  cd {qd}; "
         if cwd is not None:
             script += "else "
-            script += f" echo 'Failed to change directory to' {repr(d)} >2; "
+            script += f" echo 'Failed to change directory to' {qd} >&2; "
         script += "fi; "
 
         # Add the environment variables that were requested
@@ -375,9 +376,31 @@ def launch_jaccl(parser, hosts, args, command):
 
     jaccl_ring = args.backend == "jaccl-ring"
     have_rdmas = all(len(h.rdma) == len(hosts) for h in hosts)
+    if not have_rdmas:
+        parser.error(
+            "The hostfile is malformed: number of RDMA devices does not match hosts"
+        )
     have_nulls = all(h.rdma[i] is None for i, h in enumerate(hosts))
-    if not have_rdmas or not have_nulls:
-        parser.error("Malformed hostfile for jaccl backend")
+    if not have_nulls:
+        parser.error("The hostfile is malformed: RDMA device of self should be null")
+
+    # Find pairs that miss rmda in hostfile.
+    n = len(hosts)
+    missing_rdma = [
+        (i, j)
+        for i, h in enumerate(hosts)
+        for j in (((i - 1) % n, (i + 1) % n) if jaccl_ring else range(n))
+        if i != j and h.rdma[j] is None
+    ]
+
+    if missing_rdma:
+        pairs = ", ".join(
+            f"{hosts[i].ssh_hostname} to {hosts[j].ssh_hostname}"
+            for i, j in missing_rdma[:3]
+        )
+        if len(missing_rdma) > 3:
+            pairs += f" and {len(missing_rdma) - 3} more"
+        parser.error(f"The hostfile is malformed: no RDMA device is listed for {pairs}")
 
     coordinator = hosts[0].ips[0]
     env = args.env
@@ -537,10 +560,13 @@ def main():
         rest.pop(0)
 
     # Try to extract a list of hosts and corresponding ips
-    if args.hostfile is not None:
-        hostfile = Hostfile.from_file(args.hostfile)
-    else:
-        hostfile = Hostfile.from_list(args.hosts, args.repeat_hosts)
+    try:
+        if args.hostfile is not None:
+            hostfile = Hostfile.from_file(args.hostfile)
+        else:
+            hostfile = Hostfile.from_list(args.hosts, args.repeat_hosts)
+    except ValueError as e:
+        parser.error(str(e))
 
     # Extract extra arguments from the hostfile
     if hostfile.backend != "" and args.backend is None:

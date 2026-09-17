@@ -187,6 +187,107 @@ bool RMSNormVJP::is_equivalent(const Primitive& other) const {
   return eps_ == a_other.eps_;
 }
 
+array cross_entropy(
+    const array& logits,
+    const array& targets,
+    StreamOrDevice s_ /* = {} */) {
+  if (logits.ndim() < 1) {
+    throw std::invalid_argument(
+        "[cross_entropy] logits must have at least 1 dimension but got input "
+        "with 0 dimensions.");
+  }
+  auto expected = logits.shape();
+  expected.pop_back();
+  if (targets.shape() != expected) {
+    std::ostringstream msg;
+    msg << "[cross_entropy] targets shape " << targets.shape()
+        << " does not match logits shape " << logits.shape()
+        << " with the last axis removed.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (!issubdtype(logits.dtype(), floating)) {
+    std::ostringstream msg;
+    msg << "[cross_entropy] Received unsupported logits type " << logits.dtype()
+        << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (!issubdtype(targets.dtype(), integer)) {
+    std::ostringstream msg;
+    msg << "[cross_entropy] targets must be integer class indices but got "
+        << targets.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto s = to_stream(s_);
+  auto fallback = [s](const std::vector<array>& inputs) {
+    auto& x = inputs[0];
+    auto& y = inputs[1];
+    auto score =
+        squeeze(take_along_axis(x, expand_dims(y, -1, s), -1, s), -1, s);
+    auto loss = subtract(logsumexp(x, -1, /* keepdims= */ false, s), score, s);
+    return std::vector<array>{astype(loss, float32, s)};
+  };
+
+  auto passed_targets = astype(targets, int32, s);
+
+  if (!CrossEntropy::use_fallback(s)) {
+    return array(
+        expected,
+        float32,
+        std::make_shared<CrossEntropy>(s, fallback),
+        {logits, passed_targets});
+  }
+  return fallback({logits, passed_targets})[0];
+}
+
+std::vector<array> CrossEntropy::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  assert(primals.size() == 2);
+  assert(outputs.size() == 1);
+  assert(cotangents.size() == 1);
+
+  for (auto arg : argnums) {
+    if (arg != 0) {
+      throw std::invalid_argument(
+          "[cross_entropy] Cannot differentiate with respect to the targets.");
+    }
+  }
+
+  auto s = stream();
+  auto fallback = [s](const std::vector<array>& inputs) {
+    auto& x = inputs[0];
+    auto& y = inputs[1];
+    auto& loss = inputs[2];
+    auto& g = inputs[3];
+
+    auto score =
+        squeeze(take_along_axis(x, expand_dims(y, -1, s), -1, s), -1, s);
+    auto lse = add(loss, astype(score, float32, s), s);
+    auto p =
+        exp(subtract(astype(x, float32, s), expand_dims(lse, -1, s), s), s);
+    Shape class_shape(x.ndim(), 1);
+    class_shape.back() = x.shape(-1);
+    auto onehot = astype(
+        equal(
+            expand_dims(y, -1, s),
+            reshape(arange(x.shape(-1), y.dtype(), s), class_shape, s),
+            s),
+        float32,
+        s);
+    auto gx = multiply(expand_dims(g, -1, s), subtract(p, onehot, s), s);
+    return std::vector<array>{astype(gx, x.dtype(), s)};
+  };
+
+  return {array(
+      primals[0].shape(),
+      primals[0].dtype(),
+      std::make_shared<CrossEntropyVJP>(s, fallback),
+      {primals[0], primals[1], outputs[0], cotangents[0]})};
+}
+
 array layer_norm(
     const array& x,
     const std::optional<array>& weight,
@@ -618,7 +719,8 @@ array scaled_dot_product_attention(
     const std::string& mask_mode /* = "" */,
     std::optional<array> mask_arr /* = {} */,
     const std::optional<array>& sinks /* = {} */,
-    StreamOrDevice s /* = {}*/) {
+    bool force_fused /* = false */,
+    StreamOrDevice s /* = {} */) {
   for (const auto& tensor : {queries, keys, values}) {
     if (tensor.ndim() != 4) {
       std::ostringstream msg;
@@ -834,6 +936,7 @@ array scaled_dot_product_attention(
           do_causal,
           is_training,
           output_logsumexp,
+          force_fused,
           stream)) {
     if (has_bool_mask && !ScaledDotProductAttention::supports_bool_mask()) {
       // Convert bool mask to additive mask.
@@ -846,7 +949,13 @@ array scaled_dot_product_attention(
     }
     Shape out_shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
     auto primitive = std::make_shared<ScaledDotProductAttention>(
-        stream, fallback, scale, do_causal, has_sinks, output_logsumexp);
+        stream,
+        fallback,
+        scale,
+        do_causal,
+        has_sinks,
+        output_logsumexp,
+        force_fused);
     if (output_logsumexp) {
       return array::make_arrays(
           {std::move(out_shape), Shape{q.shape(0), q.shape(1), q.shape(2), 1}},
@@ -912,7 +1021,8 @@ bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
       static_cast<const ScaledDotProductAttention&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
       has_sinks_ == a_other.has_sinks_ &&
-      output_logsumexp_ == a_other.output_logsumexp_;
+      output_logsumexp_ == a_other.output_logsumexp_ &&
+      force_fused_ == a_other.force_fused_;
 }
 
 bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {

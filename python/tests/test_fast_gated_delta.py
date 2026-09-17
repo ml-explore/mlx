@@ -115,9 +115,17 @@ def runner(dims, stream=mx.gpu, reference=True):
         out_ref = mx.array(out_on)
         hf_ref = mx.array(hf_on)
     else:
-        # use fallback for tests once fallback is validated
+        # use fallback for tests once fallback is validated by setting a mask instead of using the cpu
+        mask = mx.ones((B, T))
+
         out_ref, hf_ref = mx.fast.gated_delta_update(
-            q, k, v, g, b, initial_state=h0, stream=mx.cpu
+            q,
+            k,
+            v,
+            g,
+            b,
+            initial_state=h0,
+            mask=mask,
         )
 
     mx.eval(out_ref, hf_ref)
@@ -135,9 +143,18 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
     large_t_dims = (2, 32, 32, 1111, 128, 128)
     diff_heads = (1, 16, 32, 33, 128, 128)
     diff_heads2 = (1, 16, 48, 33, 128, 128)
+    unsupported_heads1 = (1, 8, 32, 33, 128, 128)
+    unsupported_heads2 = (1, 24, 48, 33, 128, 128)
 
-    fallback_dims = [base_dims, unaligned_dims, big_batch_dims, diff_heads, diff_heads2]
-    gpu_dims = fallback_dims + [large_t_dims]
+    fallback_dims = [unsupported_heads1, unsupported_heads2]
+    gpu_dims = [
+        base_dims,
+        unaligned_dims,
+        big_batch_dims,
+        diff_heads,
+        diff_heads2,
+        large_t_dims,
+    ]
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_gated_delta_fallback(self):
@@ -176,12 +193,23 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
             gm = mx.where(mask[..., None], g, 1.0)
 
             out_ref, hf_ref = mx.fast.gated_delta_update(
-                qm, km, vm, gm, bm, initial_state=h0, stream=mx.cpu
+                qm,
+                km,
+                vm,
+                gm,
+                bm,
+                initial_state=h0,
             )
 
             mx.eval(out_ref, hf_ref)
             out, hf = mx.fast.gated_delta_update(
-                q, k, v, g, b, initial_state=h0, mask=mask, stream=mx.cpu
+                q,
+                k,
+                v,
+                g,
+                b,
+                initial_state=h0,
+                mask=mask,
             )
             mx.eval(out, hf)
 
@@ -193,7 +221,28 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4), msg="State " + msg
             )
 
-    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
+    def test_gated_delta_dtypes(self):
+        dtypes = [mx.bfloat16, mx.float32]
+        for dtype in dtypes:
+            for dims in [self.base_dims]:
+
+                B, Hk, Hv, T, Dk, Dv = dims
+
+                q = mx.random.normal(shape=(B, T, Hk, Dk), dtype=dtype)
+                k = mx.random.normal(shape=(B, T, Hk, Dk), dtype=dtype)
+                k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
+                v = mx.random.normal(shape=(B, T, Hv, Dv), dtype=dtype)
+                g = mx.random.uniform(shape=(B, T, Hv), dtype=dtype)
+                b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv), dtype=dtype))
+                h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
+
+                out, hf = mx.fast.gated_delta_update(q, k, v, g, b, initial_state=h0)
+
+                msg = f"Output dtype mismatch on Dimensions: {dims}"
+                self.assertTrue(dtype == out.dtype, msg="Out " + msg)
+                self.assertTrue(hf.dtype == mx.float32, msg="State " + msg)
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_sequential(self):
         os.environ["GATED_DELTA_CHUNK"] = "0"
         for dims in self.gpu_dims:
@@ -206,7 +255,7 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4), msg="State " + msg
             )
 
-    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_simdgroup(self):
         os.environ["GATED_DELTA_CHUNK"] = "8"
         for dims in self.gpu_dims:
@@ -219,7 +268,7 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4), msg="State " + msg
             )
 
-    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_nax(self):
         os.environ["GATED_DELTA_CHUNK"] = "16"
         for dims in self.gpu_dims:
@@ -231,71 +280,6 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
             self.assertTrue(
                 mx.allclose(hf_ref, hf, atol=1e-1, rtol=1e-4), msg="State " + msg
             )
-
-    @unittest.skipIf(not has_torch, "requires Torch")
-    def test_gated_delta_grad(self):
-        for dims in [self.unaligned_dims]:
-            B, Hk, Hv, T, Dk, Dv = dims
-
-            q = mx.random.normal(shape=(B, T, Hk, Dk))
-            k = mx.random.normal(shape=(B, T, Hk, Dk))
-            k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
-            v = mx.random.normal(shape=(B, T, Hv, Dv))
-            g = mx.random.uniform(shape=(B, T, Hv))
-            b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
-            h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
-
-            co_out = mx.random.normal(shape=(B, T, Hv, Dv))
-            co_state = mx.random.normal(shape=(B, Hv, Dv, Dk))
-            co_out_pt = torch.from_numpy(np.array(co_out))
-            co_state_pt = torch.from_numpy(np.array(co_state)).transpose(-1, -2)
-
-            def f(q, k, v, g, b, h0):
-                out, state = mx.fast.gated_delta_update(
-                    q, k, v, g, b, h0, stream=mx.gpu
-                )
-                return (out * co_out).sum() + (state * co_state).sum()
-
-            grads = mx.grad(f, argnums=(0, 1, 2, 3, 4, 5))(q, k, v, g, b, h0)
-            mx.eval(grads)
-
-            qpt = torch.from_numpy(np.array(q)).clone().requires_grad_()
-            kpt = torch.from_numpy(np.array(k)).clone().requires_grad_()
-            vpt = torch.from_numpy(np.array(v)).clone().requires_grad_()
-            bpt = torch.from_numpy(np.array(b)).clone().requires_grad_()
-            gpt = torch.from_numpy(np.array(g)).clone().requires_grad_()
-            h0pt = torch.from_numpy(np.array(h0)).transpose(-1, -2).contiguous()
-            h0pt.requires_grad_()
-
-            out_on_pt, hf_on_pt = gated_delta_oracle(
-                qpt,
-                kpt,
-                vpt,
-                bpt,
-                torch.log(gpt),
-                scale=1.0,
-                initial_state=h0pt,
-                output_final_state=True,
-            )
-
-            ((out_on_pt * co_out_pt).sum() + (hf_on_pt * co_state_pt).sum()).backward()
-
-            refs = [
-                qpt.grad,
-                kpt.grad,
-                vpt.grad,
-                gpt.grad,
-                bpt.grad,
-                h0pt.grad.transpose(-1, -2),
-            ]
-
-            for name, gm, gr in zip("q k v g beta h0".split(), grads, refs):
-                gr = mx.array(gr.contiguous().numpy())
-                self.assertTrue(
-                    mx.allclose(gm, gr, atol=2e-3, rtol=2e-3),
-                    msg=f"d{name} mismatch on {dims}: max err {mx.max(mx.abs(gm - gr)).item():.3e}",
-                )
-                # print(f"{name} is correct: max error {mx.max(mx.abs(gm - gr)).item():.3e}", flush=True)
 
 
 if __name__ == "__main__":

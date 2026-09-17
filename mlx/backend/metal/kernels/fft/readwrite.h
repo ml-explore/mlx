@@ -2,6 +2,7 @@
 
 #include <metal_common>
 
+#include "mlx/backend/metal/kernels/complex.h"
 #include "mlx/backend/metal/kernels/fft/radix.h"
 
 /* FFT helpers for reading and writing from/to device memory.
@@ -35,6 +36,11 @@ struct FFTStorageTraits {
 
 template <typename T>
 struct FFTStorageTraits<vec<T, 2>> {
+  using scalar_T = T;
+};
+
+template <typename T>
+struct FFTStorageTraits<complex_t<T>> {
   using scalar_T = T;
 };
 
@@ -106,17 +112,31 @@ struct ReadWriter {
     return inv ? complex_T(elem.x, -elem.y) : elem;
   }
 
+  // Handle packed complex_t storage
+  METAL_FUNC complex_T post_in(complex_t<scalar_T> elem) const thread {
+    return post_in(complex_T(elem.real, elem.imag));
+  }
+
   // Handle float case for generic RFFT alg
   METAL_FUNC complex_T post_in(scalar_T elem) const thread {
     return complex_T(elem, 0);
   }
 
   METAL_FUNC complex_T pre_out(complex_T elem) const thread {
-    return inv ? complex_T(elem.x / n, -elem.y / n) : elem;
+    return pre_out(elem, n);
   }
 
   METAL_FUNC complex_T pre_out(complex_T elem, int length) const thread {
-    return inv ? complex_T(elem.x / length, -elem.y / length) : elem;
+    if (!inv) {
+      return elem;
+    }
+    if constexpr (metal::is_same_v<scalar_T, float>) {
+      return complex_T(elem.x / length, -elem.y / length);
+    } else {
+      // Compute the reciprocal in float before narrowing to the lane.
+      scalar_T inv_length = static_cast<scalar_T>(1.0f / length);
+      return complex_T(elem.x * inv_length, -elem.y * inv_length);
+    }
   }
 
   METAL_FUNC bool out_of_bounds() const thread {
@@ -125,7 +145,7 @@ struct ReadWriter {
     return grid_index >= batch_size;
   }
 
-  METAL_FUNC void load() const thread {
+  METAL_FUNC void load(scalar_T scale) const thread {
     size_t batch_idx = size_t(elem.x * grid.y) * n;
     short tg_idx = elem.y * grid.z + elem.z;
     // Keep each thread's sequential access at 128 bits where possible.
@@ -137,7 +157,7 @@ struct ReadWriter {
       index = metal::min(index, max_full_index);
       // vectorized reads
       for (short r = 0; r < read_width; r++) {
-        buf[index + r] = post_in(in[batch_idx + index + r]);
+        buf[index + r] = post_in(in[batch_idx + index + r]) * scale;
       }
     }
     short max_index = grid.y * n - 1;
@@ -145,8 +165,12 @@ struct ReadWriter {
       short index = tg_idx + r * threads_per_tg +
           read_width * threads_per_tg * full_width_reads;
       index = metal::min(index, max_index);
-      buf[index] = post_in(in[batch_idx + index]);
+      buf[index] = post_in(in[batch_idx + index]) * scale;
     }
+  }
+
+  METAL_FUNC void load() const thread {
+    load(static_cast<scalar_T>(1));
   }
 
   METAL_FUNC void write() const thread {
@@ -198,6 +222,11 @@ struct ReadWriter {
     int m = grid.z;
     scalar_T inv_n = static_cast<scalar_T>(1.0f / n);
     complex_T inv_factor = {inv_n, -inv_n};
+    if constexpr (!metal::is_same_v<scalar_T, float>) {
+      // Reduced lanes applied the 1/n scale with the convolution, so only
+      // the conjugation remains here.
+      inv_factor = {scalar_T(1), -scalar_T(1)};
+    }
 
     threadgroup complex_T* seq_buf = buf + elem.y * n;
     for (int e = 0; e < elems_per_thread; e++) {
@@ -240,13 +269,28 @@ struct ReadWriter {
       (void)overall_n;
       bool default_inv = inv;
       inv = false;
-      load();
+      if constexpr (!metal::is_same_v<scalar_T, float>) {
+        // Reduced lanes normalize inverse transforms on input so
+        // intermediates stay in range; see write_strided.
+        if (default_inv) {
+          load(static_cast<scalar_T>(1.0f / n));
+        } else {
+          load();
+        }
+      } else {
+        load();
+      }
       inv = default_inv;
     } else {
       compute_strided_indices(stride, overall_n);
       for (int e = 0; e < elems_per_thread; e++) {
-        buf[strided_shared_idx + e] =
-            post_in(in[strided_device_idx + e * stride]);
+        complex_T input = post_in(in[strided_device_idx + e * stride]);
+        if constexpr (!metal::is_same_v<scalar_T, float>) {
+          if (step == 0 && !four_step_real && inv) {
+            input *= static_cast<scalar_T>(1.0f / n);
+          }
+        }
+        buf[strided_shared_idx + e] = input;
       }
     }
   }
@@ -255,8 +299,16 @@ struct ReadWriter {
     if constexpr (step == 1 && !four_step_real) {
       compute_strided_indices(stride, overall_n);
       for (int e = 0; e < elems_per_thread; e++) {
-        out[strided_device_idx + e * stride] =
-            pre_out(buf[strided_shared_idx + e], overall_n);
+        if constexpr (!metal::is_same_v<scalar_T, float>) {
+          // Inverse C2C passes were normalized on input, so only the
+          // conjugation of the inverse transform remains here.
+          complex_T value = buf[strided_shared_idx + e];
+          out[strided_device_idx + e * stride] =
+              inv ? complex_T(value.x, -value.y) : value;
+        } else {
+          out[strided_device_idx + e * stride] =
+              pre_out(buf[strided_shared_idx + e], overall_n);
+        }
       }
     } else {
       for (int e = 0; e < elems_per_thread; e++) {
