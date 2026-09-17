@@ -3,9 +3,7 @@
 #include <metal_stdlib>
 #include "mlx/backend/metal/kernels/utils.h"
 
-
 constant bool save_state [[function_constant(200)]];
-
 
 #define AT(TILE, IDX) TILE.thread_elements()[IDX]
 #define SUB(TILE0, TILE1, TILE2)                \
@@ -281,8 +279,6 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
     device InT* y [[buffer(6)]], // [B, T, Hv, Dv]
     device float* state_out [[buffer(7)]], // [B, Hv, Dv, Dk]
     constant int& T [[buffer(8)]],
-    // [B*Hv, n_ckpt, Dv, Dk]. Only bound when save_state is set, so the
-    // inference path pays nothing for it.
     device float* state_cache [[buffer(9), function_constant(save_state)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],

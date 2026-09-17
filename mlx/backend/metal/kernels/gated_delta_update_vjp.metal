@@ -4,17 +4,17 @@
 
 using namespace metal;
 
-#define instantiate_gdn_vjp_seq(in_type, dk, dv, hk, hv, ckpt)               \
-  instantiate_kernel(                                             \
-      "seq_gated_delta_" #in_type "_" #dk "_" #dv "_" #hk "_" #hv  \
-      "_" #ckpt,                                                  \
-      gated_delta_seq,                                            \
-      in_type, dk, dv, hk, hv, ckpt)                              \
-  instantiate_kernel(                                             \
-      "seq_gated_delta_vjp_" #in_type "_" #dk "_" #dv "_" #hk "_"  \
-      #hv "_" #ckpt,                                              \
-      gated_delta_vjp_seq,                                        \
-      in_type, dk, dv, hk, hv, ckpt)
+#define instantiate_gdn_vjp_seq(in_type, dk, dv, hk, hv, ckpt)         \
+  instantiate_kernel(                                                  \
+      "seq_gated_delta_vjp_" #in_type "_" #dk "_" #dv "_" #hk "_" #hv  \
+      "_" #ckpt,                                                       \
+      gated_delta_vjp_seq,                                             \
+      in_type,                                                         \
+      dk,                                                              \
+      dv,                                                              \
+      hk,                                                              \
+      hv,                                                              \
+      ckpt)
 
 #define instantiate_gated_delta_vjp_dims(in_type, dk, dv, hk, hv) \
   instantiate_gdn_vjp_seq(in_type, dk, dv, hk, hv, 1) \
@@ -32,3 +32,4 @@ using namespace metal;
 
 instantiate_gated_delta_vjp(float);
 instantiate_gated_delta_vjp(bfloat16_t);
+instantiate_gated_delta_vjp(float16_t);

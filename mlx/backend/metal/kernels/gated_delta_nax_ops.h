@@ -7,7 +7,6 @@
 
 #include "mlx/backend/metal/kernels/steel/gemm/nax.h"
 
-
 using namespace metal;
 using namespace mpp;
 using namespace mpp::tensor_ops;
@@ -62,7 +61,6 @@ METAL_FUNC T operator+(const thread T& a, float addend) {
   return out;
 }
 
-
 #define TRIL_NAX(TILE0, TILE1)                                                 \
   {                                                                            \
     STEEL_PRAGMA_UNROLL                                                        \
@@ -114,7 +112,6 @@ METAL_FUNC _M16x16 reduce(const thread T& a) {
   return out;
 }
 
-
 template <typename T>
 METAL_FUNC T scale_rows(const thread T& tile, const thread float* s) {
   typename T::frag_type sv;
@@ -123,7 +120,7 @@ METAL_FUNC T scale_rows(const thread T& tile, const thread float* s) {
     sv[i] = s[i >> 2];
   }
 
-T out;
+  T out;
   STEEL_PRAGMA_UNROLL
   for (short f = 0; f < T::kNumFrags; f++) {
     out.frag_at(0, f) = tile.frag_at(0, f) * sv;
@@ -151,7 +148,6 @@ METAL_FUNC void row_sum(thread float* dst, const thread T& tile) {
       AT_NAX(TILE0, _i) *= (DEC2)[_w >> 2];                         \
     }                                                               \
   }
-
 
 #define SUB_NAX(TILE0, TILE1, TILE2)                                \
   {                                                                 \
@@ -402,9 +398,9 @@ METAL_FUNC static constexpr void mman(
 
 // Operand and accumulator types are taken from the tiles rather than pinned to
 // float. Pinning them meant a bf16 tile was widened to 32 bits in registers and
-// multiplied on the fp32 pipe, which doubled the operand register cost and threw
-// away the native bf16 throughput. elem_type is NAXTile's element type, so
-// declaring the tile as NAXTile<InT, ...> is now enough to select the right
+// multiplied on the fp32 pipe, which doubled the operand register cost and
+// threw away the native bf16 throughput. elem_type is NAXTile's element type,
+// so declaring the tile as NAXTile<InT, ...> is now enough to select the right
 // instantiation.
 #define MM16x16x16(C, CO, A, TA, AO, B, TB, BO)              \
   mlx::steel::mma<                                           \
@@ -482,8 +478,6 @@ METAL_FUNC static constexpr void mman(
       B.frag_at(0, (BO) + 1),                                           \
       metal::bool_constant<TB>{});
 
-
-
 // Row sum of an elementwise product, reduced over the fragment's column axis.
 // DST[0] is the fm row group, DST[1] the fm + kElemRowsJump group.
 #define ROWSUM_NAX(DST, TILE0, TILE1)                               \
@@ -538,7 +532,7 @@ METAL_FUNC static constexpr void mman(
     }                                                               \
   }
 
-#define NSCALE_ROW_NAX(TILE0, S)                                            \
+#define NSCALE_ROW_NAX(TILE0, S)                                           \
   {                                                                        \
     STEEL_PRAGMA_UNROLL                                                    \
     for (short _i = 0; _i < decltype(TILE0)::kElemsPerTile; _i++) {        \
@@ -548,7 +542,7 @@ METAL_FUNC static constexpr void mman(
     }                                                                      \
   }
 
-  #define SCALE_ROW_P(TILE0, ROW2)                                    \
+#define SCALE_ROW_P(TILE0, ROW2)                                    \
   {                                                                 \
     STEEL_PRAGMA_UNROLL                                             \
     for (short _i = 0; _i < decltype(TILE0)::kElemsPerTile; _i++) { \
@@ -576,7 +570,6 @@ METAL_FUNC static constexpr void mman(
       AT_NAX(TILE0, _i) *= (DEC2)[_w >> 2];                         \
     }                                                               \
   }
-
 
 // sdpa stuff
 
@@ -619,12 +612,11 @@ METAL_FUNC static constexpr void mman(
 // Narrow a float tile into the operand dtype. The conversion has to be
 // explicit: elems() exposes the raw element type and MSL will not implicitly
 // convert float to bfloat.
-#define CAST_NAX(DST, SRC)                                            \
-  {                                                                   \
-    using _dst_elem_t = typename decltype(DST)::elem_type;            \
-    STEEL_PRAGMA_UNROLL                                               \
-    for (short _i = 0; _i < decltype(SRC)::kElemsPerTile; _i++) {      \
-      AT_NAX(DST, _i) = static_cast<_dst_elem_t>(AT_NAX(SRC, _i));    \
-    }                                                                 \
+#define CAST_NAX(DST, SRC)                                         \
+  {                                                                \
+    using _dst_elem_t = typename decltype(DST)::elem_type;         \
+    STEEL_PRAGMA_UNROLL                                            \
+    for (short _i = 0; _i < decltype(SRC)::kElemsPerTile; _i++) {  \
+      AT_NAX(DST, _i) = static_cast<_dst_elem_t>(AT_NAX(SRC, _i)); \
+    }                                                              \
   }
-

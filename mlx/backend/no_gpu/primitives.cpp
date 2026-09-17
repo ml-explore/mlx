@@ -78,7 +78,6 @@ bool fast::ScaledDotProductAttentionVJP::use_fallback(
   return true;
 }
 
-
 bool fast::GatedDeltaUpdate::use_fallback(
     const int Hk,
     const int Dk,

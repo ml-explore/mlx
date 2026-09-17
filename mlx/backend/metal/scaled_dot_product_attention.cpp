@@ -11,13 +11,13 @@
 #include "mlx/fast_primitives.h"
 #include "mlx/utils.h"
 
-#define TRACE(fmt, ...)              \
-  fprintf(                           \
-      stderr,                        \
-      "[%s:%d %s] " fmt "\n",        \
-      __FILE__,                      \
-      __LINE__,                      \
-      __func__,                      \
+#define TRACE(fmt, ...)       \
+  fprintf(                    \
+      stderr,                 \
+      "[%s:%d %s] " fmt "\n", \
+      __FILE__,               \
+      __LINE__,               \
+      __func__,               \
       ##__VA_ARGS__)
 
 namespace mlx::core::fast {
@@ -139,7 +139,6 @@ void sdpa_full_self_attention_nax(
       "_save_lse_",
       (save_lse ? 't' : 'n'));
 
-
   auto& compute_encoder = metal::get_command_encoder(s);
 
   auto kernel = get_steel_attention_nax_kernel(
@@ -213,7 +212,6 @@ void sdpa_full_self_attention_nax(
   }
 
   // TRACE("save_lse=%d", save_lse);
-
 
   MTL::Size grid_dims = MTL::Size(NQ, H, B);
   MTL::Size group_dims = MTL::Size(32, wm, wn);
@@ -338,7 +336,6 @@ void sdpa_full_self_attention_metal(
     enc.add_temporary(zero);
     return;
   }
-
 
   using namespace mlx::steel;
 
@@ -883,7 +880,6 @@ bool ScaledDotProductAttention::use_fallback(
   int kL = k.shape(2);
   // TRACE("B=%d H=%d D=%d gqa=%d qL=%d kL=%d", B, H, D, gqa_factor, qL, kL);
 
-
   auto [has_fused, reason] = has_fused_kernel(
       q, k, v, has_mask, has_arr_mask, do_causal, output_logsumexp, s);
   if (force_fused) {
@@ -1096,7 +1092,7 @@ bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
       e != nullptr && std::stoi(e) != 0) {
     return false;
   }
-return true;
+  return true;
 }
 
 inline array
@@ -1113,7 +1109,6 @@ ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
 void ScaledDotProductAttentionVJP::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  
   auto& s = stream();
   auto& d = metal::device(s.device);
 
@@ -1127,8 +1122,8 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   auto k = ensure_row_contiguous(inputs[1], d, s);
   auto v = ensure_row_contiguous(inputs[2], d, s);
   const int n_in = static_cast<int>(inputs.size());
-  auto o     = ensure_row_contiguous(inputs[n_in - 3], d, s);
-  auto lse   = ensure_row_contiguous(inputs[n_in - 2], d, s);
+  auto o = ensure_row_contiguous(inputs[n_in - 3], d, s);
+  auto lse = ensure_row_contiguous(inputs[n_in - 2], d, s);
   auto cot_o = ensure_row_contiguous(inputs[n_in - 1], d, s);
 
   const int B = q.shape(0);
@@ -1192,13 +1187,20 @@ void ScaledDotProductAttentionVJP::eval_gpu(
       dq_name,
       "sdpa_vjp_nax_dq_",
       get_type_string(q.dtype()),
-      "_", std::to_string(D),
-      "_", std::to_string(Dv),
-      "_", std::to_string(H),
-      "_", std::to_string(Hk),
-      "_", std::to_string(BQ),
-      "_", std::to_string(BK_dq),
-      "_", std::to_string(WM),
+      "_",
+      std::to_string(D),
+      "_",
+      std::to_string(Dv),
+      "_",
+      std::to_string(H),
+      "_",
+      std::to_string(Hk),
+      "_",
+      std::to_string(BQ),
+      "_",
+      std::to_string(BK_dq),
+      "_",
+      std::to_string(WM),
       causal_tag);
 
   auto dq_kernel = get_sdpa_vjp_kernel(d, dq_name, dq_name, func_consts);
@@ -1214,20 +1216,28 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   compute_encoder.set_bytes(kL, 7);
   compute_encoder.set_bytes(scale_, 8);
   compute_encoder.set_output_array(dq, 9);
-  compute_encoder.dispatch_threads(MTL::Size(tg_threads, n_qblocks, B * H), MTL::Size(tg_threads, 1, 1));
+  compute_encoder.dispatch_threads(
+      MTL::Size(tg_threads, n_qblocks, B * H), MTL::Size(tg_threads, 1, 1));
 
   std::string dkv_name;
   concatenate(
       dkv_name,
       "sdpa_vjp_nax_dkv_",
       get_type_string(q.dtype()),
-      "_", std::to_string(D),
-      "_", std::to_string(Dv),
-      "_", std::to_string(H),
-      "_", std::to_string(Hk),
-      "_", std::to_string(BQ),
-      "_", std::to_string(BK_dkv),
-      "_", std::to_string(WM),
+      "_",
+      std::to_string(D),
+      "_",
+      std::to_string(Dv),
+      "_",
+      std::to_string(H),
+      "_",
+      std::to_string(Hk),
+      "_",
+      std::to_string(BQ),
+      "_",
+      std::to_string(BK_dkv),
+      "_",
+      std::to_string(WM),
       causal_tag);
 
   auto dkv_kernel = get_sdpa_vjp_kernel(d, dkv_name, dkv_name, func_consts);
@@ -1244,8 +1254,8 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   compute_encoder.set_bytes(scale_, 8);
   compute_encoder.set_output_array(dk, 9);
   compute_encoder.set_output_array(dv, 10);
-  compute_encoder.dispatch_threads(MTL::Size(tg_threads, n_kblocks, B * Hk), MTL::Size(tg_threads, 1, 1));
-
+  compute_encoder.dispatch_threads(
+      MTL::Size(tg_threads, n_kblocks, B * Hk), MTL::Size(tg_threads, 1, 1));
 }
 
 } // namespace mlx::core::fast

@@ -122,7 +122,8 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C, int Ckpt>
 
     float g_val = (thread_index_in_simdgroup < (uint)valid_rows)
         ? metal::fast::log(
-              metal::max(float(g_[thread_index_in_simdgroup * Hv + hv_idx]), 1e-6))
+              metal::max(
+                  float(g_[thread_index_in_simdgroup * Hv + hv_idx]), 1e-6))
         : 0.0f;
 
     auto gamma_val = simd_prefix_inclusive_sum(g_val);
@@ -175,7 +176,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C, int Ckpt>
     SCALE_BETA_NAX(V_tile, beta_fm);
     MM16x16x16(U_tile, 0, Tinv_tile, false, 0, V_tile, false, 0)
 
-    WS_tile.clear();
+        WS_tile.clear();
     STEEL_PRAGMA_UNROLL
     for (short kk = 0; kk < Dk / 16; kk += 2) {
       MMA16x16x32(WS_tile, 0, W_tile, false, kk, S_tile, true, kk)

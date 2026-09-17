@@ -5,7 +5,6 @@
 #include <metal_atomic>
 #include "mlx/backend/metal/kernels/atomic.h"
 
-
 using namespace metal;
 using namespace mpp;
 using namespace mpp::tensor_ops;
@@ -305,8 +304,14 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C, int Ckpt>
 
       // dq reduces over Dv, which is entirely inside this threadgroup.
       reduce_tile_tg<kNSG, kGQA>(
-          dq_acc, red_scratch, dq_, Hk * Dk, kk, valid_rows,
-          sg_id, simd_lane_id);
+          dq_acc,
+          red_scratch,
+          dq_,
+          Hk * Dk,
+          kk,
+          valid_rows,
+          sg_id,
+          simd_lane_id);
     }
 
     // dv = B(Tu.T @ ddelta).  Indexed by dv_idx, so no reduction.
@@ -398,8 +403,14 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C, int Ckpt>
       }
 
       reduce_tile_tg<kNSG, kGQA>(
-          dk_acc, red_scratch, dk_, Hk * Dk, kk, valid_rows,
-          sg_id, simd_lane_id);
+          dk_acc,
+          red_scratch,
+          dk_,
+          Hk * Dk,
+          kk,
+          valid_rows,
+          sg_id,
+          simd_lane_id);
     }
 
     // dbeta = rowsum(V * dV_b) + rowsum(K * dK_b) + rowsum(tril_(dA) * KKt)
@@ -510,7 +521,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C, int Ckpt>
 
   // Walk segments in reverse. Each is replayed forward from its checkpoint to
   // recover the entry states, then walked backwards.
-    // Backward over one segment: replay its entry states from the checkpoint,
+  // Backward over one segment: replay its entry states from the checkpoint,
   // then walk it in reverse. HasTail is a compile-time tag so valid_rows is the
   // constant C on every chunk of an interior segment, which folds away the
   // row guards in the dq/dk stores and the load_rows switch in the replay.
@@ -548,8 +559,9 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C, int Ckpt>
         auto cd_c = cd_base + c * C * Dv;
 
         float gv = (thread_index_in_simdgroup < (uint)valid_rows)
-            ? metal::fast::log(metal::max(
-                  g_c[thread_index_in_simdgroup * Hv + hv_idx], 1e-6))
+            ? metal::fast::log(
+                  metal::max(
+                      g_c[thread_index_in_simdgroup * Hv + hv_idx], 1e-6))
             : 0.0f;
         auto gs = simd_prefix_inclusive_sum(gv);
         if (thread_index_in_simdgroup < C) {
@@ -624,10 +636,8 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C, int Ckpt>
     process_segment(seg, metal::false_type{});
   }
 
-
   dS_tile.store(o_dh, Dk);
 }
-
 
 template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
 [[kernel]] void gated_delta_vjp_fused_nax1(
@@ -695,7 +705,6 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
   auto i_chunk_delta =
       chunk_delta + n * n_chunks * C * Dv + dv_idx + (n_chunks - 1) * C * Dv;
 
-
   auto i_cot_h = cot_h + (n * Dv + dv_idx) * Dk;
   auto o_dh = dh + (n * Dv + dv_idx) * Dk;
 
@@ -744,14 +753,12 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
   _M16x16 dA_tile, G_tile;
   _M16x16 tri_decay;
 
-
   _M16x16 I_tile;
   STEEL_PRAGMA_UNROLL
   for (short _i = 0; _i < decltype(I_tile)::kElemsPerFrag; _i++) {
     const short2 _c = mlx::steel::BaseNAXFrag::get_coord(_i); /* {fn, fm} */
     AT_NAX(I_tile, _i) = (_c.x == _c.y) ? 1.0f : 0.0f;
   }
-
 
   _M16x16 Ones_tile;
   STEEL_PRAGMA_UNROLL
@@ -815,12 +822,11 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
           (_c.x > _c.y) ? 0.f : metal::fast::exp(gamma[_c.y] - gamma[_c.x]);
     }
 
-
     KKt_tile.load(i_chunk_mats, 16);
     TWinv_tile.load(i_chunk_mats + 256, 16);
     QKt_raw.load(i_chunk_mats + 512, 16);
 
-    QKt_tile   = QKt_raw    * tri_decay;
+    QKt_tile = QKt_raw * tri_decay;
     TUinv_tile = TWinv_tile * tri_decay;
 
     delta_tile.load(i_chunk_delta, Dv);
@@ -869,8 +875,14 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
 
       // dq reduces over Dv, which is now entirely inside this threadgroup.
       reduce_tile_tg<kNSG, kGQA>(
-          dq_acc, red_scratch, dq_, Hk * Dk, kk, valid_rows,
-          sg_id, simd_lane_id);
+          dq_acc,
+          red_scratch,
+          dq_,
+          Hk * Dk,
+          kk,
+          valid_rows,
+          sg_id,
+          simd_lane_id);
     }
 
     // dv = B(Tu.T @ ddelta).  Indexed by dv_idx, so no reduction.
@@ -926,11 +938,10 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
       MM16x32x16(dW_raw, 0, ddelta_tile, false, 0, S_tile, false, kk / 16);
       dW_raw = scale_rows(-dW_raw, row_exp);
 
-
       {
         _M16x32 dKb_tile;
         MM16x32x16(dKb_tile, 0, TWinv_tile, true, 0, dW_raw, false, 0);
-        KdKb = KdKb + dKb_tile * K_tile;          // KdKb_tmp folded away
+        KdKb = KdKb + dKb_tile * K_tile; // KdKb_tmp folded away
         dk_acc = dk_acc + scale_rows(dKb_tile, beta_fm);
       }
 
@@ -963,12 +974,18 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
       }
 
       reduce_tile_tg<kNSG, kGQA>(
-          dk_acc, red_scratch, dk_, Hk * Dk, kk, valid_rows,
-          sg_id, simd_lane_id);
+          dk_acc,
+          red_scratch,
+          dk_,
+          Hk * Dk,
+          kk,
+          valid_rows,
+          sg_id,
+          simd_lane_id);
     }
 
     // dbeta = rowsum(V * dV_b) + rowsum(K * dK_b) + rowsum(tril_(dA) * KKt)
-    
+
     load_seq(V_tile, v_ + dv_idx, Dv * Hv);
 
     _M16x16 AKKt = dA_tile * KKt_tile;
@@ -976,7 +993,6 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
     _M16x16 VdVb = fmadd(V_tile, TUddelta, AKKt);
     row_sum(dbeta_acc, VdVb);
     row_sum(dbeta_acc, KdKb);
-
 
     {
       threadgroup float* db_st = db_stage + sg_id * C;
@@ -1016,7 +1032,6 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
       _d0 += simd_shuffle_xor(_d0, ushort(8));
       _d1 += simd_shuffle_xor(_d1, ushort(1));
       _d1 += simd_shuffle_xor(_d1, ushort(8));
-
 
       const short _r0 = fm;
       const short _r1 = fm + mlx::steel::BaseNAXFrag::kElemRowsJump;
@@ -1217,7 +1232,6 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
   auto i_chunk_delta =
       chunk_delta + n * n_chunks * C * Dv + dv_idx + (n_chunks - 1) * C * Dv;
 
-
   auto i_cot_h = cot_h + (n * Dv + dv_idx) * Dk;
   auto o_dh = dh + (n * Dv + dv_idx) * Dk;
 
@@ -1266,7 +1280,6 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
   _M16x16 dA_tile, G_tile;
   _M16x16 tri_decay;
 
-
   _M16x16 I_tile;
   STEEL_PRAGMA_UNROLL
   for (short _i = 0; _i < decltype(I_tile)::kElemsPerFrag; _i++) {
@@ -1287,7 +1300,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
     AT_NAX(Ones_tile, _i) = 1.0f;
   }
 
-    auto process_chunk = [&](const short valid_rows,
+  auto process_chunk = [&](const short valid_rows,
                            auto bounded_tag) __attribute__((always_inline)) {
     constexpr bool B = decltype(bounded_tag)::value;
 
@@ -1336,13 +1349,12 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
           (_c.x > _c.y) ? 0.f : metal::fast::exp(gamma[_c.y] - gamma[_c.x]);
     }
 
-
     KKt_tile.load(i_chunk_mats, 16);
     TWinv_tile.load(i_chunk_mats + 256, 16);
     QKt_raw.load(i_chunk_mats + 512, 16);
 
     QKt_tile = QKt_raw;
-    MUL_NAX(QKt_tile, QKt_tile, tri_decay); 
+    MUL_NAX(QKt_tile, QKt_tile, tri_decay);
 
     TUinv_tile = TWinv_tile;
     MUL_NAX(TUinv_tile, TUinv_tile, tri_decay);
@@ -1412,7 +1424,6 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
               // Dv reduction done in threadgroup memory: single writer.
               mlx_atomic_store_explicit(dq_, AT_NAX(dq_acc, _i), idx);
             }
-
           }
         }
       }
@@ -1508,8 +1519,10 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
       // gamma stuff: gamma_C * sum(S * dS)
       STEEL_PRAGMA_UNROLL
       for (short _i = 0; _i < mlx::steel::BaseNAXFrag::kElemsPerFrag; _i++) {
-        dgam_last += gamma_last_exp * S_tile.frag_at(0, kk / 16)[_i] * dS_tile.frag_at(0, kk / 16)[_i];
-        dgam_last += gamma_last_exp * S_tile.frag_at(0, kk / 16 + 1)[_i] * dS_tile.frag_at(0, kk / 16 + 1)[_i];
+        dgam_last += gamma_last_exp * S_tile.frag_at(0, kk / 16)[_i] *
+            dS_tile.frag_at(0, kk / 16)[_i];
+        dgam_last += gamma_last_exp * S_tile.frag_at(0, kk / 16 + 1)[_i] *
+            dS_tile.frag_at(0, kk / 16 + 1)[_i];
       }
 
       // gamma stuff
@@ -1551,7 +1564,6 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
     ADD_NAX(VdVb, VdVb, AKKt);
     ROWSUM1_NAX(dbeta_acc, VdVb);
     ROWSUM1_NAX(dbeta_acc, KdKb);
-
 
     {
       threadgroup float* db_st = db_stage + sg_id * C;
@@ -1692,7 +1704,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
 template <typename InT, int C>
 [[kernel]] void gated_delta_dgamma_to_dg(
     const device InT* g [[buffer(0)]],
-    device float* dg [[buffer(1)]],   // in: dL/dgamma, out: dL/dg
+    device float* dg [[buffer(1)]], // in: dL/dgamma, out: dL/dg
     constant int& T [[buffer(2)]],
     constant int& Hv [[buffer(3)]],
     constant int& n_total [[buffer(4)]], // B * Hv

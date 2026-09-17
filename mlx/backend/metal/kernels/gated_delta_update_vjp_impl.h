@@ -1,8 +1,8 @@
 // Copyright © 2024 Apple Inc.
 #pragma once
 
-#include <metal_stdlib>
 #include <metal_atomic>
+#include <metal_stdlib>
 
 #include "mlx/backend/metal/kernels/atomic.h"
 #include "mlx/backend/metal/kernels/utils.h"

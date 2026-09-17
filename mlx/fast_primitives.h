@@ -418,7 +418,6 @@ inline int gated_delta_n_ckpt(int n_chunks, int ckpt) {
   return (n_chunks + ckpt - 1) / ckpt;
 }
 
-
 class GatedDeltaUpdate : public Custom {
  public:
   GatedDeltaUpdate(
@@ -466,7 +465,6 @@ class GatedDeltaUpdate : public Custom {
  private:
   bool is_training_;
 };
-
 
 class GatedDeltaUpdateVJP : public Custom {
  public:
