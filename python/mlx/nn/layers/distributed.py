@@ -37,20 +37,137 @@ def _split(weight, segments, axis):
     return mx.split(weight, indices, axis=axis)
 
 
+def _rank_sizes(dim, N, block=1):
+    """Split ``dim`` as evenly as possible across ``N`` ranks in multiples of
+    ``block``, giving the remainder to the first ranks."""
+    base, extra = divmod(dim // block, N)
+    return [(base + (r < extra)) * block for r in range(N)]
+
+
+def _quantized_output_sizes(dim, N, group_size):
+    """Split the output rows of a quantized layer.
+
+    Rows can be split anywhere, but splitting at multiples of ``group_size``
+    when possible matches the default split of a paired sharded-to-all layer.
+    """
+    if dim % group_size == 0 and dim // group_size >= N:
+        return _rank_sizes(dim, N, group_size)
+    return _rank_sizes(dim, N)
+
+
+def _resolve_sizes(dim, N, sizes, name, block=1):
+    """Validate the size of each rank's shard of ``dim``, splitting it evenly
+    in multiples of ``block`` if ``sizes`` is not given."""
+    if sizes is None:
+        sizes = _rank_sizes(dim, N, block)
+    if len(sizes) != N or sum(sizes) != dim:
+        raise ValueError(f"Expected {N} sizes that sum to {dim} but got {sizes}.")
+    if min(sizes) <= 0:
+        raise ValueError(f"Cannot shard the {name} of size {dim} across {N} devices.")
+    if any(s % block for s in sizes):
+        raise ValueError(f"The sizes {sizes} must be multiples of {block}.")
+    return list(sizes)
+
+
+def _layer_sizes(dim, N, segments, sizes, default, name):
+    """Return the per-rank sizes of a layer and the sizes to shard its
+    parameters with. Layers with more than one segment are split evenly."""
+    if segments == 1:
+        sizes = default if sizes is None else sizes
+        return sizes, sizes
+    if sizes is not None:
+        raise ValueError("Explicit sizes are only supported with segments=1.")
+    if dim % N != 0:
+        raise ValueError(f"Cannot shard the {name} of size {dim} across {N} devices.")
+    return [dim // N] * N, None
+
+
+def _split_sizes(weight, sizes, axis):
+    """Split ``weight`` along ``axis`` into parts proportional to ``sizes``.
+
+    ``sizes`` may sum to more than the length of ``axis``, as is the case for
+    packed quantized weights and their scales, but every boundary must land on
+    an integer index.
+    """
+    dim = weight.shape[axis]
+    total = sum(sizes)
+    indices = []
+    boundary = 0
+    for s in sizes[:-1]:
+        boundary += s
+        index, remainder = divmod(boundary * dim, total)
+        if remainder != 0:
+            raise ValueError(
+                f"Cannot split an axis of size {dim} according to sizes {sizes}."
+            )
+        indices.append(index)
+    return mx.split(weight, indices, axis=axis)
+
+
+def _quantized_sizes(parameters, sharding_predicate, N, quantized_paths):
+    """Return the per-rank sizes of each quantized module's sharded axis.
+
+    A quantized weight is packed along its last axis and its scales and biases
+    are grouped along the same axis, so all three are split from one list of
+    sizes in unpacked elements to keep them at matching boundaries. The sizes
+    are multiples of ``group_size`` so that a paired all-to-sharded and
+    sharded-to-all layer split their common dimension the same way.
+    """
+    rank_sizes = {}
+    for path, weight in tree_flatten(parameters):
+        module, _, name = path.rpartition(".")
+        if name != "weight" or module not in quantized_paths:
+            continue
+        shard_spec = sharding_predicate(path, weight)
+        if shard_spec is None:
+            continue
+        if isinstance(shard_spec, tuple):
+            axis, segments = shard_spec
+        else:
+            axis, segments = shard_spec, 1
+        if segments != 1:
+            continue
+        group_size, bits = quantized_paths[module]
+        if axis % weight.ndim == weight.ndim - 1:
+            dim = (weight.shape[axis] * 32) // bits
+            sizes = _rank_sizes(dim, N, group_size)
+        else:
+            dim = weight.shape[axis]
+            sizes = _quantized_output_sizes(dim, N, group_size)
+        if min(sizes) <= 0:
+            raise ValueError(
+                f"Cannot shard the quantized {module or 'module'} of size "
+                f"{dim} across {N} devices."
+            )
+        rank_sizes[module] = sizes
+    return rank_sizes
+
+
 def _shard(
     parameters: dict,
     sharding_predicate: Callable,
     group: Optional[mx.distributed.Group] = None,
+    sizes: Optional[list] = None,
+    quantized_paths: Optional[dict] = None,
 ):
     """Returns a new parameter tree with the weights sharded according to the
     sharding_predicate.
 
     The sharding predicate should return the sharding axis and optionally also
-    the segments that comprise the weight.
+    the segments that comprise the weight. If ``sizes`` is provided, each rank
+    gets the corresponding proportion of the sharded axis instead of an equal
+    part. ``sizes`` requires a single segment. ``quantized_paths`` maps the
+    path of a quantized module to its ``(group_size, bits)`` so that its
+    packed weight and grouped metadata stay at matching boundaries.
     """
     group = group or mx.distributed.init()
     N = group.size()
     r = group.rank()
+    quantized_sizes = (
+        _quantized_sizes(parameters, sharding_predicate, N, quantized_paths)
+        if sizes is None and quantized_paths
+        else {}
+    )
 
     def _shard_fn(path, weight):
         if not isinstance(weight, mx.array):
@@ -70,6 +187,21 @@ def _shard(
             raise ValueError(
                 "The sharding function should return int or tuple[int, list]"
             )
+
+        rank_sizes = sizes
+        if rank_sizes is None:
+            rank_sizes = quantized_sizes.get(path.rpartition(".")[0])
+        if rank_sizes is None and segments == 1:
+            # Split as evenly as possible rather than requiring the axis to
+            # divide by the number of devices.
+            rank_sizes = _rank_sizes(weight.shape[axis], N)
+            if min(rank_sizes) <= 0:
+                raise ValueError(
+                    f"Cannot shard {path!r} of size {weight.shape[axis]} "
+                    f"across {N} devices."
+                )
+        if rank_sizes is not None:
+            return mx.contiguous(_split_sizes(weight, rank_sizes, axis)[r])
 
         return mx.contiguous(
             mx.concatenate(
@@ -152,7 +284,18 @@ def shard_inplace(
             if sharding == "all-to-sharded"
             else _sharded_to_all(segments)
         )
-    module.update(_shard(module.parameters(), sharding, group))
+    # Detect quantized modules, including third party ones, so that their
+    # packed weights and grouped metadata are split at the same boundaries.
+    quantized_paths = {
+        path: (child.group_size, child.bits)
+        for path, child in module.named_modules()
+        if isinstance(getattr(child, "group_size", None), int)
+        and isinstance(getattr(child, "bits", None), int)
+        and "scales" in child
+    }
+    module.update(
+        _shard(module.parameters(), sharding, group, quantized_paths=quantized_paths)
+    )
 
 
 def shard_linear(
@@ -161,6 +304,7 @@ def shard_linear(
     *,
     segments: Union[int, list] = 1,
     group: Optional[mx.distributed.Group] = None,
+    sizes: Optional[list] = None,
 ):
     """Create a new linear layer that has its parameters sharded and also
     performs distributed communication either in the forward or backward
@@ -177,6 +321,10 @@ def shard_linear(
         segments (int or list): The segments to use. Default: ``1``.
         group (mlx.core.distributed.Group): The distributed group to shard
             across. If not set, the global group will be used. Default: ``None``.
+        sizes (list, optional): The size of each rank's shard of the sharded
+            dimension. If not set, the dimension is split as evenly as
+            possible with the remainder going to the first ranks. Uneven
+            splits require ``segments=1``. Default: ``None``.
     """
     _check_sharding(sharding)
     fns = {
@@ -186,7 +334,7 @@ def shard_linear(
         ("sharded-to-all", False): QuantizedShardedToAllLinear.from_quantized_linear,
     }
     return fns[sharding, isinstance(module, Linear)](
-        module, segments=segments, group=group
+        module, segments=segments, group=group, sizes=sizes
     )
 
 
@@ -204,6 +352,9 @@ class AllToShardedLinear(Module):
         group (mx.distributed.Group, optional): The sharding will happen across
             this group. If not set then the global group is used. Default is
             ``None``.
+        sizes (list, optional): The size of each rank's shard of the output
+            features. If not set, they are split as evenly as possible.
+            Default: ``None``.
     """
 
     def __init__(
@@ -212,6 +363,7 @@ class AllToShardedLinear(Module):
         output_dims: int,
         bias: bool = True,
         group: Optional[mx.distributed.Group] = None,
+        sizes: Optional[list] = None,
     ):
         super().__init__()
 
@@ -220,27 +372,25 @@ class AllToShardedLinear(Module):
         self.group = group or mx.distributed.init()
         N = self.group.size()
 
-        if (output_dims % N) != 0:
-            raise ValueError(
-                f"Cannot shard the output of size {output_dims} across {N} devices."
-            )
+        sizes = _resolve_sizes(output_dims, N, sizes, "output")
+        local_output_dims = sizes[self.group.rank()]
+        self._output_dims = output_dims
 
         self.weight = mx.random.uniform(
             low=-scale,
             high=scale,
-            shape=(output_dims // N, input_dims),
+            shape=(local_output_dims, input_dims),
         )
         if bias:
             self.bias = mx.random.uniform(
                 low=-scale,
                 high=scale,
-                shape=(output_dims // N,),
+                shape=(local_output_dims,),
             )
 
     def _extra_repr(self) -> str:
-        out_dims, in_dims = self.weight.shape
-        N = self.group.size()
-        out_dims *= N
+        in_dims = self.weight.shape[1]
+        out_dims = self._output_dims
         return f"input_dims={in_dims}, output_dims={out_dims}, bias={'bias' in self}"
 
     def __call__(self, x: mx.array) -> mx.array:
@@ -261,12 +411,21 @@ class AllToShardedLinear(Module):
         *,
         segments: Union[int, list] = 1,
         group: Optional[mx.distributed.Group] = None,
+        sizes: Optional[list] = None,
     ):
         group = group or mx.distributed.init()
+        N = group.size()
         output_dims, input_dims = linear_layer.weight.shape
+        sizes, shard_sizes = _layer_sizes(
+            output_dims, N, segments, sizes, _rank_sizes(output_dims, N), "output"
+        )
 
-        sl = cls(input_dims, output_dims, hasattr(linear_layer, "bias"), group)
-        sl.update(_shard(linear_layer.parameters(), _all_to_sharded(segments), group))
+        sl = cls(input_dims, output_dims, hasattr(linear_layer, "bias"), group, sizes)
+        sl.update(
+            _shard(
+                linear_layer.parameters(), _all_to_sharded(segments), group, shard_sizes
+            )
+        )
 
         return sl
 
@@ -288,6 +447,9 @@ class ShardedToAllLinear(Module):
         group (mx.distributed.Group, optional): The sharding will happen across
             this group. If not set then the global group is used. Default is
             ``None``.
+        sizes (list, optional): The size of each rank's shard of the input
+            features. If not set, they are split as evenly as possible.
+            Default: ``None``.
     """
 
     def __init__(
@@ -296,6 +458,7 @@ class ShardedToAllLinear(Module):
         output_dims: int,
         bias: bool = True,
         group: Optional[mx.distributed.Group] = None,
+        sizes: Optional[list] = None,
     ):
         super().__init__()
 
@@ -304,15 +467,14 @@ class ShardedToAllLinear(Module):
         self.group = group or mx.distributed.init()
         N = self.group.size()
 
-        if (input_dims % N) != 0:
-            raise ValueError(
-                f"The input of size {input_dims} cannot be sharded across {N} devices."
-            )
+        sizes = _resolve_sizes(input_dims, N, sizes, "input")
+        local_input_dims = sizes[self.group.rank()]
+        self._input_dims = input_dims
 
         self.weight = mx.random.uniform(
             low=-scale,
             high=scale,
-            shape=(output_dims, input_dims // N),
+            shape=(output_dims, local_input_dims),
         )
         if bias:
             self.bias = mx.random.uniform(
@@ -322,9 +484,8 @@ class ShardedToAllLinear(Module):
             )
 
     def _extra_repr(self) -> str:
-        N = self.group.size()
-        out_dims, in_dims = self.weight.shape
-        in_dims *= N
+        out_dims = self.weight.shape[0]
+        in_dims = self._input_dims
         return f"input_dims={in_dims}, output_dims={out_dims}, bias={'bias' in self}"
 
     def __call__(self, x: mx.array) -> mx.array:
@@ -344,12 +505,21 @@ class ShardedToAllLinear(Module):
         *,
         segments: Union[int, list] = 1,
         group: Optional[mx.distributed.Group] = None,
+        sizes: Optional[list] = None,
     ):
         group = group or mx.distributed.init()
+        N = group.size()
         output_dims, input_dims = linear_layer.weight.shape
+        sizes, shard_sizes = _layer_sizes(
+            input_dims, N, segments, sizes, _rank_sizes(input_dims, N), "input"
+        )
 
-        sl = cls(input_dims, output_dims, hasattr(linear_layer, "bias"), group)
-        sl.update(_shard(linear_layer.parameters(), _sharded_to_all(segments), group))
+        sl = cls(input_dims, output_dims, hasattr(linear_layer, "bias"), group, sizes)
+        sl.update(
+            _shard(
+                linear_layer.parameters(), _sharded_to_all(segments), group, shard_sizes
+            )
+        )
 
         return sl
 
@@ -376,6 +546,9 @@ class QuantizedAllToShardedLinear(Module):
         group (mx.distributed.Group, optional): The sharding will happen across
             this group. If not set then the global group is used. Default is
             ``None``.
+        sizes (list, optional): The size of each rank's shard of the output
+            features. If not set, they are split as evenly as possible,
+            preferring multiples of ``group_size``. Default: ``None``.
     """
 
     def __init__(
@@ -387,6 +560,7 @@ class QuantizedAllToShardedLinear(Module):
         bits: int = 4,
         mode: str = "affine",
         group: Optional[mx.distributed.Group] = None,
+        sizes: Optional[list] = None,
     ):
         super().__init__()
 
@@ -400,15 +574,16 @@ class QuantizedAllToShardedLinear(Module):
         self.group = group or mx.distributed.init()
         N = self.group.size()
 
-        if (output_dims % N) != 0:
-            raise ValueError(
-                f"Cannot shard the output of size {output_dims} across {N} devices."
-            )
+        if sizes is None:
+            sizes = _quantized_output_sizes(output_dims, N, group_size)
+        sizes = _resolve_sizes(output_dims, N, sizes, "output")
+        local_output_dims = sizes[self.group.rank()]
+        self._output_dims = output_dims
 
         weight = mx.random.uniform(
             low=-scale,
             high=scale,
-            shape=(output_dims // N, input_dims),
+            shape=(local_output_dims, input_dims),
         )
         self.weight, self.scales, *biases = mx.quantize(
             weight, group_size, bits, mode=mode
@@ -417,7 +592,7 @@ class QuantizedAllToShardedLinear(Module):
 
         # And bias if needed
         if bias:
-            self.bias = mx.zeros((output_dims // N,))
+            self.bias = mx.zeros((local_output_dims,))
 
         # Freeze this model's parameters
         self.freeze()
@@ -431,7 +606,7 @@ class QuantizedAllToShardedLinear(Module):
     def _extra_repr(self) -> str:
         out_dims, in_dims = self.weight.shape
         in_dims = (in_dims * 32) // self.bits
-        out_dims *= self.group.size()
+        out_dims = self._output_dims
         return (
             f"input_dims={in_dims}, output_dims={out_dims}, bias={'bias' in self}, "
             f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}"
@@ -462,25 +637,38 @@ class QuantizedAllToShardedLinear(Module):
         *,
         segments: Union[int, list] = 1,
         group: Optional[mx.distributed.Group] = None,
+        sizes: Optional[list] = None,
     ):
         group = group or mx.distributed.init()
+        N = group.size()
         output_dims, input_dims = quantized_linear_layer.weight.shape
         input_dims = (input_dims * 32) // quantized_linear_layer.bits
+        group_size = quantized_linear_layer.group_size
+        sizes, shard_sizes = _layer_sizes(
+            output_dims,
+            N,
+            segments,
+            sizes,
+            _quantized_output_sizes(output_dims, N, group_size),
+            "output",
+        )
 
         sl = cls(
             input_dims,
             output_dims,
             hasattr(quantized_linear_layer, "bias"),
-            group_size=quantized_linear_layer.group_size,
+            group_size=group_size,
             bits=quantized_linear_layer.bits,
             mode=getattr(quantized_linear_layer, "mode", "affine"),
             group=group,
+            sizes=sizes,
         )
         sl.update(
             _shard(
                 quantized_linear_layer.parameters(),
                 _all_to_sharded(segments),
                 group,
+                shard_sizes,
             )
         )
 
@@ -511,6 +699,9 @@ class QuantizedShardedToAllLinear(Module):
         group (mx.distributed.Group, optional): The sharding will happen across
             this group. If not set then the global group is used. Default is
             ``None``.
+        sizes (list, optional): The size of each rank's shard of the input
+            features. Each size must be a multiple of ``group_size``. If not
+            set, they are split as evenly as possible. Default: ``None``.
     """
 
     def __init__(
@@ -522,6 +713,7 @@ class QuantizedShardedToAllLinear(Module):
         bits: int = 4,
         mode: str = "affine",
         group: Optional[mx.distributed.Group] = None,
+        sizes: Optional[list] = None,
     ):
         super().__init__()
 
@@ -535,15 +727,14 @@ class QuantizedShardedToAllLinear(Module):
         self.group = group or mx.distributed.init()
         N = self.group.size()
 
-        if (input_dims % N) != 0:
-            raise ValueError(
-                f"The input of size {input_dims} cannot be sharded across {N} devices."
-            )
+        sizes = _resolve_sizes(input_dims, N, sizes, "input", group_size)
+        local_input_dims = sizes[self.group.rank()]
+        self._input_dims = input_dims
 
         weight = mx.random.uniform(
             low=-scale,
             high=scale,
-            shape=(output_dims, input_dims // N),
+            shape=(output_dims, local_input_dims),
         )
         self.weight, self.scales, *biases = mx.quantize(
             weight, group_size, bits, mode=mode
@@ -564,8 +755,8 @@ class QuantizedShardedToAllLinear(Module):
         self.freeze(recurse=False)
 
     def _extra_repr(self) -> str:
-        out_dims, in_dims = self.weight.shape
-        in_dims = (in_dims * 32) // self.bits * self.group.size()
+        out_dims = self.weight.shape[0]
+        in_dims = self._input_dims
         return (
             f"input_dims={in_dims}, output_dims={out_dims}, bias={'bias' in self}, "
             f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}"
@@ -594,25 +785,38 @@ class QuantizedShardedToAllLinear(Module):
         *,
         segments: Union[int, list] = 1,
         group: Optional[mx.distributed.Group] = None,
+        sizes: Optional[list] = None,
     ):
         group = group or mx.distributed.init()
+        N = group.size()
         output_dims, input_dims = quantized_linear_layer.weight.shape
         input_dims = (input_dims * 32) // quantized_linear_layer.bits
+        group_size = quantized_linear_layer.group_size
+        sizes, shard_sizes = _layer_sizes(
+            input_dims,
+            N,
+            segments,
+            sizes,
+            _rank_sizes(input_dims, N, group_size),
+            "input",
+        )
 
         sl = cls(
             input_dims,
             output_dims,
             hasattr(quantized_linear_layer, "bias"),
-            group_size=quantized_linear_layer.group_size,
+            group_size=group_size,
             bits=quantized_linear_layer.bits,
             mode=getattr(quantized_linear_layer, "mode", "affine"),
             group=group,
+            sizes=sizes,
         )
         sl.update(
             _shard(
                 quantized_linear_layer.parameters(),
                 _sharded_to_all(segments),
                 group,
+                shard_sizes,
             )
         )
 
