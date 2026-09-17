@@ -3,6 +3,10 @@
 #include <metal_stdlib>
 #include "mlx/backend/metal/kernels/utils.h"
 
+
+constant bool save_state [[function_constant(200)]];
+
+
 #define AT(TILE, IDX) TILE.thread_elements()[IDX]
 #define SUB(TILE0, TILE1, TILE2)                \
   {                                             \
@@ -263,25 +267,26 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
 }
 
 /*
-        auto grid   = MTL::Size(32, Dv, B * Hv);
+    auto grid   = MTL::Size(32, Dv, B * Hv);
     auto threads = MTL::Size(32, 4, 1);
  */
-template <typename InT, int Dk, int Dv, int Hk, int Hv>
+template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
 [[kernel]] void gated_delta_seq(
     const device InT* q [[buffer(0)]],
     const device InT* k [[buffer(1)]],
     const device InT* v [[buffer(2)]],
     const device float* state_in [[buffer(3)]],
-    const device InT* g [[buffer(4)]], // [B, T, Hv] or [B, T, Hv, Dk]
+    const device InT* g [[buffer(4)]], // [B, T, Hv]
     const device InT* beta [[buffer(5)]], // [B, T, Hv]
-                                          // [B, Hv, Dv, Dk]
     device InT* y [[buffer(6)]], // [B, T, Hv, Dv]
     device float* state_out [[buffer(7)]], // [B, Hv, Dv, Dk]
     constant int& T [[buffer(8)]],
+    // [B*Hv, n_ckpt, Dv, Dk]. Only bound when save_state is set, so the
+    // inference path pays nothing for it.
+    device float* state_cache [[buffer(9), function_constant(save_state)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
     uint thread_index_in_simdgroup [[thread_index_in_simdgroup]]) {
-  // kernel implementation
   auto n = thread_position_in_grid.z;
   auto b_idx = n / Hv;
   auto hv_idx = n % Hv;
@@ -313,7 +318,23 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv>
   auto g_ = g + b_idx * T * Hv;
   auto beta_ = beta + b_idx * T * Hv;
 
+  // Checkpoint every Ckpt-th step rather than every step: at T = 4096 with
+  // B = 4, Hv = 32 a dense cache is 34 GB, which the backward's replay makes
+  // unnecessary.
+  const int n_ckpt = (T + Ckpt - 1) / Ckpt;
+  auto c_state_base = state_cache + n * n_ckpt * Dv * Dk + dv_idx * Dk;
+
   for (int t = 0; t < T; ++t) {
+    // Stored before the decay, so slot t/Ckpt holds the state at *entry* to
+    // step t. The backward replays forward from here, so it must be the entry
+    // state and not the exit state.
+    if (save_state && (t % Ckpt) == 0) {
+      auto c_state = c_state_base + (t / Ckpt) * Dv * Dk;
+      for (int i = 0; i < n_per_t; ++i) {
+        c_state[n_per_t * dk_idx + i] = state[i];
+      }
+    }
+
     float kv_mem = 0.0f;
     for (int i = 0; i < n_per_t; ++i) {
       auto s_idx = n_per_t * dk_idx + i;

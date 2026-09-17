@@ -1,17 +1,15 @@
-#include <metal_stdlib>
-#include "mlx/backend/metal/kernels/utils.h"
-
-#include <metal_atomic>
-#include "mlx/backend/metal/kernels/atomic.h"
-
+// Copyright © 2024 Apple Inc.
 #pragma once
 
 #include <metal_stdlib>
+#include <metal_atomic>
+
+#include "mlx/backend/metal/kernels/atomic.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
 using namespace metal;
 
-template <typename InT, int Dk, int Dv, int Hk, int Hv>
+template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
 [[kernel]] void gated_delta_vjp_seq(
     const device InT* q [[buffer(0)]], // [B, T, Hk, Dk]
     const device InT* k [[buffer(1)]], // [B, T, Hk, Dk]
@@ -20,13 +18,13 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv>
     const device InT* b [[buffer(4)]], // [B, T, Hv]
     const device InT* cot_o [[buffer(5)]], // [B, T, Hv, Dv]
     const device float* cot_h [[buffer(6)]], // [B, Hv, Dv, Dk]
-    const device float* state_cache [[buffer(7)]], // [B*Hv, T, Dv, Dk]
+    const device float* state_cache [[buffer(7)]], // [B*Hv, n_ckpt, Dv, Dk]
     constant int& T [[buffer(8)]],
-    device mlx_atomic<InT>* dq [[buffer(9)]], // [B, T, Hk, Dk]
-    device mlx_atomic<InT>* dk [[buffer(10)]],
-    device InT* dv [[buffer(11)]],
-    device mlx_atomic<InT>* dg [[buffer(12)]],
-    device mlx_atomic<InT>* db [[buffer(13)]],
+    device mlx_atomic<float>* dq [[buffer(9)]],
+    device mlx_atomic<float>* dk [[buffer(10)]],
+    device float* dv [[buffer(11)]],
+    device mlx_atomic<float>* dg [[buffer(12)]],
+    device mlx_atomic<float>* db [[buffer(13)]],
     device float* dh [[buffer(14)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
@@ -40,117 +38,145 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv>
   auto dk_idx = thread_position_in_threadgroup.x;
   auto dv_idx = thread_position_in_grid.y;
 
-  // Starting from the last timestep (T-1)
-  auto q_ = q + b_idx * T * Hk * Dk + hk_idx * Dk + (T - 1) * Hk * Dk;
-  auto k_ = k + b_idx * T * Hk * Dk + hk_idx * Dk + (T - 1) * Hk * Dk;
-  auto dq_ = dq + b_idx * T * Hk * Dk + hk_idx * Dk + (T - 1) * Hk * Dk;
-  auto dk_ = dk + b_idx * T * Hk * Dk + hk_idx * Dk + (T - 1) * Hk * Dk;
+  const int qk_stride = Hk * Dk;
+  const int v_stride = Hv * Dv;
+  const int g_stride = Hv;
 
-  auto v_ = v + b_idx * T * Hv * Dv + hv_idx * Dv + (T - 1) * Hv * Dv;
-  auto dv_ = dv + b_idx * T * Hv * Dv + hv_idx * Dv + (T - 1) * Hv * Dv;
+  auto q_base = q + b_idx * T * qk_stride + hk_idx * Dk;
+  auto k_base = k + b_idx * T * qk_stride + hk_idx * Dk;
+  auto dq_base = dq + b_idx * T * qk_stride + hk_idx * Dk;
+  auto dk_base = dk + b_idx * T * qk_stride + hk_idx * Dk;
 
-  auto co_ = cot_o + b_idx * T * Hv * Dv + hv_idx * Dv + (T - 1) * Hv * Dv;
+  auto v_base = v + b_idx * T * v_stride + hv_idx * Dv;
+  auto dv_base = dv + b_idx * T * v_stride + hv_idx * Dv;
+  auto co_base = cot_o + b_idx * T * v_stride + hv_idx * Dv;
 
-  auto g_ = g + b_idx * T * Hv + (T - 1) * Hv + hv_idx;
-  auto b_ = b + b_idx * T * Hv + (T - 1) * Hv + hv_idx;
-  auto dg_ = dg + b_idx * T * Hv + (T - 1) * Hv + hv_idx;
-  auto db_ = db + b_idx * T * Hv + (T - 1) * Hv + hv_idx;
+  auto g_base = g + b_idx * T * g_stride + hv_idx;
+  auto b_base = b + b_idx * T * g_stride + hv_idx;
+  auto dg_base = dg + b_idx * T * g_stride + hv_idx;
+  auto db_base = db + b_idx * T * g_stride + hv_idx;
 
-  auto c_state =
-      state_cache + n * T * Dv * Dk + (T - 1) * Dv * Dk + dv_idx * Dk;
+  const int n_ckpt = (T + Ckpt - 1) / Ckpt;
 
-  float s_hat[n_per_t]; // gradient
-  float s_prev[n_per_t]; // state at entry
-  float s_dec[n_per_t]; // state * gamma
-
+  float s_hat[n_per_t];
   auto base_state = cot_h + (n * Dv + dv_idx) * Dk;
   for (int i = 0; i < n_per_t; i++) {
     s_hat[i] = base_state[n_per_t * dk_idx + i];
   }
 
-  for (int t = T - 1; t >= 0; --t) {
-    float gamma = static_cast<float>(*g_);
-    float beta = static_cast<float>(*b_);
+  // Only this thread's n_per_t slice of the state is ever needed, so a whole
+  // segment of entry states costs Ckpt * n_per_t registers and the replay needs
+  // no device buffer.
+  float seg[Ckpt][n_per_t];
+  float s_prev[n_per_t];
+  float s_dec[n_per_t];
 
-    // Recompute forward state: s_prev = cache[t], s_dec = s_prev * gamma
-    float kv_mem = 0.0f;
-    float co = static_cast<float>(co_[dv_idx]);
-    float w = 0.0f;
-    for (int i = 0; i < n_per_t; i++) {
-      const int s_idx = n_per_t * dk_idx + i;
-      s_prev[i] = c_state[s_idx];
-      s_dec[i] = s_prev[i] * gamma;
-      kv_mem += s_dec[i] * static_cast<float>(k_[s_idx]);
+  for (int seg_idx = n_ckpt - 1; seg_idx >= 0; --seg_idx) {
+    const int t0 = seg_idx * Ckpt;
+    const int seg_len = metal::min(Ckpt, T - t0);
 
-      // s_hat += outer(co, q)
-      s_hat[i] += co * static_cast<float>(q_[s_idx]);
+    // Replay forward from the checkpoint, recording the entry state of each
+    // step in the segment.
+    auto c_state =
+        state_cache + n * n_ckpt * Dv * Dk + seg_idx * Dv * Dk + dv_idx * Dk;
 
-      // w = dot(s_hat, k)
-      w += s_hat[i] * static_cast<float>(k_[s_idx]);
-    }
-    kv_mem = simd_sum(kv_mem);
-    w = simd_sum(w);
-
-    if (thread_index_in_simdgroup == 0) {
-      dv_[dv_idx] = static_cast<InT>(beta * w);
-    }
-
-    float u = static_cast<float>(v_[dv_idx]) - kv_mem;
-    float delta = beta * u;
-
-    // dv = beta * w
-    if (thread_index_in_simdgroup == 0) {
-      dv_[dv_idx] = static_cast<InT>(beta * w);
-    }
-
-    // dbeta = dot(w, u)
-    if (thread_index_in_simdgroup == 0) {
-      mlx_atomic_fetch_add_explicit(db_, static_cast<InT>(w * u), 0);
-      // db_[0] = static_cast<InT>(w * u);
-    }
-
-    float dgamma = 0.0f;
+    float s[n_per_t];
     for (int i = 0; i < n_per_t; ++i) {
-      auto s_idx = n_per_t * dk_idx + i;
-
-      // dq = S_t^T co,  S_t = s_dec + delta * k
-      float s_t = s_dec[i] + delta * static_cast<float>(k_[s_idx]);
-      mlx_atomic_fetch_add_explicit(dq_, static_cast<InT>(co * s_t), s_idx);
-
-      // dk += beta * (u * s_hat - w * s_dec)
-      float contrib = beta * (u * s_hat[i] - w * s_dec[i]);
-      mlx_atomic_fetch_add_explicit(dk_, static_cast<InT>(contrib), s_idx);
-
-      // s_hat -= beta * w * k
-      s_hat[i] -= beta * w * static_cast<float>(k_[s_idx]);
-
-      // dg = dot(s_hat, s_prev)
-      dgamma += s_hat[i] * s_prev[i];
-    }
-    dgamma = simd_sum(dgamma);
-    if (thread_index_in_simdgroup == 0) {
-      mlx_atomic_fetch_add_explicit(dg_, static_cast<InT>(dgamma), 0);
+      s[i] = c_state[n_per_t * dk_idx + i];
     }
 
-    // s_hat *= gamma
-    for (int i = 0; i < n_per_t; ++i) {
-      s_hat[i] *= gamma;
+    for (int j = 0; j < seg_len; ++j) {
+      const int t = t0 + j;
+
+      for (int i = 0; i < n_per_t; ++i) {
+        seg[j][i] = s[i];
+      }
+
+      float gamma = static_cast<float>(g_base[t * g_stride]);
+      float beta = static_cast<float>(b_base[t * g_stride]);
+
+      auto k_t = k_base + t * qk_stride;
+
+      float kv_mem = 0.0f;
+      for (int i = 0; i < n_per_t; ++i) {
+        const int s_idx = n_per_t * dk_idx + i;
+        s[i] *= gamma;
+        kv_mem += s[i] * static_cast<float>(k_t[s_idx]);
+      }
+      kv_mem = simd_sum(kv_mem);
+
+      float delta =
+          beta * (static_cast<float>(v_base[t * v_stride + dv_idx]) - kv_mem);
+
+      for (int i = 0; i < n_per_t; ++i) {
+        s[i] += delta * static_cast<float>(k_t[n_per_t * dk_idx + i]);
+      }
     }
 
-    // Decrement to previous timestep
-    q_ -= Hk * Dk;
-    k_ -= Hk * Dk;
-    v_ -= Hv * Dv;
-    co_ -= Hv * Dv;
-    g_ -= Hv;
-    b_ -= Hv;
-    dq_ -= Hk * Dk;
-    dk_ -= Hk * Dk;
-    dv_ -= Hv * Dv;
-    dg_ -= Hv;
-    db_ -= Hv;
-    c_state -= Dv * Dk;
+    // Backward over the same steps, newest first.
+    for (int j = seg_len - 1; j >= 0; --j) {
+      const int t = t0 + j;
+
+      float gamma = static_cast<float>(g_base[t * g_stride]);
+      float beta = static_cast<float>(b_base[t * g_stride]);
+
+      auto q_t = q_base + t * qk_stride;
+      auto k_t = k_base + t * qk_stride;
+      auto dq_t = dq_base + t * qk_stride;
+      auto dk_t = dk_base + t * qk_stride;
+
+      float kv_mem = 0.0f;
+      float co = static_cast<float>(co_base[t * v_stride + dv_idx]);
+      float w = 0.0f;
+      for (int i = 0; i < n_per_t; i++) {
+        const int s_idx = n_per_t * dk_idx + i;
+        s_prev[i] = seg[j][i];
+        s_dec[i] = s_prev[i] * gamma;
+        kv_mem += s_dec[i] * static_cast<float>(k_t[s_idx]);
+
+        s_hat[i] += co * static_cast<float>(q_t[s_idx]);
+
+        w += s_hat[i] * static_cast<float>(k_t[s_idx]);
+      }
+      kv_mem = simd_sum(kv_mem);
+      w = simd_sum(w);
+
+      if (thread_index_in_simdgroup == 0) {
+        dv_base[t * v_stride + dv_idx] = beta * w;
+      }
+
+      float u = static_cast<float>(v_base[t * v_stride + dv_idx]) - kv_mem;
+      float delta = beta * u;
+
+      if (thread_index_in_simdgroup == 0) {
+        mlx_atomic_fetch_add_explicit(db_base + t * g_stride, w * u, 0);
+      }
+
+      float dgamma = 0.0f;
+      for (int i = 0; i < n_per_t; ++i) {
+        auto s_idx = n_per_t * dk_idx + i;
+
+        float s_t = s_dec[i] + delta * static_cast<float>(k_t[s_idx]);
+        mlx_atomic_fetch_add_explicit(dq_t, co * s_t, s_idx);
+
+        float contrib = beta * (u * s_hat[i] - w * s_dec[i]);
+        mlx_atomic_fetch_add_explicit(dk_t, contrib, s_idx);
+
+        s_hat[i] -= beta * w * static_cast<float>(k_t[s_idx]);
+
+        dgamma += s_hat[i] * s_prev[i];
+      }
+      dgamma = simd_sum(dgamma);
+      if (thread_index_in_simdgroup == 0) {
+        mlx_atomic_fetch_add_explicit(dg_base + t * g_stride, dgamma, 0);
+      }
+
+      for (int i = 0; i < n_per_t; ++i) {
+        s_hat[i] *= gamma;
+      }
+    }
   }
+
   for (int i = 0; i < n_per_t; ++i) {
     auto s_idx = n_per_t * dk_idx + i;
     dh[(n * Dv + dv_idx) * Dk + s_idx] = s_hat[i];

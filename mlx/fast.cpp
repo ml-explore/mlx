@@ -925,8 +925,12 @@ array scaled_dot_product_attention(
   }
 
   bool is_training = detail::in_grad_tracing();
+  // printf("[%s\t %s: %d]\n", __FILE__, __func__, __LINE__);
   bool has_fast_vjp = !ScaledDotProductAttentionVJP::use_fallback(q, stream);
+  // printf("[%s\t %s: %d]\n", __FILE__, __func__, __LINE__);
   bool output_logsumexp = is_training && has_fast_vjp;
+  // printf("FWD: is_training=%d has_fast_vjp=%d output_lse=%d\n",
+  //        is_training, has_fast_vjp, output_logsumexp);
   if (!ScaledDotProductAttention::use_fallback(
           q,
           k,
@@ -957,6 +961,8 @@ array scaled_dot_product_attention(
         output_logsumexp,
         force_fused);
     if (output_logsumexp) {
+      // printf("[%s\t %s: %d] output_logsumexp=%d\n",
+      //        __FILE__, __func__, __LINE__, output_logsumexp);
       return array::make_arrays(
           {std::move(out_shape), Shape{q.shape(0), q.shape(1), q.shape(2), 1}},
           {final_type, float32},
@@ -967,6 +973,7 @@ array scaled_dot_product_attention(
           std::move(out_shape), final_type, primitive, std::move(inputs));
     }
   }
+  // printf("[%s\t %s: %d]\n", __FILE__, __func__, __LINE__);
   return fallback(std::move(inputs))[0];
 }
 
@@ -977,10 +984,14 @@ std::vector<array> ScaledDotProductAttention::vjp(
     const std::vector<array>& outputs) {
   assert(primals.size() >= 3);
   assert(cotangents.size() == outputs.size());
-
+  // printf("[%s\t %s: %d]\n", __FILE__, __func__, __LINE__);
   auto s = stream();
   if (ScaledDotProductAttentionVJP::use_fallback(primals[0], s)) {
     assert(outputs.size() == 1);
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
+
+  if (outputs.size() != 2) {
     return Custom::vjp(primals, cotangents, argnums, outputs);
   }
 
@@ -1002,6 +1013,8 @@ std::vector<array> ScaledDotProductAttention::vjp(
   inputs.push_back(outputs[0]);
   inputs.push_back(outputs[1]);
   inputs.push_back(cotangents[0]);
+  // printf("[%s\t %s: %d]\n", __FILE__, __func__, __LINE__);
+
   auto vjps = array::make_arrays(std::move(shapes), dtypes, primitive, inputs);
 
   std::vector<array> returned_vjps;
@@ -1157,7 +1170,6 @@ std::vector<array> gated_delta_update(
   auto result = fallback({q, k, v, g, beta, h0, mask});
   return result;
 }
-
 std::vector<array> GatedDeltaUpdate::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
@@ -1172,7 +1184,6 @@ std::vector<array> GatedDeltaUpdate::vjp(
     return Custom::vjp(primals, cotangents, argnums, outputs);
   }
 
-  // The VJP kernel requires an explicit initial state.
   if (primals.size() != 6) {
     throw std::runtime_error(
         "[GatedDeltaUpdate::vjp] expected 6 primals (q,k,v,g,beta,h0), got " +

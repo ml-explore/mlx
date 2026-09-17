@@ -33,7 +33,8 @@ bool GatedDeltaUpdate::use_fallback(
 
   const bool supported_heads = (Hk == 24 && Hv == 24) ||
       (Hk == 32 && Hv == 32) || (Hk == 16 && Hv == 32) ||
-      (Hk == 16 && Hv == 48);
+      (Hk == 16 && Hv == 48) || (Hk == 16 && Hv == 16) ||
+      (Hk == 16 && Hv == 64);
   if (!supported_heads) {
     return true;
   }
@@ -75,20 +76,10 @@ void GatedDeltaUpdate::eval_gpu(
   int Hv = v.shape(2);
   int Dv = v.shape(3);
 
-  int C = 1;
-  const char* threashold_env = std::getenv("GATED_DELTA_THRESH");
-  int threshold = threashold_env ? std::stoi(threashold_env) : 16;
-  if (T > threshold) {
-    if (metal::is_nax_available())
-      C = 16;
-    else
-      C = 8;
+  int C = gated_delta_chunk_size(T);
+  if (!metal::is_nax_available()) {
+    C = std::min(C, 8);
   }
-  const char* chunk_env = std::getenv("GATED_DELTA_CHUNK");
-  C = chunk_env ? std::stoi(chunk_env) : C;
-
-  if (!metal::is_nax_available())
-    C = std::min(C, 8); // override in case nax is not available.
 
   std::string suffix = get_type_string(q.dtype()) + "_" + std::to_string(Dk) +
       "_" + std::to_string(Dv) + "_" + std::to_string(Hk) + "_" +
@@ -101,16 +92,22 @@ void GatedDeltaUpdate::eval_gpu(
 
   fill_gpu(array(0, out.dtype()), out, s);
 
+  // The forward is inference-only here: the vjp runs its own save pass. The
+  // kernel declares buffers 9, 10 and 11 unconditionally, so bind a placeholder
+  // and turn the stores off with the function constant.
+  bool save_state = false;
+
+  array dummy({1}, float32, nullptr, {});
+  dummy.set_data(allocator::malloc(dummy.nbytes()));
+  compute_encoder.add_temporary(dummy);
+
   switch (C) {
     case 16: {
-      std::string kernel_name = "gated_delta_fused_nax_";
-      std::string base_name = kernel_name + suffix;
+      const int ckpt = gated_delta_ckpt();
+      std::string base_name = "gated_delta_fused_nax_" + suffix + "_" +
+          std::to_string(C) + "_" + std::to_string(ckpt);
+      std::string hash_name = base_name + (save_state ? "_save" : "");
 
-      base_name += "_" + std::to_string(C);
-
-      std::string hash_name = base_name;
-
-      bool save_state = false;
       metal::MTLFCList func_consts = {
           {&save_state, MTL::DataType::DataTypeBool, 200},
       };
@@ -128,6 +125,9 @@ void GatedDeltaUpdate::eval_gpu(
       compute_encoder.set_output_array(out, 6);
       compute_encoder.set_output_array(hf, 7); // final state out
       compute_encoder.set_bytes(T, 8);
+      compute_encoder.set_output_array(dummy, 9); // state_cache
+      compute_encoder.set_output_array(dummy, 10); // chunk_mats
+      compute_encoder.set_output_array(dummy, 11); // chunk_delta
 
       auto grid = MTL::Size(32, Dv / 16, B * Hv);
       auto threads = MTL::Size(32, 4, 1);
@@ -135,16 +135,13 @@ void GatedDeltaUpdate::eval_gpu(
       break;
     }
     case 8: {
-      std::string kernel_name = "gated_delta_fused_chunk_";
-      std::string base_name = kernel_name + suffix;
-
-      base_name += "_" + std::to_string(C);
-
+      std::string base_name =
+          "gated_delta_fused_chunk_" + suffix + "_" + std::to_string(C);
       std::string hash_name = base_name;
 
-      bool save_state = false;
+      bool no_save = false;
       metal::MTLFCList func_consts = {
-          {&save_state, MTL::DataType::DataTypeBool, 200},
+          {&no_save, MTL::DataType::DataTypeBool, 200},
       };
 
       auto delta_kernel =
@@ -168,13 +165,16 @@ void GatedDeltaUpdate::eval_gpu(
     }
     case 1:
     case 0: {
-      std::string kernel_name = "seq_gated_delta_";
-      std::string base_name = kernel_name + suffix;
+      // Ckpt is a template parameter now, so even the inference path has to
+      // name one; it just never stores.
+      const int ckpt = gated_delta_ckpt();
+      std::string base_name =
+          "seq_gated_delta_" + suffix + "_" + std::to_string(ckpt);
       std::string hash_name = base_name;
 
-      bool save_state = false;
+      bool no_save = false;
       metal::MTLFCList func_consts = {
-          {&save_state, MTL::DataType::DataTypeBool, 200},
+          {&no_save, MTL::DataType::DataTypeBool, 200},
       };
 
       auto delta_kernel =
@@ -182,15 +182,17 @@ void GatedDeltaUpdate::eval_gpu(
 
       compute_encoder.set_compute_pipeline_state(delta_kernel);
 
+      // Order must match the kernel signature: state_in is slot 3, g is 4.
       compute_encoder.set_input_array(q, 0);
       compute_encoder.set_input_array(k, 1);
       compute_encoder.set_input_array(v, 2);
-      compute_encoder.set_input_array(g, 3);
-      compute_encoder.set_input_array(beta, 4);
-      compute_encoder.set_input_array(h0, 5);
-      compute_encoder.set_bytes(T, 6);
-      compute_encoder.set_output_array(out, 7);
-      compute_encoder.set_output_array(hf, 8);
+      compute_encoder.set_input_array(h0, 3);
+      compute_encoder.set_input_array(g, 4);
+      compute_encoder.set_input_array(beta, 5);
+      compute_encoder.set_output_array(out, 6);
+      compute_encoder.set_output_array(hf, 7);
+      compute_encoder.set_bytes(T, 8);
+      // Slot 9 is gated off by the function constant, so it stays unbound.
 
       auto grid = MTL::Size(32, Dv, B * Hv);
       auto threads = MTL::Size(32, 4, 1);
@@ -221,6 +223,7 @@ bool GatedDeltaUpdateVJP::use_fallback(
       e != nullptr && std::stoi(e) != 0) {
     return true;
   }
+  return false;
 
   // like the forward
   if (Dk != 128 || Dv != 128) {
@@ -229,38 +232,14 @@ bool GatedDeltaUpdateVJP::use_fallback(
 
   const bool supported_heads = (Hk == 24 && Hv == 24) ||
       (Hk == 32 && Hv == 32) || (Hk == 16 && Hv == 32) ||
-      (Hk == 16 && Hv == 48);
+      (Hk == 16 && Hv == 48) || (Hk == 16 && Hv == 16) ||
+      (Hk == 16 && Hv == 64);
   if (!supported_heads) {
     return true;
   }
 
   return false;
 }
-
-#define PRINT_STRIDES(arr)                 \
-  printf(                                  \
-      "%s strides: %lld %lld %lld %lld\n", \
-      #arr,                                \
-      arr.strides()[0],                    \
-      arr.strides()[1],                    \
-      arr.strides()[2],                    \
-      arr.strides()[3])
-
-#define PRINT_SHAPES(arr)                 \
-  printf(                                 \
-      "%s shapes: %lld %lld %lld %lld\n", \
-      #arr,                               \
-      arr.shape()[0],                     \
-      arr.shape()[1],                     \
-      arr.shape()[2],                     \
-      arr.shape()[3])
-
-#define PRINT_ARR(arr)                      \
-  if (arr.flags().row_contiguous)           \
-    printf("%s is row contiguous\n", #arr); \
-  PRINT_SHAPES(arr);                        \
-  PRINT_STRIDES(arr);                       \
-  printf("\n");
 
 void GatedDeltaUpdateVJP::eval_gpu(
     const std::vector<array>& inputs,
@@ -293,10 +272,11 @@ void GatedDeltaUpdateVJP::eval_gpu(
     C = 0;
   }
 
-  // No checkpoint interval: the chunked path stores one state per chunk, the
-  // sequential path one state per timestep.
   int n_chunks = (T + 15) / 16;
-  int n_states = (C == 16) ? n_chunks : T;
+
+  const int ckpt = (C == 16) ? gated_delta_ckpt() : 1;
+  const int n_states =
+      (C == 16) ? gated_delta_n_ckpt(n_chunks, ckpt) : ((T + ckpt - 1) / ckpt);
 
   auto& dq = outputs[0];
   auto& dk = outputs[1];
@@ -314,33 +294,84 @@ void GatedDeltaUpdateVJP::eval_gpu(
   db.set_data(allocator::malloc(db.nbytes()));
   dh.set_data(allocator::malloc(dh.nbytes()));
 
-  fill_gpu(array(0, dq.dtype()), dq, s);
-  fill_gpu(array(0, dk.dtype()), dk, s);
-  fill_gpu(array(0, dv.dtype()), dv, s);
-  fill_gpu(array(0, dg.dtype()), dg, s);
-  fill_gpu(array(0, db.dtype()), db, s);
+  bool narrow = (q.dtype() != float32);
+
+  auto accum_for = [&](const array& out) {
+    if (!narrow) {
+      return out;
+    }
+    array a(out.shape(), float32, nullptr, {});
+    a.set_data(allocator::malloc(a.nbytes()));
+    compute_encoder.add_temporary(a);
+    return a;
+  };
+
+  auto dq_acc = accum_for(dq);
+  auto dk_acc = accum_for(dk);
+  auto dv_acc = accum_for(dv);
+  auto dg_acc = accum_for(dg);
+  auto db_acc = accum_for(db);
+
+  fill_gpu(array(0, float32), dq_acc, s);
+  fill_gpu(array(0, float32), dk_acc, s);
+  fill_gpu(array(0, float32), dv_acc, s);
+  fill_gpu(array(0, float32), dg_acc, s);
+  fill_gpu(array(0, float32), db_acc, s);
   fill_gpu(array(0, dh.dtype()), dh, s);
 
   array state_cache({B, Hv, n_states, Dv, Dk}, float32, nullptr, {});
+  array chunk_mats({B, Hv, n_chunks, 3, 16, 16}, float32, nullptr, {});
+  array chunk_delta({B, Hv, n_chunks, 16, Dv}, float32, nullptr, {});
+  array seg_states(
+      (C == 16) ? Shape({B, Hv, ckpt, Dv, Dk}) : Shape({1}),
+      float32,
+      nullptr,
+      {});
+
   state_cache.set_data(allocator::malloc(state_cache.nbytes()));
-  fill_gpu(array(0, state_cache.dtype()), state_cache, s);
+  if (C == 16) {
+    fill_gpu(array(0, state_cache.dtype()), state_cache, s);
+  }
   compute_encoder.add_temporary(state_cache);
 
-  array scratch({1}, float32, nullptr, {});
-  scratch.set_data(allocator::malloc(scratch.nbytes()));
-  fill_gpu(array(0, scratch.dtype()), scratch, s);
-  compute_encoder.add_temporary(scratch);
+  seg_states.set_data(allocator::malloc(seg_states.nbytes()));
+  compute_encoder.add_temporary(seg_states);
+
+  if (C == 16) {
+    chunk_mats.set_data(allocator::malloc(chunk_mats.nbytes()));
+    fill_gpu(array(0, chunk_mats.dtype()), chunk_mats, s);
+    compute_encoder.add_temporary(chunk_mats);
+
+    chunk_delta.set_data(allocator::malloc(chunk_delta.nbytes()));
+    fill_gpu(array(0, chunk_delta.dtype()), chunk_delta, s);
+    compute_encoder.add_temporary(chunk_delta);
+  }
+
+  array y_scratch({B, T, Hv, Dv}, q.dtype(), nullptr, {});
+  array hf_scratch({B, Hv, Dv, Dk}, float32, nullptr, {});
+
+  y_scratch.set_data(allocator::malloc(y_scratch.nbytes()));
+  compute_encoder.add_temporary(y_scratch);
+
+  hf_scratch.set_data(allocator::malloc(hf_scratch.nbytes()));
+  compute_encoder.add_temporary(hf_scratch);
 
   std::string suffix = get_type_string(q.dtype()) + "_" + std::to_string(Dk) +
       "_" + std::to_string(Dv) + "_" + std::to_string(Hk) + "_" +
       std::to_string(Hv);
 
+  // printf("state_cache %.2f  chunk_delta %.2f  chunk_mats %.2f GiB\n",
+  //     state_cache.nbytes() / double(1 << 30),
+  //     chunk_delta.nbytes() / double(1 << 30),
+  //     chunk_mats.nbytes() / double(1 << 30));
   switch (C) {
     case 16: {
-      // Forward save pass: NAX chunked kernel, one checkpoint per chunk.
+      const std::string ckpt_suffix =
+          "_" + std::to_string(C) + "_" + std::to_string(ckpt);
+
+      // Forward save pass.
       {
-        std::string base_name =
-            "gated_delta_fused_nax_" + suffix + "_" + std::to_string(C);
+        std::string base_name = "gated_delta_fused_nax_" + suffix + ckpt_suffix;
         std::string hash_name = base_name + "_save";
 
         bool save_state = true;
@@ -358,20 +389,21 @@ void GatedDeltaUpdateVJP::eval_gpu(
         compute_encoder.set_input_array(h0, 3);
         compute_encoder.set_input_array(g, 4);
         compute_encoder.set_input_array(beta, 5);
-        compute_encoder.set_output_array(scratch, 6);
-        compute_encoder.set_output_array(scratch, 7);
+        compute_encoder.set_output_array(y_scratch, 6);
+        compute_encoder.set_output_array(hf_scratch, 7);
         compute_encoder.set_bytes(T, 8);
         compute_encoder.set_output_array(state_cache, 9);
+        compute_encoder.set_output_array(chunk_mats, 10);
+        compute_encoder.set_output_array(chunk_delta, 11);
 
         auto grid = MTL::Size(32, Dv / 16, B * Hv);
         auto threads = MTL::Size(32, 4, 1);
         compute_encoder.dispatch_threads(grid, threads);
       }
 
-      // Backward pass: NAX chunked VJP.
       {
         std::string base_name =
-            "gated_delta_vjp_fused_nax_" + suffix + "_" + std::to_string(C);
+            "gated_delta_vjp_fused_nax_" + suffix + ckpt_suffix;
         std::string hash_name = base_name;
 
         metal::MTLFCList func_consts = {};
@@ -389,20 +421,21 @@ void GatedDeltaUpdateVJP::eval_gpu(
         compute_encoder.set_input_array(cot_h, 6);
         compute_encoder.set_input_array(state_cache, 7);
         compute_encoder.set_bytes(T, 8);
-        compute_encoder.set_output_array(dq, 9);
-        compute_encoder.set_output_array(dk, 10);
-        compute_encoder.set_output_array(dv, 11);
-        compute_encoder.set_output_array(dg, 12);
-        compute_encoder.set_output_array(db, 13);
+        compute_encoder.set_output_array(dq_acc, 9);
+        compute_encoder.set_output_array(dk_acc, 10);
+        compute_encoder.set_output_array(dv_acc, 11);
+        compute_encoder.set_output_array(dg_acc, 12);
+        compute_encoder.set_output_array(db_acc, 13);
         compute_encoder.set_output_array(dh, 14);
+        compute_encoder.set_input_array(chunk_mats, 15);
+        compute_encoder.set_input_array(chunk_delta, 16);
+        compute_encoder.set_output_array(seg_states, 17);
 
         auto grid = MTL::Size(32, Dv / 16, B * Hv);
-        auto threads = MTL::Size(32, 4, 1);
+        auto threads = MTL::Size(32, Dv / 16, 1);
         compute_encoder.dispatch_threads(grid, threads);
       }
 
-      // The chunked kernel leaves dL/dgamma in dg. Convert it to dL/dg with a
-      // per-chunk reverse cumulative sum followed by the 1/g factor.
       {
         int n_total = B * Hv;
 
@@ -417,7 +450,7 @@ void GatedDeltaUpdateVJP::eval_gpu(
 
         compute_encoder.set_compute_pipeline_state(dgamma_kernel);
         compute_encoder.set_input_array(g, 0);
-        compute_encoder.set_output_array(dg, 1);
+        compute_encoder.set_output_array(dg_acc, 1);
         compute_encoder.set_bytes(T, 2);
         compute_encoder.set_bytes(Hv, 3);
         compute_encoder.set_bytes(n_total, 4);
@@ -430,9 +463,10 @@ void GatedDeltaUpdateVJP::eval_gpu(
     }
     case 1:
     case 0: {
-      // Forward save pass: sequential kernel, one state per timestep.
+      const std::string ckpt_suffix = "_" + std::to_string(ckpt);
+
       {
-        std::string base_name = "seq_gated_delta_" + suffix;
+        std::string base_name = "seq_gated_delta_" + suffix + ckpt_suffix;
         std::string hash_name = base_name + "_save";
 
         bool save_state = true;
@@ -447,12 +481,12 @@ void GatedDeltaUpdateVJP::eval_gpu(
         compute_encoder.set_input_array(q, 0);
         compute_encoder.set_input_array(k, 1);
         compute_encoder.set_input_array(v, 2);
-        compute_encoder.set_input_array(g, 3);
-        compute_encoder.set_input_array(beta, 4);
-        compute_encoder.set_input_array(h0, 5);
-        compute_encoder.set_bytes(T, 6);
-        compute_encoder.set_output_array(scratch, 7);
-        compute_encoder.set_output_array(scratch, 8);
+        compute_encoder.set_input_array(h0, 3);
+        compute_encoder.set_input_array(g, 4);
+        compute_encoder.set_input_array(beta, 5);
+        compute_encoder.set_output_array(y_scratch, 6);
+        compute_encoder.set_output_array(hf_scratch, 7);
+        compute_encoder.set_bytes(T, 8);
         compute_encoder.set_output_array(state_cache, 9);
 
         auto grid = MTL::Size(32, Dv, B * Hv);
@@ -460,9 +494,8 @@ void GatedDeltaUpdateVJP::eval_gpu(
         compute_encoder.dispatch_threads(grid, threads);
       }
 
-      // Backward pass: sequential VJP.
       {
-        std::string base_name = "seq_gated_delta_vjp_" + suffix;
+        std::string base_name = "seq_gated_delta_vjp_" + suffix + ckpt_suffix;
         std::string hash_name = base_name;
 
         metal::MTLFCList func_consts = {};
@@ -480,11 +513,11 @@ void GatedDeltaUpdateVJP::eval_gpu(
         compute_encoder.set_input_array(cot_h, 6);
         compute_encoder.set_input_array(state_cache, 7);
         compute_encoder.set_bytes(T, 8);
-        compute_encoder.set_output_array(dq, 9);
-        compute_encoder.set_output_array(dk, 10);
-        compute_encoder.set_output_array(dv, 11);
-        compute_encoder.set_output_array(dg, 12);
-        compute_encoder.set_output_array(db, 13);
+        compute_encoder.set_output_array(dq_acc, 9);
+        compute_encoder.set_output_array(dk_acc, 10);
+        compute_encoder.set_output_array(dv_acc, 11);
+        compute_encoder.set_output_array(dg_acc, 12);
+        compute_encoder.set_output_array(db_acc, 13);
         compute_encoder.set_output_array(dh, 14);
 
         auto grid = MTL::Size(32, Dv, B * Hv);
@@ -497,6 +530,14 @@ void GatedDeltaUpdateVJP::eval_gpu(
       throw std::runtime_error(
           "NYI: Only sequential and chunk size 16 are supported for vjp");
     }
+  }
+
+  if (narrow) {
+    copy_gpu(dq_acc, dq, CopyType::General, s);
+    copy_gpu(dk_acc, dk, CopyType::General, s);
+    copy_gpu(dv_acc, dv, CopyType::General, s);
+    copy_gpu(dg_acc, dg, CopyType::General, s);
+    copy_gpu(db_acc, db, CopyType::General, s);
   }
 }
 
