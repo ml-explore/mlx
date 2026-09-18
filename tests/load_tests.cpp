@@ -7,6 +7,7 @@
 
 #include "doctest/doctest.h"
 
+#include "mlx/io/load.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -653,4 +654,29 @@ TEST_CASE("test single array serialization") {
     CHECK_EQ(a.shape(), b.shape());
     CHECK(array_equal(a, b).item<bool>());
   }
+}
+
+TEST_CASE("test parallel_file_reader") {
+  std::string file_path = get_temp_file("test_pfr_data.bin");
+  std::vector<char> data(1024, 'a');
+  for (size_t i = 0; i < data.size(); ++i) {
+    data[i] = static_cast<char>(i % 256);
+  }
+
+  {
+    std::ofstream out(file_path, std::ios::binary);
+    out.write(data.data(), data.size());
+  }
+
+  io::ParallelFileReader reader(file_path);
+  CHECK(reader.is_open());
+
+  std::vector<char> buf(128);
+  reader.read(buf.data(), 128, 256);
+  CHECK_EQ(
+      std::vector<char>(data.begin() + 256, data.begin() + 384), buf);
+
+  // Read past EOF should throw std::runtime_error
+  CHECK_THROWS_AS(reader.read(buf.data(), 128, 1000), std::runtime_error);
+  CHECK_THROWS_AS(reader.read(buf.data(), 128, 2000), std::runtime_error);
 }
