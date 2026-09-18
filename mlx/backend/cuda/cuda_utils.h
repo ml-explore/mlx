@@ -30,7 +30,13 @@ class CudaHandle {
     if (cudaPeekAtLastError() != cudaSuccess) {
       return;
     }
-    reset();
+    // Not reset(): it throws via CHECK_CUDA_ERROR, and a throw escaping a
+    // destructor terminates. At exit the runtime may already be unloading, so
+    // Destroy fails and the handle can no longer be reclaimed or reported on.
+    if (handle_ != nullptr) {
+      Destroy(handle_);
+      handle_ = nullptr;
+    }
   }
 
   CudaHandle(const CudaHandle&) = delete;
