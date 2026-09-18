@@ -20,14 +20,15 @@ class MeshImpl {
       int size,
       std::vector<Connection>& conns,
       std::vector<SharedBuffer>& buffers,
-      std::vector<SharedBuffer>& scatter_buffers)
+      std::vector<SharedBuffer>& scatter_buffers,
+      std::vector<int> liveness_fds = {})
       : rank_(rank),
         size_(size),
         connections_(conns),
         buffers_(buffers),
         scatter_buffers_(scatter_buffers),
-        staging_mem_(
-            std::make_unique<char[]>(MESH_PIPELINE * MAX_BUFFER_SIZE)) {}
+        staging_mem_(std::make_unique<char[]>(MESH_PIPELINE * MAX_BUFFER_SIZE)),
+        liveness_fds_(std::move(liveness_fds)) {}
 
   MeshImpl() : rank_(0), size_(1) {}
 
@@ -86,6 +87,7 @@ class MeshImpl {
     }
 
     // Main loop
+    ProgressGuard _pg1(liveness_fds_, rank_, "all_reduce");
     while (reduce_chunk < total_chunks) {
       // Poll the hardware for completions.
       //
@@ -100,6 +102,7 @@ class MeshImpl {
       // receives.
       ibv_wc wc[WC_NUM];
       int n = poll(connections_, WC_NUM, wc);
+      _pg1.tick(n > 0);
       for (int i = 0; i < n; i++) {
         int work_type = wc[i].wr_id >> 16;
         int buff = (wc[i].wr_id >> 8) & 0xff;
@@ -194,9 +197,11 @@ class MeshImpl {
     }
 
     // Drain remaining in-flight completions (outstanding sends).
+    ProgressGuard _pg2(liveness_fds_, rank_, "all_reduce");
     while (in_flight > 0) {
       ibv_wc wc[WC_NUM];
       int n = poll(connections_, WC_NUM, wc);
+      _pg2.tick(n > 0);
       in_flight -= n;
     }
   }
@@ -242,9 +247,11 @@ class MeshImpl {
     // Main loop
     //
     // Keep going until we have no longer data in flight.
+    ProgressGuard _pg3(liveness_fds_, rank_, "all_gather");
     while (in_flight > 0) {
       ibv_wc wc[WC_NUM];
       int n = poll(connections_, WC_NUM, wc);
+      _pg3.tick(n > 0);
       for (int i = 0; i < n; i++) {
         int work_type = wc[i].wr_id >> 16;
         int buff = (wc[i].wr_id >> 8) & 0xff;
@@ -342,9 +349,11 @@ class MeshImpl {
     // Main loop
     //
     // Keep going until we have no longer data in flight.
+    ProgressGuard _pg4(liveness_fds_, rank_, "sum_scatter");
     while (in_flight > 0) {
       ibv_wc wc[WC_NUM];
       int n = poll(connections_, WC_NUM, wc);
+      _pg4.tick(n > 0);
       for (int i = 0; i < n; i++) {
         int work_type = wc[i].wr_id >> 16;
         int buff = (wc[i].wr_id >> 8) & 0xff;
@@ -465,6 +474,7 @@ class MeshImpl {
     }
 
     // Main loop
+    ProgressGuard _pg5(liveness_fds_, rank_, "send");
     while (in_flight > 0) {
       // Poll the hardware for completions.
       //
@@ -472,6 +482,7 @@ class MeshImpl {
       // and send them.
       ibv_wc wc[WC_NUM];
       int n = connections_[dst].poll(WC_NUM, wc);
+      _pg5.tick(n > 0);
       for (int i = 0; i < n; i++) {
         int buff = (wc[i].wr_id >> 8) & 0xff;
         int rank = wc[i].wr_id & 0xff;
@@ -510,6 +521,7 @@ class MeshImpl {
     }
 
     // Main loop
+    ProgressGuard _pg6(liveness_fds_, rank_, "recv");
     while (in_flight > 0) {
       // Poll the hardware for completions.
       //
@@ -517,6 +529,7 @@ class MeshImpl {
       // data to fetch post another recv.
       ibv_wc wc[WC_NUM];
       int n = connections_[src].poll(WC_NUM, wc);
+      _pg6.tick(n > 0);
       for (int i = 0; i < n; i++) {
         int buff = (wc[i].wr_id >> 8) & 0xff;
         int rank = wc[i].wr_id & 0xff;
@@ -627,6 +640,7 @@ class MeshImpl {
   std::span<SharedBuffer> buffers_;
   std::span<SharedBuffer> scatter_buffers_;
   std::unique_ptr<char[]> staging_mem_;
+  std::vector<int> liveness_fds_;
 };
 
 } // namespace jaccl

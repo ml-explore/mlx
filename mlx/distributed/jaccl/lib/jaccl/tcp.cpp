@@ -152,7 +152,14 @@ void TCPSocket::recv(const char* tag, void* data, size_t len) {
     auto n = ::recv(sock_, data, len, 0);
     if (n <= 0) {
       std::ostringstream msg;
-      msg << tag << " Recv failed with errno=" << errno;
+      // 0 means the peer closed the side channel
+      // (a rank failed during init or exited); errno is stale in that case.
+      if (n == 0) {
+        msg << tag << " Recv failed: peer closed the side channel"
+            << " (another rank failed during init or exited)";
+      } else {
+        msg << tag << " Recv failed with errno=" << errno;
+      }
       throw std::runtime_error(msg.str());
     }
     len -= n;

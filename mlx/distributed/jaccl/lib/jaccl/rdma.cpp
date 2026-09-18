@@ -1,6 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
 #include <dlfcn.h>
+#include <poll.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #include <cerrno>
 #include <iostream>
@@ -140,10 +142,44 @@ Connection::~Connection() {
   }
 }
 
+namespace {
+// name the device and its port state in the
+// errors that a Thunderbolt link problem produces. Measured on macOS 26.6.1:
+// on a device whose port is PORT_DOWN, ibv_open_device succeeds but
+// ibv_alloc_pd returns NULL; a peer whose IPv4-mapped GID is not reachable on
+// this link fails the RTR transition with errno 60 (ETIMEDOUT).
+std::string describe_device(ibv_context* ctx) {
+  std::ostringstream s;
+  if (ctx == nullptr) {
+    return "<no device>";
+  }
+  const char* name = ctx->device ? ibv().get_device_name(ctx->device) : nullptr;
+  s << (name ? name : "<unknown device>");
+  ibv_port_attr pa;
+  if (ibv().query_port(ctx, 1, &pa) == 0) {
+    static const char* states[] = {
+        "NOP",
+        "PORT_DOWN",
+        "PORT_INIT",
+        "PORT_ARMED",
+        "PORT_ACTIVE",
+        "ACTIVE_DEFER"};
+    int st = static_cast<int>(pa.state);
+    s << " (port " << (st >= 0 && st < 6 ? states[st] : "?") << ")";
+  }
+  return s.str();
+}
+} // namespace
+
 void Connection::allocate_protection_domain() {
   protection_domain = ibv().alloc_pd(ctx);
   if (protection_domain == nullptr) {
-    throw std::runtime_error("[jaccl] Couldn't allocate protection domain");
+    int err = errno;
+    std::ostringstream msg;
+    msg << "[jaccl] Couldn't allocate protection domain on "
+        << describe_device(ctx) << " (errno " << err
+        << "): is the Thunderbolt link up?";
+    throw std::runtime_error(msg.str());
   }
 }
 
@@ -263,7 +299,21 @@ void Connection::queue_pair_rtr(const Destination& dst) {
 
   if (int status = ibv().modify_qp(queue_pair, &attr, mask); status != 0) {
     std::ostringstream msg;
-    msg << "[jaccl] Changing queue pair to RTR failed with errno " << status;
+    msg << "[jaccl] Changing queue pair to RTR failed with errno " << status
+        << " on " << describe_device(ctx) << " towards peer ";
+    if (attr.ah_attr.is_global) {
+      const uint8_t* g = dst.global_identifier.raw;
+      msg << (int)g[12] << "." << (int)g[13] << "." << (int)g[14] << "."
+          << (int)g[15];
+    } else {
+      msg << "lid " << dst.local_id;
+    }
+    if (status == 60) {
+      msg << " (peer unreachable on this link: wrong cable/device or the "
+          << "peer's link-local address is gone)";
+    } else if (status == 22) {
+      msg << " (invalid GID/attributes for this link)";
+    }
     throw std::invalid_argument(msg.str());
   }
 }
@@ -376,14 +426,111 @@ void TCPAllGather::operator()(const char* src, char* dst, size_t n_bytes) {
 }
 
 SideChannel::SideChannel(int rank, int size, AllGatherFn agf)
-    : rank_(rank), size_(size), all_gather_fn_(std::move(agf)) {}
+    : SideChannel(rank, size, std::move(agf), std::vector<int>{}) {}
+
+SideChannel::SideChannel(
+    int rank,
+    int size,
+    AllGatherFn agf,
+    std::vector<int> liveness_fds)
+    : rank_(rank),
+      size_(size),
+      all_gather_fn_(std::move(agf)),
+      liveness_fds_(std::move(liveness_fds)) {}
 
 SideChannel::SideChannel(SideChannel&& sc)
     : rank_(sc.rank_),
       size_(sc.size_),
-      all_gather_fn_(std::move(sc.all_gather_fn_)) {
+      all_gather_fn_(std::move(sc.all_gather_fn_)),
+      liveness_fds_(std::move(sc.liveness_fds_)) {
   sc.rank_ = -1;
   sc.size_ = -1;
+}
+
+// ── liveness + progress guard
+// ─────────────────────────────────────────────────
+
+double progress_timeout_s() {
+  static double timeout = [] {
+    const char* v = std::getenv("JACCL_PROGRESS_TIMEOUT_S");
+    if (v == nullptr) {
+      v = std::getenv("MLX_JACCL_PROGRESS_TIMEOUT_S");
+    }
+    if (v == nullptr || *v == 0) {
+      return 600.0;
+    }
+    return std::atof(v);
+  }();
+  return timeout;
+}
+
+void check_peers_alive(std::span<const int> fds, int rank, const char* what) {
+  if (fds.empty()) {
+    return;
+  }
+  std::vector<pollfd> pfds;
+  pfds.reserve(fds.size());
+  for (int fd : fds) {
+    pfds.push_back({fd, POLLIN, 0});
+  }
+  int r = ::poll(pfds.data(), pfds.size(), 0);
+  if (r <= 0) {
+    return; // nothing to report (EINTR/EAGAIN included)
+  }
+  for (size_t i = 0; i < pfds.size(); i++) {
+    bool dead = (pfds[i].revents & (POLLHUP | POLLERR | POLLNVAL)) != 0;
+    if (!dead && (pfds[i].revents & POLLIN)) {
+      char b;
+      ssize_t n = ::recv(pfds[i].fd, &b, 1, MSG_PEEK | MSG_DONTWAIT);
+      dead = (n == 0) || (n < 0 && errno != EAGAIN && errno != EINTR);
+    }
+    if (dead) {
+      std::ostringstream msg;
+      msg << IBV_TAG << " peer is gone: side channel to ";
+      if (rank == 0) {
+        msg << "rank " << (i + 1);
+      } else {
+        msg << "rank 0 (coordinator)";
+      }
+      msg << " closed while waiting in " << what
+          << " (a rank died or exited; UC RDMA never reports this by itself)";
+      throw std::runtime_error(msg.str());
+    }
+  }
+}
+
+ProgressGuard::ProgressGuard(
+    std::span<const int> fds,
+    int rank,
+    const char* what)
+    : fds_(fds),
+      rank_(rank),
+      what_(what),
+      last_progress_(std::chrono::steady_clock::now()),
+      last_check_(last_progress_) {}
+
+void ProgressGuard::slow_tick() {
+  auto now = std::chrono::steady_clock::now();
+  if (progressed_) {
+    last_progress_ = now;
+    progressed_ = false;
+  }
+  if (now - last_check_ < std::chrono::milliseconds(250)) {
+    return;
+  }
+  last_check_ = now;
+  check_peers_alive(fds_, rank_, what_);
+  double timeout = progress_timeout_s();
+  if (timeout > 0) {
+    double idle = std::chrono::duration<double>(now - last_progress_).count();
+    if (idle > timeout) {
+      std::ostringstream msg;
+      msg << IBV_TAG << " no progress in " << what_ << " for " << (int)idle
+          << " s (JACCL_PROGRESS_TIMEOUT_S=" << (int)timeout
+          << "): lost frame or wedged peer";
+      throw std::runtime_error(msg.str());
+    }
+  }
 }
 
 } // namespace jaccl

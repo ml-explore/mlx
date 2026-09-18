@@ -4,6 +4,8 @@
 
 #include <infiniband/verbs.h>
 
+#include <chrono>
+#include <cstdint>
 #include <functional>
 #include <mutex>
 #include <span>
@@ -271,6 +273,48 @@ inline int poll(
 using AllGatherFn =
     std::function<void(const char* src, char* dst, size_t n_bytes)>;
 
+// ── liveness + progress guard
+// ───────────────────────────────────────────────── UC queue pairs give no
+// error completion when a peer dies (measured on Apple's Thunderbolt RDMA
+// stack, macOS 26.6.1, scripts/jaccl/rdma_pair.c): a survivor polls forever.
+// The side channel TCP sockets live as long as the group, so a closed socket IS
+// the death signal. ProgressGuard is ticked from every completion wait loop;
+// while no completion arrives it checks the side channel at most every 250 ms
+// (poll()/MSG_PEEK only: no reads, no locks, safe from several wire threads at
+// once) and enforces a hard progress timeout (JACCL_PROGRESS_TIMEOUT_S /
+// MLX_JACCL_PROGRESS_TIMEOUT_S, default 600 s, 0 = disabled) as a backstop for
+// a lost UC frame or a wedged peer.
+void check_peers_alive(std::span<const int> fds, int rank, const char* what);
+double progress_timeout_s();
+
+class ProgressGuard {
+ public:
+  ProgressGuard(std::span<const int> fds, int rank, const char* what);
+
+  inline void tick(bool progressed) {
+    if (progressed) {
+      idle_polls_ = 0;
+      progressed_ = true;
+      return;
+    }
+    if ((++idle_polls_ & 255) != 0) {
+      return;
+    }
+    slow_tick();
+  }
+
+ private:
+  void slow_tick();
+
+  std::span<const int> fds_;
+  int rank_;
+  const char* what_;
+  std::chrono::steady_clock::time_point last_progress_;
+  std::chrono::steady_clock::time_point last_check_;
+  uint32_t idle_polls_ = 0;
+  bool progressed_ = false;
+};
+
 class TCPAllGather {
  public:
   TCPAllGather(int rank, int size, const char* addr);
@@ -281,6 +325,17 @@ class TCPAllGather {
   TCPAllGather& operator=(TCPAllGather&&) = delete;
 
   void operator()(const char* src, char* dst, size_t n_bytes);
+
+  // the socket fds (rank 0: one per peer in rank order; other
+  // ranks: the coordinator). Values only, the sockets stay owned here.
+  std::vector<int> fds() const {
+    std::vector<int> r;
+    r.reserve(sockets_.size());
+    for (auto& s : sockets_) {
+      r.push_back(static_cast<int>(s));
+    }
+    return r;
+  }
 
  private:
   int rank_;
@@ -299,7 +354,20 @@ class TCPAllGather {
 class SideChannel {
  public:
   SideChannel(int rank, int size, AllGatherFn agf);
+  // same, with the side channel socket fds to watch (kept as a
+  // separate overload so the stock 3-argument symbol stays exported: ABI).
+  SideChannel(
+      int rank,
+      int size,
+      AllGatherFn agf,
+      std::vector<int> liveness_fds);
   SideChannel(SideChannel&& sc);
+
+  // side channel socket fds to watch for peer death (empty when
+  // the side channel is not TCP based, e.g. a user supplied all-gather).
+  const std::vector<int>& liveness_fds() const {
+    return liveness_fds_;
+  }
 
   SideChannel(const SideChannel&) = delete;
   SideChannel& operator=(const SideChannel&) = delete;
@@ -358,6 +426,7 @@ class SideChannel {
   int rank_;
   int size_;
   AllGatherFn all_gather_fn_;
+  std::vector<int> liveness_fds_;
 };
 
 } // namespace jaccl
