@@ -1,100 +1,79 @@
 #include "svm.h"
-#include "mlx/mlx.h"
 #include <iostream>
+#include "mlx/mlx.h"
 
 namespace mx = mlx::core;
 
-
 int main() {
+  // --------------------------------
+  // Training data
+  // --------------------------------
 
-    // --------------------------------
-    // Training data
-    // --------------------------------
+  mx::array X(
+      {2.0f,
+       3.0f,
+       3.0f,
+       4.0f,
+       4.0f,
+       2.0f,
+       5.0f,
+       3.0f,
 
-    mx::array X(
-        {
-            2.0f, 3.0f,
-            3.0f, 4.0f,
-            4.0f, 2.0f,
-            5.0f, 3.0f,
+       -2.0f,
+       -3.0f,
+       -3.0f,
+       -4.0f,
+       -4.0f,
+       -2.0f,
+       -5.0f,
+       -3.0f},
+      {8, 2});
 
-            -2.0f, -3.0f,
-            -3.0f, -4.0f,
-            -4.0f, -2.0f,
-            -5.0f, -3.0f
-        },
-        {8, 2}
-    );
+  // Labels must be -1 or +1
 
+  mx::array Y(
+      {1.0f,
+       1.0f,
+       1.0f,
+       1.0f,
 
-    // Labels must be -1 or +1
+       -1.0f,
+       -1.0f,
+       -1.0f,
+       -1.0f},
+      {8});
 
-    mx::array Y(
-        {
-            1.0f,
-            1.0f,
-            1.0f,
-            1.0f,
+  // --------------------------------
+  // Create SVM
+  // --------------------------------
 
-            -1.0f,
-            -1.0f,
-            -1.0f,
-            -1.0f
-        },
-        {8}
-    );
+  SVM svm(
+      2, // Number of features
+      0.01f, // Learning rate
+      0.01f // Lambda
+  );
 
+  // --------------------------------
+  // Train
+  // --------------------------------
 
-    // --------------------------------
-    // Create SVM
-    // --------------------------------
+  svm.fit(X, Y, 1000);
 
-    SVM svm(
-        2,          // Number of features
-        0.01f,      // Learning rate
-        0.01f       // Lambda
-    );
+  // --------------------------------
+  // Evaluate
+  // --------------------------------
 
+  float acc = svm.accuracy(X, Y);
 
-    // --------------------------------
-    // Train
-    // --------------------------------
+  std::cout << "\nTraining Accuracy: " << acc * 100.0f << "%" << std::endl;
 
-    svm.fit(
-        X,
-        Y,
-        1000
-    );
+  // --------------------------------
+  // Prediction
+  // --------------------------------
 
+  auto predictions = svm.predict(X);
 
-    // --------------------------------
-    // Evaluate
-    // --------------------------------
+  std::cout << "\nPredictions:\n" << predictions << std::endl;
 
-    float acc =
-        svm.accuracy(X, Y);
-
-
-    std::cout
-        << "\nTraining Accuracy: "
-        << acc * 100.0f
-        << "%"
-        << std::endl;
-
-
-    // --------------------------------
-    // Prediction
-    // --------------------------------
-
-    auto predictions =
-        svm.predict(X);
-
-
-    std::cout
-        << "\nPredictions:\n"
-        << predictions
-        << std::endl;
-
-
-    return 0;
+  return 0;
 }
