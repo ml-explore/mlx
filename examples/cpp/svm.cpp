@@ -1,4 +1,4 @@
-#include "SVM.h"
+#include "svm.h"
 #include "mlx/mlx.h"
 #include <iostream>
 
