@@ -195,8 +195,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool can_use_qmm_sm80 =
       !global_scale.has_value() && supports(supports_qmm_sm80);
   bool can_use_qmm_naive = supports(supports_qmm_naive);
-  bool can_use_fp_gather_qmv =
-      !global_scale && supports(supports_fp_gather_qmv);
+  bool can_use_fp_gather_qmv = supports(supports_fp_gather_qmv);
   bool can_use_qmv = supports(supports_qmv) || can_use_fp_gather_qmv;
   bool prefer_qmv = can_use_fp_gather_qmv || (can_use_qmv && M * B < 8);
   auto call_qmm_sm80 = [&]() {
@@ -238,6 +237,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
           x,
           w,
           scales,
+          global_scale,
           lhs_indices,
           rhs_indices,
           out,

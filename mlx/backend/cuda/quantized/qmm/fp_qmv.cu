@@ -64,6 +64,7 @@ __device__ void fp_qmv_impl(
     const uint8_t* scales_,
     const T* vec,
     T* out,
+    float scale,
     int rows,
     int cols) {
   auto block = cg::this_thread_block();
@@ -150,7 +151,7 @@ __device__ void fp_qmv_impl(
 
     sum = cg::reduce(warp, sum, cg::plus<float>{});
     if (warp.thread_rank() == 0) {
-      out[row] = static_cast<T>(sum);
+      out[row] = static_cast<T>(sum * scale);
     }
   }
 }
@@ -170,7 +171,7 @@ __global__ void fp_qmv_single(
     int rows,
     int cols) {
   fp_qmv_impl<T, rows_per_block, n_per_thread, bits, group_size, use_mx_scale>(
-      mat, scales, vec, out, rows, cols);
+      mat, scales, vec, out, 1.0f, rows, cols);
 }
 
 template <
@@ -208,7 +209,7 @@ __global__ void fp_qmv_batched(
       mat_strides,
       scales_strides);
   fp_qmv_impl<T, rows_per_block, n_per_thread, bits, group_size, use_mx_scale>(
-      mat, scales, vec, out, rows, cols);
+      mat, scales, vec, out, 1.0f, rows, cols);
 }
 
 template <
@@ -221,6 +222,7 @@ template <
 __global__ void fp_gather_qmv(
     const uint32_t* mat,
     const uint8_t* scales,
+    const float* global_scale,
     const T* vec,
     T* out,
     const uint32_t* lhs_indices,
@@ -235,8 +237,11 @@ __global__ void fp_gather_qmv(
   scales += rhs_indices[idx] * scales_size;
   vec += static_cast<int64_t>(lhs_indices[idx]) * cols;
   out += static_cast<int64_t>(idx) * rows;
+  float scale = global_scale
+      ? global_scale[rhs_indices[idx]] / (F8E4M3_MAX * F4E2M1_MAX)
+      : 1.0f;
   fp_qmv_impl<T, rows_per_block, n_per_thread, bits, group_size, use_mx_scale>(
-      mat, scales, vec, out, rows, cols);
+      mat, scales, vec, out, scale, rows, cols);
 }
 
 } // namespace cu
@@ -397,6 +402,7 @@ void fp_gather_qmv(
     const array& x,
     const array& w,
     const array& scales,
+    const std::optional<array>& global_scale,
     const array& lhs_indices,
     const array& rhs_indices,
     array& out,
@@ -409,6 +415,9 @@ void fp_gather_qmv(
 
   encoder.set_input_array(w);
   encoder.set_input_array(scales);
+  if (global_scale) {
+    encoder.set_input_array(*global_scale);
+  }
   encoder.set_input_array(x);
   encoder.set_input_array(lhs_indices);
   encoder.set_input_array(rhs_indices);
@@ -435,6 +444,7 @@ void fp_gather_qmv(
             block_dims,
             mat_ptr,
             gpu_ptr<uint8_t>(scales),
+            global_scale ? gpu_ptr<float>(*global_scale) : nullptr,
             vec_ptr,
             gpu_ptr<T>(out),
             gpu_ptr<uint32_t>(lhs_indices),
