@@ -636,20 +636,41 @@ TEST_CASE("test split") {
   CHECK_EQ(out[1].data_size(), sliced.data_size());
   CHECK_EQ(out[1].data_size(), 184);
 
+  // (4, 4) array, but slice keeps the strides at (8, 1)
+  x = slice(reshape(arange(32), {4, 8}), {0, 0}, {4, 4});
+  // out[0] and out[1] are (4, 2)
+  out = split(x, Shape{2}, 1);
+  // same out out[1]
+  auto holey = slice(x, {0, 2}, {4, 4});
+  eval(out);
+  eval(holey);
+  CHECK_EQ(out[0].data_size(), 26);
+  CHECK_EQ(out[1].data_size(), 26);
+  CHECK_EQ(out[1].data_size(), holey.data_size());
+  CHECK_EQ(out[0].strides(), x.strides());
+  CHECK_EQ(out[1].strides(), holey.strides());
+  CHECK(array_equal(out[1], holey).item<bool>());
+
+  // A negative stride travels backwards, so it bounds the span from below.
+  // strides (-4, 1)
+  x = flip(reshape(arange(24), {6, 4}), 0);
+  out = split(x, Shape{2}, 0);
+  eval(out);
+  // no holes
+  CHECK_EQ(out[0].data_size(), 8);
+  CHECK_EQ(out[1].data_size(), 16);
+  CHECK_EQ(out[0].strides(), x.strides());
+  CHECK_EQ(out[1].strides(), x.strides());
+  CHECK(array_equal(out[0], slice(x, {0, 0}, {2, 4})).item<bool>());
+  CHECK(array_equal(out[1], slice(x, {2, 0}, {6, 4})).item<bool>());
+
   // A zero-length axis empties every output. Splitting at 0 cannot get here,
   // split() sends that to slice().
   x = ones({0, 4});
   out = split(x, Shape{2}, 1);
   eval(out);
-  CHECK_EQ(out[0].size(), 0);
   CHECK_EQ(out[0].data_size(), 0);
   CHECK_EQ(out[1].data_size(), 0);
-
-  x = ones({2, 0, 4});
-  out = split(x, Shape{2}, 2);
-  eval(out);
-  CHECK_EQ(out[0].size(), 0);
-  CHECK_EQ(out[0].data_size(), 0);
 }
 
 TEST_CASE("test flip") {
