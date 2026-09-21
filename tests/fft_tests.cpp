@@ -393,3 +393,69 @@ TEST_CASE("test fftshift and ifftshift") {
   CHECK_THROWS_AS(fft::ifftshift(x, {3}), std::invalid_argument);
   CHECK_THROWS_AS(fft::ifftshift(x, {-5}), std::invalid_argument);
 }
+
+TEST_CASE("test stft and istft") {
+  auto win = ones({16}, float32);
+
+  // Real, centered input -> (n_freq, n_frames).
+  auto x = astype(arange(64), float32);
+  auto z = fft::stft(x, 16, 8, 16, win, /* center = */ true);
+  CHECK_EQ(z.ndim(), 2);
+  CHECK_EQ(z.shape(0), 9); // n_fft / 2 + 1
+  CHECK_EQ(z.shape(1), 9); // 1 + (64 + 16 - 16) / 8
+  CHECK_EQ(z.dtype(), complex64);
+
+  // Batched input -> (batch, n_freq, n_frames).
+  auto xb = reshape(astype(arange(2 * 64), float32), {2, 64});
+  auto zb = fft::stft(xb, 16, 8, 16, win, true);
+  CHECK_EQ(zb.ndim(), 3);
+  CHECK_EQ(zb.shape(0), 2);
+  CHECK_EQ(zb.shape(1), 9);
+
+  // Non-overlapping rectangular window reconstructs the signal exactly.
+  auto x2 = astype(arange(32), float32);
+  auto win2 = ones({8}, float32);
+  auto z2 = fft::stft(x2, 8, 8, 8, win2, /* center = */ false);
+  auto y2 = fft::istft(
+      z2,
+      /* n_fft = */ 8,
+      /* hop_length = */ 8,
+      /* win_length = */ 8,
+      win2,
+      /* center = */ false,
+      fft::FFTNorm::Backward,
+      /* onesided = */ true,
+      /* length = */ 32);
+  CHECK_EQ(y2.shape(0), 32);
+  CHECK(allclose(y2, x2, 1e-4, 1e-4).item<bool>());
+
+  // Overlapping window: round-trip recovers the fully covered interior.
+  auto x3 = astype(arange(64), float32);
+  auto z3 = fft::stft(x3, 16, 8, 16, win, /* center = */ false);
+  auto y3 = fft::istft(z3, 16, 8, 16, win, false, fft::FFTNorm::Backward, true);
+  CHECK_EQ(y3.shape(0), 64); // n_fft + (n_frames - 1) * hop = 16 + 6 * 8
+  CHECK(allclose(slice(y3, {8}, {56}), slice(x3, {8}, {56}), 1e-4, 1e-4)
+            .item<bool>());
+
+  // n_fft not divisible by hop: length is n_fft + (n_frames - 1) * hop.
+  auto w7 = ones({7}, float32);
+  auto z4 = fft::stft(x3, 7, 3, 7, w7, /* center = */ false);
+  auto y4 = fft::istft(z4, 7, 3, 7, w7, false, fft::FFTNorm::Backward, true);
+  CHECK_EQ(y4.shape(0), 64); // n_frames = 20 -> 7 + 19 * 3
+
+  // Two-sided transform keeps all frequency bins.
+  auto zf = fft::stft(
+      x, 16, 8, 16, win, true, "reflect", fft::FFTNorm::Backward, false);
+  CHECK_EQ(zf.shape(0), 16);
+
+  // Edge padding must not raise (regression: edge mode on the last axis).
+  auto ze = fft::stft(x, 16, 8, 16, win, true, "edge");
+  CHECK_EQ(ze.shape(0), 9);
+
+  // Error cases.
+  CHECK_THROWS_AS(fft::stft(x, 0), std::invalid_argument);
+  CHECK_THROWS_AS(
+      fft::stft(x, 16, 8, 16, ones({32}, float32)), std::invalid_argument);
+  CHECK_THROWS_AS(
+      fft::stft(x, 16, 8, 16, win, true, "bogus"), std::invalid_argument);
+}
