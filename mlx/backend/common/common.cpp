@@ -2,6 +2,7 @@
 #include <cassert>
 
 #include "mlx/backend/common/broadcasting.h"
+#include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
@@ -166,48 +167,31 @@ void Split::eval(
 
   auto& in = inputs[0];
 
-  auto compute_new_flags = [](const auto& shape,
-                              const auto& strides,
-                              size_t in_data_size,
-                              auto flags) {
-    size_t data_size = 1;
-    size_t f_stride = 1;
-    size_t b_stride = 1;
-    flags.row_contiguous = true;
-    flags.col_contiguous = true;
-    for (int i = 0, ri = shape.size() - 1; ri >= 0; i++, ri--) {
-      flags.col_contiguous &= strides[i] == f_stride || shape[i] == 1;
-      flags.row_contiguous &= strides[ri] == b_stride || shape[ri] == 1;
-      f_stride *= shape[i];
-      b_stride *= shape[ri];
-      if (strides[i] > 0) {
-        data_size *= shape[i];
-      }
-    }
-
-    if (data_size == 1) {
-      // Broadcasted scalar array is contiguous.
-      flags.contiguous = true;
-    } else if (data_size == in_data_size) {
-      // Means we sliced a broadcasted dimension so leave the "no holes" flag
-      // alone.
-    } else {
-      // We sliced something. So either we are row or col contiguous or we
-      // punched a hole.
-      flags.contiguous &= flags.row_contiguous || flags.col_contiguous;
-    }
-
-    return std::pair<decltype(flags), size_t>{flags, data_size};
-  };
-
   std::vector<int> indices(1, 0);
   indices.insert(indices.end(), indices_.begin(), indices_.end());
   for (int i = 0; i < indices.size(); i++) {
+    if (outputs[i].size() == 0) {
+      outputs[i].set_data(allocator::malloc(0));
+      continue;
+    }
+
     size_t offset = indices[i] * in.strides()[axis_];
-    auto [new_flags, data_size] = compute_new_flags(
-        outputs[i].shape(), in.strides(), in.data_size(), in.flags());
-    outputs[i].copy_shared_buffer(
-        in, in.strides(), new_flags, data_size, offset);
+
+    // compute the span; data_size is the distance between the first and the
+    // last element
+    int64_t low_idx = 0;
+    int64_t high_idx = 0;
+    for (int j = 0; j < in.ndim(); j++) {
+      auto delta = in.strides()[j] * (outputs[i].shape()[j] - 1);
+      if (in.strides()[j] > 0) {
+        high_idx += delta;
+      } else {
+        low_idx += delta;
+      }
+    }
+
+    shared_buffer_slice(
+        in, in.strides(), offset, (high_idx - low_idx) + 1, outputs[i]);
   }
 }
 
