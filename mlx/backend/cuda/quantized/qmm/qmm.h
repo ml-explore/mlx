@@ -135,6 +135,7 @@ void gather_qmv(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& global_scale,
     const array& lhs_indices,
     const array& rhs_indices,
     array& out,
