@@ -167,18 +167,16 @@ void Split::eval(
 
   auto& in = inputs[0];
 
-  std::vector<int> indices(1, 0);
-  indices.insert(indices.end(), indices_.begin(), indices_.end());
-  for (int i = 0; i < indices.size(); i++) {
+  for (int i = 0; i < outputs.size(); i++) {
     if (outputs[i].size() == 0) {
       outputs[i].set_data(allocator::malloc(0));
       continue;
     }
 
-    size_t offset = indices[i] * in.strides()[axis_];
+    int64_t start = i == 0 ? 0 : indices_[i - 1];
+    int64_t offset = start * in.strides()[axis_];
 
-    // compute the span; data_size is the distance between the first and the
-    // last element
+    // compute the span
     int64_t low_idx = 0;
     int64_t high_idx = 0;
     for (int j = 0; j < in.ndim(); j++) {
