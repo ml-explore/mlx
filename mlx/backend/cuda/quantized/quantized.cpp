@@ -196,6 +196,9 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       !global_scale.has_value() && supports(supports_qmm_sm80);
   bool can_use_qmm_naive = supports(supports_qmm_naive);
   bool can_use_qmv = supports(supports_qmv);
+  bool can_use_gather_qmm_rhs_sm80 = mode_ != QuantizationMode::Affine &&
+      right_sorted_ && !global_scale.has_value() &&
+      supports(supports_gather_qmm_rhs_sm80);
 
   auto call_qmm_sm80 = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
@@ -245,6 +248,22 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         mode_,
         encoder);
   };
+
+  if (can_use_gather_qmm_rhs_sm80) {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    gather_qmm_rhs_sm80(
+        x,
+        w,
+        scales,
+        biases,
+        rhs_indices,
+        out,
+        bits_,
+        group_size_,
+        mode_,
+        encoder);
+    return;
+  }
 
   if (can_use_qmm_sm80) {
     if (can_use_qmv && (M * B < 8)) {
