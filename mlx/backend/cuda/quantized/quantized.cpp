@@ -198,7 +198,6 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool can_use_fp_gather_qmv =
       !global_scale && supports(supports_fp_gather_qmv);
   bool can_use_qmv = supports(supports_qmv) || can_use_fp_gather_qmv;
-  // fp_gather_qmv wins at any batch size, gather_qmv only under 8 rows.
   bool prefer_qmv = can_use_fp_gather_qmv || (can_use_qmv && M * B < 8);
   auto call_qmm_sm80 = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
