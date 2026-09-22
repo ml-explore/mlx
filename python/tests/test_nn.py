@@ -1,5 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
+import math
 import os
 import tempfile
 import unittest
@@ -1029,6 +1030,23 @@ class TestLayers(mlx_tests.MLXTestCase):
         c = nn.Conv2d(4, 8, 3, padding=1, stride=1, groups=2)
         y = c(x)
         self.assertEqual(y.shape, (4, 7, 7, 8))
+
+    def test_conv_grouped_init(self):
+        # weights are drawn from U(-s, s) with s = 1 / sqrt(fan_in), where
+        # fan_in only counts the input channels each group sees
+        mx.random.seed(0)
+        for groups in (1, 2, 4):
+            layers = [
+                nn.Conv1d(64, 64, kernel_size=3, groups=groups),
+                nn.Conv2d(64, 64, kernel_size=3, groups=groups),
+            ]
+            for layer in layers:
+                w = layer.weight
+                fan_in = math.prod(w.shape[1:])
+                bound = 1 / math.sqrt(fan_in)
+                w_max = mx.abs(w).max().item()
+                self.assertLessEqual(w_max, bound)
+                self.assertGreater(w_max, 0.95 * bound)
 
     def test_conv_transpose_extra_repr(self):
         self.assertIn(
