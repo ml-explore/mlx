@@ -1170,7 +1170,8 @@ void init_transforms(nb::module_& m) {
             return a pytree with the vectorization axes of each output. If some
             outputs are no longer vectorized, then their vectorization axis
             should be ``None``.
-          )pbdoc");
+          )pbdoc")
+      .freeze();
 
   m.def(
       "eval",
