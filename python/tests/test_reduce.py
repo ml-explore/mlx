@@ -159,6 +159,36 @@ class TestReduce(mlx_tests.MLXTestCase):
                 with self.assertRaises(ValueError):
                     getattr(mx, op)(a_mx, axis=axis)
 
+    def test_zero_size_sum_prod_all_dtypes(self):
+        # sum and prod have identities, so an empty reduction returns them for
+        # every dtype. The unsigned outputs (uint32, uint64) had no init kernel
+        # on Metal and aborted the process instead.
+        dtypes = [
+            mx.bool_,
+            mx.uint8,
+            mx.uint16,
+            mx.uint32,
+            mx.uint64,
+            mx.int8,
+            mx.int16,
+            mx.int32,
+            mx.int64,
+            mx.float16,
+            mx.float32,
+        ]
+        for dtype in dtypes:
+            a = mx.zeros((0,), dtype=dtype)
+            for op, identity in [("sum", 0), ("prod", 1)]:
+                out = getattr(mx, op)(a)
+                mx.eval(out)
+                self.assertEqual(out.item(), identity, f"{op} of empty {dtype}")
+            # empty because of another axis, reduced over a non-empty one
+            b = mx.zeros((0, 3), dtype=dtype)
+            for op in ["sum", "prod"]:
+                out = getattr(mx, op)(b, axis=-1)
+                mx.eval(out)
+                self.assertEqual(out.shape, (0,))
+
     def test_sum_bool(self):
         x = np.random.uniform(0, 1, size=(10, 10, 10)) > 0.5
         y = mx.array(x)
