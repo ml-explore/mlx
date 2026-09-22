@@ -1601,7 +1601,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
-    @unittest.skipIf(mx.cuda.is_available(), "Not implemented for CUDA")
     def test_gather_qqmm_global_scale_matrix_paths(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("Not implemented for CPU")
@@ -2090,7 +2089,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 ds = mx.grad(gmm)(s, x, wq)
 
     @unittest.skipIf(
-        not mx.metal.is_available(), "Global scale is only supported on Metal backend"
+        not mx.is_available(mx.gpu), "Global scale is only supported on the GPU"
     )
     def test_gather_qmm_global_scale(self):
         mx.random.seed(0)
@@ -2163,6 +2162,29 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 rotated = mx.concatenate([gs[1:], gs[:1]])
                 wrong = mx.gather_qmm(x, wq, s, global_scale=rotated, **kwargs)
                 self.assertGreater(rel_err(wrong, expected), 0.5)
+
+        # Repeated and out-of-order experts with explicit lhs indices on the
+        # M=1 vector path; each output must pick its own expert's scale. The
+        # long K is the decode shape that long-K vector kernels take.
+        E = 6
+        for K in (K, 2048):
+            with self.subTest(K=K):
+                w = (mx.random.normal((E, N, K)) / K**0.5).astype(mx.bfloat16)
+                wq, s, gs, w_hat = quantize_experts(w)
+                indices = mx.array([3, 0, 5, 3, 1, 0], mx.uint32)
+                x = (mx.random.normal((2, 1, K)) / K**0.5).astype(mx.bfloat16)
+                lhs = mx.array([0, 1, 0, 1, 0, 1], mx.uint32)
+                expected = x[lhs] @ w_hat[indices].swapaxes(-1, -2)
+                out = mx.gather_qmm(
+                    x,
+                    wq,
+                    s,
+                    lhs_indices=lhs,
+                    rhs_indices=indices,
+                    mode="nvfp4",
+                    global_scale=gs,
+                )
+                self.assertLess(rel_err(out, expected), 3e-2)
 
     def test_quantize_strided(self):
         N = 64
