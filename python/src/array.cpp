@@ -129,9 +129,10 @@ void init_array(nb::module_& m) {
             return nb::isinstance<mx::Dtype>(other) &&
                 t == nb::cast<mx::Dtype>(other);
           })
-      .def("__hash__", [](const mx::Dtype& t) {
-        return static_cast<int64_t>(t.val());
-      });
+      .def(
+          "__hash__",
+          [](const mx::Dtype& t) { return static_cast<int64_t>(t.val()); })
+      .freeze();
 
   m.attr("bool_") = nb::cast(mx::bool_);
   m.attr("uint8") = nb::cast(mx::uint8);
@@ -229,13 +230,16 @@ void init_array(nb::module_& m) {
           &mx::finfo::smallest_normal,
           R"pbdoc(The smallest positive normal number.)pbdoc")
       .def_ro("dtype", &mx::finfo::dtype, R"pbdoc(The :obj:`Dtype`.)pbdoc")
-      .def("__repr__", [](const mx::finfo& f) {
-        std::ostringstream os;
-        os << "finfo("
-           << "min=" << f.min << ", max=" << f.max << ", dtype=" << f.dtype
-           << ")";
-        return os.str();
-      });
+      .def(
+          "__repr__",
+          [](const mx::finfo& f) {
+            std::ostringstream os;
+            os << "finfo("
+               << "min=" << f.min << ", max=" << f.max << ", dtype=" << f.dtype
+               << ")";
+            return os.str();
+          })
+      .freeze();
 
   nb::class_<mx::iinfo>(
       m,
@@ -253,13 +257,16 @@ void init_array(nb::module_& m) {
           &mx::iinfo::max,
           R"pbdoc(The largest representable number.)pbdoc")
       .def_ro("dtype", &mx::iinfo::dtype, R"pbdoc(The :obj:`Dtype`.)pbdoc")
-      .def("__repr__", [](const mx::iinfo& i) {
-        std::ostringstream os;
-        os << "iinfo("
-           << "min=" << i.min << ", max=" << i.max << ", dtype=" << i.dtype
-           << ")";
-        return os.str();
-      });
+      .def(
+          "__repr__",
+          [](const mx::iinfo& i) {
+            std::ostringstream os;
+            os << "iinfo("
+               << "min=" << i.min << ", max=" << i.max << ", dtype=" << i.dtype
+               << ")";
+            return os.str();
+          })
+      .freeze();
 
   nb::class_<ArrayAt>(
       m,
@@ -274,7 +281,8 @@ void init_array(nb::module_& m) {
       .def("multiply", &ArrayAt::multiply, "value"_a)
       .def("divide", &ArrayAt::divide, "value"_a)
       .def("maximum", &ArrayAt::maximum, "value"_a)
-      .def("minimum", &ArrayAt::minimum, "value"_a);
+      .def("minimum", &ArrayAt::minimum, "value"_a)
+      .freeze();
 
   nb::class_<ArrayLike>(
       m,
@@ -283,7 +291,8 @@ void init_array(nb::module_& m) {
         Any Python object which has an ``__mlx__array__`` method that
         returns an :obj:`array`.
       )pbdoc")
-      .def(nb::init_implicit<nb::object>());
+      .def(nb::init_implicit<nb::object>())
+      .freeze();
 
   nb::class_<ArrayPythonIterator>(
       m,
@@ -292,7 +301,8 @@ void init_array(nb::module_& m) {
       A helper object to iterate over the 1st dimension of an array.
       )pbdoc")
       .def("__next__", &ArrayPythonIterator::next)
-      .def("__iter__", [](const ArrayPythonIterator& it) { return it; });
+      .def("__iter__", [](const ArrayPythonIterator& it) { return it; })
+      .freeze();
 
   // Install buffer protocol functions
   PyType_Slot array_slots[] = {
@@ -1582,5 +1592,6 @@ void init_array(nb::module_& m) {
           "dtype"_a,
           nb::kw_only(),
           "stream"_a = nb::none(),
-          "See :func:`view`.");
+          "See :func:`view`.")
+      .freeze();
 }

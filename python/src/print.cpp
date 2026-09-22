@@ -33,7 +33,8 @@ void init_print(nb::module_& m) {
   // Expose printing options to Python: allow setting global precision.
   nb::class_<mx::PrintOptions>(m, "PrintOptions")
       .def(nb::init<int>(), "precision"_a = -1)
-      .def_rw("precision", &mx::PrintOptions::precision);
+      .def_rw("precision", &mx::PrintOptions::precision)
+      .freeze();
 
   m.def(
       "set_printoptions",
@@ -64,7 +65,8 @@ void init_print(nb::module_& m) {
   nb::class_<PrintOptionsContext>(m, "_PrintOptionsContext")
       .def(nb::init<mx::PrintOptions>())
       .def("__enter__", &PrintOptionsContext::enter)
-      .def("__exit__", &PrintOptionsContext::exit);
+      .def("__exit__", &PrintOptionsContext::exit)
+      .freeze();
 
   m.def(
       "printoptions",
