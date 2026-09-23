@@ -1,4 +1,4 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
 #include "mlx/memory.h"
 #include <nanobind/nanobind.h>
@@ -87,6 +87,12 @@ void init_memory(nb::module_& m) {
 
       Returns:
         int: The previous memory limit in bytes.
+      )pbdoc");
+  m.def(
+      "get_memory_limit",
+      &mx::get_memory_limit,
+      R"pbdoc(
+      Get the current memory limit in bytes.
       )pbdoc");
   m.def(
       "set_cache_limit",

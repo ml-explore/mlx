@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <sstream>
+#include <vector>
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
@@ -15,10 +16,11 @@ namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
-// Create the StreamContext on enter and delete on exit.
+// Create a StreamContext on enter and delete it on exit. The contexts are
+// stacked, so the same object can be entered more than once.
 class PyStreamContext {
  public:
-  PyStreamContext(mx::StreamOrDevice s) : _inner(nullptr) {
+  PyStreamContext(mx::StreamOrDevice s) {
     if (std::holds_alternative<std::monostate>(s)) {
       throw std::runtime_error(
           "[StreamContext] Invalid argument, please specify a stream or device.");
@@ -27,28 +29,33 @@ class PyStreamContext {
   }
 
   void enter() {
-    _inner = new mx::StreamContext(_s);
+    _contexts.push_back(new mx::StreamContext(_s));
   }
 
   void exit() {
-    auto* inner = _inner;
-    _inner = nullptr;
-    // the destructor can throw, _inner is freed regardless.
+    if (_contexts.empty()) {
+      return;
+    }
+    auto* inner = _contexts.back();
+    _contexts.pop_back();
+    // the destructor can throw, inner is freed regardless.
     delete inner;
   }
 
   // ~StreamContext throws when destroyed on a different thread, which Python
   // cannot control
   ~PyStreamContext() {
-    try {
-      exit();
-    } catch (...) {
+    while (!_contexts.empty()) {
+      try {
+        exit();
+      } catch (...) {
+      }
     }
   }
 
  private:
   mx::StreamOrDevice _s;
-  mx::StreamContext* _inner;
+  std::vector<mx::StreamContext*> _contexts;
 };
 
 void init_stream(nb::module_& m) {
