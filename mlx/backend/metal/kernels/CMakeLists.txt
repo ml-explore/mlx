@@ -77,6 +77,7 @@ set(STEEL_HEADERS
     steel/gemm/transforms.h
     steel/gemm/kernels/steel_gemm_fused.h
     steel/gemm/kernels/steel_gemm_gather.h
+    steel/gemm/kernels/steel_gemm_grouped.h
     steel/gemm/kernels/steel_gemm_masked.h
     steel/gemm/kernels/steel_gemm_segmented.h
     steel/gemm/kernels/steel_gemm_splitk.h
@@ -110,6 +111,7 @@ set(STEEL_NAX_HEADERS
     steel/utils/integral_constant.h
     steel/gemm/kernels/steel_gemm_fused_nax.h
     steel/gemm/kernels/steel_gemm_gather_nax.h
+    steel/gemm/kernels/steel_gemm_grouped_nax.h
     steel/gemm/kernels/steel_gemm_splitk_nax.h
     steel/gemm/kernels/steel_gemm_segmented_nax.h)
 
@@ -151,6 +153,7 @@ if(NOT MLX_METAL_JIT)
   build_kernel(steel/conv/kernels/steel_conv_general ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_fused ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_gather ${STEEL_HEADERS})
+  build_kernel(steel/gemm/kernels/steel_gemm_grouped ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_masked ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_splitk ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_segmented ${STEEL_HEADERS})
@@ -164,6 +167,7 @@ if(NOT MLX_METAL_JIT)
 
     build_kernel(steel/gemm/kernels/steel_gemm_fused_nax ${STEEL_NAX_HEADERS})
     build_kernel(steel/gemm/kernels/steel_gemm_gather_nax ${STEEL_NAX_HEADERS})
+    build_kernel(steel/gemm/kernels/steel_gemm_grouped_nax ${STEEL_NAX_HEADERS})
     build_kernel(steel/gemm/kernels/steel_gemm_splitk_nax ${STEEL_NAX_HEADERS})
     build_kernel(steel/gemm/kernels/steel_gemm_segmented_nax
                  ${STEEL_NAX_HEADERS})

@@ -3098,8 +3098,164 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   segmented_mm(a, b, segments, out, M, N, K, d, s);
 }
 
-void GroupedMM::eval_gpu(const std::vector<array>&, array&) {
-  throw std::runtime_error("[GroupedMM::eval_gpu] Metal grouped_mm NYI.");
+void grouped_mm(
+    const array& a_,
+    const array& b_,
+    const array& offsets_,
+    array& out,
+    metal::Device& d,
+    const Stream& s) {
+  array a = ensure_row_contiguous(a_, d, s);
+  auto [transpose_b, ldb, b] = ensure_batch_contiguous(b_, d, s);
+  array offsets = ensure_row_contiguous(offsets_, d, s);
+
+  int M = a.shape(0);
+  int K = a.shape(1);
+  int N = b.shape(-1);
+  int num_groups = std::min<int>(offsets.size(), b.shape(0));
+  int rows_per_group = M / num_groups;
+
+  bool use_nax = metal::is_nax_available() &&
+      (env::enable_tf32() || out.dtype() != float32);
+
+  int bm, bn, bk, wm, wn;
+  if (use_nax) {
+    bn = 128;
+    bk = 128;
+    wn = 4;
+  } else {
+    bn = 64;
+    bk = 16;
+    wn = 2;
+  }
+  if (rows_per_group > 48) {
+    bm = 64;
+    wm = 2;
+  } else if (rows_per_group > 24) {
+    bm = 32;
+    wm = 1;
+  } else {
+    bm = 16;
+    wm = 1;
+  }
+
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+
+  std::string base_name;
+  base_name.reserve(64);
+  concatenate(
+      base_name,
+      use_nax ? "steel_grouped_mm_nax_n" : "steel_grouped_mm_n",
+      transpose_b ? 't' : 'n',
+      '_',
+      type_to_name(a),
+      '_',
+      type_to_name(out),
+      "_bm",
+      bm,
+      "_bn",
+      bn,
+      "_bk",
+      bk,
+      "_wm",
+      wm,
+      "_wn",
+      wn);
+
+  metal::MTLFCList func_consts = {
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+  };
+
+  std::string hash_name;
+  hash_name.reserve(128);
+  concatenate(
+      hash_name,
+      base_name,
+      "_align_M_",
+      align_M ? 't' : 'n',
+      "_align_N_",
+      align_N ? 't' : 'n',
+      "_align_K_",
+      align_K ? 't' : 'n');
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+  auto kernel = use_nax ? get_steel_gemm_grouped_nax_kernel(
+                              d,
+                              base_name,
+                              hash_name,
+                              func_consts,
+                              out,
+                              false,
+                              transpose_b,
+                              bm,
+                              bn,
+                              bk,
+                              wm,
+                              wn)
+                        : get_steel_gemm_grouped_kernel(
+                              d,
+                              base_name,
+                              hash_name,
+                              func_consts,
+                              out,
+                              false,
+                              transpose_b,
+                              bm,
+                              bn,
+                              bk,
+                              wm,
+                              wn);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  steel::GEMMParams params{/* const int M = */ M,
+                           /* const int N = */ N,
+                           /* const int K = */ K,
+                           /* const int lda = */ K,
+                           /* const int ldb = */ static_cast<int>(ldb),
+                           /* const int ldd = */ N,
+                           /* const int tiles_n = */ (N + bn - 1) / bn,
+                           /* const int tiles_m = */ (M + bm - 1) / bm,
+                           /* const int64_t batch_stride_a = */ 0,
+                           /* const int64_t batch_stride_b = */ b.strides()[0],
+                           /* const int64_t batch_stride_d = */ 0,
+                           /* const int swizzle_log = */ 0,
+                           /* const int gemm_k_iterations_aligned = */ (K / bk),
+                           /* const int batch_ndim = */ 0};
+
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims = MTL::Size(params.tiles_n, params.tiles_m, 1);
+
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_input_array(offsets, 2);
+  compute_encoder.set_output_array(out, 3);
+  compute_encoder.set_bytes(params, 4);
+  compute_encoder.set_bytes(num_groups, 5);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+void GroupedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  auto& offsets = inputs[2];
+
+  if (out.size() == 0 || a.size() == 0 || b.size() == 0 ||
+      offsets.size() == 0) {
+    array zero = array(0, out.dtype());
+    fill_gpu(zero, out, s);
+    metal::get_command_encoder(s).add_temporary(std::move(zero));
+    return;
+  }
+
+  out.set_data(allocator::malloc(out.nbytes()));
+  grouped_mm(a, b, offsets, out, d, s);
 }
 
 } // namespace mlx::core
