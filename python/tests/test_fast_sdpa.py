@@ -7,6 +7,139 @@ import mlx.core as mx
 import mlx_tests
 import numpy as np
 
+def compare_sdpa_grads(grads, refs, dims, dtype, mask_str, tol, label):
+    """Report dq, dk and dv against the fp32 reference and return the failures.
+
+    Metrics rather than a bare allclose because the three gradients have very
+    different scales: dv is a convex combination of the cotangent while dq and
+    dk carry the softmax Jacobian and are smaller by roughly the score spread,
+    so one absolute tolerance cannot cover all three.
+    """
+    B, qH, kH, qL, kL, D, Dv = dims
+
+    np.set_printoptions(precision=6, suppress=True, linewidth=200)
+    print(f"\n=== {label} {dims} {dtype} mask={mask_str} ===")
+    print(
+        "  grad   status  rel_scale    rel_l2     rel_elem   "
+        "max|err|    max|ref|",
+        flush=True,
+    )
+
+    failures = []
+    for name, gm, gr in zip(("q", "k", "v"), grads, refs):
+        a = np.asarray(
+            np.array(gm.astype(mx.float32), dtype=np.float32), dtype=np.float64
+        )
+        r = np.asarray(
+            np.array(gr.astype(mx.float32), dtype=np.float32), dtype=np.float64
+        )
+
+        if a.shape != r.shape:
+            print(f"  d{name:<5} SHAPE  mlx {a.shape} vs ref {r.shape}", flush=True)
+            failures.append(f"d{name} shape {a.shape} != {r.shape}")
+            continue
+
+        e = np.abs(a - r)
+        max_err = e.max()
+        scale = np.abs(r).max()
+
+        # error against the largest reference magnitude
+        rel_scale = max_err / max(scale, 1e-30)
+        # global energy ratio, insensitive to single outliers
+        rel_l2 = np.linalg.norm(a - r) / max(np.linalg.norm(r), 1e-30)
+        # worst per-element relative error over non-negligible entries; without
+        # the mask this is dominated by near-zero entries where relative error
+        # carries no information
+        sig = np.abs(r) > 1e-3 * max(scale, 1e-30)
+        rel_elem = (e[sig] / np.abs(r[sig])).max() if sig.any() else 0.0
+
+        ok = bool(rel_scale < tol and rel_l2 < tol)
+        status = "PASS" if ok else "FAIL"
+        print(
+            f"  d{name:<5} {status}   {rel_scale:.3e}  {rel_l2:.3e}  "
+            f"{rel_elem:.3e}  {max_err:.3e}  {scale:.3e}",
+            flush=True,
+        )
+
+        if not ok:
+            # Shape is [B, H, L, D]. Which axis the error concentrates on says
+            # what is broken: a single sequence block points at the block loop
+            # bound or a tail, a single head at the batch/head decode, a single
+            # head-dim slice at the frag layout, and a uniform smear at the
+            # numerics.
+            en = e / max(scale, 1e-30)
+            print(f"       per-seqblk  rel: {en.max(axis=(0, 1, 3))[::16]}", flush=True)
+            print(f"       per-head    rel: {en.max(axis=(0, 2, 3))}", flush=True)
+            print(f"       per-dimfrag rel: {en.max(axis=(0, 1, 2))[::16]}", flush=True)
+            bad = np.unravel_index(e.argmax(), e.shape)
+            print(
+                f"       worst at (b,h,l,d)={bad}  mlx {a[bad]:+.6f}  "
+                f"ref {r[bad]:+.6f}",
+                flush=True,
+            )
+            failures.append(f"d{name} rel {rel_scale:.3e}")
+
+    print("========================\n", flush=True)
+    return failures
+
+
+def sdpa_grad_and_refs(dims, dtype, mask_str):
+    """Run the fused VJP and the fp32 reference VJP on the same inputs.
+
+    The reference is mlx_ref_attn differentiated by mx.vjp with the inputs
+    promoted to fp32. Differentiating it at the test dtype instead would make
+    the two paths share their rounding error and hide real kernel bugs.
+    """
+    B, qH, kH, qL, kL, D, Dv = dims
+    assert qH % kH == 0
+    assert Dv == D, "different head and value dims not enabled"
+
+    mx.random.seed(0)
+    scale = 1.0 / math.sqrt(D)
+
+    # Uniform rather than normal, matching prepare_inputs: it keeps the scores
+    # in a narrow range so the softmax does not saturate, which would make the
+    # gradient identically zero and the comparison vacuous.
+    q = mx.random.uniform(0.0, 0.5, (B, qH, qL, D), dtype)
+    k = mx.random.uniform(0.0, 0.5, (B, kH, kL, D), dtype)
+    v = mx.random.uniform(0.0, scale, (B, kH, kL, Dv), dtype)
+
+    mask = None
+    if mask_str == "causal":
+        mask = "causal"
+    elif mask_str == "additive":
+        mask = mx.random.uniform(0.0, 0.5, (B, qH, qL, kL), dtype)
+    elif mask_str == "bool":
+        mask = mx.random.uniform(0.0, 1.0, (B, qH, qL, kL)) < 0.5
+
+    # A random cotangent, not ones. With an all-ones dO the rowsum term
+    # <dO_i, O_i> collapses to sum(O_i) and several sign errors in the dS
+    # assembly cancel, so an ones cotangent passes on kernels that are wrong.
+    cot = mx.random.normal((B, qH, qL, Dv)).astype(dtype)
+    mx.eval(q, k, v, cot)
+
+    fast = lambda q_, k_, v_: mx.fast.scaled_dot_product_attention(
+        q_, k_, v_, scale=scale, mask=mask
+    )
+    _, grads = mx.vjp(fast, [q, k, v], [cot])
+    mx.eval(grads)
+
+    # Reference in fp32. The mask must be promoted too, or an additive fp16 mask
+    # reintroduces the rounding this is meant to avoid.
+    mask32 = mask
+    if isinstance(mask, mx.array) and mask.dtype != mx.bool_:
+        mask32 = mask.astype(mx.float32)
+
+    slow = lambda q_, k_, v_: mlx_ref_attn(q_, k_, v_, scale=scale, mask=mask32)
+    _, refs = mx.vjp(
+        slow,
+        [q.astype(mx.float32), k.astype(mx.float32), v.astype(mx.float32)],
+        [cot.astype(mx.float32)],
+    )
+    mx.eval(refs)
+
+    return grads, refs
+
 
 def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
     q_dtype = q.dtype
@@ -1061,6 +1194,98 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     else:
                         tolerance = {"rtol": 1e-2, "atol": 1e-2}
                     self.assertTrue(mx.allclose(ref, out, **tolerance))
+    
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    def test_sdpa_grad_per_output(self):
+        # (B, qH, kH, qL, kL, D, Dv)
+        grad_dims = [
+            (1, 16, 16, 64, 64, 64, 64),      # smallest full tile
+            (1, 16, 16, 128, 128, 128, 128),
+            (2, 16, 16, 512, 512, 128, 128),
+            (1, 16, 16, 4096, 4096, 128, 128),  # the size that is slow
+            (1, 16, 4, 512, 512, 128, 128),     # GQA, rep = 4
+            (1, 16, 16, 64, 64, 256, 256),      # widest head dim
+            (1, 16, 16, 129, 127, 64, 64),      # ragged, exercises tails
+        ]
+        for dims in grad_dims:
+            for dtype in (mx.float32, mx.bfloat16):
+                # for mask_str in (None, "causal"):
+                for mask_str in [None]:
+                    grads, refs = sdpa_grad_and_refs(dims, dtype, mask_str)
+                    tol = 5e-2 if dtype == mx.float32 else 5e-1
+
+                    failures = compare_sdpa_grads(
+                        grads, refs, dims, dtype, mask_str, tol,
+                        "fused vjp vs fp32 reference",
+                    )
+                    self.assertTrue(
+                        not failures,
+                        msg=f"gradient mismatch on {dims} with {dtype}, "
+                        f"mask={mask_str}: " + ", ".join(failures),
+                    )
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    def test_sdpa_dq_stage(self):
+        STAGE = os.environ.get("SDPA_DQ_STAGE", "ds")
+
+        B, H, L, D = 1, 16, 64, 64  # must match an instantiated shape
+        scale = 1.0 / math.sqrt(D)
+
+        mx.random.seed(0)
+        q = mx.random.uniform(0.0, 0.5, (B, H, L, D), mx.float32)
+        k = mx.random.uniform(0.0, 0.5, (B, H, L, D), mx.float32)
+        v = mx.random.uniform(0.0, scale, (B, H, L, D), mx.float32)
+        cot = mx.random.normal((B, H, L, D)).astype(mx.float32)
+        mx.eval(q, k, v, cot)
+
+        f = lambda a, b, c: mx.fast.scaled_dot_product_attention(
+            a, b, c, scale=scale, mask=None
+        )
+        _, grads = mx.vjp(f, [q, k, v], [cot])
+        got = grads[0]
+        mx.eval(got)
+
+        # The reference intermediates, in the same order the kernel builds them.
+        S = scale * (q @ mx.swapaxes(k, -1, -2))
+        P = mx.softmax(S, axis=-1, precise=True)
+        dP = cot @ mx.swapaxes(v, -1, -2)
+        O = P @ v
+        # <dO_i, O_i>, the rowsum(P * dP) term of the softmax Jacobian.
+        odo = (cot * O).sum(-1, keepdims=True)
+        dS = P * (dP - odo) * scale
+
+        odo_bcast = mx.broadcast_to(odo, (B, H, L, L))
+
+        want = {"p": P, "dp": dP, "ds": dS, "odo": odo_bcast}[STAGE] @ k
+        mx.eval(want)
+
+        a = np.array(got, dtype=np.float64)
+        r = np.array(want, dtype=np.float64)
+        e = np.abs(a - r)
+        rel = e.max() / max(np.abs(r).max(), 1e-30)
+
+        print(f"\n=== dq stage={STAGE} ===", flush=True)
+        print(f"  rel {rel:.3e}   max|err| {e.max():.3e}   max|ref| "
+              f"{np.abs(r).max():.3e}", flush=True)
+        print(f"  ratio of maxima  mlx/ref = "
+              f"{np.abs(a).max() / max(np.abs(r).max(), 1e-30):.4f}", flush=True)
+
+        if rel > 1e-4:
+            # A single wrong row or column localizes the index; a flat smear with
+            # a clean ratio is a missing or extra scalar factor.
+            en = e / max(np.abs(r).max(), 1e-30)
+            print(f"  per-row  rel: {en.max(axis=(0, 1, 3))}", flush=True)
+            print(f"  per-col  rel: {en.max(axis=(0, 1, 2))}", flush=True)
+            bad = np.unravel_index(e.argmax(), e.shape)
+            print(f"  worst (b,h,l,d)={bad}  mlx {a[bad]:+.6f}  ref {r[bad]:+.6f}",
+                  flush=True)
+            print(f"  elementwise ratio at worst: "
+                  f"{a[bad] / r[bad] if r[bad] != 0 else float('nan'):+.4f}",
+                  flush=True)
+
+        self.assertLessEqual(rel, 1e-4, f"dq stage {STAGE} mismatch")
+
+
 
 
 if __name__ == "__main__":

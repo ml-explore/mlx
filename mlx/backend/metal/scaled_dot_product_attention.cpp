@@ -11,6 +11,15 @@
 #include "mlx/fast_primitives.h"
 #include "mlx/utils.h"
 
+#define TRACE(fmt, ...)       \
+  fprintf(                    \
+      stderr,                 \
+      "[%s:%d %s] " fmt "\n", \
+      __FILE__,               \
+      __LINE__,               \
+      __func__,               \
+      ##__VA_ARGS__)
+
 namespace mlx::core::fast {
 
 namespace {
@@ -25,14 +34,20 @@ void sdpa_full_self_attention_nax(
     array& o,
     bool do_causal_,
     const std::optional<array>& mask,
-    const std::optional<array>& sinks) {
+    const std::optional<array>& sinks,
+    array* lse) {
   using namespace mlx::steel;
 
   int bd = q.shape(-1);
   int bq = 64;
   int bk = 32;
 
-  bool split_d = bd == 256;
+  // The d-split kernel gives wn warps the same query rows and a slice of the
+  // head dim each, so every one of them runs the softmax bookkeeping for those
+  // rows. The sink seeds sum_score with exp(z - z) == 1, which then enters the
+  // denominator once per warp instead of once per row. Keep sinks on the
+  // single-warp path until the seed moves after the cross-warp combine.
+  bool split_d = (bd == 256) && !sinks.has_value();
   int wm = 4;
   int wn = split_d ? 2 : 1;
 
@@ -79,13 +94,15 @@ void sdpa_full_self_attention_nax(
   const bool has_mask = mask.has_value();
   const bool do_causal = do_causal_;
   const bool has_sinks = sinks.has_value();
+  const bool save_lse = (lse != nullptr);
 
   metal::MTLFCList func_consts = {
       {&align_Q, MTL::DataType::DataTypeBool, 200},
       {&align_K, MTL::DataType::DataTypeBool, 201},
       {&has_mask, MTL::DataType::DataTypeBool, 300},
       {&do_causal, MTL::DataType::DataTypeBool, 301},
-      {&has_sinks, MTL::DataType::DataTypeBool, 302}};
+      {&has_sinks, MTL::DataType::DataTypeBool, 302},
+      {&save_lse, MTL::DataType::DataTypeBool, 303}};
 
   std::string base_name;
   concatenate(
@@ -118,7 +135,9 @@ void sdpa_full_self_attention_nax(
       "_do_causal_",
       (do_causal ? 't' : 'n'),
       "_has_sinks_",
-      (has_sinks ? 't' : 'n'));
+      (has_sinks ? 't' : 'n'),
+      "_save_lse_",
+      (save_lse ? 't' : 'n'));
 
   auto& compute_encoder = metal::get_command_encoder(s);
 
@@ -188,6 +207,11 @@ void sdpa_full_self_attention_nax(
   if (has_sinks) {
     compute_encoder.set_input_array(*sinks, 7);
   }
+  if (save_lse) {
+    compute_encoder.set_output_array(*lse, 8);
+  }
+
+  // TRACE("save_lse=%d", save_lse);
 
   MTL::Size grid_dims = MTL::Size(NQ, H, B);
   MTL::Size group_dims = MTL::Size(32, wm, wn);
@@ -206,7 +230,8 @@ void sdpa_full_self_attention_metal(
     array& o,
     bool do_causal_,
     const std::optional<array>& mask,
-    const std::optional<array>& sinks) {
+    const std::optional<array>& sinks,
+    array* lse /* = nullptr */) {
   int B = q.shape(0);
   int H = q.shape(1);
   int D = q.shape(3);
@@ -214,10 +239,11 @@ void sdpa_full_self_attention_metal(
 
   int qL = q.shape(2);
   int kL = k.shape(2);
-
+  // TRACE("B=%d H=%d D=%d gqa=%d qL=%d kL=%d", B, H, D, gqa_factor, qL, kL);
   if (metal::is_nax_available() &&
       (D == 64 || D == 96 || D == 128 || D == 256) &&
       (env::enable_tf32() || q.dtype() != float32)) {
+    // TRACE();
     return sdpa_full_self_attention_nax(
         /* const Stream& s = */ s,
         /* metal::Device& d = */ d,
@@ -228,9 +254,16 @@ void sdpa_full_self_attention_metal(
         /* array& o = */ o,
         /* bool do_causal_ = */ do_causal_,
         /* const std::optional<array>& mask = */ mask,
-        /* const std::optional<array>& sinks = */ sinks);
+        /* const std::optional<array>& sinks = */ sinks,
+        /* array* lse = */ lse);
   }
 
+  if (lse != nullptr) {
+    throw std::runtime_error(
+        "[scaled_dot_product_attention] saving the logsumexp is only "
+        "implemented in the nax kernel.");
+  }
+  // TRACE();
   // Pad head dims 72 and 80 to 96 to reach the NAX kernel. The added lanes
   // are zero and the caller's scale is retained. Enable by default only for
   // long, unmasked half-precision attention, where the attention work can
@@ -283,7 +316,10 @@ void sdpa_full_self_attention_metal(
         /* array& o = */ op,
         /* bool do_causal_ = */ do_causal_,
         /* const std::optional<array>& mask = */ mask,
-        /* const std::optional<array>& sinks = */ sinks);
+        /* const std::optional<array>& sinks = */ sinks,
+        // Guaranteed null: the throw above rejects lse on any non-nax path, and
+        // the padded call only runs when the direct nax dispatch declined.
+        /* array* lse = */ nullptr);
 
     // Slice the padded lanes back out into o's caller-chosen strides.
     copy_gpu_inplace(
@@ -716,12 +752,20 @@ std::tuple<bool, std::string> has_fused_kernel(
   if (s.device != Device::gpu) {
     return {false, "the fused kernels require a GPU (Metal) stream."};
   }
-  if (output_logsumexp) {
+
+  if (output_logsumexp && has_arr_mask) {
     return {
         false,
-        "the fused forward does not produce the logsumexp required for "
-        "the fused VJP; use default routing when training."};
+        "the fused VJP does not support an array mask; only causal masking is "
+        "implemented in the backward kernels."};
   }
+
+  // if (output_logsumexp) {
+  //   return {
+  //       false,
+  //       "the fused forward does not produce the logsumexp required for "
+  //       "the fused VJP; use default routing when training."};
+  // }
 
   const int value_head_dim = v.shape(-1);
   const int query_head_dim = q.shape(-1);
@@ -827,6 +871,15 @@ bool ScaledDotProductAttention::use_fallback(
     bool output_logsumexp,
     bool force_fused,
     Stream s) {
+  int B = q.shape(0);
+  int H = q.shape(1);
+  int D = q.shape(3);
+  int gqa_factor = q.shape(1) / k.shape(1);
+
+  int qL = q.shape(2);
+  int kL = k.shape(2);
+  // TRACE("B=%d H=%d D=%d gqa=%d qL=%d kL=%d", B, H, D, gqa_factor, qL, kL);
+
   auto [has_fused, reason] = has_fused_kernel(
       q, k, v, has_mask, has_arr_mask, do_causal, output_logsumexp, s);
   if (force_fused) {
@@ -837,18 +890,20 @@ bool ScaledDotProductAttention::use_fallback(
           << reason;
       throw std::invalid_argument(msg.str());
     }
+    // TRACE();
     return false;
   }
 
-  if (is_training) {
-    // It's faster for training on Metal to use the unfused SDPA for both
-    // forward and backward.
-    return true;
-  }
+  // if (is_training) {
+  //   // It's faster for training on Metal to use the unfused SDPA for both
+  //   // forward and backward.
+  //   return true;
+  // }
+  // TRACE();
   if (!has_fused) {
     return true;
   }
-
+  // TRACE();
   const int query_sequence_length = q.shape(2);
   const int query_head_dim = q.shape(-1);
   const int value_head_dim = v.shape(-1);
@@ -861,7 +916,7 @@ bool ScaledDotProductAttention::use_fallback(
       (do_causal || has_arr_mask)) {
     return false;
   }
-
+  // TRACE();
   // Unfused path is faster for following shapes.
   if (query_sequence_length > 8) {
     return query_head_dim == 192 || query_head_dim == 256;
@@ -886,8 +941,8 @@ void ScaledDotProductAttention::eval_gpu(
   auto& o = outputs[0];
 
   std::vector<array> copies;
-
-  // Define some copy functions to ensure the layout of the inputs is as
+  // TRACE();
+  // // Define some copy functions to ensure the layout of the inputs is as
   // expected.
   copies.reserve(inputs.size());
   auto copy_unless = [&copies, &s](
@@ -914,6 +969,12 @@ void ScaledDotProductAttention::eval_gpu(
 
   // We are in vector mode ie single query
   if (q_pre.shape(2) <= 8) {
+    if (outputs.size() > 1) {
+      throw std::runtime_error(
+          "[scaled_dot_product_attention] the vector kernels do not produce a "
+          "logsumexp; the VJP path requires the full-attention kernel.");
+    }
+
     auto q_copy_unless = [](const array& arr) {
       if (arr.flags().row_contiguous) {
         return true;
@@ -986,6 +1047,7 @@ void ScaledDotProductAttention::eval_gpu(
 
   // Full attention mode
   else {
+    // TRACE();
     const auto& q = copy_unless(is_matrix_contiguous, q_pre);
     const auto& k = copy_unless(is_matrix_contiguous, k_pre);
     const auto& v = copy_unless(is_matrix_contiguous, v_pre);
@@ -1012,21 +1074,188 @@ void ScaledDotProductAttention::eval_gpu(
         ? std::optional<array>{copy_unless(is_matrix_contiguous, inputs[3])}
         : std::nullopt;
 
+    array* lse = nullptr;
+    if (outputs.size() > 1) {
+      outputs[1].set_data(allocator::malloc(outputs[1].nbytes()));
+      lse = &outputs[1];
+    }
+    // TRACE();
     sdpa_full_self_attention_metal(
-        s, d, q, k, v, scale_, o, do_causal_, mask, sinks);
+        s, d, q, k, v, scale_, o, do_causal_, mask, sinks, lse);
   }
 
   metal::get_command_encoder(s).add_temporaries(std::move(copies));
 }
 
 bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
+  if (const char* e = std::getenv("SDPA_VJP_KERNEL");
+      e != nullptr && std::stoi(e) != 0) {
+    return false;
+  }
   return true;
+}
+
+inline array
+ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
+  if (!x.flags().row_contiguous) {
+    array x_copy = contiguous_copy_gpu(x, s);
+    metal::get_command_encoder(s).add_temporary(x_copy);
+    return x_copy;
+  } else {
+    return x;
+  }
 }
 
 void ScaledDotProductAttentionVJP::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  throw std::runtime_error("NYI");
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  const int n_primals = 3 + static_cast<int>(has_sinks_);
+  if (has_sinks_) {
+    throw std::runtime_error(
+        "[ScaledDotProductAttentionVJP] NYI: attention sinks");
+  }
+
+  auto q = ensure_row_contiguous(inputs[0], d, s);
+  auto k = ensure_row_contiguous(inputs[1], d, s);
+  auto v = ensure_row_contiguous(inputs[2], d, s);
+  const int n_in = static_cast<int>(inputs.size());
+  auto o = ensure_row_contiguous(inputs[n_in - 3], d, s);
+  auto lse = ensure_row_contiguous(inputs[n_in - 2], d, s);
+  auto cot_o = ensure_row_contiguous(inputs[n_in - 1], d, s);
+
+  const int B = q.shape(0);
+  const int H = q.shape(1);
+  const int qL = q.shape(2);
+  const int D = q.shape(3);
+  const int Hk = k.shape(1);
+  const int kL = k.shape(2);
+  const int Dv = v.shape(3);
+
+  auto& dq = outputs[0];
+  auto& dk = outputs[1];
+  auto& dv = outputs[2];
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+
+  dq.set_data(allocator::malloc(dq.nbytes()));
+  dk.set_data(allocator::malloc(dk.nbytes()));
+  dv.set_data(allocator::malloc(dv.nbytes()));
+
+  constexpr int WM = 4;
+  constexpr int WN = 1;
+  constexpr int BQ = 64; // kNWarps * 16, so TQ == 1 in dq
+
+  constexpr int BK_dq = 16;
+  constexpr int BK_dkv = 64; // kNWarps * 16, so TK == 1 in dkv
+
+  const int tg_threads = WM * WN * 32;
+
+  const int n_qblocks = (qL + BQ - 1) / BQ;
+  const int n_kblocks = (kL + BK_dkv - 1) / BK_dkv;
+
+  bool causal = do_causal_;
+  metal::MTLFCList func_consts = {};
+  const char* causal_tag = causal ? "_causal" : "";
+
+  array odo({B, H, qL}, float32, nullptr, {});
+  odo.set_data(allocator::malloc(odo.nbytes()));
+  compute_encoder.add_temporary(odo);
+
+  std::string odo_name;
+  concatenate(
+      odo_name,
+      "sdpa_vjp_odo_",
+      get_type_string(q.dtype()),
+      "_",
+      std::to_string(Dv));
+
+  auto odo_kernel = d.get_kernel(odo_name);
+
+  compute_encoder.set_compute_pipeline_state(odo_kernel);
+  compute_encoder.set_input_array(o, 0);
+  compute_encoder.set_input_array(cot_o, 1);
+  compute_encoder.set_output_array(odo, 2);
+  compute_encoder.set_bytes(qL, 3);
+  compute_encoder.dispatch_threads(
+      MTL::Size(32, qL, B * H), MTL::Size(32, 1, 1));
+
+  std::string dq_name;
+  concatenate(
+      dq_name,
+      "sdpa_vjp_nax_dq_",
+      get_type_string(q.dtype()),
+      "_",
+      std::to_string(D),
+      "_",
+      std::to_string(Dv),
+      "_",
+      std::to_string(H),
+      "_",
+      std::to_string(Hk),
+      "_",
+      std::to_string(BQ),
+      "_",
+      std::to_string(BK_dq),
+      "_",
+      std::to_string(WM),
+      causal_tag);
+
+  auto dq_kernel = get_sdpa_vjp_kernel(d, dq_name, dq_name, func_consts);
+
+  compute_encoder.set_compute_pipeline_state(dq_kernel);
+  compute_encoder.set_input_array(q, 0);
+  compute_encoder.set_input_array(k, 1);
+  compute_encoder.set_input_array(v, 2);
+  compute_encoder.set_input_array(odo, 3);
+  compute_encoder.set_input_array(lse, 4);
+  compute_encoder.set_input_array(cot_o, 5);
+  compute_encoder.set_bytes(qL, 6);
+  compute_encoder.set_bytes(kL, 7);
+  compute_encoder.set_bytes(scale_, 8);
+  compute_encoder.set_output_array(dq, 9);
+  compute_encoder.dispatch_threads(
+      MTL::Size(tg_threads, n_qblocks, B * H), MTL::Size(tg_threads, 1, 1));
+
+  std::string dkv_name;
+  concatenate(
+      dkv_name,
+      "sdpa_vjp_nax_dkv_",
+      get_type_string(q.dtype()),
+      "_",
+      std::to_string(D),
+      "_",
+      std::to_string(Dv),
+      "_",
+      std::to_string(H),
+      "_",
+      std::to_string(Hk),
+      "_",
+      std::to_string(BQ),
+      "_",
+      std::to_string(BK_dkv),
+      "_",
+      std::to_string(WM),
+      causal_tag);
+
+  auto dkv_kernel = get_sdpa_vjp_kernel(d, dkv_name, dkv_name, func_consts);
+
+  compute_encoder.set_compute_pipeline_state(dkv_kernel);
+  compute_encoder.set_input_array(q, 0);
+  compute_encoder.set_input_array(k, 1);
+  compute_encoder.set_input_array(v, 2);
+  compute_encoder.set_input_array(odo, 3);
+  compute_encoder.set_input_array(lse, 4);
+  compute_encoder.set_input_array(cot_o, 5);
+  compute_encoder.set_bytes(qL, 6);
+  compute_encoder.set_bytes(kL, 7);
+  compute_encoder.set_bytes(scale_, 8);
+  compute_encoder.set_output_array(dk, 9);
+  compute_encoder.set_output_array(dv, 10);
+  compute_encoder.dispatch_threads(
+      MTL::Size(tg_threads, n_kblocks, B * Hk), MTL::Size(tg_threads, 1, 1));
 }
 
 } // namespace mlx::core::fast
