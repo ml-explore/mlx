@@ -108,7 +108,12 @@ void strided_reduce(
 };
 
 template <typename T, typename U, typename Op>
-void contiguous_reduce(const T* x, U* accumulator, int size, Op op, U init) {
+void contiguous_reduce(
+    const T* x,
+    U* accumulator,
+    int64_t size,
+    Op op,
+    U init) {
   constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
   simd::Simd<U, N> accumulator_v(init);
   while (size >= N) {
@@ -125,11 +130,11 @@ void contiguous_reduce(const T* x, U* accumulator, int size, Op op, U init) {
 
 // Helper for the ndimensional strided loop
 void nd_loop(
-    std::function<void(int)> callback,
+    std::function<void(int64_t)> callback,
     const Shape& shape,
     const Strides& strides) {
-  std::function<void(int, int)> loop_inner;
-  loop_inner = [&](int dim, int offset) {
+  std::function<void(int, int64_t)> loop_inner;
+  loop_inner = [&](int dim, int64_t offset) {
     if (dim < shape.size() - 1) {
       auto size = shape[dim];
       auto stride = strides[dim];
@@ -181,16 +186,16 @@ void reduction_op(
     auto [shape, strides] = shapes_without_reduction_axes(x, axes);
     if (plan.shape.size() == 0) {
       for (int i = 0; i < out.size(); i++, out_ptr++) {
-        int offset = elem_to_loc(i, shape, strides);
+        int64_t offset = elem_to_loc(i, shape, strides);
         *out_ptr = init;
         contiguous_reduce(in_ptr + offset, out_ptr, reduction_size, Op{}, init);
       }
     } else {
       for (int i = 0; i < out.size(); i++, out_ptr++) {
-        int offset = elem_to_loc(i, shape, strides);
+        int64_t offset = elem_to_loc(i, shape, strides);
         *out_ptr = init;
         nd_loop(
-            [&](int extra_offset) {
+            [&](int64_t extra_offset) {
               contiguous_reduce(
                   in_ptr + offset + extra_offset,
                   out_ptr,
@@ -229,7 +234,7 @@ void reduction_op(
 
     if (plan.shape.size() == 0) {
       for (int i = 0; i < out.size(); i += reduction_stride) {
-        int offset = elem_to_loc(i, shape, strides);
+        int64_t offset = elem_to_loc(i, shape, strides);
         std::fill_n(out_ptr, reduction_stride, init);
         strided_reduce(
             in_ptr + offset, out_ptr, reduction_size, reduction_stride, Op{});
@@ -237,10 +242,10 @@ void reduction_op(
       }
     } else {
       for (int i = 0; i < out.size(); i += reduction_stride) {
-        int offset = elem_to_loc(i, shape, strides);
+        int64_t offset = elem_to_loc(i, shape, strides);
         std::fill_n(out_ptr, reduction_stride, init);
         nd_loop(
-            [&](int extra_offset) {
+            [&](int64_t extra_offset) {
               strided_reduce(
                   in_ptr + offset + extra_offset,
                   out_ptr,
@@ -260,10 +265,10 @@ void reduction_op(
     auto [shape, strides] = shapes_without_reduction_axes(x, axes);
 
     for (int i = 0; i < out.size(); i++, out_ptr++) {
-      int offset = elem_to_loc(i, shape, strides);
+      int64_t offset = elem_to_loc(i, shape, strides);
       U val = init;
       nd_loop(
-          [&](int extra_offset) {
+          [&](int64_t extra_offset) {
             val = Op{}(val, *(in_ptr + offset + extra_offset));
           },
           plan.shape,
