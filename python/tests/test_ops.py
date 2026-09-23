@@ -3469,10 +3469,6 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertEqual(inverse.shape, v_mx.shape)
             self.assertTrue(np.array_equal(np.array(values[inverse]), v_np))
 
-    @unittest.skipIf(
-        os.getenv("LOW_MEMORY", None) is not None,
-        "This test requires a lot of memory",
-    )
     def test_large_binary(self):
         a = mx.ones([1000, 2147484], mx.int8)
         b = mx.ones([2147484], mx.int8)
