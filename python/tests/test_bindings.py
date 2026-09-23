@@ -1,5 +1,6 @@
 # Copyright © 2026 Apple Inc.
 
+import subprocess
 import sys
 import unittest
 
@@ -42,6 +43,20 @@ class TestBindings(mlx_tests.MLXTestCase):
                 return self.sum().item()
 
         self.assertEqual(Array([1, 2, 3]).total(), 6)
+
+    @unittest.skipUnless(sys.version_info >= (3, 13), "requires Python 3.13")
+    def test_import_preserves_gil_state(self):
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import sys; "
+                "before = sys._is_gil_enabled(); "
+                "import mlx.core; "
+                "assert sys._is_gil_enabled() == before",
+            ],
+            check=True,
+        )
 
 
 if __name__ == "__main__":
