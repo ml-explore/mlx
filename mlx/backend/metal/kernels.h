@@ -81,6 +81,14 @@ MTL::ComputePipelineState* get_sort_kernel(
     int bn,
     int tn);
 
+MTL::ComputePipelineState* get_partition_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in,
+    const array& out,
+    bool arg_partition,
+    int bn);
+
 MTL::ComputePipelineState* get_searchsorted_kernel(
     metal::Device& d,
     const std::string& kernel_name,
