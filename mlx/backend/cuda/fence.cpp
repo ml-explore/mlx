@@ -35,7 +35,7 @@ void Fence::wait(Stream s, const array&, uint32_t value) {
   } else {
     // AtomicEvent can not reliably notify a GPU stream, so a dependency that
     // involves the CPU keeps the synchronous wait.
-    auto event = f.cpu_event;
+    auto& event = f.cpu_event;
     event.set_value(value);
     event.wait();
   }
