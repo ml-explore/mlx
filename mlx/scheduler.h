@@ -63,6 +63,11 @@ class MLX_API Scheduler {
     }
   }
 
+  // Called by the pthread_atfork handlers.
+  void prepare_fork();
+  void after_fork_in_parent();
+  void after_fork_in_child();
+
  private:
   friend Stream mlx::core::new_stream(Device d);
 

@@ -3,6 +3,10 @@
 #include <future>
 #include <thread>
 
+#ifndef _WIN32
+#include <pthread.h>
+#endif
+
 #include "mlx/backend/cpu/eval.h"
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/compile_impl.h"
@@ -96,6 +100,29 @@ Scheduler::Scheduler() {
   gpu::init();
 }
 
+void Scheduler::prepare_fork() {
+  threads_mtx_.lock();
+  mtx.lock();
+}
+
+void Scheduler::after_fork_in_parent() {
+  mtx.unlock();
+  threads_mtx_.unlock();
+}
+
+void Scheduler::after_fork_in_child() {
+  // Only the forking thread exists in the child, so the stream threads are
+  // gone. They cannot be joined, so leak them and start new ones on demand.
+  for (auto& [index, st] : threads_) {
+    st.release();
+  }
+  threads_.clear();
+  n_active_tasks_ = 0;
+  new (&completion_cv) std::condition_variable;
+  new (&mtx) std::mutex;
+  new (&threads_mtx_) std::shared_mutex;
+}
+
 Scheduler::~Scheduler() = default;
 
 void Scheduler::enqueue(Stream s, std::function<void()> task) {
@@ -166,10 +193,58 @@ StreamThread& Scheduler::get_thread(Stream s) {
 // unmapped, causing SIGSEGV (macOS/Linux) or join() deadlocks (Windows/MSVC
 // CRT).
 // The OS reclaims all resources at process exit anyway.
+// It is not a function local static, because a fork while another thread is
+// constructing it would leave the child waiting on that static's guard.
+namespace {
+std::atomic<Scheduler*> scheduler_instance{nullptr};
+std::mutex scheduler_init_mtx;
+} // namespace
+
 Scheduler& scheduler() {
-  static Scheduler* scheduler = new Scheduler;
-  return *scheduler;
+  auto* s = scheduler_instance.load(std::memory_order_acquire);
+  if (!s) {
+    std::lock_guard lk(scheduler_init_mtx);
+    s = scheduler_instance.load(std::memory_order_relaxed);
+    if (!s) {
+      s = new Scheduler;
+      scheduler_instance.store(s, std::memory_order_release);
+    }
+  }
+  return *s;
 }
+
+#ifndef _WIN32
+namespace {
+
+void prepare_fork() {
+  // Wait for a scheduler under construction and hold off new ones.
+  scheduler_init_mtx.lock();
+  if (auto* s = scheduler_instance.load(std::memory_order_relaxed)) {
+    s->prepare_fork();
+  }
+}
+
+void after_fork_in_parent() {
+  if (auto* s = scheduler_instance.load(std::memory_order_relaxed)) {
+    s->after_fork_in_parent();
+  }
+  scheduler_init_mtx.unlock();
+}
+
+void after_fork_in_child() {
+  if (auto* s = scheduler_instance.load(std::memory_order_relaxed)) {
+    s->after_fork_in_child();
+  }
+  new (&scheduler_init_mtx) std::mutex;
+}
+
+// Registered at load time. Registering from the constructor would wait on the
+// fork lock while the scheduler is only half built.
+[[maybe_unused]] const int fork_handlers =
+    pthread_atfork(prepare_fork, after_fork_in_parent, after_fork_in_child);
+
+} // namespace
+#endif
 
 } // namespace scheduler
 } // namespace mlx::core
