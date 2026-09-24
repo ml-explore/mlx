@@ -86,10 +86,11 @@ TEST_CASE("test clear cache trims CUDA pool") {
           pool, cudaMemPoolAttrReservedMemCurrent, &initial_reserved),
       cudaSuccess);
 
+  auto s = default_stream(Device::gpu);
   {
-    auto a = zeros({16 * 1024 * 1024}, float32, Device::gpu);
+    auto a = zeros({16 * 1024 * 1024}, float32, s);
     eval(a);
-    synchronize();
+    synchronize(s);
   }
   CHECK_GE(get_cache_memory(), 64ULL << 20);
 
