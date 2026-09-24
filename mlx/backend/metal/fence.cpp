@@ -48,7 +48,7 @@ void Fence::wait(Stream stream, const array& x, uint32_t value) {
   auto& f = *static_cast<FenceImpl*>(fence_.get());
 
   if (!f.use_fast) {
-    auto event = *f.event;
+    auto& event = *f.event;
     event.set_value(value);
     event.wait(stream);
     return;
