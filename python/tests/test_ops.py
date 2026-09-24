@@ -3007,6 +3007,131 @@ class TestOps(mlx_tests.MLXTestCase):
                             M = top_k_mx.shape[axis or 0]
                             self.assertEqual(M, (kth + N) % N)
 
+    def test_partition_long_rows(self):
+        # Rows long enough for the Metal radix select path
+        np.random.seed(0)
+
+        def check(a_np, a_mx, kth, ref):
+            # a_np is the float32 reference of a_mx when a_mx is bfloat16, ref
+            # its sorted rows
+            rows, n = a_np.shape
+            b_mx = mx.partition(a_mx, kth, axis=-1)
+            self.assertEqual(b_mx.dtype, a_mx.dtype)
+            b_np = np.array(
+                b_mx.astype(mx.float32) if a_mx.dtype == mx.bfloat16 else b_mx
+            )
+            i_mx = mx.argpartition(a_mx, kth, axis=-1)
+            self.assertEqual(i_mx.dtype, mx.uint32)
+            i_np = np.array(i_mx)
+            self.assertTrue(
+                np.array_equal(np.sort(i_np, axis=-1), np.tile(np.arange(n), (rows, 1)))
+            )
+            for out in (b_np, np.take_along_axis(a_np, i_np, axis=-1)):
+                self.assertTrue(
+                    np.array_equal(np.sort(out, axis=-1), ref, equal_nan=True)
+                )
+                finite = np.where(np.isnan(out), np.inf, out)
+                pivot = finite[:, kth : kth + 1]
+                self.assertTrue(np.all(finite[:, :kth] <= pivot))
+                self.assertTrue(np.all(finite[:, kth + 1 :] >= pivot))
+
+        def data(shape, dtype):
+            low = 0 if np.dtype(dtype).kind == "u" else -100
+            return np.random.uniform(low, 100, size=shape).astype(dtype)
+
+        # The widest threadgroup, kth at both ends and in the middle
+        shape = (16, 4096)
+        for dtype in ("float32", "float16", "int8", "int64"):
+            for kth in (0, 32, 2048, 4095):
+                a_np = data(shape, dtype)
+                ref = np.sort(a_np, axis=-1)
+                with self.subTest(dtype=dtype, kth=kth):
+                    check(a_np, mx.array(a_np), kth, ref)
+
+        # Row lengths that pick the smaller threadgroups, keys of every width
+        for short_shape, dtype in (
+            ((512, 512), "uint8"),
+            ((512, 1000), "int16"),
+            ((2048, 129), "uint32"),
+            ((128, 2048), "uint64"),
+        ):
+            n = short_shape[1]
+            a_np = data(short_shape, dtype)
+            ref = np.sort(a_np, axis=-1)
+            for kth in (0, n // 2, n - 1):
+                with self.subTest(shape=short_shape, dtype=dtype, kth=kth):
+                    check(a_np, mx.array(a_np), kth, ref)
+
+        # bfloat16 goes through float32 for the reference
+        a_np = data(shape, np.float32)
+        a_np[:, ::97] = np.nan
+        a_mx = mx.array(a_np).astype(mx.bfloat16)
+        a_np = np.array(a_mx.astype(mx.float32))
+        ref = np.sort(a_np, axis=-1)
+        for kth in (0, 32, 4095):
+            with self.subTest(dtype="bfloat16", kth=kth):
+                check(a_np, a_mx, kth, ref)
+
+        # Ties and NaN
+        a_np = np.random.randint(0, 5, size=shape).astype(np.float32)
+        a_np[:, ::7] = np.nan
+        ref = np.sort(a_np, axis=-1)
+        for kth in (0, 2048, 4095):
+            with self.subTest(case="ties_nan", kth=kth):
+                check(a_np, mx.array(a_np), kth, ref)
+
+        # Longer rows than the candidate cache, 16-bit and 32-bit keys
+        for dtype in ("float16", "float32"):
+            a_np = data((8, 40000), dtype)
+            with self.subTest(dtype=dtype, kth=40000 - 2048):
+                check(a_np, mx.array(a_np), 40000 - 2048, np.sort(a_np, axis=-1))
+
+        # complex64 against the sort of the same device, NaN cases on the GPU
+        a_np = (
+            np.random.uniform(-100, 100, size=shape)
+            + 1j * np.random.randint(-3, 3, size=shape)
+        ).astype(np.complex64)
+        with_nan = a_np.copy()
+        with_nan.real[:, ::53] = np.nan
+        with_nan.imag[:, 5::71] = np.nan
+        cases = [(a_np, False)] + (
+            [(with_nan, True)] if mx.default_device() == mx.gpu else []
+        )
+        for c_np, has_nan in cases:
+            a_mx = mx.array(c_np)
+            ref = np.array(mx.sort(a_mx, axis=-1))
+            for kth in (0, 32, 2048, 4095):
+                with self.subTest(dtype="complex64", nan=has_nan, kth=kth):
+                    i_mx = mx.argpartition(a_mx, kth, axis=-1)
+                    self.assertTrue(
+                        np.array_equal(
+                            np.sort(np.array(i_mx), axis=-1),
+                            np.tile(np.arange(shape[1]), (shape[0], 1)),
+                        )
+                    )
+                    for out in (
+                        mx.partition(a_mx, kth, axis=-1),
+                        mx.take_along_axis(a_mx, i_mx, axis=-1),
+                    ):
+                        for part, ref_part in (
+                            (out[:, : kth + 1], ref[:, : kth + 1]),
+                            (out[:, kth:], ref[:, kth:]),
+                        ):
+                            self.assertTrue(
+                                np.array_equal(
+                                    np.array(mx.sort(part, axis=-1)),
+                                    ref_part,
+                                    equal_nan=True,
+                                )
+                            )
+
+        # A transposed view stays correct
+        a_np = data((4096, 64), np.float32)
+        b_t = np.array(mx.partition(mx.array(a_np).T, 3, axis=-1))
+        self.assertTrue(
+            np.array_equal(b_t[:, 3], np.partition(a_np.T, 3, axis=-1)[:, 3])
+        )
+
     def test_argpartition(self):
         x = mx.broadcast_to(mx.array([1, 2, 3]), (2, 3))
         out = mx.argpartition(x, kth=1, axis=0)
