@@ -322,7 +322,7 @@ constexpr size_t RADIX_PARTITION_MIN_SIZE = 256 * 1024;
 constexpr int RADIX_PARTITION_LONG_AXIS_SIZE = 4096;
 
 bool use_radix_partition(const array& in, int axis) {
-  if (axis != in.ndim() - 1 || !in.flags().row_contiguous) {
+  if (!in.flags().contiguous || in.strides()[axis] != 1) {
     return false;
   }
   int axis_size = in.shape(axis);
@@ -342,7 +342,8 @@ void gpu_radix_partition(
     int kth,
     bool arg_partition) {
   int axis_size = in.shape(axis);
-  int n_rows = in.size() / axis_size;
+  // Broadcast rows share their data. The output keeps the same strides
+  int n_rows = in.data_size() / axis_size;
 
   int bn = 64;
   if (axis_size >= 1024) {
@@ -399,15 +400,20 @@ void Sort::eval_gpu(const std::vector<array>& inputs, array& out) {
 void ArgPartition::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
 
-  out.set_data(allocator::malloc(out.nbytes()));
-
   auto& s = stream();
   auto& d = metal::device(s.device);
   auto& in = inputs[0];
 
   if (use_radix_partition(in, axis_)) {
+    // The kernel keeps the layout of the input
+    out.set_data(
+        allocator::malloc(in.data_size() * out.itemsize()),
+        in.data_size(),
+        in.strides(),
+        in.flags());
     gpu_radix_partition(s, d, in, out, axis_, kth_, true);
   } else {
+    out.set_data(allocator::malloc(out.nbytes()));
     gpu_merge_sort(s, d, in, out, axis_, true);
   }
 }
@@ -415,15 +421,20 @@ void ArgPartition::eval_gpu(const std::vector<array>& inputs, array& out) {
 void Partition::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
 
-  out.set_data(allocator::malloc(out.nbytes()));
-
   auto& s = stream();
   auto& d = metal::device(s.device);
   auto& in = inputs[0];
 
   if (use_radix_partition(in, axis_)) {
+    // The kernel keeps the layout of the input
+    out.set_data(
+        allocator::malloc(in.data_size() * out.itemsize()),
+        in.data_size(),
+        in.strides(),
+        in.flags());
     gpu_radix_partition(s, d, in, out, axis_, kth_, false);
   } else {
+    out.set_data(allocator::malloc(out.nbytes()));
     gpu_merge_sort(s, d, in, out, axis_, false);
   }
 }
