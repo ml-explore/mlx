@@ -395,29 +395,6 @@ class ConvertFP8 : public Primitive {
   bool to_fp8_;
 };
 
-inline int gated_delta_chunk_size(int T) {
-  const char* thresh_env = std::getenv("GATED_DELTA_THRESH");
-  int threshold = thresh_env ? std::stoi(thresh_env) : 16;
-
-  int C = (T > threshold) ? 16 : 1;
-
-  const char* chunk_env = std::getenv("GATED_DELTA_CHUNK");
-  return chunk_env ? std::stoi(chunk_env) : C;
-}
-
-inline int gated_delta_ckpt() {
-  const char* e = std::getenv("GATED_DELTA_CKPT");
-  int c = e ? std::stoi(e) : 8;
-  if (c != 1 && c != 4 && c != 8 && c != 16) {
-    c = 8;
-  }
-  return c;
-}
-
-inline int gated_delta_n_ckpt(int n_chunks, int ckpt) {
-  return (n_chunks + ckpt - 1) / ckpt;
-}
-
 class GatedDeltaUpdate : public Custom {
  public:
   GatedDeltaUpdate(

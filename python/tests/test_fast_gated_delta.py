@@ -155,12 +155,10 @@ def compare_grads(grads, refs, dims, dtype, g, tol, label):
     )
     # print("cmp: ", g_np.min(), g_np.max(), flush=True)
 
-
     np.set_printoptions(precision=6, suppress=True, linewidth=200)
     print(f"\n=== {label} {dims} {dtype} ===")
     print(
-        "  grad   status  rel_scale    rel_l2     rel_elem   "
-        "max|err|    max|ref|",
+        "  grad   status  rel_scale    rel_l2     rel_elem   " "max|err|    max|ref|",
         flush=True,
     )
 
@@ -258,7 +256,6 @@ def grad_and_refs(dims, dtype):
 
     mx.eval(q, k, v, g, b, h0)
     # print("draw:", g.min().item(), g.max().item(), g.dtype, flush=True)
-
 
     co_out = mx.random.normal(shape=(B, T, Hv, Dv))
     co_state = mx.random.normal(shape=(B, Hv, Dv, Dk))
@@ -466,7 +463,7 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_gated_delta_grad(self):
         os.environ["GATED_DELTA_VJP_CHUNK"] = "0"
-        for dims in self.grad_dims:
+        for dims in self.gpu_dims:
             for dtype in (mx.float32, mx.bfloat16):
                 grads, refs, g = grad_and_refs(dims, dtype)
 
@@ -489,9 +486,9 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
         # Set explicitly rather than relying on the default, so the test cannot
         # silently measure the sequential kernel if the threshold logic changes.
         os.environ["GATED_DELTA_VJP_CHUNK"] = "16"
-        for dims in self.grad_dims:
+        for dims in self.gpu_dims:
             for dtype in (mx.float32, mx.bfloat16):
-            # for dtype in [mx.float32]:
+                # for dtype in [mx.float32]:
                 grads, refs, g = grad_and_refs(dims, dtype)
 
                 # As above, plus the chunked path is intrinsically looser: it
