@@ -240,8 +240,16 @@ class TestEval(mlx_tests.MLXTestCase):
     def test_eval_exception_after_cross_stream_wait(self):
         # gather_qqmm has no CPU kernel. It fails in eval after the CPU
         # stream waits for x from the GPU.
-        x = mx.full((2, 64), 3.0) * 2.0
-        wq, scales = mx.quantize(mx.ones((32, 64)), mode="nvfp4")[:2]
+        x = mx.multiply(
+            mx.full((2, 64), 3.0, stream=mx.gpu),
+            2.0,
+            stream=mx.gpu,
+        )
+        wq, scales = mx.quantize(
+            mx.ones((32, 64), stream=mx.gpu),
+            mode="nvfp4",
+            stream=mx.gpu,
+        )[:2]
         y = mx.gather_qqmm(x, wq, scales, mode="nvfp4", stream=mx.cpu)
         with self.assertRaises(RuntimeError):
             mx.eval(y)
