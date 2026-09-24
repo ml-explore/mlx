@@ -537,6 +537,7 @@ template <
     const constant AttnMaskParams* mask_params [[buffer(5), function_constant(has_mask)]],
     const device MaskType* mask [[buffer(6), function_constant(has_mask)]],
     const device T* sinks [[buffer(7), function_constant(has_sinks)]],
+    device float* LSE [[buffer(8), function_constant(save_lse)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -912,6 +913,21 @@ template <
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < kRowsPT; ++i) {
     rcp[i] = 1.f / sum_score[i];
+  }
+
+  if (save_lse && d_half == 0 && sn == 0) {
+    const int lse_row_base = int(tid.x) * BQ + tm;
+    const int lse_head_off = (int(tid.z) * params->H + int(tid.y)) * params->qL;
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      const int row = lse_row_base + i * stile_t::kFragRowsJump + sm;
+      if (row < params->qL) {
+        LSE[lse_head_off + row] = (sum_score[i] == 0)
+            ? -INFINITY
+            : float(M_LN2_F * (max_score[i] + metal::log2(sum_score[i])));
+      }
+    }
   }
 
   Otile.template row_bin_op<MulOp>(rcp);
