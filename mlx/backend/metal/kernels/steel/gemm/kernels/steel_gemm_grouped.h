@@ -2,7 +2,6 @@
 
 using namespace mlx::steel;
 
-constant bool align_M [[function_constant(200)]];
 constant bool align_N [[function_constant(201)]];
 constant bool align_K [[function_constant(202)]];
 
@@ -44,58 +43,36 @@ template <
   using loader_b_t = typename gemm_kernel::loader_b_t;
   using mma_t = typename gemm_kernel::mma_t;
 
-  if (params->tiles_n <= static_cast<int>(tid.x) ||
-      params->tiles_m <= static_cast<int>(tid.y)) {
+  const int group = tid.y;
+  if (params->tiles_n <= static_cast<int>(tid.x) || group >= num_groups) {
     return;
   }
 
   threadgroup T As[gemm_kernel::tgp_mem_size_a];
   threadgroup T Bs[gemm_kernel::tgp_mem_size_b];
 
-  const int c_row = tid.y * BM;
   const int c_col = tid.x * BN;
-  const size_t c_row_long = size_t(c_row);
   const size_t c_col_long = size_t(c_col);
-
-  const short tgp_bm = align_M ? BM : short(min(BM, params->M - c_row));
   const short tgp_bn = align_N ? BN : short(min(BN, params->N - c_col));
+  const int group_end = group + 1 < num_groups ? offsets[group + 1] : params->M;
 
-  A += transpose_a ? c_row_long : c_row_long * params->lda;
+  B += group * params->batch_stride_b;
   B += transpose_b ? c_col_long * params->ldb : c_col_long;
-  C += c_row_long * params->ldd + c_col_long;
+  C += c_col_long;
 
-  int group = 0;
-  for (int last = num_groups - 1; group < last;) {
-    int mid = (group + last + 1) / 2;
-    if (offsets[mid] <= c_row) {
-      group = mid;
-    } else {
-      last = mid - 1;
-    }
-  }
+  for (int c_row = offsets[group]; c_row < group_end; c_row += BM) {
+    const size_t c_row_long = size_t(c_row);
+    const short tgp_bm = short(min(BM, group_end - c_row));
+    const device T* A_tile =
+        A + (transpose_a ? c_row_long : c_row_long * params->lda);
+    device T* C_tile = C + c_row_long * params->ldd;
 
-  short offset;
-  short offset_next = 0;
-  for (; offset_next < tgp_bm; group++) {
-    offset = offset_next;
-    offset_next = tgp_bm;
-    if (group + 1 < num_groups) {
-      offset_next =
-          short(clamp(offsets[group + 1] - c_row, int(offset), int(tgp_bm)));
-    }
-    if (offset_next == offset) {
-      continue;
-    }
-    threadgroup_barrier(mem_flags::mem_none);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
 
     thread mma_t mma_op(simd_group_id, simd_lane_id);
-    thread loader_a_t loader_a(A, params->lda, As, simd_group_id, simd_lane_id);
-    thread loader_b_t loader_b(
-        B + group * params->batch_stride_b,
-        params->ldb,
-        Bs,
-        simd_group_id,
-        simd_lane_id);
+    thread loader_a_t loader_a(
+        A_tile, params->lda, As, simd_group_id, simd_lane_id);
+    thread loader_b_t loader_b(B, params->ldb, Bs, simd_group_id, simd_lane_id);
 
     if (!align_K) {
       const int k_last = params->gemm_k_iterations_aligned * BK;
@@ -126,7 +103,7 @@ template <
 
     const int gemm_k_iterations = params->gemm_k_iterations_aligned;
     const short lbk = 0;
-    if ((align_M || tgp_bm == BM) && (align_N || tgp_bn == BN)) {
+    if ((tgp_bm == BM) && (align_N || tgp_bn == BN)) {
       gemm_kernel::gemm_loop(
           As,
           Bs,
@@ -150,7 +127,7 @@ template <
           tgp_bn,
           lbk,
           LoopAlignment<false, true, true>{});
-    } else if (align_M || tgp_bm == BM) {
+    } else if (tgp_bm == BM) {
       gemm_kernel::gemm_loop(
           As,
           Bs,
@@ -176,11 +153,10 @@ template <
           LoopAlignment<false, false, true>{});
     }
 
-    if (offset_next - offset == BM && (align_N || tgp_bn == BN)) {
-      mma_op.store_result(C, params->ldd);
+    if (tgp_bm == BM && (align_N || tgp_bn == BN)) {
+      mma_op.store_result(C_tile, params->ldd);
     } else {
-      mma_op.store_result_slice(
-          C, params->ldd, short2(0, offset), short2(tgp_bn, offset_next));
+      mma_op.store_result_safe(C_tile, params->ldd, short2(tgp_bn, tgp_bm));
     }
   }
 }

@@ -3139,7 +3139,6 @@ void grouped_mm(
     wm = 1;
   }
 
-  const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
   const bool align_K = (K % bk) == 0;
 
@@ -3165,7 +3164,6 @@ void grouped_mm(
       wn);
 
   metal::MTLFCList func_consts = {
-      {&align_M, MTL::DataType::DataTypeBool, 200},
       {&align_N, MTL::DataType::DataTypeBool, 201},
       {&align_K, MTL::DataType::DataTypeBool, 202},
   };
@@ -3175,8 +3173,6 @@ void grouped_mm(
   concatenate(
       hash_name,
       base_name,
-      "_align_M_",
-      align_M ? 't' : 'n',
       "_align_N_",
       align_N ? 't' : 'n',
       "_align_K_",
@@ -3227,7 +3223,7 @@ void grouped_mm(
                            /* const int batch_ndim = */ 0};
 
   MTL::Size group_dims = MTL::Size(32, wn, wm);
-  MTL::Size grid_dims = MTL::Size(params.tiles_n, params.tiles_m, 1);
+  MTL::Size grid_dims = MTL::Size(params.tiles_n, num_groups, 1);
 
   compute_encoder.set_input_array(a, 0);
   compute_encoder.set_input_array(b, 1);
