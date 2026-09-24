@@ -74,13 +74,9 @@ void reset_random_state() {
 class RandomState {};
 
 nb::object random_state_sentinel() {
-  static nb::object sentinel = []() {
-    auto sentinel = nb::cast(RandomState{});
-    sentinel.inc_ref();
-    return sentinel;
-  }();
+  static nb::handle sentinel = nb::cast(RandomState{}).release();
 
-  return sentinel;
+  return nb::borrow(sentinel);
 }
 
 mx::array random_state_key() {
