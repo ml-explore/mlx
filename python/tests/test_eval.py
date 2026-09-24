@@ -236,6 +236,19 @@ class TestEval(mlx_tests.MLXTestCase):
         with self.assertRaises(RuntimeError):
             mx.synchronize(mx.cpu)
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_eval_exception_after_cross_stream_wait(self):
+        # gather_qqmm has no CPU kernel. It fails in eval after the CPU
+        # stream waits for x from the GPU.
+        x = mx.full((2, 64), 3.0) * 2.0
+        wq, scales = mx.quantize(mx.ones((32, 64)), mode="nvfp4")[:2]
+        y = mx.gather_qqmm(x, wq, scales, mode="nvfp4", stream=mx.cpu)
+        with self.assertRaises(RuntimeError):
+            mx.eval(y)
+
+        self.assertTrue(mx.all(x == 6.0).item())
+        self.assertEqual((mx.ones((4,), stream=mx.cpu) + 1).sum().item(), 8.0)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

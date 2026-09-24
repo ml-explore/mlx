@@ -324,6 +324,15 @@ array eval_impl(std::vector<array> outputs, bool async) {
       } catch (...) {
       }
     }
+    // Commit GPU streams before the wait.
+    for (auto& s : open_streams) {
+      if (s.device == Device::gpu) {
+        try {
+          gpu::finalize(s);
+        } catch (...) {
+        }
+      }
+    }
     for (auto& s : open_streams) {
       try {
         synchronize(s);
