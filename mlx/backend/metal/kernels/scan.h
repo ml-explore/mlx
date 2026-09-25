@@ -411,8 +411,9 @@ template <
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
     const constant size_t& axis_size [[buffer(2)]],
-    const constant size_t& stride [[buffer(3)]],
-    const constant size_t& stride_blocks [[buffer(4)]],
+    const constant int64_t& stride [[buffer(3)]],
+    const constant int64_t& stride_blocks [[buffer(4)]],
+    const constant int64_t& data_size [[buffer(5)]],
     uint3 gid [[threadgroup_position_in_grid]],
     uint3 gsize [[threadgroups_per_grid]],
     uint3 lid [[thread_position_in_threadgroup]],
@@ -434,15 +435,17 @@ template <
   }
 
   // Compute offsets
-  size_t full_gid = gid.y + gsize.y * size_t(gid.z);
-  size_t offset = full_gid / stride_blocks * axis_size * stride;
-  size_t global_index_x = full_gid % stride_blocks * BN;
+  int64_t full_gid = gid.y + int64_t(gsize.y) * gid.z;
+  int64_t offset = full_gid / stride_blocks * axis_size * stride;
+  int64_t global_index_x = full_gid % stride_blocks * BN;
   uint read_offset_y = (lid.x * N_READS) / BN;
   uint read_offset_x = (lid.x * N_READS) % BN;
   uint scan_offset_y = simd_lane_id;
   uint scan_offset_x = simd_group_id * n_scans;
 
-  uint stride_limit = stride - global_index_x;
+  int64_t stride_limit =
+      min(stride - global_index_x, data_size - offset - global_index_x);
+
   in += offset + global_index_x + read_offset_x;
   out += offset + global_index_x + read_offset_x;
   threadgroup U* read_into =
