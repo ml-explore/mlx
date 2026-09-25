@@ -3207,6 +3207,7 @@ void grouped_mm(
                               wn);
   compute_encoder.set_compute_pipeline_state(kernel);
 
+  int tiles_m = std::min(M, (M + bm - 1) / bm + num_groups - 1);
   steel::GEMMParams params{/* const int M = */ M,
                            /* const int N = */ N,
                            /* const int K = */ K,
@@ -3214,7 +3215,7 @@ void grouped_mm(
                            /* const int ldb = */ static_cast<int>(ldb),
                            /* const int ldd = */ N,
                            /* const int tiles_n = */ (N + bn - 1) / bn,
-                           /* const int tiles_m = */ (M + bm - 1) / bm,
+                           /* const int tiles_m = */ tiles_m,
                            /* const int64_t batch_stride_a = */ 0,
                            /* const int64_t batch_stride_b = */ b.strides()[0],
                            /* const int64_t batch_stride_d = */ 0,
@@ -3223,7 +3224,7 @@ void grouped_mm(
                            /* const int batch_ndim = */ 0};
 
   MTL::Size group_dims = MTL::Size(32, wn, wm);
-  MTL::Size grid_dims = MTL::Size(params.tiles_n, num_groups, 1);
+  MTL::Size grid_dims = MTL::Size(params.tiles_n, params.tiles_m, 1);
 
   compute_encoder.set_input_array(a, 0);
   compute_encoder.set_input_array(b, 1);

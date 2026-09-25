@@ -1,5 +1,7 @@
 // Copyright © 2026 Apple Inc.
 
+#include "mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_grouped_utils.h"
+
 using namespace mlx::steel;
 
 constant bool align_N [[function_constant(201)]];
@@ -43,8 +45,19 @@ template <
   using loader_b_t = typename gemm_kernel::loader_b_t;
   using mma_t = typename gemm_kernel::mma_t;
 
-  const int group = tid.y;
-  if (params->tiles_n <= static_cast<int>(tid.x) || group >= num_groups) {
+  int c_row;
+  int group;
+  short tgp_bm;
+  if (params->tiles_n <= static_cast<int>(tid.x) ||
+      !grouped_mm_row_tile<BM>(
+          offsets,
+          num_groups,
+          params->M,
+          tid.y,
+          simd_lane_id,
+          c_row,
+          group,
+          tgp_bm)) {
     return;
   }
 
@@ -52,111 +65,101 @@ template <
   threadgroup T Bs[gemm_kernel::tgp_mem_size_b];
 
   const int c_col = tid.x * BN;
+  const size_t c_row_long = size_t(c_row);
   const size_t c_col_long = size_t(c_col);
   const short tgp_bn = align_N ? BN : short(min(BN, params->N - c_col));
-  const int group_end = group + 1 < num_groups ? offsets[group + 1] : params->M;
 
+  A += transpose_a ? c_row_long : c_row_long * params->lda;
   B += group * params->batch_stride_b;
   B += transpose_b ? c_col_long * params->ldb : c_col_long;
-  C += c_col_long;
+  C += c_row_long * params->ldd + c_col_long;
 
-  for (int c_row = offsets[group]; c_row < group_end; c_row += BM) {
-    const size_t c_row_long = size_t(c_row);
-    const short tgp_bm = short(min(BM, group_end - c_row));
-    const device T* A_tile =
-        A + (transpose_a ? c_row_long : c_row_long * params->lda);
-    device T* C_tile = C + c_row_long * params->ldd;
+  thread mma_t mma_op(simd_group_id, simd_lane_id);
+  thread loader_a_t loader_a(A, params->lda, As, simd_group_id, simd_lane_id);
+  thread loader_b_t loader_b(B, params->ldb, Bs, simd_group_id, simd_lane_id);
+
+  if (!align_K) {
+    const int k_last = params->gemm_k_iterations_aligned * BK;
+    const int k_remain = params->K - k_last;
+    const size_t k_jump_a =
+        transpose_a ? params->lda * size_t(k_last) : size_t(k_last);
+    const size_t k_jump_b =
+        transpose_b ? size_t(k_last) : params->ldb * size_t(k_last);
+
+    loader_a.src += k_jump_a;
+    loader_b.src += k_jump_b;
+
+    const short2 tile_dims_A =
+        transpose_a ? short2(tgp_bm, k_remain) : short2(k_remain, tgp_bm);
+    const short2 tile_dims_B =
+        transpose_b ? short2(k_remain, tgp_bn) : short2(tgp_bn, k_remain);
+
+    loader_a.load_safe(tile_dims_A);
+    loader_b.load_safe(tile_dims_B);
 
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    thread mma_t mma_op(simd_group_id, simd_lane_id);
-    thread loader_a_t loader_a(
-        A_tile, params->lda, As, simd_group_id, simd_lane_id);
-    thread loader_b_t loader_b(B, params->ldb, Bs, simd_group_id, simd_lane_id);
+    mma_op.mma(As, Bs);
 
-    if (!align_K) {
-      const int k_last = params->gemm_k_iterations_aligned * BK;
-      const int k_remain = params->K - k_last;
-      const size_t k_jump_a =
-          transpose_a ? params->lda * size_t(k_last) : size_t(k_last);
-      const size_t k_jump_b =
-          transpose_b ? size_t(k_last) : params->ldb * size_t(k_last);
+    loader_a.src -= k_jump_a;
+    loader_b.src -= k_jump_b;
+  }
 
-      loader_a.src += k_jump_a;
-      loader_b.src += k_jump_b;
+  const int gemm_k_iterations = params->gemm_k_iterations_aligned;
+  const short lbk = 0;
+  if ((tgp_bm == BM) && (align_N || tgp_bn == BN)) {
+    gemm_kernel::gemm_loop(
+        As,
+        Bs,
+        gemm_k_iterations,
+        loader_a,
+        loader_b,
+        mma_op,
+        tgp_bm,
+        tgp_bn,
+        lbk,
+        LoopAlignment<true, true, true>{});
+  } else if (align_N || tgp_bn == BN) {
+    gemm_kernel::gemm_loop(
+        As,
+        Bs,
+        gemm_k_iterations,
+        loader_a,
+        loader_b,
+        mma_op,
+        tgp_bm,
+        tgp_bn,
+        lbk,
+        LoopAlignment<false, true, true>{});
+  } else if (tgp_bm == BM) {
+    gemm_kernel::gemm_loop(
+        As,
+        Bs,
+        gemm_k_iterations,
+        loader_a,
+        loader_b,
+        mma_op,
+        tgp_bm,
+        tgp_bn,
+        lbk,
+        LoopAlignment<true, false, true>{});
+  } else {
+    gemm_kernel::gemm_loop(
+        As,
+        Bs,
+        gemm_k_iterations,
+        loader_a,
+        loader_b,
+        mma_op,
+        tgp_bm,
+        tgp_bn,
+        lbk,
+        LoopAlignment<false, false, true>{});
+  }
 
-      const short2 tile_dims_A =
-          transpose_a ? short2(tgp_bm, k_remain) : short2(k_remain, tgp_bm);
-      const short2 tile_dims_B =
-          transpose_b ? short2(k_remain, tgp_bn) : short2(tgp_bn, k_remain);
-
-      loader_a.load_safe(tile_dims_A);
-      loader_b.load_safe(tile_dims_B);
-
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-
-      mma_op.mma(As, Bs);
-
-      loader_a.src -= k_jump_a;
-      loader_b.src -= k_jump_b;
-    }
-
-    const int gemm_k_iterations = params->gemm_k_iterations_aligned;
-    const short lbk = 0;
-    if ((tgp_bm == BM) && (align_N || tgp_bn == BN)) {
-      gemm_kernel::gemm_loop(
-          As,
-          Bs,
-          gemm_k_iterations,
-          loader_a,
-          loader_b,
-          mma_op,
-          tgp_bm,
-          tgp_bn,
-          lbk,
-          LoopAlignment<true, true, true>{});
-    } else if (align_N || tgp_bn == BN) {
-      gemm_kernel::gemm_loop(
-          As,
-          Bs,
-          gemm_k_iterations,
-          loader_a,
-          loader_b,
-          mma_op,
-          tgp_bm,
-          tgp_bn,
-          lbk,
-          LoopAlignment<false, true, true>{});
-    } else if (tgp_bm == BM) {
-      gemm_kernel::gemm_loop(
-          As,
-          Bs,
-          gemm_k_iterations,
-          loader_a,
-          loader_b,
-          mma_op,
-          tgp_bm,
-          tgp_bn,
-          lbk,
-          LoopAlignment<true, false, true>{});
-    } else {
-      gemm_kernel::gemm_loop(
-          As,
-          Bs,
-          gemm_k_iterations,
-          loader_a,
-          loader_b,
-          mma_op,
-          tgp_bm,
-          tgp_bn,
-          lbk,
-          LoopAlignment<false, false, true>{});
-    }
-
-    if (tgp_bm == BM && (align_N || tgp_bn == BN)) {
-      mma_op.store_result(C_tile, params->ldd);
-    } else {
-      mma_op.store_result_safe(C_tile, params->ldd, short2(tgp_bn, tgp_bm));
-    }
+  if (tgp_bm == BM && (align_N || tgp_bn == BN)) {
+    mma_op.store_result(C, params->ldd);
+  } else {
+    mma_op.store_result_safe(C, params->ldd, short2(tgp_bn, tgp_bm));
   }
 }
