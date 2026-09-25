@@ -933,23 +933,31 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
     def test_sdpa_force_fused_metal(self):
         if mx.default_device() != mx.gpu:
             self.skipTest("requires GPU")
+        mx.random.seed(0)
 
-        def make_qkv(qL, kL, D, qH=8, kH=8):
-            q = mx.random.normal((1, qH, qL, D), mx.float16)
-            k = mx.random.normal((1, kH, kL, D), mx.float16)
-            v = mx.random.normal((1, kH, kL, D), mx.float16)
+        def make_qkv(qL, kL, D, qH=8, kH=8, dtype=mx.float16):
+            q = mx.random.normal((1, qH, qL, D), dtype)
+            k = mx.random.normal((1, kH, kL, D), dtype)
+            v = mx.random.normal((1, kH, kL, D), dtype)
             return q, k, v
 
         # Full attention kernel.
-        for D, qL, mask in product((192, 256), (9, 16), (None, "causal")):
-            with self.subTest(head_dim=D, qL=qL, mask=mask):
-                q, k, v = make_qkv(qL, 512, D, 8, 4)
+        for D, qL, kL, mask, dtype in product(
+            (192, 256),
+            (9, 16),
+            (31, 512),
+            (None, "causal"),
+            (mx.bfloat16, mx.float32),
+        ):
+            with self.subTest(head_dim=D, qL=qL, kL=kL, mask=mask):
+                q, k, v = make_qkv(qL, kL, D, 8, 4)
                 scale = D**-0.5
                 ref = mlx_ref_attn(q, k, v, scale=scale, mask=mask)
                 out = mx.fast.scaled_dot_product_attention(
                     q, k, v, scale=scale, mask=mask, force_fused=True
                 )
-                self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
+                tol = 1e-2 if dtype == mx.bfloat16 else 1e-3
+                self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
         # Vector attention kernel.
         for D in (192, 256, 512):
