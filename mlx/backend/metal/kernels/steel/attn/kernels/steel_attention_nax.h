@@ -79,7 +79,8 @@ template <
     int WM,
     int WN,
     typename MaskType = float,
-    typename AccumType = float>
+    typename AccumType = float,
+    int BV = BD>
 [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void attention_nax(
     const device T* Q [[buffer(0)]],
     const device T* K [[buffer(1)]],
@@ -136,11 +137,13 @@ template <
   constexpr int TQ = BQ / (kNWarps * kU);
   // HeadDim frags (all warps load the same frags)
   constexpr int TD = BD / kU;
+  constexpr int TV = BV / kU;
+  static_assert(BD % kU == 0 && BV % (2 * kU) == 0, "Invalid head dimensions");
   // KV seq frags per warp
   constexpr short TK = BK / kU;
 
   static_assert(TQ == 1, "Check TQ");
-  using otile_t = NAXTile<AccumType, TQ, TD>;
+  using otile_t = NAXTile<AccumType, TQ, TV>;
   otile_t Otile;
 
   Otile.clear();
@@ -421,8 +424,8 @@ template <
     STEEL_PRAGMA_UNROLL
     for (short iq = 0; iq < TQ; iq++) {
       STEEL_PRAGMA_UNROLL
-      for (short id = 0; id < TD; id += 2) {
-        if constexpr (BD == 128) {
+      for (short id = 0; id < TV; id += 2) {
+        if constexpr (BV == 128) {
           if (id == 4) {
             threadgroup_barrier(mem_flags::mem_none);
           }
