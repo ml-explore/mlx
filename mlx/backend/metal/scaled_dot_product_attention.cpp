@@ -7,6 +7,7 @@
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/steel/attn/params.h"
+#include "mlx/backend/metal/matmul.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/utils.h"
@@ -25,14 +26,21 @@ void sdpa_full_self_attention_nax(
     array& o,
     bool do_causal_,
     const std::optional<array>& mask,
-    const std::optional<array>& sinks) {
+    const std::optional<array>& sinks,
+    array* lse) {
   using namespace mlx::steel;
 
   int bd = q.shape(-1);
   int bq = 64;
   int bk = 32;
 
-  bool split_d = bd == 256;
+  // The d-split kernel gives wn warps the same query rows and a slice of the
+  // head dim each, so every one of them runs the softmax bookkeeping for those
+  // rows. The sink seeds sum_score with exp(z - z) == 1, which then enters the
+  // denominator once per warp instead of once per row, and the logsumexp store
+  // lands before the cross-warp combine so each warp writes a partial. Keep
+  // sinks and lse on the single-warp path until both move after the combine.
+  bool split_d = (bd == 256) && !sinks.has_value() && (lse == nullptr);
   int wm = 4;
   int wn = split_d ? 2 : 1;
 
@@ -79,13 +87,15 @@ void sdpa_full_self_attention_nax(
   const bool has_mask = mask.has_value();
   const bool do_causal = do_causal_;
   const bool has_sinks = sinks.has_value();
+  const bool save_lse = (lse != nullptr);
 
   metal::MTLFCList func_consts = {
       {&align_Q, MTL::DataType::DataTypeBool, 200},
       {&align_K, MTL::DataType::DataTypeBool, 201},
       {&has_mask, MTL::DataType::DataTypeBool, 300},
       {&do_causal, MTL::DataType::DataTypeBool, 301},
-      {&has_sinks, MTL::DataType::DataTypeBool, 302}};
+      {&has_sinks, MTL::DataType::DataTypeBool, 302},
+      {&save_lse, MTL::DataType::DataTypeBool, 303}};
 
   std::string base_name;
   concatenate(
@@ -118,7 +128,9 @@ void sdpa_full_self_attention_nax(
       "_do_causal_",
       (do_causal ? 't' : 'n'),
       "_has_sinks_",
-      (has_sinks ? 't' : 'n'));
+      (has_sinks ? 't' : 'n'),
+      "_save_lse_",
+      (save_lse ? 't' : 'n'));
 
   auto& compute_encoder = metal::get_command_encoder(s);
 
@@ -188,6 +200,9 @@ void sdpa_full_self_attention_nax(
   if (has_sinks) {
     compute_encoder.set_input_array(*sinks, 7);
   }
+  if (save_lse) {
+    compute_encoder.set_output_array(*lse, 8);
+  }
 
   MTL::Size grid_dims = MTL::Size(NQ, H, B);
   MTL::Size group_dims = MTL::Size(32, wm, wn);
@@ -206,15 +221,12 @@ void sdpa_full_self_attention_metal(
     array& o,
     bool do_causal_,
     const std::optional<array>& mask,
-    const std::optional<array>& sinks) {
-  int B = q.shape(0);
-  int H = q.shape(1);
+    const std::optional<array>& sinks,
+    array* lse /* = nullptr */) {
   int D = q.shape(3);
-  int gqa_factor = q.shape(1) / k.shape(1);
 
   int qL = q.shape(2);
   int kL = k.shape(2);
-
   if (metal::is_nax_available() &&
       (D == 64 || D == 96 || D == 128 || D == 256) &&
       (env::enable_tf32() || q.dtype() != float32)) {
@@ -228,15 +240,18 @@ void sdpa_full_self_attention_metal(
         /* array& o = */ o,
         /* bool do_causal_ = */ do_causal_,
         /* const std::optional<array>& mask = */ mask,
-        /* const std::optional<array>& sinks = */ sinks);
+        /* const std::optional<array>& sinks = */ sinks,
+        /* array* lse = */ lse);
   }
 
   // Pad head dims 72 and 80 to 96 to reach the NAX kernel. The added lanes
   // are zero and the caller's scale is retained. Enable by default only for
   // long, unmasked half-precision attention, where the attention work can
   // amortize the padding and output copy. The override is read per call.
+  //
+  // Skipped when the logsumexp is needed
   bool pad_default = qL >= 512 && kL >= 512 && !do_causal_ && !mask && !sinks;
-  if ((D == 72 || D == 80) && metal::is_nax_available() &&
+  if ((D == 72 || D == 80) && lse == nullptr && metal::is_nax_available() &&
       (q.dtype() == float16 || q.dtype() == bfloat16) &&
       env::get_var("MLX_SDPA_PAD_HEAD_DIM", pad_default ? 1 : 0) == 1) {
     constexpr int pad_to = 96;
@@ -283,7 +298,8 @@ void sdpa_full_self_attention_metal(
         /* array& o = */ op,
         /* bool do_causal_ = */ do_causal_,
         /* const std::optional<array>& mask = */ mask,
-        /* const std::optional<array>& sinks = */ sinks);
+        /* const std::optional<array>& sinks = */ sinks,
+        /* array* lse = */ nullptr);
 
     // Slice the padded lanes back out into o's caller-chosen strides.
     copy_gpu_inplace(
@@ -303,6 +319,10 @@ void sdpa_full_self_attention_metal(
 
   using namespace mlx::steel;
 
+  int B = q.shape(0);
+  int H = q.shape(1);
+  int gqa_factor = q.shape(1) / k.shape(1);
+
   int wm = 4;
   int wn = 1;
 
@@ -315,13 +335,15 @@ void sdpa_full_self_attention_metal(
   const bool has_mask = mask.has_value();
   const bool do_causal = do_causal_;
   const bool has_sinks = sinks.has_value();
+  const bool save_lse = (lse != nullptr);
 
   metal::MTLFCList func_consts = {
       {&align_Q, MTL::DataType::DataTypeBool, 200},
       {&align_K, MTL::DataType::DataTypeBool, 201},
       {&has_mask, MTL::DataType::DataTypeBool, 300},
       {&do_causal, MTL::DataType::DataTypeBool, 301},
-      {&has_sinks, MTL::DataType::DataTypeBool, 302}};
+      {&has_sinks, MTL::DataType::DataTypeBool, 302},
+      {&save_lse, MTL::DataType::DataTypeBool, 303}};
 
   std::string base_name;
   concatenate(
@@ -354,7 +376,9 @@ void sdpa_full_self_attention_metal(
       "_do_causal_",
       (do_causal ? 't' : 'n'),
       "_has_sinks_",
-      (has_sinks ? 't' : 'n'));
+      (has_sinks ? 't' : 'n'),
+      "_save_lse_",
+      (save_lse ? 't' : 'n'));
 
   auto& compute_encoder = metal::get_command_encoder(s);
 
@@ -422,6 +446,9 @@ void sdpa_full_self_attention_metal(
   }
   if (has_sinks) {
     compute_encoder.set_input_array(*sinks, 7);
+  }
+  if (save_lse) {
+    compute_encoder.set_output_array(*lse, 8);
   }
 
   MTL::Size grid_dims = MTL::Size(NQ, H, B);
@@ -716,11 +743,12 @@ std::tuple<bool, std::string> has_fused_kernel(
   if (s.device != Device::gpu) {
     return {false, "the fused kernels require a GPU (Metal) stream."};
   }
-  if (output_logsumexp) {
+
+  if (output_logsumexp && has_arr_mask) {
     return {
         false,
-        "the fused forward does not produce the logsumexp required for "
-        "the fused VJP; use default routing when training."};
+        "the backward pass does not support an array mask; only causal masking "
+        "is implemented."};
   }
 
   const int value_head_dim = v.shape(-1);
@@ -814,6 +842,346 @@ std::tuple<bool, std::string> has_fused_kernel(
   return {true, ""};
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Backward pass
+///////////////////////////////////////////////////////////////////////////////
+
+struct SDPAVJPTileParams {
+  int bq;
+  int bk;
+  int qL;
+  int i0;
+  int j0;
+  float scale;
+  int diag_off;
+  int causal;
+};
+
+array ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
+  if (!x.flags().row_contiguous) {
+    array x_copy = contiguous_copy_gpu(x, s);
+    metal::get_command_encoder(s).add_temporary(x_copy);
+    return x_copy;
+  } else {
+    return x;
+  }
+}
+
+array vjp_alloc(Shape shape, Dtype dt, const Stream& s) {
+  array a(std::move(shape), dt, nullptr, {});
+  a.set_data(allocator::malloc(a.nbytes()));
+  metal::get_command_encoder(s).add_temporary(a);
+  return a;
+}
+
+// Takes a view of the buffer
+array vjp_view(const array& base, Shape shape) {
+  array v(shape, base.dtype(), nullptr, {});
+  Strides st(shape.size());
+  int64_t acc = 1;
+  for (int i = static_cast<int>(shape.size()) - 1; i >= 0; --i) {
+    st[i] = acc;
+    acc *= shape[i];
+  }
+  array::Flags f{1, 1, shape.size() <= 1};
+  v.copy_shared_buffer(base, st, f, static_cast<size_t>(acc), 0);
+  return v;
+}
+
+// A [B, H, len, D] window of a row-contiguous [B, H, T, D] input, starting at
+// sequence position t0.
+array vjp_row_slice(const array& x, int t0, int len) {
+  const auto& shp = x.shape();
+  int64_t Dx = shp[3];
+  int64_t Tx = shp[2];
+  Shape ns = {shp[0], shp[1], len, static_cast<int>(Dx)};
+  Strides st = {shp[1] * Tx * Dx, Tx * Dx, Dx, 1};
+  array v(ns, x.dtype(), nullptr, {});
+  array::Flags f{1, len == shp[2], false};
+  size_t base = static_cast<size_t>(x.offset()) / x.itemsize();
+  v.copy_shared_buffer(
+      x,
+      st,
+      f,
+      x.data_size(),
+      base + static_cast<size_t>(t0) * static_cast<size_t>(Dx));
+  return v;
+}
+
+// Block sizes for the score tile. The best results are usually for 1024x1024 so
+// I set those as default. This probably depends on the hardware so it may need
+// to be tuned in the future.
+std::pair<int, int> sdpa_vjp_blocks(int B, int H, int qL, int kL, Dtype ctype) {
+  constexpr int kDefaultBlock = 1024;
+
+  int blk = env::get_var("MLX_SDPA_VJP_BLOCK", kDefaultBlock);
+
+  int bq = std::min(blk, qL);
+  int bk = std::min(blk, kL);
+  if (int e = env::get_var("MLX_SDPA_VJP_BQ", 0); e > 0) {
+    bq = std::min(e, qL);
+  }
+  if (int e = env::get_var("MLX_SDPA_VJP_BK", 0); e > 0) {
+    bk = std::min(e, kL);
+  }
+  return {bq, bk};
+}
+
+void sdpa_vjp_blocked(
+    const Stream& s,
+    metal::Device& d,
+    const array& q,
+    const array& k,
+    const array& v,
+    const array& odo,
+    const array& lse,
+    const array& cot_o,
+    array& dq,
+    array& dk,
+    array& dv,
+    float scale,
+    bool causal) {
+  auto& compute_encoder = metal::get_command_encoder(s);
+
+  const int B = q.shape(0);
+  const int H = q.shape(1);
+  const int qL = q.shape(2);
+  const int D = q.shape(3);
+  const int Hk = k.shape(1);
+  const int kL = k.shape(2);
+  const int Dv = v.shape(3);
+  const int G = H / Hk;
+  const int BH = B * H;
+  const int BHk = B * Hk;
+  // Under a causal mask the diagonal sits at j == i + (kL - qL), which is
+  // nonzero whenever the queries are a suffix of the keys.
+  const int diag_off = kL - qL;
+
+  auto blocks = sdpa_vjp_blocks(B, H, qL, kL, q.dtype());
+  const int BQ = blocks.first;
+  const int BK = blocks.second;
+
+  Dtype ctype = q.dtype();
+  std::string tname = get_type_string(ctype);
+
+  auto ds_kernel = d.get_kernel("sdpa_vjp_ds_" + tname);
+  auto red_add = d.get_kernel("sdpa_vjp_reduce_add_" + tname);
+  auto red_set = d.get_kernel("sdpa_vjp_reduce_set_" + tname);
+
+  // Temporary tiles
+  array s_buf = vjp_alloc({BH, BQ, BK}, ctype, s);
+  array dp_buf = vjp_alloc({BH, BQ, BK}, ctype, s);
+  array dst_buf = vjp_alloc({BH, BK, BQ}, ctype, s);
+  array pt_buf = vjp_alloc({BH, BK, BQ}, ctype, s);
+
+  // Output of the gemms
+  array dq_tile = vjp_alloc({BH, BQ, D}, ctype, s);
+  array dk_tile = vjp_alloc({BH, BK, D}, ctype, s);
+  array dv_tile = vjp_alloc({BH, BK, Dv}, ctype, s);
+
+  // Accumulators for the result
+  array dq_acc = vjp_alloc({B, H, qL, D}, float32, s);
+  array dk_acc = vjp_alloc({B, Hk, kL, D}, float32, s);
+  array dv_acc = vjp_alloc({B, Hk, kL, Dv}, float32, s);
+
+  std::vector<array> copies;
+
+  auto run_reduce = [&](const array& src,
+                        array& acc,
+                        array& out,
+                        int rows,
+                        int dim,
+                        int group,
+                        int acc_rows,
+                        int row_off,
+                        int nbh,
+                        bool accum) {
+    compute_encoder.set_compute_pipeline_state(accum ? red_add : red_set);
+    compute_encoder.set_input_array(src, 0);
+    compute_encoder.set_input_array(acc, 1);
+    compute_encoder.set_output_array(acc, 1);
+    compute_encoder.set_output_array(out, 2);
+    compute_encoder.set_bytes(rows, 3);
+    compute_encoder.set_bytes(dim, 4);
+    compute_encoder.set_bytes(group, 5);
+    compute_encoder.set_bytes(acc_rows, 6);
+    compute_encoder.set_bytes(row_off, 7);
+    compute_encoder.dispatch_threads(
+        MTL::Size(dim, rows, nbh), MTL::Size(std::min(dim, 32), 8, 1));
+  };
+
+  const int n_i = (qL + BQ - 1) / BQ;
+
+  const Strides q_bs = {
+      H * int64_t(qL) * D, G * int64_t(qL) * D, int64_t(qL) * D};
+  const Strides o_bs = {
+      H * int64_t(qL) * Dv, G * int64_t(qL) * Dv, int64_t(qL) * Dv};
+  // A zero innermost batch stride broadcasts one kv head over its query group.
+  const Strides k_bs = {Hk * int64_t(kL) * D, int64_t(kL) * D, 0};
+  const Strides v_bs = {Hk * int64_t(kL) * Dv, int64_t(kL) * Dv, 0};
+  const Shape bshape = {B, Hk, G};
+
+  for (int j0 = 0; j0 < kL; j0 += BK) {
+    const int bk_len = std::min(BK, kL - j0);
+
+    array k_sl = vjp_row_slice(k, j0, bk_len);
+    array v_sl = vjp_row_slice(v, j0, bk_len);
+
+    bool kv_accum = false;
+
+    for (int ii = 0; ii < n_i; ++ii) {
+      const int i0 = ii * BQ;
+      const int bq_len = std::min(BQ, qL - i0);
+      // Skip tiles that lie entirely above the causal diagonal.
+      if (causal && j0 > i0 + bq_len - 1 + diag_off) {
+        continue;
+      }
+
+      array q_sl = vjp_row_slice(q, i0, bq_len);
+      array o_sl = vjp_row_slice(cot_o, i0, bq_len);
+
+      array s_v = vjp_view(s_buf, {BH, bq_len, bk_len});
+      // S = Q @ K.T
+      steel_matmul(
+          s,
+          d,
+          q_sl,
+          k_sl,
+          s_v,
+          bq_len,
+          bk_len,
+          D,
+          BH,
+          D,
+          D,
+          false,
+          true,
+          copies,
+          bshape,
+          q_bs,
+          k_bs);
+
+      array dp_v = vjp_view(dp_buf, {BH, bq_len, bk_len});
+      // dP = dO @ V.T
+      steel_matmul(
+          s,
+          d,
+          o_sl,
+          v_sl,
+          dp_v,
+          bq_len,
+          bk_len,
+          Dv,
+          BH,
+          Dv,
+          Dv,
+          false,
+          true,
+          copies,
+          bshape,
+          o_bs,
+          v_bs);
+
+      array ds_v = vjp_view(s_buf, {BH, bq_len, bk_len});
+      array dst_v = vjp_view(dst_buf, {BH, bk_len, bq_len});
+      array pt_v = vjp_view(pt_buf, {BH, bk_len, bq_len});
+
+      SDPAVJPTileParams params{
+          bq_len, bk_len, qL, i0, j0, scale, diag_off, causal ? 1 : 0};
+
+      // P = exp(scale * S - lse), dS = P * (dP - delta) * scale
+      compute_encoder.set_compute_pipeline_state(ds_kernel);
+      compute_encoder.set_input_array(s_v, 0);
+      compute_encoder.set_input_array(dp_v, 1);
+      compute_encoder.set_input_array(lse, 2);
+      compute_encoder.set_input_array(odo, 3);
+      compute_encoder.set_output_array(s_v, 4);
+      compute_encoder.set_output_array(dst_v, 5);
+      compute_encoder.set_output_array(pt_v, 6);
+      compute_encoder.set_bytes(params, 7);
+      compute_encoder.dispatch_threads(
+          MTL::Size(bk_len, bq_len, BH), MTL::Size(32, 8, 1));
+
+      int64_t ss2 = static_cast<int64_t>(bq_len) * bk_len;
+      Strides sc_bs = {H * ss2, G * ss2, ss2};
+
+      array dq_v = vjp_view(dq_tile, {BH, bq_len, D});
+      // dQ = dS @ K
+      steel_matmul(
+          s,
+          d,
+          ds_v,
+          k_sl,
+          dq_v,
+          bq_len,
+          D,
+          bk_len,
+          BH,
+          bk_len,
+          D,
+          false,
+          false,
+          copies,
+          bshape,
+          sc_bs,
+          k_bs);
+
+      array dk_v = vjp_view(dk_tile, {BH, bk_len, D});
+      // dK = dS.T @ Q
+      steel_matmul(
+          s,
+          d,
+          dst_v,
+          q_sl,
+          dk_v,
+          bk_len,
+          D,
+          bq_len,
+          BH,
+          bq_len,
+          D,
+          false,
+          false,
+          copies,
+          bshape,
+          sc_bs,
+          q_bs);
+
+      array dv_v = vjp_view(dv_tile, {BH, bk_len, Dv});
+      // dV = P.T @ dO
+      steel_matmul(
+          s,
+          d,
+          pt_v,
+          o_sl,
+          dv_v,
+          bk_len,
+          Dv,
+          bq_len,
+          BH,
+          bq_len,
+          Dv,
+          false,
+          false,
+          copies,
+          bshape,
+          sc_bs,
+          o_bs);
+
+      // dQ[i0] += dQ_tile, dK[j0] += sum_G dK_tile, dV[j0] += sum_G dV_tile
+      run_reduce(dq_v, dq_acc, dq, bq_len, D, 1, qL, i0, BH, j0 != 0);
+      run_reduce(dk_v, dk_acc, dk, bk_len, D, G, kL, j0, BHk, kv_accum);
+      run_reduce(dv_v, dv_acc, dv, bk_len, Dv, G, kL, j0, BHk, kv_accum);
+
+      kv_accum = true;
+    }
+  }
+
+  for (auto& c : copies) {
+    compute_encoder.add_temporary(c);
+  }
+}
+
 } // namespace
 
 bool ScaledDotProductAttention::use_fallback(
@@ -840,13 +1208,13 @@ bool ScaledDotProductAttention::use_fallback(
     return false;
   }
 
-  if (is_training) {
-    // It's faster for training on Metal to use the unfused SDPA for both
-    // forward and backward.
-    return true;
-  }
   if (!has_fused) {
     return true;
+  }
+
+  // The logsumexp only comes out of the fused forward
+  if (output_logsumexp) {
+    return false;
   }
 
   const int query_sequence_length = q.shape(2);
@@ -886,7 +1254,6 @@ void ScaledDotProductAttention::eval_gpu(
   auto& o = outputs[0];
 
   std::vector<array> copies;
-
   // Define some copy functions to ensure the layout of the inputs is as
   // expected.
   copies.reserve(inputs.size());
@@ -914,6 +1281,12 @@ void ScaledDotProductAttention::eval_gpu(
 
   // We are in vector mode ie single query
   if (q_pre.shape(2) <= 8) {
+    if (outputs.size() > 1) {
+      throw std::runtime_error(
+          "[scaled_dot_product_attention] the vector kernels do not produce a "
+          "logsumexp; the VJP path requires the full-attention kernel.");
+    }
+
     auto q_copy_unless = [](const array& arr) {
       if (arr.flags().row_contiguous) {
         return true;
@@ -1012,21 +1385,91 @@ void ScaledDotProductAttention::eval_gpu(
         ? std::optional<array>{copy_unless(is_matrix_contiguous, inputs[3])}
         : std::nullopt;
 
+    array* lse = nullptr;
+    if (outputs.size() > 1) {
+      outputs[1].set_data(allocator::malloc(outputs[1].nbytes()));
+      lse = &outputs[1];
+    }
+
     sdpa_full_self_attention_metal(
-        s, d, q, k, v, scale_, o, do_causal_, mask, sinks);
+        s, d, q, k, v, scale_, o, do_causal_, mask, sinks, lse);
   }
 
   metal::get_command_encoder(s).add_temporaries(std::move(copies));
 }
 
+// The vjp uses matmuls directly so it should be fine to call it every time as
+// it uses a lot less memory. It can be overriden by setting
+// MLX_SDPA_VJP_FALLBACK=1
 bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
-  return true;
+  if (s.device != Device::gpu) {
+    return true;
+  }
+  if (env::get_var("MLX_SDPA_VJP_FALLBACK", 0) != 0) {
+    return true;
+  }
+  auto dt = q.dtype();
+  return !(dt == float32 || dt == float16 || dt == bfloat16);
 }
 
 void ScaledDotProductAttentionVJP::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  throw std::runtime_error("NYI");
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  if (has_sinks_) {
+    throw std::runtime_error(
+        "[ScaledDotProductAttentionVJP] NYI: attention sinks");
+  }
+
+  auto q = ensure_row_contiguous(inputs[0], d, s);
+  auto k = ensure_row_contiguous(inputs[1], d, s);
+  auto v = ensure_row_contiguous(inputs[2], d, s);
+  const int n_in = static_cast<int>(inputs.size());
+  auto o = ensure_row_contiguous(inputs[n_in - 3], d, s);
+  auto lse = ensure_row_contiguous(inputs[n_in - 2], d, s);
+  auto cot_o = ensure_row_contiguous(inputs[n_in - 1], d, s);
+
+  const int B = q.shape(0);
+  const int H = q.shape(1);
+  const int qL = q.shape(2);
+  const int Dv = v.shape(3);
+
+  auto& dq = outputs[0];
+  auto& dk = outputs[1];
+  auto& dv = outputs[2];
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+
+  dq.set_data(allocator::malloc(dq.nbytes()));
+  dk.set_data(allocator::malloc(dk.nbytes()));
+  dv.set_data(allocator::malloc(dv.nbytes()));
+
+  array odo({B, H, qL}, float32, nullptr, {});
+  odo.set_data(allocator::malloc(odo.nbytes()));
+  compute_encoder.add_temporary(odo);
+
+  std::string odo_name;
+  concatenate(
+      odo_name,
+      "sdpa_vjp_odo_",
+      get_type_string(q.dtype()),
+      "_",
+      std::to_string(Dv));
+
+  auto odo_kernel = d.get_kernel(odo_name);
+
+  compute_encoder.set_compute_pipeline_state(odo_kernel);
+  compute_encoder.set_input_array(o, 0);
+  compute_encoder.set_input_array(cot_o, 1);
+  compute_encoder.set_output_array(odo, 2);
+  compute_encoder.set_bytes(qL, 3);
+  compute_encoder.dispatch_threads(
+      MTL::Size(32, qL, B * H), MTL::Size(32, 1, 1));
+
+  sdpa_vjp_blocked(
+      s, d, q, k, v, odo, lse, cot_o, dq, dk, dv, scale_, do_causal_);
 }
 
 } // namespace mlx::core::fast
