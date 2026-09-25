@@ -259,47 +259,32 @@ bool compiler_supports_device_sass(Device& device) {
 }
 
 #define INCLUDE_PREFIX "mlx/backend/cuda/device/"
+#define REDUCE_PREFIX "mlx/backend/cuda/reduce/"
 
 constexpr const char* g_include_names[] = {
-    INCLUDE_PREFIX "atomic_ops.cuh",
-    INCLUDE_PREFIX "binary_ops.cuh",
-    INCLUDE_PREFIX "cast_op.cuh",
-    INCLUDE_PREFIX "config.h",
-    INCLUDE_PREFIX "complex.cuh",
-    INCLUDE_PREFIX "cute_dequant.cuh",
-    INCLUDE_PREFIX "fp16_math.cuh",
-    INCLUDE_PREFIX "gemm_sm70.cuh",
-    INCLUDE_PREFIX "hadamard.cuh",
-    INCLUDE_PREFIX "indexing.cuh",
-    INCLUDE_PREFIX "qmm_naive.cuh",
-    INCLUDE_PREFIX "qmm_sm80.cuh",
-    INCLUDE_PREFIX "qmm_sm90.cuh",
-    INCLUDE_PREFIX "scatter_ops.cuh",
-    INCLUDE_PREFIX "unary_ops.cuh",
-    INCLUDE_PREFIX "ternary_ops.cuh",
-    INCLUDE_PREFIX "utils.cuh",
+    INCLUDE_PREFIX "atomic_ops.cuh", INCLUDE_PREFIX "binary_ops.cuh",
+    INCLUDE_PREFIX "cast_op.cuh",    INCLUDE_PREFIX "config.h",
+    INCLUDE_PREFIX "complex.cuh",    INCLUDE_PREFIX "cute_dequant.cuh",
+    INCLUDE_PREFIX "fp16_math.cuh",  INCLUDE_PREFIX "gemm_sm70.cuh",
+    INCLUDE_PREFIX "hadamard.cuh",   INCLUDE_PREFIX "indexing.cuh",
+    INCLUDE_PREFIX "qmm_naive.cuh",  INCLUDE_PREFIX "qmm_sm80.cuh",
+    INCLUDE_PREFIX "qmm_sm90.cuh",   INCLUDE_PREFIX "scatter_ops.cuh",
+    INCLUDE_PREFIX "unary_ops.cuh",  INCLUDE_PREFIX "ternary_ops.cuh",
+    INCLUDE_PREFIX "utils.cuh",      REDUCE_PREFIX "all_reduce.cuh",
+    REDUCE_PREFIX "reduce_ops.cuh",  REDUCE_PREFIX "reduce_utils.cuh",
 };
 
 #undef INCLUDE_PREFIX
+#undef REDUCE_PREFIX
 
 constexpr const char* g_headers[] = {
-    jit_source_atomic_ops,
-    jit_source_binary_ops,
-    jit_source_cast_op,
-    jit_source_config,
-    jit_source_complex,
-    jit_source_cute_dequant,
-    jit_source_fp16_math,
-    jit_source_gemm_sm70,
-    jit_source_hadamard,
-    jit_source_indexing,
-    jit_source_qmm_naive,
-    jit_source_qmm_sm80,
-    jit_source_qmm_sm90,
-    jit_source_scatter_ops,
-    jit_source_unary_ops,
-    jit_source_ternary_ops,
-    jit_source_utils,
+    jit_source_atomic_ops,  jit_source_binary_ops,   jit_source_cast_op,
+    jit_source_config,      jit_source_complex,      jit_source_cute_dequant,
+    jit_source_fp16_math,   jit_source_gemm_sm70,    jit_source_hadamard,
+    jit_source_indexing,    jit_source_qmm_naive,    jit_source_qmm_sm80,
+    jit_source_qmm_sm90,    jit_source_scatter_ops,  jit_source_unary_ops,
+    jit_source_ternary_ops, jit_source_utils,        jit_source_all_reduce,
+    jit_source_reduce_ops,  jit_source_reduce_utils,
 };
 
 void compile(

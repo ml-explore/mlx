@@ -1,11 +1,19 @@
 // Copyright © 2023-2024 Apple Inc.
 
+template <typename T>
+struct Identity {
+  T operator()(T x) thread {
+    return x;
+  }
+};
+
 template <
     typename T,
     typename U,
     typename Op,
     typename IdxT = int64_t,
-    int N_READS = REDUCE_N_READS>
+    int N_READS = REDUCE_N_READS,
+    typename Prefix = Identity<T>>
 [[kernel]] void all_reduce(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
@@ -18,6 +26,7 @@ template <
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
   Op op;
+  Prefix prefix;
   threadgroup U shared_vals[simd_size];
 
   U total = Op::init;
@@ -37,13 +46,13 @@ template <
 
   for (IdxT b = 0; b < blocks; b++) {
     for (int i = 0; i < N_READS; i++) {
-      total = op(cast_to<U>(in[i]), total);
+      total = op(cast_to<U>(prefix(in[i])), total);
     }
     in += lsize.x * N_READS;
   }
   if (extra > 0) {
     for (int i = 0; i < extra; i++) {
-      total = op(cast_to<U>(in[i]), total);
+      total = op(cast_to<U>(prefix(in[i])), total);
     }
   }
 

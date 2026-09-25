@@ -72,7 +72,8 @@ bool is_noop(const Primitive& p) {
 }
 
 bool is_reduction(const Primitive& p) {
-  return typeid(p) == typeid(Reduce) || typeid(p) == typeid(ArgReduce);
+  // TODO: Add fused-prefix support for ArgReduce.
+  return typeid(p) == typeid(Reduce);
 }
 
 bool is_fusable(const Primitive& p) {
@@ -122,6 +123,13 @@ Compiled::Compiled(
     }
     // computation performed
     os << a.primitive().name();
+    const auto& primitive = a.primitive();
+    if (typeid(primitive) == typeid(Reduce)) {
+      const auto& reduce = static_cast<const Reduce&>(primitive);
+      for (auto axis : reduce.state().second) {
+        os << "A" << axis;
+      }
+    }
     // name of inputs to the function
     for (auto& inp : a.inputs()) {
       os << namer.get_name(inp);
@@ -209,8 +217,52 @@ std::vector<Shape> Compiled::output_shapes(const std::vector<array>& inputs) {
       out_shape[i] = std::max(out_shape[i], in.shape()[i - dd]);
     }
   }
-  // All outputs have the same shape
+  // Elementwise outputs have the same shape.
   return std::vector<Shape>(outputs_.size(), out_shape);
+}
+
+CompiledReduce::CompiledReduce(
+    Stream stream,
+    std::vector<array> inputs,
+    std::vector<array> outputs,
+    std::vector<array> tape,
+    std::unordered_set<uintptr_t> constant_ids)
+    : Compiled(
+          stream,
+          std::move(inputs),
+          std::move(outputs),
+          std::move(tape),
+          std::move(constant_ids)) {
+  if (this->tape().size() < 2) {
+    throw std::invalid_argument(
+        "[CompiledReduce] Expected an elementwise prefix and a reduction");
+  }
+  const auto& terminal = this->tape().back().primitive();
+  if (typeid(terminal) != typeid(Reduce)) {
+    throw std::invalid_argument(
+        "[CompiledReduce] Expected a terminal Reduce primitive");
+  }
+}
+
+std::vector<Shape> CompiledReduce::output_shapes(
+    const std::vector<array>& inputs) {
+  size_t nd = 0;
+  for (const auto& in : inputs) {
+    nd = std::max(nd, in.ndim());
+  }
+  Shape out_shape(nd, 0);
+  for (const auto& in : inputs) {
+    auto dd = nd - in.ndim();
+    for (auto i = dd; i < nd; ++i) {
+      out_shape[i] = std::max(out_shape[i], in.shape()[i - dd]);
+    }
+  }
+
+  const auto& reduce = static_cast<const Reduce&>(tape().back().primitive());
+  for (auto axis : reduce.state().second) {
+    out_shape[axis] = 1;
+  }
+  return {std::move(out_shape)};
 }
 
 namespace detail {
@@ -827,6 +879,114 @@ void compile_fuse(
 
     // Already compiled
     if (global_cache.find(arr.id()) != global_cache.end()) {
+      continue;
+    }
+    // Fuse an elementwise prefix and a terminal all-reduce into one
+    // CompiledReduce primitive.
+    if (arr.has_primitive() && is_reduction(arr.primitive()) &&
+        static_cast<const Reduce&>(arr.primitive()).state().second.size() ==
+            arr.inputs()[0].ndim()) {
+      auto& reduction_input = arr.inputs()[0];
+      Stream reduction_stream = arr.primitive().stream();
+      const int max_prefix_depth = max_compile_depth - 1; // 1 for reduction
+
+      std::vector<array> prefix_tape;
+      std::vector<array> prefix_inputs;
+      std::unordered_set<uintptr_t> visited;
+
+      std::function<void(const array&, int)> collect_prefix;
+      collect_prefix = [&](const array& a, int depth) {
+        // Skip if already processed
+        if (visited.count(a.id())) {
+          return;
+        }
+        // Stop fusing if:
+        // depth limit exceeded
+        // non unary primitive
+        // does not have primitive
+        // stream mismatch
+        // is a function input or output
+        if (depth >= max_prefix_depth || !a.has_primitive() ||
+            !is_unary(a.primitive()) ||
+            a.primitive().stream() != reduction_stream ||
+            input_ids.count(a.id()) || output_map.count(a.id())) {
+          prefix_inputs.push_back(a);
+          visited.insert(a.id());
+          return;
+        }
+        // Check if the input is used multiple times
+        auto pit = parents_map.find(a.id());
+        if (pit != parents_map.end() && pit->second.size() > 1) {
+          prefix_inputs.push_back(a);
+          visited.insert(a.id());
+          return;
+        }
+        visited.insert(a.id());
+        for (auto& in : a.inputs()) {
+          collect_prefix(in, depth + 1);
+        }
+        prefix_tape.push_back(a);
+      };
+
+      collect_prefix(reduction_input, 0);
+
+      // If there are operations that we can fuse
+      if (!prefix_tape.empty()) {
+        std::unordered_set<uintptr_t> constant_ids;
+        for (auto& in : prefix_inputs) {
+          if (in.size() == 1 && !in.has_primitive() &&
+              input_ids.find(in.id()) == input_ids.end()) {
+            constant_ids.insert(in.id());
+          }
+        }
+
+        std::vector<array> fused_tape = prefix_tape;
+        fused_tape.push_back(arr);
+        std::unordered_set<uintptr_t> fused_ids;
+        for (const auto& a : fused_tape) {
+          fused_ids.insert(a.id());
+        }
+
+        auto compiled_output = array(
+            arr.shape(),
+            arr.dtype(),
+            std::make_shared<CompiledReduce>(
+                reduction_stream,
+                prefix_inputs,
+                std::vector<array>{arr},
+                std::move(fused_tape),
+                std::move(constant_ids)),
+            prefix_inputs);
+
+        new_tape.push_back(compiled_output);
+
+        for (int j = 0; j < prefix_inputs.size(); ++j) {
+          auto& pairs = parents_map[prefix_inputs[j].id()];
+          pairs.erase(
+              std::remove_if(
+                  pairs.begin(),
+                  pairs.end(),
+                  [&](auto& p) { return fused_ids.count(p.first.id()); }),
+              pairs.end());
+          pairs.push_back({compiled_output, j});
+        }
+
+        for (auto& p : prefix_tape) {
+          global_cache.insert(p.id());
+          parents_map.erase(p.id());
+        }
+        global_cache.insert(arr.id());
+
+        merge_one(compiled_output, arr, parents_map);
+        if (auto it = output_map.find(arr.id()); it != output_map.end()) {
+          it->second = compiled_output;
+        }
+        continue;
+      }
+
+      // Keep reductions without a fusable prefix unchanged.
+      new_tape.push_back(arr);
+      global_cache.insert(arr.id());
       continue;
     }
 
