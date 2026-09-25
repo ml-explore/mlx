@@ -32,12 +32,12 @@ METAL_FUNC bool gather_mm_row_tile(
     const ushort owner_lane = ushort(simd_sum(int(tiles_through <= tile)));
     if (owner_lane < 32) {
       // if true, we found an owner
-      group = e + lane;
+      group = e + owner_lane;
       // fill the row to start
-      row = simd_shuffle(start, lane) +
-          (tile - simd_shuffle(tiles_through - n, lane)) * BM;
+      row = simd_shuffle(start, owner_lane) +
+          (tile - simd_shuffle(tiles_through - n, owner_lane)) * BM;
       // number of valid rows in the tile
-      rows = short(min(BM, simd_shuffle(end, lane) - row));
+      rows = short(min(BM, simd_shuffle(end, owner_lane) - row));
       return true;
     }
     tiles_before = simd_shuffle(tiles_through, 31);
