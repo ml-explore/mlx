@@ -1,4 +1,4 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
 #include "mlx/backend/common/quantized.h"
 #include "mlx/backend/cuda/device/utils.cuh"
@@ -64,6 +64,7 @@ __device__ void fp_qmv_impl(
     const uint8_t* scales_,
     const T* vec,
     T* out,
+    float scale,
     int rows,
     int cols) {
   auto block = cg::this_thread_block();
@@ -150,7 +151,7 @@ __device__ void fp_qmv_impl(
 
     sum = cg::reduce(warp, sum, cg::plus<float>{});
     if (warp.thread_rank() == 0) {
-      out[row] = static_cast<T>(sum);
+      out[row] = static_cast<T>(sum * scale);
     }
   }
 }
@@ -170,7 +171,7 @@ __global__ void fp_qmv_single(
     int rows,
     int cols) {
   fp_qmv_impl<T, rows_per_block, n_per_thread, bits, group_size, use_mx_scale>(
-      mat, scales, vec, out, rows, cols);
+      mat, scales, vec, out, 1.0f, rows, cols);
 }
 
 template <
@@ -208,7 +209,39 @@ __global__ void fp_qmv_batched(
       mat_strides,
       scales_strides);
   fp_qmv_impl<T, rows_per_block, n_per_thread, bits, group_size, use_mx_scale>(
-      mat, scales, vec, out, rows, cols);
+      mat, scales, vec, out, 1.0f, rows, cols);
+}
+
+template <
+    typename T,
+    int rows_per_block,
+    int n_per_thread,
+    int bits,
+    int group_size,
+    bool use_mx_scale>
+__global__ void fp_gather_qmv(
+    const uint32_t* mat,
+    const uint8_t* scales,
+    const float* global_scale,
+    const T* vec,
+    T* out,
+    const uint32_t* lhs_indices,
+    const uint32_t* rhs_indices,
+    int rows,
+    int cols) {
+  constexpr int vals_per_item = bits == 8 ? 4 : 8;
+  uint32_t idx = cg::this_grid().block_index().z;
+  int64_t mat_size = static_cast<int64_t>(rows) * (cols / vals_per_item);
+  int64_t scales_size = static_cast<int64_t>(rows) * (cols / group_size);
+  mat += rhs_indices[idx] * mat_size;
+  scales += rhs_indices[idx] * scales_size;
+  vec += static_cast<int64_t>(lhs_indices[idx]) * cols;
+  out += static_cast<int64_t>(idx) * rows;
+  float scale = global_scale
+      ? global_scale[rhs_indices[idx]] / (F8E4M3_MAX * F4E2M1_MAX)
+      : 1.0f;
+  fp_qmv_impl<T, rows_per_block, n_per_thread, bits, group_size, use_mx_scale>(
+      mat, scales, vec, out, scale, rows, cols);
 }
 
 } // namespace cu
@@ -226,6 +259,24 @@ void dispatch_1_2_4(int n, F&& f) {
       f(std::integral_constant<int, 4>{});
       break;
   }
+}
+
+// Packed words loaded per thread, limited by the alignment of the inputs.
+template <typename T>
+int fp_qmv_n_per_thread(
+    const uint32_t* mat,
+    const T* vec,
+    uint32_t K,
+    int bits) {
+  if (K % 32 == 0 && cu::is_aligned<4>(mat) &&
+      ((bits == 4 && cu::is_aligned<8>(vec)) || cu::is_aligned<4>(vec))) {
+    return 4;
+  }
+  if (cu::is_aligned<2>(mat) &&
+      ((bits == 4 && cu::is_aligned<4>(vec)) || cu::is_aligned<2>(vec))) {
+    return 2;
+  }
+  return 1;
 }
 
 void fp_qmv(
@@ -259,17 +310,7 @@ void fp_qmv(
       uint32_t blocks_y = (N + rows_per_block - 1) / rows_per_block;
       const uint32_t* mat_ptr = gpu_ptr<uint32_t>(mat);
       const T* vec_ptr = gpu_ptr<T>(vec);
-      int n = 1;
-      if (K % 32 == 0 && cu::is_aligned<4>(mat_ptr) &&
-          ((bits == 4 && cu::is_aligned<8>(vec_ptr)) ||
-           cu::is_aligned<4>(vec_ptr))) {
-        n = 4;
-      } else if (
-          cu::is_aligned<2>(mat_ptr) &&
-          ((bits == 4 && cu::is_aligned<4>(vec_ptr)) ||
-           cu::is_aligned<2>(vec_ptr))) {
-        n = 2;
-      }
+      int n = fp_qmv_n_per_thread(mat_ptr, vec_ptr, K, bits);
       dispatch_1_2_4(n, [&](auto n) {
         if (B == 1) {
           auto kernel =
@@ -318,6 +359,98 @@ void fp_qmv(
               const_param(mat.strides()),
               const_param(scales.strides()));
         }
+      });
+    }
+  });
+}
+
+bool supports_fp_gather_qmv(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& out,
+    bool transpose,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::Device& device) {
+  constexpr uint32_t max_grid_yz_dim = 65535;
+  if (mode == QuantizationMode::Affine || !transpose) {
+    return false;
+  }
+  if (out.shape(-2) != 1) {
+    return false;
+  }
+  if (!w.flags().row_contiguous || !scales.flags().row_contiguous) {
+    return false;
+  }
+  // Four packed words fill a warp at K = 1024; shorter K uses the qmm kernels.
+  int k = x.shape(-1);
+  if (k < 1024 || k % 32 != 0) {
+    return false;
+  }
+  uint32_t n = out.shape(-1);
+  if (n > rows_per_block * max_grid_yz_dim ||
+      out.size() / n > max_grid_yz_dim) {
+    return false;
+  }
+  return true;
+}
+
+void fp_gather_qmv(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& global_scale,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    array& out,
+    int bits,
+    int group_size,
+    cu::CommandEncoder& encoder) {
+  uint32_t N = out.shape(-1);
+  uint32_t K = x.shape(-1);
+  uint32_t B = out.size() / N;
+
+  encoder.set_input_array(w);
+  encoder.set_input_array(scales);
+  if (global_scale) {
+    encoder.set_input_array(*global_scale);
+  }
+  encoder.set_input_array(x);
+  encoder.set_input_array(lhs_indices);
+  encoder.set_input_array(rhs_indices);
+  encoder.set_output_array(out);
+  dispatch_float_types(out.dtype(), "gather_qmv", [&](auto type_tag) {
+    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    if constexpr (!std::is_same_v<T, double>) {
+      dim3 block_dims{WARP_SIZE, rows_per_block};
+      uint32_t blocks_y = (N + rows_per_block - 1) / rows_per_block;
+      const uint32_t* mat_ptr = gpu_ptr<uint32_t>(w);
+      const T* vec_ptr = gpu_ptr<T>(x);
+      int n = fp_qmv_n_per_thread(mat_ptr, vec_ptr, K, bits);
+      dispatch_1_2_4(n, [&](auto n) {
+        auto kernel =
+            cu::fp_gather_qmv<T, rows_per_block, n.value, 4, 32, true>;
+        if (bits == 8) {
+          kernel = cu::fp_gather_qmv<T, rows_per_block, n.value, 8, 32, true>;
+        } else if (group_size == 16) {
+          kernel = cu::fp_gather_qmv<T, rows_per_block, n.value, 4, 16, false>;
+        }
+        encoder.add_kernel_node(
+            kernel,
+            {1, blocks_y, B},
+            block_dims,
+            mat_ptr,
+            gpu_ptr<uint8_t>(scales),
+            global_scale ? gpu_ptr<float>(*global_scale) : nullptr,
+            vec_ptr,
+            gpu_ptr<T>(out),
+            gpu_ptr<uint32_t>(lhs_indices),
+            gpu_ptr<uint32_t>(rhs_indices),
+            N,
+            K);
       });
     }
   });
