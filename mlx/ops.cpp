@@ -2947,6 +2947,7 @@ array topk(const array& a, int k, int axis, StreamOrDevice s /* = {}*/) {
 std::vector<array> unique(
     const array& a,
     int size,
+    bool return_index /* = false */,
     bool return_inverse /* = false */,
     bool return_counts /* = false */,
     const std::optional<array>& fill_value /* = std::nullopt */,
@@ -2982,6 +2983,9 @@ std::vector<array> unique(
                         astype(reshape(*fill_value, {}, s), flat.dtype(), s),
                         flat.dtype(),
                         s));
+    if (return_index) {
+      out.push_back(zeros({size}, uint32, s));
+    }
     if (return_inverse) {
       out.push_back(zeros(a.shape(), uint32, s));
     }
@@ -2993,7 +2997,7 @@ std::vector<array> unique(
 
   // Sort the array. The values stay differentiable, the permutation does not.
   std::optional<array> order;
-  if (return_inverse) {
+  if (return_index || return_inverse) {
     order = stop_gradient(argsort(flat, 0, s), s);
   }
   const auto sorted = order ? take(flat, *order, 0, s) : sort(flat, 0, s);
@@ -3050,6 +3054,12 @@ std::vector<array> unique(
   // Build the output arrays.
   std::vector<array> out;
   out.push_back(where(used, take(sorted, positions, 0, s), fill, s));
+  if (return_index) {
+    // The sort is stable, so the first sorted position of a group holds the
+    // first occurrence in the input. Unused slots point at position zero,
+    // which pads with the index of the smallest unique value.
+    out.push_back(take(*order, positions, 0, s));
+  }
   if (return_inverse) {
     // Clamp so that the indices stay inside a truncated output. Without a
     // truncation every group index is already smaller than size.

@@ -342,7 +342,14 @@ class TestExportImport(mlx_tests.MLXTestCase):
         for size, fill_value in ((10, None), (6, -1), (4, None), (2, None)):
 
             def fun(a):
-                return mx.unique(a, size, True, True, fill_value=fill_value)
+                return mx.unique(
+                    a,
+                    size,
+                    return_index=True,
+                    return_inverse=True,
+                    return_counts=True,
+                    fill_value=fill_value,
+                )
 
             mx.export_function(path, fun, x)
             imported_fun = mx.import_function(path)

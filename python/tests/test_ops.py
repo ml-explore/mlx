@@ -3127,6 +3127,7 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertTrue(mx.array_equal(out, mx.array(want)), f"got {out}")
 
         a = mx.array([2, 1, 2, 3, 1])  # three unique values
+        b = mx.array([[3, 1, 3], [2, 1, 4]])  # four unique values when flat
 
         # size is required and cannot be negative
         with self.assertRaises(TypeError):
@@ -3142,14 +3143,39 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.unique(a, 3).dtype, a.dtype)
 
         # only the requested extras come back, ordered values, inverse, counts
-        self.assertEqual(len(mx.unique(a, 3, True)), 2)
-        self.assertEqual(len(mx.unique(a, 3, False, True)), 2)
-        values, inverse, counts = mx.unique(a, 4, True, True, fill_value=0)
+        self.assertEqual(len(mx.unique(a, 3, return_inverse=True)), 2)
+        self.assertEqual(len(mx.unique(a, 3, return_counts=True)), 2)
+        values, inverse, counts = mx.unique(
+            a, 4, return_inverse=True, return_counts=True, fill_value=0
+        )
         expect(values, [1, 2, 3, 0])
         expect(inverse, [1, 0, 1, 2, 0])
         expect(counts, [2, 2, 1, 0])
         self.assertEqual(inverse.dtype, mx.uint32)
         self.assertEqual(counts.dtype, mx.int32)
+
+        # return_index gives the first occurrence of each unique element in the
+        # flattened input, and pads with the index of the smallest one
+        expect(mx.unique(a, 3, return_index=True)[1], [1, 0, 3])
+        expect(mx.unique(a, 5, return_index=True)[1], [1, 0, 3, 1, 1])
+        expect(mx.unique(a, 2, return_index=True)[1], [1, 0])
+        # the fill value applies to the values, never to the indices
+        expect(mx.unique(a, 5, return_index=True, fill_value=99)[1], [1, 0, 3, 1, 1])
+        # the sort is stable, so a leading duplicate wins
+        expect(mx.unique(mx.array([5, 1, 5, 1]), 4, return_index=True)[1], [1, 0, 1, 1])
+        # the index refers to the flattened input
+        expect(mx.unique(b, 4, return_index=True)[1], [1, 3, 0, 5])
+
+        # all four outputs at once, in the order values, index, inverse, counts
+        values, index, inverse, counts = mx.unique(
+            a, 4, return_index=True, return_inverse=True, return_counts=True
+        )
+        expect(values, [1, 2, 3, 1])
+        expect(index, [1, 0, 3, 1])
+        expect(inverse, [1, 0, 1, 2, 0])
+        expect(counts, [2, 2, 1, 0])
+        self.assertEqual(index.dtype, mx.uint32)
+        self.assertEqual(len(mx.unique(a, 3, return_index=True)), 2)
 
         # the fill value defaults to the smallest unique element, and any one
         # element array works whatever its rank
@@ -3169,57 +3195,64 @@ class TestOps(mlx_tests.MLXTestCase):
         # padding counts are zero, so counts sum to a.size unless the output
         # was truncated, and their non zero entries count the unique values
         for size in (3, 4, 5, 7):
-            self.assertEqual(mx.sum(mx.unique(a, size, False, True)[1]).item(), a.size)
+            self.assertEqual(
+                mx.sum(mx.unique(a, size, return_counts=True)[1]).item(), a.size
+            )
         for size in (1, 2):
-            self.assertLess(mx.sum(mx.unique(a, size, False, True)[1]).item(), a.size)
-        self.assertEqual(mx.sum(mx.unique(a, a.size, False, True)[1] > 0).item(), 3)
-        expect(mx.unique(a, 2, False, True)[1], [2, 2])
+            self.assertLess(
+                mx.sum(mx.unique(a, size, return_counts=True)[1]).item(), a.size
+            )
+        self.assertEqual(
+            mx.sum(mx.unique(a, a.size, return_counts=True)[1] > 0).item(), 3
+        )
+        expect(mx.unique(a, 2, return_counts=True)[1], [2, 2])
 
         # the inverse has the shape of the input and indexes into the output,
         # so values[inverse] rebuilds the input when nothing was truncated
-        b = mx.array([[3, 1, 3], [2, 1, 4]])
-        values, inverse = mx.unique(b, 4, True)
+        values, inverse = mx.unique(b, 4, return_inverse=True)
         expect(values, [1, 2, 3, 4])
         self.assertEqual(inverse.shape, b.shape)
         expect(values[inverse], [[3, 1, 3], [2, 1, 4]])
 
         # truncation clamps the inverse to keep it in range, so a dropped value
         # comes back as the largest kept one instead of reading past the output
-        values, inverse = mx.unique(a, 2, True)
+        values, inverse = mx.unique(a, 2, return_inverse=True)
         self.assertTrue(bool(mx.all(inverse < values.size)))
         expect(values[inverse], [2, 1, 2, 2, 1])
 
         # a size of zero leaves no index to clamp to, the only case where the
         # reconstruction is not a valid array
         for x in (a, mx.zeros((2, 3), mx.int32), mx.array(5)):
-            values, inverse = mx.unique(x, 0, True)
+            values, inverse = mx.unique(x, 0, return_inverse=True)
             self.assertEqual(values.size, 0)
             self.assertTrue(mx.array_equal(inverse, mx.zeros(x.shape, mx.uint32)))
             with self.assertRaises(ValueError):
                 mx.eval(values[inverse])
 
         # a 0-d input is flattened like any other
-        values, inverse = mx.unique(mx.array(5), 1, True)
+        values, inverse = mx.unique(mx.array(5), 1, return_inverse=True)
         expect(values, [5])
         self.assertEqual(inverse.shape, ())
 
         # an empty input needs a fill value if size > 0
         e = mx.array([], mx.float32)
-        values, inverse, counts = mx.unique(e, 0, True, True)
+        values, inverse, counts = mx.unique(
+            e, 0, return_inverse=True, return_counts=True
+        )
         self.assertEqual(values.dtype, mx.float32)
         self.assertEqual((values.shape, inverse.shape, counts.shape), ((0,),) * 3)
         with self.assertRaises(ValueError):
             mx.unique(e, 3)
         # the reconstruction stays valid even with size 0
         for size, want in ((0, []), (3, [7.0, 7.0, 7.0])):
-            values, inverse = mx.unique(e, size, True, fill_value=7)
+            values, inverse = mx.unique(e, size, return_inverse=True, fill_value=7)
             expect(values, want)
             rebuilt = values[inverse]
             mx.eval(rebuilt)
             self.assertEqual(rebuilt.shape, (0,))
 
         # every element identical, and every element distinct
-        values, counts = mx.unique(mx.full((7,), 4, mx.int32), 7, False, True)
+        values, counts = mx.unique(mx.full((7,), 4, mx.int32), 7, return_counts=True)
         expect(values, [4] * 7)
         expect(counts, [7] + [0] * 6)
         expect(mx.unique(mx.arange(6), 6), [0, 1, 2, 3, 4, 5])
@@ -3228,7 +3261,10 @@ class TestOps(mlx_tests.MLXTestCase):
         for dtype in (mx.int64, mx.uint64, mx.complex64):
             with self.subTest(dtype=dtype):
                 values, inverse, counts = mx.unique(
-                    mx.array([3, 1, 2, 1], dtype), 4, True, True
+                    mx.array([3, 1, 2, 1], dtype),
+                    4,
+                    return_inverse=True,
+                    return_counts=True,
                 )
                 self.assertEqual(values.dtype, dtype)
                 self.assertTrue(mx.array_equal(values, mx.array([1, 2, 3, 1], dtype)))
@@ -3239,7 +3275,11 @@ class TestOps(mlx_tests.MLXTestCase):
 
         # bool only works on the cpu stream, the metal sort has no bool kernel
         values, inverse, counts = mx.unique(
-            mx.array([True, False, True]), 2, True, True, stream=mx.cpu
+            mx.array([True, False, True]),
+            2,
+            return_inverse=True,
+            return_counts=True,
+            stream=mx.cpu,
         )
         expect(values, [False, True])
         expect(inverse, [1, 0, 1])
@@ -3276,10 +3316,27 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(
             mx.array_equal(mx.compile(lambda x: mx.unique(x, 3))(a), mx.unique(a, 3))
         )
+
+        # every optional output and a fill value have to survive compilation too
+        def all_outputs(x):
+            return mx.unique(
+                x,
+                5,
+                return_index=True,
+                return_inverse=True,
+                return_counts=True,
+                fill_value=-1,
+            )
+
+        for got, want in zip(mx.compile(all_outputs)(a), all_outputs(a)):
+            self.assertTrue(mx.array_equal(got, want))
+            self.assertEqual(got.dtype, want.dtype)
         # the batch rows must have different unique sets, otherwise broadcasting
         # one row over the batch would pass
         rows = mx.array([[2, 1, 2, 3, 1], [7, 7, 5, 5, 9]])
-        values, inverse, counts = mx.vmap(lambda x: mx.unique(x, 3, True, True))(rows)
+        values, inverse, counts = mx.vmap(
+            lambda x: mx.unique(x, 3, return_inverse=True, return_counts=True)
+        )(rows)
         expect(values, [[1, 2, 3], [5, 7, 9]])
         expect(inverse, [[1, 0, 1, 2, 0], [1, 1, 0, 0, 2]])
         expect(counts, [[2, 2, 1], [2, 2, 1]])
@@ -3293,7 +3350,9 @@ class TestOps(mlx_tests.MLXTestCase):
                 v_np, i_np, c_np = np.unique(
                     a_np, return_inverse=True, return_counts=True
                 )
-                values, inverse, counts = mx.unique(a_mx, len(v_np), True, True)
+                values, inverse, counts = mx.unique(
+                    a_mx, len(v_np), return_inverse=True, return_counts=True
+                )
                 self.assertTrue(np.array_equal(np.array(values), v_np))
                 self.assertTrue(
                     np.array_equal(np.array(inverse).reshape(-1), i_np.reshape(-1))
@@ -3301,7 +3360,7 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertTrue(np.array_equal(np.array(counts), c_np))
                 self.assertTrue(mx.array_equal(values[inverse], a_mx))
                 # a padded output holds the same values up front
-                padded, pad_counts = mx.unique(a_mx, n, False, True)
+                padded, pad_counts = mx.unique(a_mx, n, return_counts=True)
                 self.assertEqual(padded.shape, (n,))
                 self.assertTrue(np.array_equal(np.array(padded)[: len(v_np)], v_np))
                 self.assertEqual(mx.sum(pad_counts > 0).item(), len(v_np))
@@ -3318,7 +3377,11 @@ class TestOps(mlx_tests.MLXTestCase):
             (mx.broadcast_to(base[0], (3, 6)), np.broadcast_to(base_np[0], (3, 6))),
         ):
             want = np.unique(v_np)
-            self.assertTrue(np.array_equal(np.array(mx.unique(v_mx, len(want))), want))
+            values, inverse = mx.unique(v_mx, len(want), return_inverse=True)
+            self.assertTrue(np.array_equal(np.array(values), want))
+            # the inverse follows the shape of the view, not of its backing array
+            self.assertEqual(inverse.shape, v_mx.shape)
+            self.assertTrue(np.array_equal(np.array(values[inverse]), v_np))
 
     @unittest.skipIf(
         os.getenv("LOW_MEMORY", None) is not None,

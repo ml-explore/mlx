@@ -3240,6 +3240,7 @@ void init_ops(nb::module_& m) {
       "unique",
       [](const mx::array& a,
          int size,
+         bool return_index,
          bool return_inverse,
          bool return_counts,
          const std::optional<ScalarOrArray>& fill_value,
@@ -3248,8 +3249,14 @@ void init_ops(nb::module_& m) {
         if (fill_value) {
           fill_value_ = to_array(fill_value.value(), a.dtype());
         }
-        auto out =
-            mx::unique(a, size, return_inverse, return_counts, fill_value_, s);
+        auto out = mx::unique(
+            a,
+            size,
+            return_index,
+            return_inverse,
+            return_counts,
+            fill_value_,
+            s);
         if (out.size() == 1) {
           return nb::cast(out.at(0));
         }
@@ -3261,13 +3268,14 @@ void init_ops(nb::module_& m) {
       },
       nb::arg(),
       "size"_a,
+      "return_index"_a = false,
       "return_inverse"_a = false,
       "return_counts"_a = false,
       "fill_value"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def unique(a: array, /, size: int, return_inverse: bool = False, return_counts: bool = False, fill_value: scalar | array | None = None, *, stream: StreamOrDevice = None) -> array | tuple[array, ...]"),
+          "def unique(a: array, /, size: int, return_index: bool = False, return_inverse: bool = False, return_counts: bool = False, fill_value: scalar | array | None = None, *, stream: StreamOrDevice = None) -> array | tuple[array, ...]"),
       R"pbdoc(
         Returns the sorted unique elements of the flattened array.
 
@@ -3280,9 +3288,10 @@ void init_ops(nb::module_& m) {
         elements as long as the output is not truncated.
 
         A truncated output keeps the smallest ``size`` unique elements, and
-        ``inverse`` and ``counts`` then stop describing all of ``a`` and stop
-        agreeing with each other: the counts of the dropped elements are gone,
-        while their indices in ``inverse`` are clamped to the last entry.
+        ``index``, ``inverse`` and ``counts`` then stop describing all of ``a``,
+        and ``inverse`` and ``counts`` stop agreeing with each other: the counts
+        of the dropped elements are gone, while their indices in ``inverse`` are
+        clamped to the last entry.
         ``inverse`` is meaningless for a ``size`` of ``0``, since there is no
         element left for it to point at.
 
@@ -3294,6 +3303,9 @@ void init_ops(nb::module_& m) {
             size (int): The size of the output. If the size is smaller than
               the number of unique elements of ``a``, the output is truncated.
               If it is larger, the output is padded with ``fill_value``.
+            return_index (bool, optional): If ``True``, also return the index
+              in the flattened ``a`` of the first occurrence of each unique
+              element. Default: ``False``.
             return_inverse (bool, optional): If ``True``, also return the
               indices of the unique array that rebuild ``a``. The indices have
               the same shape as ``a``. Default: ``False``.
@@ -3304,9 +3316,10 @@ void init_ops(nb::module_& m) {
               first of the sorted unique elements. Default: ``None``.
 
         Returns:
-            array or tuple(array, ...): The sorted unique elements. If
-            ``return_inverse`` or ``return_counts`` is ``True``, a tuple with
-            the requested arrays in the order values, inverse, counts.
+            array or tuple(array, ...): The sorted unique elements. If any of
+            ``return_index``, ``return_inverse`` or ``return_counts`` is
+            ``True``, a tuple with the requested arrays in the order values,
+            index, inverse, counts.
 
         Example:
             >>> a = mx.array([2, 1, 2, 3, 1])
@@ -3314,9 +3327,12 @@ void init_ops(nb::module_& m) {
             array([1, 2, 3], dtype=int32)
             >>> mx.unique(a, 5)
             array([1, 2, 3, 1, 1], dtype=int32)
-            >>> values, inverse, counts = mx.unique(a, 4, True, True, fill_value=0)
+            >>> values, index, inverse, counts = mx.unique(
+            ...     a, 4, True, True, True, fill_value=0)
             >>> values
             array([1, 2, 3, 0], dtype=int32)
+            >>> index
+            array([1, 0, 3, 1], dtype=uint32)
             >>> inverse
             array([1, 0, 1, 2, 0], dtype=uint32)
             >>> counts

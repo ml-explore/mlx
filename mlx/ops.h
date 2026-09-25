@@ -880,7 +880,8 @@ MLX_API array topk(const array& a, int k, int axis, StreamOrDevice s = {});
 
 /**
  * Returns the sorted unique elements of the flattened array, and optionally
- * the inverse indices and the counts. The output has the given size, and
+ * the index of the first occurrence of each, the inverse indices and the
+ * counts. The output has the given size, and
  * is truncated if ``size`` is smaller than the number of unique values.
  * If ``size`` is larger, the result is padded with ``fill_value``, or the
  * first of the sorted unique values if no fill value is provided. An empty
@@ -892,6 +893,7 @@ MLX_API array topk(const array& a, int k, int axis, StreamOrDevice s = {});
 MLX_API std::vector<array> unique(
     const array& a,
     int size,
+    bool return_index = false,
     bool return_inverse = false,
     bool return_counts = false,
     const std::optional<array>& fill_value = std::nullopt,
