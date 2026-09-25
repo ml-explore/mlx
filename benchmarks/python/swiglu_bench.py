@@ -69,9 +69,8 @@ def time_gather_mm(name, D, M, E, I):
         mx.eval(x, indices, sorted_indices)
 
         label = f"{name} N={N}"
-        time_fn(
-            gather_mm, x, w1, w2, w3, indices, True, msg=f"{label} swiglu"
-        )
+        time_fn(gather_mm, x, w1, w2, w3, indices, True, msg=f"{label} swiglu")
+
 
 if __name__ == "__main__":
     for name, config in CONFIGS.items():
