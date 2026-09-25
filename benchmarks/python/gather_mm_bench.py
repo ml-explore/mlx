@@ -1,24 +1,13 @@
 # Copyright © 2025 Apple Inc.
 
 import mlx.core as mx
-import mlx.nn as nn
 from time_utils import time_fn
 
-SEQ_LENS = [512, 713, 1024, 2048, 4123, 8192, 8192 * 2]
-MAX_UNSORTED_N = 1024
-
-# https://huggingface.co/zai-org/GLM-5.3-Flash-BF16/blob/main/config.json
-# https://huggingface.co/zai-org/GLM-5.3/blob/main/config.json
-# https://huggingface.co/Qwen/Qwen3.5-35B-A3B/blob/main/config.json
-# https://huggingface.co/Qwen/Qwen3.5-122B-A10B/blob/main/config.json
-# https://huggingface.co/Qwen/Qwen3.5-397B-A17B/blob/main/config.json
-CONFIGS = {
-    "glm-5.3-flash": (4096, 2048, 288, 8),
-    "glm-5.3": (6144, 2048, 256, 8),
-    "qwen3.5-35b-a3b": (2048, 512, 256, 8),
-    "qwen3.5-122b-a10b": (3072, 1024, 256, 8),
-    "qwen3.5-397b-a17b": (4096, 1024, 512, 10),
-}
+N = 1024
+D = 1024
+M = 1024
+E = 32
+I = 4
 
 
 def gather_sort(x, indices):
@@ -45,70 +34,41 @@ def gather_mm_simulate(x, w, indices):
     return x
 
 
-def time_gather_mm(name, D, M, E, I):
-    w1 = mx.random.normal((E, M, D), dtype=mx.bfloat16, scale=D**-0.5)
-    w2 = mx.random.normal((E, M, D), dtype=mx.bfloat16, scale=D**-0.5)
-    w3 = mx.random.normal((E, D, M), dtype=mx.bfloat16, scale=M**-0.5)
-    mx.eval(w1, w2, w3)
+def time_gather_mm():
+    x = mx.random.normal((N, 1, 1, D)) / 1024**0.5
+    w1 = mx.random.normal((E, M, D)) / 1024**0.5
+    w2 = mx.random.normal((E, D, M)) / 1024**0.5
+    indices = (mx.random.uniform(shape=(N, I)) * E).astype(mx.uint32)
+    sorted_indices = mx.sort(indices.flatten()).reshape(N, I)
+    mx.eval(x, w1, w2, indices, sorted_indices)
 
-    def gather_mm(x, w1, w2, w3, indices, sort):
+    def gather_mm(x, w1, w2, indices, sort):
         idx = indices
         inv_order = None
         if sort:
             x, idx, inv_order = gather_sort(x, indices)
-        gate = mx.gather_mm(
-            x, w1.swapaxes(-1, -2), rhs_indices=idx, sorted_indices=sort
-        )
-        up = mx.gather_mm(x, w2.swapaxes(-1, -2), rhs_indices=idx, sorted_indices=sort)
-        x = mx.gather_mm(
-            nn.silu(gate) * up,
-            w3.swapaxes(-1, -2),
-            rhs_indices=idx,
-            sorted_indices=sort,
-        )
+        x = mx.gather_mm(x, w1.swapaxes(-1, -2), rhs_indices=idx, sorted_indices=sort)
+        x = mx.gather_mm(x, w2.swapaxes(-1, -2), rhs_indices=idx, sorted_indices=sort)
         if sort:
             x = scatter_unsort(x, inv_order, indices.shape)
         return x
 
-    def equivalent_matmul(x, w1, w2, w3):
-        return (nn.silu(x @ w1.T) * (x @ w2.T)) @ w3.T
+    time_fn(gather_mm, x, w1, w2, indices, False)
+    time_fn(gather_mm, x, w1, w2, sorted_indices, False)
+    time_fn(gather_mm, x, w1, w2, indices, True)
 
-    for N in SEQ_LENS:
-        x = mx.random.normal((N, 1, 1, D), dtype=mx.bfloat16)
-        scores = mx.random.uniform(shape=(N, E))
-        indices = mx.argpartition(scores, E - I, axis=-1)[:, -I:].astype(mx.uint32)
-        sorted_indices = mx.sort(indices.flatten()).reshape(N, I)
-        mx.eval(x, indices, sorted_indices)
+    x = mx.random.normal((N * I, D)) / 1024**0.5
+    w1 = mx.random.normal((M, D)) / 1024**0.5
+    w2 = mx.random.normal((D, M)) / 1024**0.5
+    mx.eval(x, w1, w2)
 
-        label = f"{name} N={N}"
-        if N <= MAX_UNSORTED_N:
-            time_fn(gather_mm, x, w1, w2, w3, indices, False, msg=f"{label} gather_mm")
-            time_fn(
-                gather_mm,
-                x,
-                w1,
-                w2,
-                w3,
-                sorted_indices,
-                False,
-                msg=f"{label} gather_mm presorted",
-            )
-        time_fn(
-            gather_mm, x, w1, w2, w3, indices, True, msg=f"{label} gather_mm sorted"
-        )
+    def equivalent_matmul(x, w1, w2):
+        x = x @ w1.T
+        x = x @ w2.T
+        return x
 
-        x = mx.random.normal((N * I, D), dtype=mx.bfloat16)
-        mx.eval(x)
-        time_fn(
-            equivalent_matmul,
-            x,
-            w1[0],
-            w2[0],
-            w3[0],
-            msg=f"{label} equivalent matmul",
-        )
+    time_fn(equivalent_matmul, x, w1, w2)
 
 
 if __name__ == "__main__":
-    for name, config in CONFIGS.items():
-        time_gather_mm(name, *config)
+    time_gather_mm()
