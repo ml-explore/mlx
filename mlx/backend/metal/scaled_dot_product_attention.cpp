@@ -864,7 +864,8 @@ bool ScaledDotProductAttention::use_fallback(
     const int64_t query_blocks = int64_t(q.shape(0)) * q.shape(1) *
         int64_t(ceildiv(query_sequence_length, 32));
     // The D512 kernel needs this many query blocks to match fallback speed.
-    const bool eligible = metal::is_nax_available() && q.dtype() != float32 &&
+    const bool eligible = metal::is_nax_available() &&
+        (env::enable_tf32() || q.dtype() != float32) &&
         query_sequence_length >= 1024 && do_causal && !has_arr_mask &&
         query_blocks >= min_query_blocks;
     return !eligible;
