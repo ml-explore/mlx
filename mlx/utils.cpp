@@ -179,7 +179,7 @@ int normalize_axis_index(
     std::ostringstream msg;
     msg << msg_prefix << "Axis " << axis << " is out of bounds for array with "
         << ndim << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
   return axis < 0 ? axis + ndim : axis;
 }
