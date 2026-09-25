@@ -1,5 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
+#include "mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_gather_utils.h"
+
 using namespace mlx::steel;
 
 constant bool align_M [[function_constant(200)]];
@@ -20,9 +22,11 @@ template <
 gather_mm_rhs_nax(
     const device T* A [[buffer(0)]],
     const device T* B [[buffer(1)]],
-    const device uint32_t* rhs_indices [[buffer(2)]],
+    const device int32_t* offsets [[buffer(2)]],
     device T* C [[buffer(3)]],
     const constant GEMMParams* params [[buffer(4)]],
+    const constant int& num_groups [[buffer(5)]],
+    uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]]) {
   constexpr short SM = BM / WM;
@@ -31,106 +35,66 @@ gather_mm_rhs_nax(
   constexpr short TM = SM / 16;
   constexpr short TN = SN / 16;
 
+  int c_row;
+  int group;
+  short tgp_bm;
   if (params->tiles_n <= static_cast<int>(tid.x) ||
-      params->tiles_m <= static_cast<int>(tid.y)) {
+      !gather_mm_row_tile<BM>(
+          offsets,
+          num_groups,
+          params->M,
+          tid.y,
+          simd_lane_id,
+          c_row,
+          group,
+          tgp_bm)) {
     return;
   }
 
-  // Find the block in A, B, C
-  const int c_row = tid.y * BM;
   const int c_col = tid.x * BN;
-  const size_t c_row_long = size_t(c_row);
-  const size_t c_col_long = size_t(c_col);
-
-  A += transpose_a ? c_row_long : c_row_long * params->lda;
-  B += transpose_b ? c_col_long * params->ldb : c_col_long;
-  C += c_row_long * params->ldd + c_col_long;
-  rhs_indices += c_row;
-
   const short tm = SM * (simd_group_id / WN);
   const short tn = SN * (simd_group_id % WN);
+  const short sgp_sm = short(clamp(tgp_bm - tm, 0, int(SM)));
+  const short sgp_sn =
+      align_N ? SN : short(clamp(params->N - (c_col + tn), 0, int(SN)));
 
-  const int sgp_sm_int =
-      align_M ? int(SM) : min(int(SM), params->M - (c_row + tm));
-  const short sgp_sm = short(sgp_sm_int);
-  const bool is_unaligned_sm = align_M ? false : (sgp_sm != SM);
+  const size_t c_row_long = size_t(c_row + tm);
+  const size_t c_col_long = size_t(c_col + tn);
+  A += transpose_a ? c_row_long : c_row_long * params->lda;
+  B += group * params->batch_stride_b;
+  B += transpose_b ? c_col_long * params->ldb : c_col_long;
+  C += c_row_long * params->ldd + c_col_long;
 
-  const int sgp_sn_int =
-      align_N ? int(SN) : min(int(SN), params->N - (c_col + tn));
-  const short sgp_sn = short(sgp_sn_int);
-  const bool is_unaligned_sn = align_N ? false : (sgp_sn != SN);
+  dispatch_bool(align_K, [&](auto kAlignedK) {
+    dispatch_bool(sgp_sm == SM, [&](auto kAlignedM) {
+      dispatch_bool(sgp_sn == SN, [&](auto kAlignedN) {
+        NAXTile<AccumType, TM, TN> Ctile = gemm_loop<
+            T,
+            SM,
+            SN,
+            SK,
+            BK,
+            transpose_a,
+            transpose_b,
+            kAlignedM.value,
+            kAlignedN.value,
+            kAlignedK.value,
+            AccumType>(
+            A,
+            B,
+            params->lda,
+            params->ldb,
+            params->K,
+            params->gemm_k_iterations_aligned,
+            sgp_sm,
+            sgp_sn);
 
-  A += transpose_a ? tm : (tm * params->lda);
-  B += transpose_b ? (tn * params->ldb) : tn;
-  C += tm * params->ldd + tn;
-  rhs_indices += tm;
-
-  // Do as many matmuls as necessary
-  uint32_t index;
-  short offset;
-  uint32_t index_next = rhs_indices[0];
-  short offset_next = 0;
-  int n = 0;
-  while (n < sgp_sm) {
-    n++;
-    offset = offset_next;
-    index = index_next;
-    offset_next = sgp_sm;
-    for (; n < sgp_sm; n++) {
-      if (rhs_indices[n] != index) {
-        offset_next = n;
-        index_next = rhs_indices[n];
-        break;
-      }
-    }
-    threadgroup_barrier(mem_flags::mem_none);
-
-    NAXTile<AccumType, TM, TN> Ctile;
-
-    dispatch_bool(align_K, [&](auto kAlignedK) {
-      dispatch_bool(align_M || !is_unaligned_sm, [&](auto kAlignedM) {
-        dispatch_bool(align_N || !is_unaligned_sn, [&](auto kAlignedN) {
-          auto do_gemm = gemm_loop< // Matmul for partial BM, full BN and full K
-              T,
-              SM,
-              SN,
-              SK,
-              BK,
-              transpose_a,
-              transpose_b,
-              kAlignedM.value,
-              kAlignedN.value,
-              kAlignedK.value,
-              AccumType>;
-          Ctile = do_gemm(
-              A,
-              B + index * params->batch_stride_b,
-              params->lda,
-              params->ldb,
-              params->K,
-              params->gemm_k_iterations_aligned,
-              sgp_sm,
-              sgp_sn);
-
-          if constexpr (kAlignedN.value) {
-            if (offset_next - offset == SM) {
-              Ctile.store(C, int(params->ldd));
-            } else {
-              Ctile.store_slice(
-                  C,
-                  int(params->ldd),
-                  short2(0, offset),
-                  short2(SN, offset_next));
-            }
-          } else {
-            Ctile.store_slice(
-                C,
-                int(params->ldd),
-                short2(0, offset),
-                short2(sgp_sn, offset_next));
-          }
-        });
+        if constexpr (kAlignedM.value && kAlignedN.value) {
+          Ctile.store(C, int(params->ldd));
+        } else {
+          Ctile.store_safe(C, int(params->ldd), short2(sgp_sn, sgp_sm));
+        }
       });
     });
-  }
+  });
 }

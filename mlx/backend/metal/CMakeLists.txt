@@ -58,7 +58,8 @@ if(MLX_METAL_JIT)
     kernels/steel/gemm/transforms.h)
   make_jit_source(steel/gemm/kernels/steel_gemm_fused)
   make_jit_source(steel/gemm/kernels/steel_gemm_masked kernels/steel/defines.h)
-  make_jit_source(steel/gemm/kernels/steel_gemm_gather)
+  make_jit_source(steel/gemm/kernels/steel_gemm_gather
+                  kernels/steel/gemm/kernels/steel_gemm_gather_utils.h)
   make_jit_source(steel/gemm/kernels/steel_gemm_splitk)
   make_jit_source(steel/gemm/kernels/steel_gemm_segmented)
   make_jit_source(
@@ -93,7 +94,8 @@ if(MLX_METAL_JIT)
       steel/gemm/gemm_nax kernels/steel/utils.h kernels/steel/gemm/nax.h
       kernels/steel/gemm/params.h kernels/steel/gemm/transforms.h)
     make_jit_source(steel/gemm/kernels/steel_gemm_fused_nax)
-    make_jit_source(steel/gemm/kernels/steel_gemm_gather_nax)
+    make_jit_source(steel/gemm/kernels/steel_gemm_gather_nax
+                    kernels/steel/gemm/kernels/steel_gemm_gather_utils.h)
     make_jit_source(steel/gemm/kernels/steel_gemm_splitk_nax)
     make_jit_source(steel/gemm/kernels/steel_gemm_segmented_nax)
 
