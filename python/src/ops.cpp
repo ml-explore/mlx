@@ -746,6 +746,9 @@ void init_ops(nb::module_& m) {
         - All but the last two dimensions of each input are broadcast with one another using
           standard numpy-style broadcasting semantics.
 
+        Only inexact types are supported. The promoted type of ``a`` and ``b``
+        must be floating point or complex.
+
         Args:
             a (array): Input array or scalar.
             b (array): Input array or scalar.
@@ -5824,6 +5827,9 @@ void init_ops(nb::module_& m) {
       R"pbdoc(
 
       Perform the Einstein summation convention on the operands.
+
+      Contractions are implemented with :func:`matmul` and have the same
+      requirements.
 
       Args:
         subscripts (str): The Einstein summation convention equation.
