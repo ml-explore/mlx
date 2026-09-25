@@ -136,7 +136,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 )
 
                 if dtype == mx.float32:
-                    atol = 7e-5
+                    atol = 1e-5
                 elif dtype == mx.bfloat16:
                     atol = 5e-3
                 else:
@@ -172,7 +172,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 )
 
                 if dtype == mx.float32:
-                    atol = 8e-5
+                    atol = 1e-5
                 elif dtype == mx.bfloat16:
                     atol = 5e-3
                 else:
@@ -217,7 +217,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 )
 
                 if dtype == mx.float32:
-                    atol = 7e-5
+                    atol = 1e-5
                 elif dtype == mx.bfloat16:
                     atol = 5e-3
                 else:
@@ -287,7 +287,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     if dtype == mx.float32:
                         # The fused shapes run through tf32 tensor ops when
                         # MLX_ENABLE_TF32 is on (the default).
-                        tol = 1e-3 if qL >= 2048 else 5e-4
+                        tol = 1e-3 if qL >= 2048 else 1e-4
                     else:
                         tol = 5e-3
                     self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
@@ -322,7 +322,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     scale=scale,
                     mask=m,
                 )
-                self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+                self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     def test_sdpa_vector(self):
         D = 64
@@ -365,7 +365,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 scale=scale,
                 mask=m,
             )
-            self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+            self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
         L = 4096
         scale = 1.0
@@ -394,7 +394,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 scale=scale,
                 mask=m,
             )
-            self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+            self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     def test_sdpa_vector_gqa_long(self):
         scale = 1.0
@@ -408,7 +408,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 vr = mx.repeat(v, Nq // Nkv, axis=1)
                 ref = mlx_primitives_sdpa(q, kr, vr, scale)
                 out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
-                self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+                self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
     def test_sdpa_vector_head_dim_512(self):
@@ -431,7 +431,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     out = mx.fast.scaled_dot_product_attention(
                         q, k, v, scale=scale, force_fused=True
                     )
-                    atol = 7e-5 if dtype == mx.float32 else 2e-2
+                    atol = 1e-5 if dtype == mx.float32 else 2e-2
                     self.assertTrue(mx.allclose(ref, out, atol=atol))
 
             # Test 2-pass kernel.
@@ -446,7 +446,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     out = mx.fast.scaled_dot_product_attention(
                         q, k, v, scale=scale, force_fused=True
                     )
-                    atol = 7e-5 if dtype == mx.float32 else 2e-2
+                    atol = 1e-5 if dtype == mx.float32 else 2e-2
                     self.assertTrue(mx.allclose(ref, out, atol=atol))
 
             # Test other heads.
@@ -463,7 +463,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                         scale=scale,
                         force_fused=True,
                     )
-                    self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+                    self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
             # Test batched.
             B = 2
@@ -483,7 +483,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                             sinks=s_in,
                             force_fused=True,
                         )
-                        self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+                        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     def test_sdpa_fully_masked(self):
         Lkv = 8
@@ -507,7 +507,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 k[..., 0, :] = -float("inf")
                 ref = mlx_primitives_sdpa(q, k, v, scale=1, mask=None)
                 out = mx.fast.scaled_dot_product_attention(q, k, v, mask=None, scale=1)
-                self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+                self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     def test_sdpa_few_query(self):
         D = 64
@@ -539,7 +539,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 scale=scale,
                 mask=m,
             )
-            self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+            self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
         L = 4096
         scale = 1.0
@@ -565,7 +565,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 scale=scale,
                 mask=m,
             )
-            self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+            self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     @unittest.skip("Different head and value dims is not enabled")
     def test_sdpa_vector_value_dims(self):
@@ -582,7 +582,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             v = 5e-1 * mx.random.normal(shape=(1, Nkv, L, V))
             ref = mlx_primitives_sdpa(q, k, v, scale)
             out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
-            self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+            self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     def test_sdpa_vector_batched(self):
         D = 64
@@ -592,29 +592,29 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
         out = mx.fast.scaled_dot_product_attention(q, k, v, mask=None, scale=1.0)
         ref = mlx_ref_attn(q, k, v)
-        self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
         q = mx.random.normal(shape=(2, 4, 3, D))
         out = mx.fast.scaled_dot_product_attention(q, k, v, mask=None, scale=1.0)
         ref = mlx_ref_attn(q, k, v)
-        self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
         q = mx.random.normal(shape=(2, 3, 4, D)).swapaxes(1, 2)
         out = mx.fast.scaled_dot_product_attention(q, k, v, mask=None, scale=1.0)
         ref = mlx_ref_attn(q, k, v)
-        self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
         k = mx.random.normal(shape=(2, 3, 1, D)).swapaxes(1, 2)
         out = mx.fast.scaled_dot_product_attention(q, k, v, mask=None, scale=1.0)
         ref = mlx_ref_attn(q, k, v)
-        self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
         q = mx.random.normal(shape=(2, 4, 3, D))
         k = mx.random.normal(shape=(2, 3, 2, D)).swapaxes(1, 2)
         v = mx.random.normal(shape=(2, 2, 3, D))
         out = mx.fast.scaled_dot_product_attention(q, k, v, mask=None, scale=1.0)
         ref = mlx_ref_attn(q, k, v)
-        self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
         q = mx.random.normal(shape=(2, 4, 3, D))
         k = mx.random.normal(shape=(2, 1, 3, D))
@@ -622,7 +622,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         mask = 10 * mx.random.normal(shape=(1, 2, 3, 3)).swapaxes(0, 1)
         out = mx.fast.scaled_dot_product_attention(q, k, v, mask=mask, scale=1.0)
         ref = mlx_ref_attn(q, k, v, mask=mask)
-        self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
     def test_sdpa_blocks_env_override(self):
@@ -637,7 +637,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         for blocks in (16, 33, 48, 100):
             with mlx_tests.scoped_env(MLX_SDPA_BLOCKS=str(blocks)):
                 out = mx.fast.scaled_dot_product_attention(q, k, v, scale=D**-0.5)
-                self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+                self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "too slow on CPU")
     def test_sdpa(self):
@@ -715,7 +715,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                         out_ref = out_ref[:, :, offset:, :]
                         out_fst = out_fst[:, :, offset:, :]
 
-                atol = 6e-5 if dtype == mx.float32 else 3e-4
+                atol = 2e-5 if dtype == mx.float32 else 3e-4
 
                 self.assertListEqual(list(out_ref.shape), list(out_fst.shape))
 
@@ -775,7 +775,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         v = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
         ref = mlx_primitives_sdpa(q, k, v, scale, mask=mask)
         out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask=mask)
-        self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     def test_sdpa_noncontiguous_inputs(self):
         mask = mx.ones(shape=(4, 1, 7, 7), dtype=mx.bool_)
@@ -786,7 +786,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         v = mx.random.normal(shape=(4, 7, 8, 64)).swapaxes(1, 2)
         out = mx.fast.scaled_dot_product_attention(q, k, v, scale=1.0, mask=mask)
         ref = mlx_ref_attn(q, k, v, scale=1.0, mask=mask)
-        self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     def test_sdpa_promote_mask(self):
         mask = mx.array(2.0, mx.bfloat16)
@@ -802,7 +802,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         v = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
         ref = mlx_primitives_sdpa(q, k, v, scale, mask=mask)
         out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask=mask)
-        self.assertTrue(mx.allclose(ref, out, atol=5e-4, rtol=5e-4))
+        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     def test_sdpa_nan_bug(self):
         N = 128
@@ -822,7 +822,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         out = mx.fast.scaled_dot_product_attention(q, k, v, mask=mask, scale=1.0)
         expected = mlx_ref_attn(q, k, v, mask=mask, scale=1.0)
         self.assertFalse(mx.isnan(out).any().item())
-        self.assertLessEqual(mx.abs(out - expected).max().item(), 5e-4)
+        self.assertLessEqual(mx.abs(out - expected).max().item(), 1e-4)
 
         # And an additive one
         mask = mx.log(mask)
@@ -830,7 +830,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         out = mx.fast.scaled_dot_product_attention(q, k, v, mask=mask, scale=1.0)
         expected = mlx_ref_attn(q, k, v, mask=mask, scale=1.0)
         self.assertFalse(mx.isnan(out).any().item())
-        self.assertLessEqual(mx.abs(out - expected).max().item(), 5e-4)
+        self.assertLessEqual(mx.abs(out - expected).max().item(), 1e-4)
 
     def test_sdpa_attention_sinks(self):
         B = 2
@@ -879,7 +879,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 out = mx.fast.scaled_dot_product_attention(
                     q, k, v, scale=scale, sinks=sinks
                 )
-                atol = 6e-4 if dtype == mx.float32 else 1e-2
+                atol = 1e-5 if dtype == mx.float32 else 1e-2
                 self.assertTrue(mx.allclose(out, expected, atol=atol))
 
     def test_sdpa_grad(self):
