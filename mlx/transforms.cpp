@@ -89,8 +89,12 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
   }
 
-  // Map of array id that needs fence and stream it's computed on
-  std::unordered_map<uintptr_t, std::pair<uint32_t, bool>> needs_fence;
+  struct FenceInfo {
+    int stream_index;
+    bool cross_device;
+    uint32_t value{0};
+  };
+  std::unordered_map<uintptr_t, FenceInfo> needs_fence;
 
   auto synchronizer = array(
       {}, bool_, std::make_shared<Synchronizer>(stream), std::move(outputs));
@@ -146,9 +150,9 @@ array eval_impl(std::vector<array> outputs, bool async) {
                 a.primitive().stream().device != in.primitive().stream().device;
             auto [it, inserted] = needs_fence.emplace(
                 in.id(),
-                std::make_pair(in.primitive().stream().index, device_switch));
+                FenceInfo{in.primitive().stream().index, device_switch});
             if (!inserted) {
-              it->second.second |= device_switch;
+              it->second.cross_device |= device_switch;
             }
           }
         }
@@ -251,7 +255,8 @@ array eval_impl(std::vector<array> outputs, bool async) {
           // Use fence to wait within a single eval
           // Get the input array's stream fence and wait on the
           // output arrays stream
-          fences[it->second.first].wait(stream, in);
+          auto& info = it->second;
+          fences.at(info.stream_index).wait(stream, in, info.value);
         } else if (in.event().valid()) {
           if (in.event().is_signaled()) {
             in.detach_event();
@@ -291,7 +296,8 @@ array eval_impl(std::vector<array> outputs, bool async) {
               if (it == fences.end()) {
                 it = fences.emplace(stream.index, Fence{stream}).first;
               }
-              it->second.update(stream, a, nf->second.second);
+              nf->second.value =
+                  it->second.update(stream, a, nf->second.cross_device);
             }
           };
 

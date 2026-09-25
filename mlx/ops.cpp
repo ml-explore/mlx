@@ -1794,6 +1794,17 @@ array transpose(const array& a, StreamOrDevice s /* = {} */) {
   return transpose(a, std::move(axes), to_stream(s));
 }
 
+array matrix_transpose(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.ndim() < 2) {
+    throw std::invalid_argument(
+        "[matrix_transpose] Input array must have at least 2 dimensions.");
+  }
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  std::swap(axes[a.ndim() - 1], axes[a.ndim() - 2]);
+  return transpose(a, std::move(axes), to_stream(s));
+}
+
 array broadcast_to(
     const array& a,
     const Shape& shape,
@@ -5575,9 +5586,9 @@ array gather_qmm(
           << ".";
       throw std::invalid_argument(msg.str());
     }
-    if (to_stream(s).device != Device::gpu || !metal::is_available()) {
+    if (to_stream(s).device != Device::gpu) {
       throw std::invalid_argument(
-          "[gather_qmm] Global scale is only supported on the Metal backend.");
+          "[gather_qmm] Global scale is only supported on the GPU.");
     }
   }
   if (qmode == QuantizationMode::Affine) {
@@ -5680,7 +5691,13 @@ array gather_qqmm(
   return array(
       std::move(out_shape),
       x.dtype(),
-      std::make_shared<GatherQQMM>(stream, group_size, bits, qmode),
+      std::make_shared<GatherQQMM>(
+          stream,
+          group_size,
+          bits,
+          qmode,
+          sorted_indices && !rhs_indices_,
+          sorted_indices && !lhs_indices_),
       std::move(inputs));
 }
 

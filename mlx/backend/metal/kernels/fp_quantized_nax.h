@@ -1,4 +1,4 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
 #include <metal_simdgroup>
 #include <metal_stdlib>
@@ -561,10 +561,12 @@ template <
     const int BN = 64,
     const int WM = 2,
     const int WN = 2,
+    const bool has_global_scale = false,
     typename Wtype = bfloat>
 [[kernel]] void fp_qmm_t_nax(
     const device uint32_t* w,
     const device uint8_t* scales,
+    const device float* global_scale,
     const device T* x,
     device T* y,
     const constant int& K,
@@ -608,14 +610,14 @@ template <
       group_size,
       bits,
       aligned_N,
-      false,
+      has_global_scale,
       BM,
       BK,
       BN,
       WM,
       WN,
       Wtype>(
-      w, scales, nullptr, x, y, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
+      w, scales, global_scale, x, y, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
 template <
