@@ -303,15 +303,15 @@ void sdpa_full_self_attention_metal(
 
   using namespace mlx::steel;
 
-  int wm = 4;
-
-  int bd = q.shape(-1);
   char devc = d.get_architecture().back();
-  int wn = bd == 256 ? 2 : 1;
+  int bd = q.shape(-1);
   int bq = 32;
-  int bk = bd == 256 && q.dtype() != float32 && devc == 'd'
+  int bk = (bd == 256) && (q.dtype() != float32) && (devc == 'd')
       ? 32
       : (bd < 128 ? 32 : 16);
+
+  int wm = 4;
+  int wn = (bd == 256) ? 2 : 1;
 
   const bool align_Q = (qL % bq) == 0;
   const bool align_K = (kL % bk) == 0;

@@ -119,7 +119,7 @@ template <
   constexpr short tgp_mem_0 = (BK + padK) * (BD);
   constexpr short tgp_mem_1 = BK * (BD + padV);
   constexpr short tgp_mem_s = tgp_mem_0 > tgp_mem_1 ? tgp_mem_0 : tgp_mem_1;
-  constexpr bool q_in_registers = WN == 2 && (BK == 32 || sizeof(T) == 4);
+  constexpr bool q_in_registers = (WN == 2) && (BK == 32 || sizeof(T) == 4);
   constexpr short q_tgp_mem_s = q_in_registers ? 1 : BQ * (BD + padQ);
 
   threadgroup T Q_smem[q_tgp_mem_s];

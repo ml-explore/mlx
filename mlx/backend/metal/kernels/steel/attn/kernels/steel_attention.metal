@@ -11,25 +11,26 @@
       "_wm" #wm "_wn" #wn "_mask" #mname,                                \
   attention, dtype, bq, bk, bd, wm, wn, mtype, float)
 
-#define instantiate_attn_shapes_helper(iname, itype, mname, mtype, bk256) \
-    instantiate_attn(iname, itype, 32, bk256, 256, 4, 2, mname, mtype)  \
-    instantiate_attn(iname, itype, 32, 16, 192, 4, 1, mname, mtype) \
-    instantiate_attn(iname, itype, 32, 16, 128, 4, 1, mname, mtype) \
-    instantiate_attn(iname, itype, 32, 32,  96, 4, 1, mname, mtype) \
-    instantiate_attn(iname, itype, 32, 32,  80, 4, 1, mname, mtype) \
-    instantiate_attn(iname, itype, 32, 32,  72, 4, 1, mname, mtype) \
-    instantiate_attn(iname, itype, 32, 32,  64, 4, 1, mname, mtype)
+#define instantiate_attn_helper(iname, itype, bq, bk, bd, wm, wn) \
+    instantiate_attn(iname, itype, bq, bk, bd, wm, wn, iname, itype) \
+    instantiate_attn(iname, itype, bq, bk, bd, wm, wn, bool_, bool)
 
-#define instantiate_attn_mask_helper(iname, itype, bk256) \
-    instantiate_attn_shapes_helper(iname, itype, iname, itype, bk256) \
-    instantiate_attn_shapes_helper(iname, itype, bool_, bool, bk256)
+#define instantiate_attn_shapes_helper(iname, itype)  \
+    instantiate_attn_helper(iname, itype, 32, 16, 192, 4, 1) \
+    instantiate_attn_helper(iname, itype, 32, 16, 128, 4, 1) \
+    instantiate_attn_helper(iname, itype, 32, 32,  96, 4, 1) \
+    instantiate_attn_helper(iname, itype, 32, 32,  80, 4, 1) \
+    instantiate_attn_helper(iname, itype, 32, 32,  72, 4, 1) \
+    instantiate_attn_helper(iname, itype, 32, 32,  64, 4, 1)
 
-instantiate_attn_mask_helper(float16, half, 32);
-instantiate_attn_mask_helper(bfloat16, bfloat16_t, 32);
-instantiate_attn(float16, half, 32, 16, 256, 4, 2, float16, half);
-instantiate_attn(float16, half, 32, 16, 256, 4, 2, bool_, bool);
-instantiate_attn(bfloat16, bfloat16_t, 32, 16, 256, 4, 2, bfloat16, bfloat16_t);
-instantiate_attn(bfloat16, bfloat16_t, 32, 16, 256, 4, 2, bool_, bool);
+instantiate_attn_shapes_helper(float16, half);
+instantiate_attn_shapes_helper(bfloat16, bfloat16_t);
+instantiate_attn_shapes_helper(float32, float);
 
-instantiate_attn_mask_helper(float32, float, 16);
+instantiate_attn_helper(float16, half, 32, 16, 256, 4, 2);
+instantiate_attn_helper(float16, half, 32, 32, 256, 4, 2);
+instantiate_attn_helper(bfloat16, bfloat16_t, 32, 16, 256, 4, 2);
+instantiate_attn_helper(bfloat16, bfloat16_t, 32, 32, 256, 4, 2);
+instantiate_attn_helper(float32, float, 32, 16, 256, 4, 2);
+
 // clang-format on
