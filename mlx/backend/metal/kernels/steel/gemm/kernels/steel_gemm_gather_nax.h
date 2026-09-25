@@ -1,7 +1,5 @@
 // Copyright © 2024 Apple Inc.
 
-#include "mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_gather_utils.h"
-
 using namespace mlx::steel;
 
 constant bool align_M [[function_constant(200)]];
@@ -39,7 +37,7 @@ gather_mm_rhs_nax(
   int group;
   short tgp_bm;
   if (params->tiles_n <= static_cast<int>(tid.x) ||
-      !gather_mm_row_tile<BM>(
+      !schedule_row_tile<BM>(
           offsets,
           num_groups,
           params->M,

@@ -78,7 +78,6 @@ set(STEEL_HEADERS
     steel/gemm/transforms.h
     steel/gemm/kernels/steel_gemm_fused.h
     steel/gemm/kernels/steel_gemm_gather.h
-    steel/gemm/kernels/steel_gemm_gather_utils.h
     steel/gemm/kernels/steel_gemm_masked.h
     steel/gemm/kernels/steel_gemm_segmented.h
     steel/gemm/kernels/steel_gemm_splitk.h
@@ -112,7 +111,6 @@ set(STEEL_NAX_HEADERS
     steel/utils/integral_constant.h
     steel/gemm/kernels/steel_gemm_fused_nax.h
     steel/gemm/kernels/steel_gemm_gather_nax.h
-    steel/gemm/kernels/steel_gemm_gather_utils.h
     steel/gemm/kernels/steel_gemm_splitk_nax.h
     steel/gemm/kernels/steel_gemm_segmented_nax.h)
 
