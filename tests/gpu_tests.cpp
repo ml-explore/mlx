@@ -730,3 +730,86 @@ TEST_CASE("test layer norm vjp bias grad race") {
   }
   CHECK(worst <= 1e-5);
 }
+
+TEST_CASE("fast metal kernel dispatches the full requested grid") {
+  if (default_device().type != Device::gpu) {
+    return;
+  }
+
+  // Regression test for a CustomKernel::eval_gpu bug that clamped the
+  // requested threadgroup dimensions against the grid dimensions
+  // (group_dims = (min(tx,gx), min(ty,gy), min(tz,gz))) and dispatched the
+  // result through dispatch_threads. The combined effect was a silently
+  // truncated dispatch: whenever a grid dimension was smaller than the
+  // matching threadgroup dimension (the common case, e.g. a per-row grid
+  // with a 256-wide threadgroup), only a small prefix of the requested
+  // threadgroups ever executed. The truncation was stable across repeated
+  // same-geometry dispatches, so re-dispatching could not clear it; the only
+  // reliable detector is full thread coverage of the requested grid.
+  // It also silently truncated work on every custom-kernel dispatch in the
+  // affected window, making custom-kernel timing measurements appear
+  // dramatically faster than the true full-work cost: a timing claim for a
+  // custom kernel is not valid without per-dispatch fullness evidence.
+  //
+  // The probe kernel writes each executing thread's unique index
+  // ((grid.y * grid.x + group.x) * tx + thread.x, with grid.z = tz = 1)
+  // into its own output slot; full coverage of the requested gx * ty * tx
+  // threads is equivalent to the output being exactly {1, 2, ..., N}.
+
+  const std::string src = R"(
+kernel void full_probe(device const int2& pos [[buffer(0)]],
+                       device int& out [[buffer(1)]]) {
+  long idx = (long)(pos.y * pos.x + threadgroup_position_in_grid.x) * 256L
+      + position_in_threadgroup.x;
+  out[idx] = (int)idx;
+}
+)";
+
+  auto make_kernel = [&]() {
+    return fast::metal_kernel(
+        "full_probe",
+        {"in"},
+        {"out"},
+        src,
+        "",
+        true,
+        false);
+  };
+
+  // (grid, threadgroup) pairs. The first pair is the production geometry
+  // that motivated the test: one threadgroup per query row, a 256-wide
+  // threadgroup, grid.x (24) far below the threadgroup width.
+  const std::vector<std::tuple<int, int, int>> grids = { {24, 64, 1},
+                                                         {64, 24, 1},
+                                                         {24, 2048, 1} };
+  const std::tuple<int, int, int> tg = {256, 1, 1};
+
+  for (auto [gx, gy, gz] : grids) {
+    auto in = array(ones({gy * gx, 2}, int32, Device::gpu));
+    const long N = (long)gx * gy * std::get<0>(tg);
+    Shape out_shape;
+    out_shape.push_back((int32_t)N);
+    auto ref = copy(arange(1, N + 1, int32, Device::cpu), Device::gpu);
+
+    auto fn = make_kernel();
+
+    // First dispatch at a fresh geometry, then a repeated same-geometry
+    // dispatch: before the fix the truncation was stable across the whole
+    // same-geometry sequence, so both must show full coverage.
+    for (int iter = 0; iter < 2; ++iter) {
+      auto result = fn(
+          {in},
+          {out_shape},
+          {int32},
+          {gx, gy, gz},
+          tg,
+          {},
+          {},
+          false,
+          {});
+      auto res = result[0];
+      eval(res);
+      CHECK(array_equal(res, ref, Device::gpu).item<bool>());
+    }
+  }
+}

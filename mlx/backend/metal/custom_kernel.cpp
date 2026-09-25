@@ -93,10 +93,15 @@ void CustomKernel::eval_gpu(
   }
 
   const auto [gx, gy, gz] = grid_;
-  MTL::Size group_dims =
-      MTL::Size(std::min(tx, gx), std::min(ty, gy), std::min(tz, gz));
+  // dispatch_threadgroups takes the threadgroup dimensions as-is; using
+  // dispatch_threads here would treat the requested *threadgroup* sizes as
+  // thread counts and silently truncate the dispatch to
+  // ceil(thread_count / max_threads_per_threadgroup) threadgroups, which is
+  // fewer than requested whenever a dimension of grid_ is smaller than the
+  // matching threadgroup dimension (the common case).
+  MTL::Size group_dims = MTL::Size(tx, ty, tz);
   MTL::Size grid_dims = MTL::Size(gx, gy, gz);
-  compute_encoder.dispatch_threads(grid_dims, group_dims);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
   compute_encoder.add_temporaries(std::move(copies));
 }
