@@ -14,6 +14,7 @@ constant bool align_K [[function_constant(201)]];
 constant bool has_mask [[function_constant(300)]];
 constant bool do_causal [[function_constant(301)]];
 constant bool has_sinks [[function_constant(302)]];
+constant bool save_lse [[function_constant(303)]];
 
 struct MaxOp {
   template <typename T>
@@ -76,6 +77,7 @@ template <
     const constant AttnMaskParams* mask_params [[buffer(5), function_constant(has_mask)]],
     const device MaskType* mask [[buffer(6), function_constant(has_mask)]],
     const device T* sinks [[buffer(7), function_constant(has_sinks)]],
+    device float* lse [[buffer(8), function_constant(save_lse)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -101,6 +103,12 @@ template <
   O += tidl.z * params->O_strides[0] + // Batch
       tidl.y * params->O_strides[1] + // Head
       tidl.x * BQ * params->O_strides[2]; // Sequence
+
+  if (save_lse) {
+    lse += tidl.z * params->H * params->qL + // Batch
+        tidl.y * params->qL + // Head
+        tidl.x * BQ; // Sequence
+  }
 
   if (has_mask) {
     mask += tidl.z * mask_params->M_strides[0] + // Batch
@@ -526,6 +534,20 @@ template <
   // Normalize output
   Otile.template row_bin_op<DivOp>(sum_score);
   threadgroup_barrier(mem_flags::mem_none);
+
+  // Store the logsumexp for the backward pass
+  if (save_lse && sn == 0) {
+    using stile_t = decltype(Stile);
+    const bool is_last_q = int(tid.x) == (params->NQ_aligned);
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      const short r = tm + sm + i * stile_t::kFragRows;
+      if (align_Q || !is_last_q || r < params->qL_rem) {
+        lse[r] = M_LN2_F * (max_score[i] + metal::log2(sum_score[i]));
+      }
+    }
+  }
 
   // Store results
   O += (tm + sm) * params->O_strides[2] + d_half * BDh + sn;
