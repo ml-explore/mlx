@@ -479,7 +479,8 @@ class CustomKernel : public Primitive {
       std::vector<ScalarArg> scalar_arguments,
       bool is_precompiled,
       int shared_memory,
-      CompileOptions::Data compile_options = {})
+      CompileOptions::Data compile_options = {},
+      std::optional<std::size_t> source_hash = std::nullopt)
       : Primitive(stream),
         name_(std::move(name)),
         source_(std::move(source)),
@@ -491,7 +492,8 @@ class CustomKernel : public Primitive {
         scalar_arguments_(std::move(scalar_arguments)),
         is_precompiled_(is_precompiled),
         shared_memory_(shared_memory),
-        compile_options_(compile_options) {}
+        compile_options_(compile_options),
+        source_hash_(source_hash) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -529,6 +531,9 @@ class CustomKernel : public Primitive {
   bool is_precompiled_;
   int shared_memory_;
   CompileOptions::Data compile_options_;
+  // std::hash of source_, when the caller already has it. Not part of state():
+  // it is derived from source_.
+  std::optional<std::size_t> source_hash_;
 };
 
 } // namespace mlx::core::fast

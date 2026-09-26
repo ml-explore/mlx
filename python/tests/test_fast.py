@@ -1239,6 +1239,55 @@ class TestFast(mlx_tests.MLXTestCase):
         out = call_kernel(a).astype(mx.float32) + call_kernel(b)
         self.assertTrue(mx.allclose(out, mx.full((32,), 8.0)))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_kernel_variants_one_object(self):
+        # One kernel object generates a different source per input dtype,
+        # input address space, output dtype and template argument. Calling the
+        # variants in alternation must run the right source every time. An
+        # int 1 and a bool true template argument give the same kernel name
+        # but a different signature, which sizeof(S) exposes.
+        kernel = mx.fast.metal_kernel(
+            name="variants",
+            input_names=["inp"],
+            output_names=["out"],
+            source="""
+                uint elem = thread_position_in_grid.x;
+                out[elem] = static_cast<float>(inp[elem]) * S + sizeof(S);
+            """,
+        )
+
+        def call_kernel(a, s, out_dtype):
+            return kernel(
+                inputs=[a],
+                template=[("S", s)],
+                grid=(a.size, 1, 1),
+                threadgroup=(a.size, 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[out_dtype],
+                stream=mx.gpu,
+            )[0]
+
+        device_in = mx.arange(32, dtype=mx.float32)
+        constant_in = mx.arange(4, dtype=mx.float32)
+        variants = [
+            (device_in, 3, mx.float32, device_in * 3 + 4),
+            (device_in.astype(mx.float16), 3, mx.float32, device_in * 3 + 4),
+            (constant_in, 3, mx.float32, constant_in * 3 + 4),
+            (device_in, 3, mx.float16, device_in * 3 + 4),
+            (device_in, 1, mx.float32, device_in + 4),
+            (device_in, True, mx.float32, device_in + 1),
+        ]
+        for _ in range(2):
+            for a, s, out_dtype, expected in variants:
+                out = call_kernel(a, s, out_dtype)
+                self.assertEqual(out.dtype, out_dtype)
+                self.assertTrue(mx.array_equal(out, expected))
+
+        outs = [call_kernel(a, s, dt) for a, s, dt, _ in variants]
+        mx.eval(outs)
+        for out, (_, _, _, expected) in zip(outs, variants):
+            self.assertTrue(mx.array_equal(out, expected))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
