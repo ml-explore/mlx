@@ -44,6 +44,7 @@ if(MLX_METAL_JIT)
   make_jit_source(binary_two)
   make_jit_source(fft kernels/fft/radix.h kernels/fft/readwrite.h)
   make_jit_source(logsumexp)
+  make_jit_source(cross_entropy)
   make_jit_source(ternary)
   make_jit_source(softmax)
   make_jit_source(scan)
@@ -135,6 +136,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/hadamard.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/logsumexp.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/cross_entropy.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/gated_delta_update.cpp

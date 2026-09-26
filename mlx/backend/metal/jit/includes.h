@@ -18,6 +18,7 @@ const char* unary();
 const char* binary();
 const char* binary_two();
 const char* copy();
+const char* cross_entropy();
 const char* fft();
 const char* gather_axis();
 const char* gather_front();

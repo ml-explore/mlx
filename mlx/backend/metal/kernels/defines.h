@@ -14,6 +14,7 @@ static MTL_CONST constexpr int REDUCE_N_WRITES = 4;
 static MTL_CONST constexpr int SOFTMAX_N_READS = 4;
 static MTL_CONST constexpr int RMS_N_READS = 4;
 static MTL_CONST constexpr int RMS_LOOPED_LIMIT = 4096;
+static MTL_CONST constexpr int CROSS_ENTROPY_N_READS = 4;
 
 // Instantiate a templated kernel.
 // Extra args are used as template parameters:
