@@ -1366,7 +1366,7 @@ class TestArray(mlx_tests.MLXTestCase):
         a[0:2] = 3
         self.assertEqual(a.tolist(), [3, 3, 1])
 
-        # Assigning through a bare Ellipsis, like a[:] and a[None]
+        # Assigning through a bare Ellipsis, like a[:] and a[(...,)]
         e = mx.zeros((2, 3), mx.int32)
         e[...] = 5
         self.assertEqual(e.tolist(), [[5, 5, 5], [5, 5, 5]])
@@ -1378,15 +1378,43 @@ class TestArray(mlx_tests.MLXTestCase):
         e[...] = mx.zeros((2, 3), mx.int32)
         self.assertEqual(e.tolist(), [[0, 0, 0], [0, 0, 0]])
 
+        # Leading singleton dimensions of the update are squeezed
+        e[...] = mx.array([[[1, 2, 3], [4, 5, 6]]])
+        self.assertEqual(e.tolist(), [[1, 2, 3], [4, 5, 6]])
+
+        # The target keeps its leading dimension of size 1
+        h = mx.zeros((1, 3), mx.int32)
+        h[...] = mx.array([[[1, 2, 3]]])
+        self.assertEqual(h.tolist(), [[1, 2, 3]])
+
+        # a[...] assigns the same values as a[(...,)]
+        f = mx.zeros((3,), mx.int32)
+        g = mx.zeros((3,), mx.int32)
+        f[...] = mx.array([[1, 2, 3]])
+        g[(...,)] = mx.array([[1, 2, 3]])
+        self.assertEqual(f.tolist(), [1, 2, 3])
+        self.assertEqual(f.tolist(), g.tolist())
+
         # Scalar array
         e = mx.array(0)
         e[...] = 7
         self.assertEqual(e.item(), 7)
 
+        e[...] = mx.array([[9]])
+        self.assertEqual(e.tolist(), 9)
+
         # Shapes that cannot broadcast are still rejected
         e = mx.zeros((2, 3), mx.int32)
         with self.assertRaises(ValueError):
             e[...] = mx.array([1, 2])
+
+        # The squeeze stops at the first dimension that is not 1
+        with self.assertRaises(ValueError):
+            e[...] = mx.zeros((2, 1, 3), mx.int32)
+
+        # A squeezed update that still does not broadcast is rejected
+        with self.assertRaises(ValueError):
+            e[...] = mx.zeros((1, 4), mx.int32)
 
         a[0:3] = 4
         self.assertEqual(a.tolist(), [4, 4, 4])
