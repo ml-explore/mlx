@@ -3141,6 +3141,19 @@ class TestOps(mlx_tests.MLXTestCase):
         b = mx.ones([2147484], mx.int8)
         self.assertEqual((a + b)[0, 0].item(), 2)
 
+    @unittest.skipIf(
+        os.getenv("LOW_MEMORY", None) is not None,
+        "This test requires a lot of memory",
+    )
+    def test_large_contiguous_binary(self):
+        # VectorScalar used int size, so n >= 2**31 wrote nothing.
+        mx.clear_cache()
+        n = 2**31
+        a = mx.full((n,), 3, dtype=mx.uint8, stream=mx.cpu)
+        out = mx.add(a, mx.array(1, mx.uint8), stream=mx.cpu)
+        self.assertEqual(out[0].item(), 4)
+        self.assertEqual(out[-1].item(), 4)
+
     def test_eye(self):
         self.assertCmpNumpy([3], mx.eye, np.eye)
         # Test for zero rows and columns
