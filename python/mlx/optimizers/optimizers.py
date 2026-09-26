@@ -193,7 +193,8 @@ class MultiOptimizer(Optimizer):
                     parts[i].append((k, g))
                     break
 
-        return [tree_unflatten(p) for p in parts]
+        # tree_unflatten([]) returns a list so use a dict for empty parts
+        return [tree_unflatten(p) if p else {} for p in parts]
 
     def init(self, parameters: dict):
         for o, p in zip(self.optimizers, self._split_dictionary(parameters)):
