@@ -1987,6 +1987,73 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     tol = 1e-3 if on_gpu else 1.5e-5
                     self.assertLess((y_sorted - y_unsorted).abs().max(), tol)
 
+    @unittest.skipIf(not mx.cuda.is_available(), "CUDA kernel path only")
+    def test_gather_qmm_sorted_rhs_cuda(self):
+        # Sorted rows with a shared LHS take the sorted-RHS matrix kernel. Row
+        # counts cover the 16/32/64-row tiles and a row tail; random routing
+        # gives runs of unequal length that cross tile edges.
+        mx.random.seed(0)
+        shapes = [(64, 4, 2816, 704)] + [
+            (rows, 8, 256, 256) for rows in (16, 24, 40, 64, 100, 200, 1000)
+        ]
+        for rows, experts, n, k in shapes:
+            for dtype in (mx.bfloat16, mx.float16):
+                x = (mx.random.normal((rows, 1, 1, k)) / k**0.5).astype(dtype)
+                w = mx.random.normal((experts, n, k)).astype(dtype)
+                indices = mx.sort(mx.random.randint(0, experts, (rows,))).astype(
+                    mx.uint32
+                )[:, None]
+                for mode in ("nvfp4", "mxfp4", "mxfp8"):
+                    with self.subTest(rows=rows, dtype=dtype, mode=mode):
+                        qw, scales = mx.quantize(w, mode=mode)
+                        w_hat = mx.dequantize(qw, scales, mode=mode)
+                        reference = mx.gather_mm(
+                            x, w_hat.swapaxes(-1, -2), rhs_indices=indices
+                        )
+                        expected = mx.gather_qmm(
+                            x,
+                            qw,
+                            scales,
+                            rhs_indices=indices,
+                            transpose=True,
+                            mode=mode,
+                            sorted_indices=False,
+                        )
+                        mx.eval(reference, expected)
+                        # Successive runs in one CTA reuse its shared memory;
+                        # repeat to catch a race between them.
+                        for _ in range(3):
+                            actual = mx.gather_qmm(
+                                x,
+                                qw,
+                                scales,
+                                rhs_indices=indices,
+                                transpose=True,
+                                mode=mode,
+                                sorted_indices=True,
+                            )
+                            mx.eval(actual)
+                            self.assertLess(
+                                mx.max(mx.abs(expected - actual)).item(), 1e-2
+                            )
+                            self.assertTrue(
+                                mx.allclose(reference, actual, rtol=2e-2, atol=2e-2)
+                            )
+
+    @unittest.skipIf(not mx.cuda.is_available(), "CUDA kernel path only")
+    def test_gather_qmm_sorted_broadcast_lhs_cuda(self):
+        # One x row broadcast over the sorted indices stays on the generic
+        # gathered kernel.
+        rows, experts, n, k = 16, 4, 256, 256
+        x = mx.random.normal((1, 1, k)).astype(mx.bfloat16)
+        w = mx.random.normal((experts, n, k)).astype(mx.bfloat16)
+        qw, scales = mx.quantize(w, mode="mxfp8")
+        indices = mx.repeat(mx.arange(experts), rows // experts).astype(mx.uint32)
+        kwargs = dict(rhs_indices=indices, transpose=True, mode="mxfp8")
+        expected = mx.gather_qmm(x, qw, scales, sorted_indices=False, **kwargs)
+        actual = mx.gather_qmm(x, qw, scales, sorted_indices=True, **kwargs)
+        self.assertLess(mx.max(mx.abs(expected - actual)).item(), 1e-3)
+
     def test_gather_qmm_grad(self):
         def gather_qmm_ref(x, w, s, b, lhs, rhs, trans, sort):
             if lhs is not None:
