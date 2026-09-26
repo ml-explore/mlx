@@ -1,5 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
+import os
+import unittest
 from itertools import combinations, permutations
 
 import mlx.core as mx
@@ -281,6 +283,32 @@ class TestReduce(mlx_tests.MLXTestCase):
                 getattr(mx, op)(x_mx, axis=1).tolist(),
                 getattr(np, op)(x_np, axis=1).tolist(),
             )
+
+    @unittest.skipIf(
+        os.getenv("LOW_MEMORY", None) is not None,
+        "This test requires a lot of memory",
+    )
+    def test_large_offsets(self):
+        # Row r holds r % 251 and row 2**15 starts at offset 2**31, so any
+        # reduction that narrows offsets or sizes to 32 bits reads the wrong
+        # rows. The views below have fewer than 2**31 elements themselves.
+        mx.clear_cache()
+        rows, cols = 2**15 + 1, 2**16
+        row_max = (mx.arange(rows) % 251).astype(mx.uint8)
+        x = mx.contiguous(mx.broadcast_to(row_max[:, None], (rows, cols)))
+
+        self.assertTrue(mx.array_equal(x[:, 7:].max(axis=-1), row_max))
+        self.assertTrue(mx.array_equal(x[:, 7:].min(axis=-1), row_max))
+        y = x.reshape(rows, 256, 256)[:, 1:, 1:]
+        self.assertTrue(mx.array_equal(y.max(axis=(1, 2)), row_max))
+        y = x.reshape(rows, 16, 16, 256)[:, 1:, :, 1:]
+        expected = mx.broadcast_to(row_max[:, None], (rows, 16))
+        self.assertTrue(mx.array_equal(y.max(axis=(1, 3)), expected))
+
+        # Reducing all 2**31 + 2**16 elements at once
+        self.assertEqual(x.max().item(), 250)
+        self.assertTrue(x.any().item())
+        self.assertFalse(x.all().item())
 
 
 if __name__ == "__main__":
