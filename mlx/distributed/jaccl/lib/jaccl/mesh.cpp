@@ -28,7 +28,13 @@ MeshGroup::MeshGroup(
   side_channel_.barrier();
 
   // Create the mesh implementation object
-  mesh_ = MeshImpl(rank_, size_, connections_, buffers_, scatter_buffers_);
+  mesh_ = MeshImpl(
+      rank_,
+      size_,
+      connections_,
+      buffers_,
+      scatter_buffers_,
+      side_channel_.liveness_fds());
 }
 
 void MeshGroup::initialize() {

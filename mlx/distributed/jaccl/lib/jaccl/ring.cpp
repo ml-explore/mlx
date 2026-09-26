@@ -34,7 +34,14 @@ RingGroup::RingGroup(
 
   // Create the ring implementation object
   ring_ = RingImpl(
-      rank_, size_, left_, right_, send_buffers_, recv_buffers_, &pool_);
+      rank_,
+      size_,
+      left_,
+      right_,
+      send_buffers_,
+      recv_buffers_,
+      &pool_,
+      side_channel_.liveness_fds());
 }
 
 void RingGroup::initialize() {

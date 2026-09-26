@@ -215,12 +215,14 @@ SideChannel Config::get_side_channel() const {
 
   auto tcp =
       std::make_shared<TCPAllGather>(rank_, size_, get_coordinator().c_str());
+  auto fds = tcp->fds(); // watched for peer death
   return SideChannel(
       rank_,
       size_,
       [tcp = std::move(tcp)](const char* src, char* dst, size_t n_bytes) {
         (*tcp)(src, dst, n_bytes);
-      });
+      },
+      std::move(fds));
 }
 
 Config Config::from_env() {

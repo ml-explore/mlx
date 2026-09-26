@@ -21,7 +21,8 @@ class RingImpl {
       std::vector<Connection>& right,
       std::vector<SharedBuffer>& send_buffers,
       std::vector<SharedBuffer>& recv_buffers,
-      ThreadPool* pool = nullptr)
+      ThreadPool* pool = nullptr,
+      std::vector<int> liveness_fds = {})
       : rank_(rank),
         size_(size),
         n_conns_(left.size()),
@@ -29,7 +30,8 @@ class RingImpl {
         right_(right),
         send_buffers_(send_buffers),
         recv_buffers_(recv_buffers),
-        pool_(pool) {}
+        pool_(pool),
+        liveness_fds_(std::move(liveness_fds)) {}
 
   RingImpl(
       int rank,
@@ -401,9 +403,11 @@ class RingImpl {
       }
 
       // Main loop
+      ProgressGuard _pg1(liveness_fds_, rank_, "reduce_scatter_wire");
       while (in_flight > 0) {
         ibv_wc wc[WC_NUM];
         int n = poll_wire(lw, WC_NUM, wc);
+        _pg1.tick(n > 0);
         for (int i = 0; i < n; i++) {
           int work_type = wc[i].wr_id >> 16;
           int buff = (wc[i].wr_id >> 8) & 0xff;
@@ -529,9 +533,11 @@ class RingImpl {
       // Main loop
       //
       // Keep going until we have no longer data in flight.
+      ProgressGuard _pg2(liveness_fds_, rank_, "reduce_scatter_wire");
       while (in_flight > 0) {
         ibv_wc wc[WC_NUM];
         int n = poll_wire(lw, WC_NUM, wc);
+        _pg2.tick(n > 0);
         for (int i = 0; i < n; i++) {
           int work_type = wc[i].wr_id >> 16;
           int buff = (wc[i].wr_id >> 8) & 0xff;
@@ -636,6 +642,7 @@ class RingImpl {
     }
 
     // Main loop
+    ProgressGuard _pg3(liveness_fds_, rank_, "send_wire");
     while (in_flight > 0) {
       // Poll the hardware for completions.
       //
@@ -643,6 +650,7 @@ class RingImpl {
       // and send them.
       ibv_wc wc[WC_NUM];
       int n = conns[lw].poll(WC_NUM, wc);
+      _pg3.tick(n > 0);
       for (int i = 0; i < n; i++) {
         int buff = (wc[i].wr_id >> 8) & 0xff;
 
@@ -710,6 +718,7 @@ class RingImpl {
     }
 
     // Main loop
+    ProgressGuard _pg4(liveness_fds_, rank_, "recv_wire");
     while (in_flight > 0) {
       // Poll the hardware for completions.
       //
@@ -717,6 +726,7 @@ class RingImpl {
       // data to fetch post another recv.
       ibv_wc wc[WC_NUM];
       int n = conns[lw].poll(WC_NUM, wc);
+      _pg4.tick(n > 0);
       for (int i = 0; i < n; i++) {
         int buff = (wc[i].wr_id >> 8) & 0xff;
 
@@ -820,6 +830,7 @@ class RingImpl {
   std::span<SharedBuffer> send_buffers_;
   std::span<SharedBuffer> recv_buffers_;
   ThreadPool* pool_;
+  std::vector<int> liveness_fds_;
 };
 
 } // namespace jaccl
