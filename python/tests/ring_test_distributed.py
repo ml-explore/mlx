@@ -23,6 +23,16 @@ class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         with self.assertRaises(RuntimeError):
             sub = world.split(world.rank() % 2)
 
+    def test_strict_init_after_fallback(self):
+        with mlx_tests.scoped_env(
+            JACCL_IBV_DEVICES=None,
+            MLX_IBV_DEVICES=None,
+        ):
+            self.assertEqual(mx.distributed.init(backend="jaccl").size(), 1)
+
+            with self.assertRaises(RuntimeError):
+                mx.distributed.init(backend="jaccl", strict=True)
+
     def test_all_reduce_extra(self):
         world = mx.distributed.init()
         dtypes = [
