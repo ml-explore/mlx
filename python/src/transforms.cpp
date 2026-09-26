@@ -310,7 +310,11 @@ auto py_vmap(
     const nb::callable& fun,
     const nb::object& in_axes,
     const nb::object& out_axes) {
-  return [fun, in_axes, out_axes](const nb::args& args) {
+  return [fun, in_axes, out_axes](
+             const nb::args& args, const nb::kwargs& kwargs) {
+    if (kwargs.size()) {
+      throw nb::type_error("[vmap] Keyword arguments are not supported.");
+    }
     auto axes_to_flat_tree = [](const nb::object& tree,
                                 const nb::object& axes,
                                 bool output_axes) {
@@ -1170,7 +1174,8 @@ void init_transforms(nb::module_& m) {
             return a pytree with the vectorization axes of each output. If some
             outputs are no longer vectorized, then their vectorization axis
             should be ``None``.
-          )pbdoc");
+          )pbdoc")
+      .freeze();
 
   m.def(
       "eval",
@@ -1471,7 +1476,7 @@ void init_transforms(nb::module_& m) {
          const nb::object& outputs,
          bool shapeless) {
         return mlx_func(
-            nb::cpp_function(PyCompiledFun{fun, inputs, outputs, shapeless}),
+            PyCompiledFun{fun, inputs, outputs, shapeless},
             fun,
             inputs,
             outputs);

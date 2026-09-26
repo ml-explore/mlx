@@ -73,10 +73,13 @@ void init_stream(nb::module_& m) {
             os << s;
             return os.str();
           })
-      .def("__eq__", [](const mx::Stream& s, const nb::object& other) {
-        return nb::isinstance<mx::Stream>(other) &&
-            s == nb::cast<mx::Stream>(other);
-      });
+      .def(
+          "__eq__",
+          [](const mx::Stream& s, const nb::object& other) {
+            return nb::isinstance<mx::Stream>(other) &&
+                s == nb::cast<mx::Stream>(other);
+          })
+      .freeze();
 
   nb::class_<mx::ThreadLocalStream>(
       m,
@@ -97,7 +100,8 @@ void init_stream(nb::module_& m) {
           [](const mx::ThreadLocalStream& s, const nb::object& other) {
             return nb::isinstance<mx::ThreadLocalStream>(other) &&
                 s == nb::cast<mx::ThreadLocalStream>(other);
-          });
+          })
+      .freeze();
 
   nb::implicitly_convertible<mx::Device::DeviceType, mx::Device>();
 
@@ -179,7 +183,8 @@ void init_stream(nb::module_& m) {
              const std::optional<nb::object>& traceback) { scm.exit(); },
           "exc_type"_a = nb::none(),
           "exc_value"_a = nb::none(),
-          "traceback"_a = nb::none());
+          "traceback"_a = nb::none())
+      .freeze();
   m.def(
       "stream",
       [](mx::StreamOrDevice s) { return PyStreamContext(s); },

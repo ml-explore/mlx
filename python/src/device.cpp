@@ -43,13 +43,16 @@ void init_device(nb::module_& m) {
             os << d;
             return os.str();
           })
-      .def("__eq__", [](const mx::Device& d, const nb::object& other) {
-        if (!nb::isinstance<mx::Device>(other) &&
-            !nb::isinstance<mx::Device::DeviceType>(other)) {
-          return false;
-        }
-        return d == nb::cast<mx::Device>(other);
-      });
+      .def(
+          "__eq__",
+          [](const mx::Device& d, const nb::object& other) {
+            if (!nb::isinstance<mx::Device>(other) &&
+                !nb::isinstance<mx::Device::DeviceType>(other)) {
+              return false;
+            }
+            return d == nb::cast<mx::Device>(other);
+          })
+      .freeze();
 
   nb::implicitly_convertible<mx::Device::DeviceType, mx::Device>();
 
