@@ -1,4 +1,4 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2024-26 Apple Inc.
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
@@ -303,12 +303,15 @@ void sdpa_full_self_attention_metal(
 
   using namespace mlx::steel;
 
-  int wm = 4;
-  int wn = 1;
-
+  char devc = d.get_architecture().back();
   int bd = q.shape(-1);
   int bq = 32;
-  int bk = bd < 128 ? 32 : 16;
+  int bk = (bd == 256) && (q.dtype() != float32) && (devc == 'd')
+      ? 32
+      : (bd < 128 ? 32 : 16);
+
+  int wm = 4;
+  int wn = (bd == 256) ? 2 : 1;
 
   const bool align_Q = (qL % bq) == 0;
   const bool align_K = (kL % bk) == 0;
@@ -859,6 +862,12 @@ bool ScaledDotProductAttention::use_fallback(
       (env::enable_tf32() || q.dtype() != float32) &&
       query_sequence_length >= 1024 && query_head_dim == 256 &&
       (do_causal || has_arr_mask)) {
+    return false;
+  }
+
+  if (!metal::is_nax_available() && q.dtype() != float32 && do_causal &&
+      query_head_dim == 256 && query_sequence_length >= 2048 &&
+      query_sequence_length == k.shape(2)) {
     return false;
   }
 
