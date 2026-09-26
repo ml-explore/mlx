@@ -1,0 +1,2 @@
+# 64bit dtype not supported https://github.com/ml-explore/mlx/issues/4300
+array_api_tests/test_creation_functions.py::test_eye
