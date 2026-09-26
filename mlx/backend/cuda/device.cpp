@@ -206,15 +206,17 @@ CommandEncoder::CommandEncoder(Device& d)
     : device_(d),
       stream_(d),
       graph_(d),
-      worker_(std::make_shared<Worker>(d)),
+      worker_(std::make_unique<Worker>(d)),
       graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {
   std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits(d);
-  worker_->start();
 }
 
 CommandEncoder::~CommandEncoder() {
-  synchronize();
-  worker_->stop();
+  try {
+    synchronize();
+  } catch (...) {
+    // Synchronizing can fail when the CUDA runtime is shutting down.
+  }
 }
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
@@ -490,6 +492,8 @@ void CommandEncoder::commit() {
 
 void CommandEncoder::synchronize() {
   CHECK_CUDA_ERROR(cudaStreamSynchronize(stream_));
+  // Commit first so the handler below runs after all pending tasks.
+  commit();
   auto p = std::make_shared<std::promise<void>>();
   std::future<void> f = p->get_future();
   add_completed_handler([p = std::move(p)]() { p->set_value(); });

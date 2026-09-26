@@ -114,6 +114,35 @@ TEST_CASE("test thread unsafe stream") {
   CHECK_EQ(expected, actual);
 }
 
+TEST_CASE("test eval does not create default stream") {
+  auto s = new_thread_unsafe_stream(default_device());
+  size_t num_streams = get_streams().size();
+
+  std::thread t([&] {
+    async_eval(arange(10, s));
+    eval(arange(10, s));
+  });
+  t.join();
+
+  CHECK_EQ(get_streams().size(), num_streams);
+}
+
+TEST_CASE("test compile does not create default stream") {
+  auto s = new_thread_unsafe_stream(default_device());
+  size_t num_streams = get_streams().size();
+
+  std::function<std::vector<array>(const std::vector<array>&)> fun =
+      [s](const std::vector<array>& inputs) {
+        return std::vector<array>{abs(inputs[0], s)};
+      };
+  auto cfun = compile(fun);
+
+  std::thread t([&] { eval(cfun({array({-1, 2})})); });
+  t.join();
+
+  CHECK_EQ(get_streams().size(), num_streams);
+}
+
 TEST_CASE("test thread local stream") {
   auto s = new_thread_local_stream(default_device());
   int result = sum(arange(10, s)).item<int>();
