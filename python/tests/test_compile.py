@@ -87,6 +87,12 @@ class TestCompile(mlx_tests.MLXTestCase):
             self.assertEqual(out[0].item(), 1.0)
             self.assertEqual(out[1].item(), float("-inf"))
 
+    def test_compile_float_constant_precision(self):
+        x = mx.ones((4,), dtype=mx.float32)
+        for constant in (1 / 3, 128**-0.5, 0.7071067811865476):
+            fun = lambda x, constant=constant: (x * x) * constant
+            self.assertTrue(mx.array_equal(mx.compile(fun)(x), fun(x)))
+
     def test_compile_tuple_output_in_thread(self):
         @mx.compile
         def fun(x):
@@ -1309,14 +1315,13 @@ class TestCompile(mlx_tests.MLXTestCase):
 
     def test_double_constant(self):
         with mx.stream(mx.cpu):
-            x = mx.array(1.0, dtype=mx.float64)
+            x = mx.array([1.0], dtype=mx.float64)
+            constant = math.nextafter(1.0, 2.0)
 
             def fun(x):
-                return (x + math.pi) * 2.0
+                return (x * x) * constant
 
-            y = fun(x).item()
-            y_compiled = mx.compile(fun)(x).item()
-            self.assertEqual(y, y_compiled)
+            self.assertTrue(mx.array_equal(fun(x), mx.compile(fun)(x)))
 
     def test_shared_broadcast(self):
         def fun(x, y, z):

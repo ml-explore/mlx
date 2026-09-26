@@ -37,9 +37,9 @@ void print_float_constant(std::ostream& os, const array& x) {
 
   auto old_precision = os.precision();
   if constexpr (std::is_same_v<T, double>) {
-    os << std::setprecision(std::numeric_limits<double>::digits10 + 1);
+    os << std::setprecision(std::numeric_limits<double>::max_digits10);
   } else {
-    os << std::setprecision(std::numeric_limits<float>::digits10 + 1);
+    os << std::setprecision(std::numeric_limits<float>::max_digits10);
   }
   os << value << std::setprecision(old_precision);
 }
