@@ -15,6 +15,10 @@ bool is_available() {
 void start_capture(std::string) {}
 void stop_capture() {}
 
+std::pair<int, int> set_command_buffer_limits(int, int) {
+  return {0, 0};
+}
+
 const std::unordered_map<std::string, std::variant<std::string, size_t>>&
 device_info() {
   throw std::runtime_error(

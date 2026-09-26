@@ -10,3 +10,4 @@ Metal
   device_info
   start_capture
   stop_capture
+  set_command_buffer_limits

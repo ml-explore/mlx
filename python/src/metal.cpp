@@ -3,6 +3,7 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
+#include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/variant.h>
@@ -90,6 +91,29 @@ void init_metal(nb::module_& m) {
       &mx::metal::stop_capture,
       R"pbdoc(
       Stop a Metal capture.
+      )pbdoc");
+  metal.def(
+      "set_command_buffer_limits",
+      &mx::metal::set_command_buffer_limits,
+      "max_ops"_a,
+      "max_mb"_a,
+      R"pbdoc(
+      Set how many operations, and how many MB of distinct input buffers, a
+      Metal command buffer may hold before it is committed.
+
+      Weights count toward the MB limit, so a decode step of a large model
+      commits a command buffer after nearly every weight read, and at most a
+      few command buffers may be in flight. Larger limits during decode keep
+      the GPU fed; keep the defaults during prefill, where in-flight command
+      buffers hold large intermediates.
+
+      Args:
+        max_ops (int): Operations per command buffer (``<= 0`` keeps it).
+        max_mb (int): MB of distinct inputs per command buffer (``<= 0``
+          keeps it).
+
+      Returns:
+        tuple(int, int): The previous ``(max_ops, max_mb)``.
       )pbdoc");
   metal.def("device_info", []() {
     DEPRECATE("mx.metal.device_info", "mx.device_info");
