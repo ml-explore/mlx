@@ -1,6 +1,9 @@
 # Copyright © 2026 Apple Inc.
 
+import os
+import signal
 import threading
+import time
 import unittest
 
 import mlx.core as mx
@@ -106,6 +109,36 @@ class TestThreads(mlx_tests.MLXTestCase):
         for t in threads:
             t.join()
         self.assertEqual(errors, [])
+
+    @unittest.skipIf(
+        not hasattr(os, "fork") or mx.default_device() != mx.cpu,
+        "A forked child is only usable with the cpu backend",
+    )
+    def test_fork_after_eval(self):
+        # The stream threads of the parent do not exist in a forked child, so
+        # the child must not queue work on them.
+        mx.eval(mx.arange(4) * 2)
+
+        pid = os.fork()
+        if pid == 0:
+            try:
+                y = mx.arange(4) * 2
+                mx.eval(y)
+                os._exit(0 if y.tolist() == [0, 2, 4, 6] else 1)
+            finally:
+                os._exit(1)
+
+        deadline = time.monotonic() + 30
+        while True:
+            done, status = os.waitpid(pid, os.WNOHANG)
+            if done:
+                break
+            if time.monotonic() > deadline:
+                os.kill(pid, signal.SIGKILL)
+                os.waitpid(pid, 0)
+                self.fail("The forked child hung")
+            time.sleep(0.01)
+        self.assertEqual(os.waitstatus_to_exitcode(status), 0)
 
 
 if __name__ == "__main__":

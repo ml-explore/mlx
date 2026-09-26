@@ -3,6 +3,10 @@
 #include <algorithm>
 #include <mutex>
 
+#ifndef _WIN32
+#include <pthread.h>
+#endif
+
 #include "mlx/allocator.h"
 #include "mlx/backend/common/buffer_cache.h"
 #include "mlx/memory.h"
@@ -63,6 +67,17 @@ class CommonAllocator : public Allocator {
   size_t get_cache_memory() const;
   size_t set_cache_limit(size_t limit);
   void clear_cache();
+
+  // Called by the pthread_atfork handlers.
+  void prepare_fork() {
+    mutex_.lock();
+  }
+  void after_fork_in_parent() {
+    mutex_.unlock();
+  }
+  void after_fork_in_child() {
+    new (&mutex_) std::mutex;
+  }
 
  private:
   friend CommonAllocator& common_allocator();
@@ -166,6 +181,15 @@ CommonAllocator& common_allocator() {
   static CommonAllocator allocator_;
   return allocator_;
 }
+
+#ifndef _WIN32
+// Hold the allocator lock across a fork so the child never inherits it locked
+// by a thread that does not exist there.
+[[maybe_unused]] const int fork_handlers = pthread_atfork(
+    [] { common_allocator().prepare_fork(); },
+    [] { common_allocator().after_fork_in_parent(); },
+    [] { common_allocator().after_fork_in_child(); });
+#endif
 
 Allocator& allocator() {
   return common_allocator();
