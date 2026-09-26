@@ -1044,6 +1044,53 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 test_grad(loss_slow, loss_fast, [q, k, v])
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_d512_default_metal(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        mx.random.seed(0)
+
+        cases = (
+            (1, 4, 2, 1024, 1057, 1152),
+            (2, 2, 1, 1025, 1025, None),
+            (1, 2, 1, 1024, 4103, 4128),
+        )
+        for dtype, (B, qH, kH, qL, kL, cache_len) in product(
+            (mx.float16, mx.bfloat16), cases
+        ):
+            with self.subTest(dtype=dtype, qL=qL, kL=kL):
+                q = (0.5 * mx.random.normal((B, qH, qL, 512))).astype(dtype)
+                kv_len = cache_len or kL
+                k_cache = (0.5 * mx.random.normal((B, kH, kv_len, 512))).astype(dtype)
+                v_cache = (0.5 * mx.random.normal((B, kH, kv_len, 512))).astype(dtype)
+                k = k_cache[..., :kL, :]
+                v = v_cache[..., :kL, :]
+                scale = 512**-0.5
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask="causal")
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask="causal"
+                )
+                tol = 1e-2 if dtype == mx.bfloat16 else 1e-3
+                self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
+        q = mx.random.normal((1, 2, 1024, 512), mx.float16)
+        k = mx.random.normal((1, 1, 1057, 512), mx.float16)
+        v = mx.random.normal((1, 1, 1057, 512), mx.float16)
+        scale = 512**-0.5
+        mask = mx.random.uniform(shape=(1, 1, 1024, 1057)) > 0.2
+        sinks = mx.random.normal((2,), mx.float16)
+        fallback_cases = (
+            (v, mask, None),
+            (v, "causal", sinks),
+            (v[..., :128], "causal", None),
+        )
+        for v_arg, mask_arg, sinks_arg in fallback_cases:
+            ref = mlx_ref_attn(q, k, v_arg, scale=scale, mask=mask_arg, sinks=sinks_arg)
+            out = mx.fast.scaled_dot_product_attention(
+                q, k, v_arg, scale=scale, mask=mask_arg, sinks=sinks_arg
+            )
+            self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
     def test_sdpa_force_fused_metal(self):
         if mx.default_device() != mx.gpu:
             self.skipTest("requires GPU")

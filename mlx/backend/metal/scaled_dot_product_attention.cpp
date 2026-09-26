@@ -1,4 +1,5 @@
 // Copyright © 2024-26 Apple Inc.
+#include <algorithm>
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
@@ -7,6 +8,7 @@
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/steel/attn/params.h"
+#include "mlx/backend/metal/matmul.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/utils.h"
@@ -14,6 +16,189 @@
 namespace mlx::core::fast {
 
 namespace {
+
+bool use_blocked_d512(
+    const array& q,
+    const array& k,
+    const array& v,
+    bool has_arr_mask,
+    bool do_causal,
+    bool has_sinks,
+    Stream s) {
+  return s.device == Device::gpu && !metal::is_nax_available() &&
+      (q.dtype() == float16 || q.dtype() == bfloat16) && q.shape(-1) == 512 &&
+      v.shape(-1) == 512 && q.shape(2) >= 1024 && q.shape(2) <= k.shape(2) &&
+      do_causal && !has_arr_mask && !has_sinks;
+}
+
+void sdpa_blocked_softmax(const Stream& s, metal::Device& d, array& scores) {
+  constexpr int looped_limit = 4096;
+  constexpr int simd_size = 32;
+
+  int axis_size = scores.shape().back();
+  int n_rows = scores.size() / axis_size;
+  std::string kernel_name =
+      axis_size > looped_limit ? "looped_softmax_" : "block_softmax_";
+  if (scores.dtype() != float32) {
+    kernel_name += "precise_";
+  }
+  kernel_name += type_to_name(scores);
+
+  auto kernel = get_softmax_kernel(d, kernel_name, true, scores);
+  auto& compute_encoder = metal::get_command_encoder(s);
+
+  size_t threadgroup_size;
+  if (axis_size <= looped_limit) {
+    size_t reads = (axis_size + SOFTMAX_N_READS - 1) / SOFTMAX_N_READS;
+    size_t simds = (reads + simd_size - 1) / simd_size;
+    threadgroup_size = simd_size * simds;
+    assert(threadgroup_size <= kernel->maxTotalThreadsPerThreadgroup());
+  } else {
+    threadgroup_size = kernel->maxTotalThreadsPerThreadgroup();
+  }
+
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(scores, 0);
+  compute_encoder.set_output_array(scores, 1);
+  compute_encoder.set_bytes(axis_size, 2);
+  compute_encoder.dispatch_threads(
+      MTL::Size(n_rows * threadgroup_size, 1, 1),
+      MTL::Size(threadgroup_size, 1, 1));
+}
+
+void sdpa_full_self_attention_blocked(
+    const Stream& s,
+    metal::Device& d,
+    const array& q,
+    const array& k,
+    const array& v,
+    float scale,
+    array& o) {
+  // This block size balances score-buffer memory and GEMM efficiency.
+  constexpr int block_rows = 256;
+
+  int B = q.shape(0);
+  int H = q.shape(1);
+  int qL = q.shape(2);
+  int kL = k.shape(2);
+  int D = q.shape(3);
+  int kvH = k.shape(1);
+  int gqa = H / kvH;
+
+  array score_buffer({B, H, block_rows, kL}, q.dtype(), nullptr, {});
+  score_buffer.set_data(allocator::malloc(score_buffer.nbytes()));
+  array q_buffer({B, H, block_rows, D}, q.dtype(), nullptr, {});
+  q_buffer.set_data(allocator::malloc(q_buffer.nbytes()));
+  array out_buffer({B, H, block_rows, D}, o.dtype(), nullptr, {});
+  out_buffer.set_data(allocator::malloc(out_buffer.nbytes()));
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+  auto scale_kernel =
+      d.get_kernel("sdpa_blocked_scale_copy_" + type_to_name(q));
+  auto mask_kernel =
+      d.get_kernel("sdpa_blocked_causal_mask_" + type_to_name(q));
+  Shape batch_shape = {B, kvH};
+  Strides k_batch_strides = {k.strides(0), k.strides(1)};
+  Strides v_batch_strides = {v.strides(0), v.strides(1)};
+
+  std::vector<array> copies;
+  for (int q_offset = 0; q_offset < qL; q_offset += block_rows) {
+    int rows = std::min(block_rows, qL - q_offset);
+    // Skip columns that are masked for every row in this query block.
+    int columns = std::min(kL, kL - qL + q_offset + rows);
+
+    array q_block({B, H, rows, D}, q.dtype(), nullptr, {});
+    q_block.copy_shared_buffer(
+        q_buffer, q_block.strides(), q_block.flags(), q_block.size());
+    compute_encoder.set_compute_pipeline_state(scale_kernel);
+    compute_encoder.set_input_array(q, 0);
+    compute_encoder.set_output_array(q_block, 1);
+    compute_encoder.set_bytes(scale, 2);
+    compute_encoder.set_vector_bytes(q.strides(), 3);
+    compute_encoder.set_bytes(H, 4);
+    compute_encoder.set_bytes(rows, 5);
+    compute_encoder.set_bytes(D, 6);
+    compute_encoder.set_bytes(q_offset, 7);
+    auto scale_group_dims = get_block_dims(D, rows, B * H);
+    compute_encoder.dispatch_threads(
+        MTL::Size(D, rows, B * H), scale_group_dims);
+
+    array scores({B, H, rows, columns}, q.dtype(), nullptr, {});
+    scores.copy_shared_buffer(
+        score_buffer, scores.strides(), scores.flags(), scores.size());
+
+    Strides q_batch_strides = {int64_t(H) * rows * D, int64_t(gqa) * rows * D};
+    steel_matmul(
+        /* const Stream& s = */ s,
+        /* metal::Device& d = */ d,
+        /* const array& a = */ q_block,
+        /* const array& b = */ k,
+        /* array& out = */ scores,
+        /* int M = */ gqa * rows,
+        /* int N = */ columns,
+        /* int K = */ D,
+        /* int batch_size_out = */ B * kvH,
+        /* int lda = */ D,
+        /* int ldb = */ k.strides(2),
+        /* bool transpose_a = */ false,
+        /* bool transpose_b = */ true,
+        /* std::vector<array>& copies = */ copies,
+        /* Shape batch_shape = */ batch_shape,
+        /* Strides A_batch_stride = */ q_batch_strides,
+        /* Strides B_batch_stride = */ k_batch_strides);
+
+    int total_rows = B * H * rows;
+    compute_encoder.set_compute_pipeline_state(mask_kernel);
+    compute_encoder.set_output_array(scores, 0);
+    compute_encoder.set_bytes(rows, 1);
+    compute_encoder.set_bytes(columns, 2);
+    auto mask_group_dims = get_block_dims(rows, total_rows, 1);
+    compute_encoder.dispatch_threads(
+        MTL::Size(rows, total_rows, 1), mask_group_dims);
+
+    sdpa_blocked_softmax(s, d, scores);
+
+    array out_block({B, H, rows, D}, o.dtype(), nullptr, {});
+    out_block.copy_shared_buffer(
+        out_buffer, out_block.strides(), out_block.flags(), out_block.size());
+
+    Strides scores_batch_strides = {
+        int64_t(H) * rows * columns, int64_t(gqa) * rows * columns};
+    steel_matmul(
+        /* const Stream& s = */ s,
+        /* metal::Device& d = */ d,
+        /* const array& a = */ scores,
+        /* const array& b = */ v,
+        /* array& out = */ out_block,
+        /* int M = */ gqa * rows,
+        /* int N = */ D,
+        /* int K = */ columns,
+        /* int batch_size_out = */ B * kvH,
+        /* int lda = */ columns,
+        /* int ldb = */ v.strides(2),
+        /* bool transpose_a = */ false,
+        /* bool transpose_b = */ false,
+        /* std::vector<array>& copies = */ copies,
+        /* Shape batch_shape = */ batch_shape,
+        /* Strides A_batch_stride = */ scores_batch_strides,
+        /* Strides B_batch_stride = */ v_batch_strides);
+    copy_gpu_inplace(
+        /* const array& in = */ out_block,
+        /* array& out = */ o,
+        /* const Shape& data_shape = */ out_block.shape(),
+        /* const Strides& i_strides = */ out_block.strides(),
+        /* const Strides& o_strides = */ o.strides(),
+        /* int64_t i_offset = */ 0,
+        /* int64_t o_offset = */ int64_t(q_offset) * o.strides(2),
+        /* CopyType ctype = */ CopyType::GeneralGeneral,
+        /* const Stream& s = */ s);
+  }
+
+  compute_encoder.add_temporaries(std::move(copies));
+  compute_encoder.add_temporary(std::move(score_buffer));
+  compute_encoder.add_temporary(std::move(q_buffer));
+  compute_encoder.add_temporary(std::move(out_buffer));
+}
 
 void sdpa_full_self_attention_nax(
     const Stream& s,
@@ -829,6 +1014,7 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    bool has_sinks,
     bool is_training,
     bool output_logsumexp,
     bool force_fused,
@@ -850,6 +1036,9 @@ bool ScaledDotProductAttention::use_fallback(
     // It's faster for training on Metal to use the unfused SDPA for both
     // forward and backward.
     return true;
+  }
+  if (use_blocked_d512(q, k, v, has_arr_mask, do_causal, has_sinks, s)) {
+    return false;
   }
   if (!has_fused) {
     return true;
@@ -1036,8 +1225,13 @@ void ScaledDotProductAttention::eval_gpu(
         ? std::optional<array>{copy_unless(is_matrix_contiguous, inputs[3])}
         : std::nullopt;
 
-    sdpa_full_self_attention_metal(
-        s, d, q, k, v, scale_, o, do_causal_, mask, sinks);
+    if (use_blocked_d512(
+            q, k, v, has_arr_mask, do_causal_, sinks.has_value(), s)) {
+      sdpa_full_self_attention_blocked(s, d, q, k, v, scale_, o);
+    } else {
+      sdpa_full_self_attention_metal(
+          s, d, q, k, v, scale_, o, do_causal_, mask, sinks);
+    }
   }
 
   metal::get_command_encoder(s).add_temporaries(std::move(copies));
