@@ -67,6 +67,9 @@ inline array ensure_row_contiguous_matrix(
     const array& x,
     metal::Device& d,
     const Stream& s) {
+  if (x.flags().row_contiguous) {
+    return x;
+  }
   if (x.ndim() < 2) {
     if (x.strides()[0] == 1) {
       return x;
