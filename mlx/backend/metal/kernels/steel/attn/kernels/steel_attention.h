@@ -63,6 +63,7 @@ template <
     int BQ,
     int BK,
     int BD,
+    int BV,
     int WM,
     int WN,
     typename MaskType = float,
@@ -114,10 +115,10 @@ template <
 
   constexpr short LDQ_tgp = BD + padQ;
   constexpr short LDK_tgp = BK + padK;
-  constexpr short LDV_tgp = BD + padV;
+  constexpr short LDV_tgp = BV + padV;
 
   constexpr short tgp_mem_0 = (BK + padK) * (BD);
-  constexpr short tgp_mem_1 = BK * (BD + padV);
+  constexpr short tgp_mem_1 = BK * (BV + padV);
   constexpr short tgp_mem_s = tgp_mem_0 > tgp_mem_1 ? tgp_mem_0 : tgp_mem_1;
 
   threadgroup T Q_smem[BQ * (BD + padQ)];
@@ -150,7 +151,7 @@ template <
   using VBlockLoader = BlockLoaderT<
       /* typename T = */ T,
       /* short BROWS = */ BK,
-      /* short BCOLS = */ BD,
+      /* short BCOLS = */ BV,
       /* short kDstStrRow = */ LDV_tgp,
       /* short kDstStrCol = */ 1,
       /* short reduction_dim = */ 0,
@@ -180,6 +181,7 @@ template <
   constexpr int TK = BK / kFragSize;
   // HeadDim frags (all warps load the same frags)
   constexpr int TD = BD / kFragSize;
+  constexpr int TV = BV / kFragSize;
 
   static_assert(TQ == 1, "Check TQ");
 
@@ -187,7 +189,7 @@ template <
   MMATile<AccumType, 1, TK, MMAFrag_acc_t> Ktile;
   MMATile<AccumType, TQ, TK, MMAFrag_acc_t> Stile;
   MMATile<AccumType, 1, 1, MMAFrag_acc_t> Vtile;
-  MMATile<AccumType, TQ, TD, MMAFrag_acc_t> Otile;
+  MMATile<AccumType, TQ, TV, MMAFrag_acc_t> Otile;
 
   Otile.clear();
 
@@ -373,7 +375,7 @@ template <
 
     // Load V blocks
     if (!align_K && kb == (params->NK_aligned)) {
-      loader_v.load_safe(short2(BD, params->kL_rem));
+      loader_v.load_safe(short2(BV, params->kL_rem));
     } else {
       loader_v.load_unsafe();
     }
@@ -425,7 +427,7 @@ template <
     STEEL_PRAGMA_UNROLL
     for (short iq = 0; iq < TQ; iq++) {
       STEEL_PRAGMA_UNROLL
-      for (short id = 0; id < TD; id++) {
+      for (short id = 0; id < TV; id++) {
         STEEL_PRAGMA_UNROLL
         for (short ik = 0; ik < TK; ik++) {
           if constexpr (BD >= 128) {
@@ -464,7 +466,7 @@ template <
   O += (tm + sm) * params->O_strides[2] + sn;
 
   if (!align_Q && int(tid.x) == (params->NQ_aligned)) {
-    auto dst_tile_dims = short2(BD - sn, params->qL_rem - (tm + sm));
+    auto dst_tile_dims = short2(BV - sn, params->qL_rem - (tm + sm));
 
     if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
       return;

@@ -310,6 +310,7 @@ void sdpa_full_self_attention_metal(
   int wn = 1;
 
   int bd = q.shape(-1);
+  int bv = v.shape(-1);
   int bq = 32;
   int bk = bd < 128 ? 32 : 16;
 
@@ -337,6 +338,7 @@ void sdpa_full_self_attention_metal(
       bk,
       "_bd",
       bd,
+      (bv == bd ? "" : "_bv" + std::to_string(bv)),
       "_wm",
       wm,
       "_wn",
@@ -370,6 +372,7 @@ void sdpa_full_self_attention_metal(
       bq,
       bk,
       bd,
+      bv,
       wm,
       wn,
       (has_mask ? *mask : q));
@@ -746,19 +749,10 @@ std::tuple<bool, std::string> has_fused_kernel(
     if (!supported_head_dim) {
       msg << "the full attention kernel supports head dims "
           << "{64, 72, 80, 96, 128, 192, 256} with matching query/value head "
-          << "dims, or (query, value) head dims (96, 64) with NAX; got query "
+          << "dims, or (query, value) head dims (96, 64); got query "
           << "head dim " << query_head_dim << " and value head dim "
           << value_head_dim << ".";
       return {false, msg.str()};
-    }
-    if (asymmetric) {
-      if (!metal::is_nax_available() ||
-          (q.dtype() == float32 && !env::enable_tf32())) {
-        return {
-            false,
-            "the (96, 64) full attention kernel requires NAX and "
-            "TF32 for float32 inputs."};
-      }
     }
     if (has_mask && !has_arr_mask &&
         !(query_sequence_length <= key_sequence_length && do_causal)) {

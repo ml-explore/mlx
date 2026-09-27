@@ -413,6 +413,7 @@ MTL::ComputePipelineState* get_steel_attention_kernel(
     int bq,
     int bk,
     int bd,
+    int bv,
     int wm,
     int wn,
     const array& m);

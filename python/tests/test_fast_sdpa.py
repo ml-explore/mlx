@@ -1,6 +1,5 @@
 import math
 import os
-import platform
 import unittest
 from itertools import product
 
@@ -297,12 +296,6 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
     def test_sdpa_full_d96_v64(self):
         if mx.default_device() != mx.gpu:
             self.skipTest("requires GPU")
-        arch = mx.device_info()["architecture"]
-        min_gen = 18 if arch.endswith("p") else 17
-        if int(arch[-3:-1]) < min_gen or tuple(
-            map(int, platform.mac_ver()[0].split(".")[:2])
-        ) < (26, 2):
-            self.skipTest("requires NAX")
         mx.random.seed(0)
         scale = 96**-0.5
         cells = [
@@ -310,12 +303,12 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             (1, 4, 4, 64, 64),
             (2, 4, 2, 65, 97),
             (1, 4, 4, 16, 9),
+            (1, 4, 2, 32, 31),
+            (1, 4, 2, 33, 32),
         ]
         for dtype, (B, qH, kH, qL, kL) in product(
             (mx.float16, mx.bfloat16, mx.float32), cells
         ):
-            if dtype == mx.float32 and os.environ.get("MLX_ENABLE_TF32", "1") == "0":
-                continue
             q = (
                 (0.5 * mx.random.normal((B, qL, qH, 96)))
                 .astype(dtype)
