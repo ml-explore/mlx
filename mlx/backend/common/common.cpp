@@ -20,25 +20,33 @@ void AsStrided::eval(const std::vector<array>& inputs, array& out) {
         "AsStrided must be used with row contiguous arrays only.");
   }
 
-  auto [no_bsx_size, row_contiguous, col_contiguous] =
-      check_contiguity(shape_, strides_);
+  auto [_, row_contiguous, col_contiguous] = check_contiguity(shape_, strides_);
 
   int64_t l = 0, h = 0;
-  bool has_negative_stride = false;
+  std::vector<std::pair<int64_t, int>> dims;
   for (int i = 0; i < strides_.size(); i++) {
     auto delta = strides_[i] * (shape_[i] - 1);
     if (strides_[i] >= 0) {
       h += delta;
     } else {
       l += delta;
-      has_negative_stride |= shape_[i] > 1;
+    }
+    if (shape_[i] > 1 && strides_[i] != 0) {
+      dims.emplace_back(strides_[i], shape_[i]);
     }
   }
   size_t data_size = out.size() == 0 ? 0 : (h - l) + 1;
 
+  std::sort(dims.begin(), dims.end());
+  int64_t expected_stride = 1;
+  bool dense = true;
+  for (auto [stride, size] : dims) {
+    dense &= stride == expected_stride;
+    expected_stride *= size;
+  }
+
   auto flags = in.flags();
-  flags.contiguous =
-      out.size() == 0 || (!has_negative_stride && no_bsx_size == data_size);
+  flags.contiguous = out.size() == 0 || dense;
   flags.row_contiguous = row_contiguous;
   flags.col_contiguous = col_contiguous;
 

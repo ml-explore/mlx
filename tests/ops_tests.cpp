@@ -358,6 +358,24 @@ TEST_CASE("test slice") {
   out = slice(x, {3, 0}, {-5, 2}, {-1, 1});
   eval(out);
   CHECK_EQ(out.data_size(), 8);
+
+  // Slice of an overlapping view
+  x = as_strided(square(arange(16, float32)), {3, 2, 2}, {1, 1, 5}, 0);
+  out = slice(x, {0, 0, 0}, {2, 2, 2});
+  eval(out);
+  CHECK_EQ(out.data_size(), 8);
+  CHECK_FALSE(out.flags().contiguous);
+  CHECK_EQ(sum(out).item<float>(), 152.0f);
+
+  // Reverse twice gives a dense view again
+  x = reshape(arange(6), {2, 3});
+  x = slice(x, {1, 0}, {-3, 3}, {-1, 1});
+  out = slice(x, {1, 0}, {-3, 3}, {-1, 1});
+  eval(out);
+  CHECK(out.flags().contiguous);
+  CHECK(out.flags().row_contiguous);
+  CHECK(array_equal(reshape(transpose(out), {-1}), array({0, 3, 1, 4, 2, 5}))
+            .item<bool>());
 }
 
 TEST_CASE("test slice update") {
@@ -2892,6 +2910,14 @@ TEST_CASE("test as_strided op") {
   CHECK(array_equal(y, expected).item<bool>());
   CHECK_EQ(y.data_size(), 10);
   CHECK_FALSE(y.flags().contiguous);
+
+  // Overlaps and gaps with element count equal to span
+  auto xf = square(arange(16, float32));
+  y = as_strided(xf, {2, 2, 2}, {1, 1, 5}, 0);
+  eval(y);
+  CHECK_EQ(y.data_size(), 8);
+  CHECK_FALSE(y.flags().contiguous);
+  CHECK_EQ(sum(y).item<float>(), 152.0f);
 
   x = reshape(x, {2, 5}); // 0 1 2 3 ...
   x = transpose(x, {1, 0}); // 0 5 1 6 2 7 ...
