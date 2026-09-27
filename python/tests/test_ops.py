@@ -593,6 +593,11 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(math.isnan(mx.minimum(a, b).item()))
         self.assertTrue(math.isnan(mx.minimum(b, a).item()))
 
+        # A NaN in either part of the first argument propagates.
+        a = mx.array([complex(3, float("nan"))])
+        b = mx.array([2 + 0j])
+        self.assertTrue(mx.array_equal(mx.minimum(a, b), a, equal_nan=True))
+
     def test_maximum(self):
         x = mx.array([0.0, -5, 10.0])
         y = mx.array([1.0, -7.0, 3.0])
@@ -604,6 +609,11 @@ class TestOps(mlx_tests.MLXTestCase):
         b = mx.array([0.0])
         self.assertTrue(math.isnan(mx.maximum(a, b).item()))
         self.assertTrue(math.isnan(mx.maximum(b, a).item()))
+
+        # A NaN in either part of the first argument propagates.
+        a = mx.array([complex(1, float("nan"))])
+        b = mx.array([2 + 0j])
+        self.assertTrue(mx.array_equal(mx.maximum(a, b), a, equal_nan=True))
 
     def test_floor(self):
         x = mx.array([-22.03, 19.98, -27, 9, 0.0, -np.inf, np.inf])
@@ -4274,6 +4284,11 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = mx.array([0.0 + 1j, 2.0 + 1j, 3.0 + 1j, mx.nan + 2j])
         self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
 
+        # A NaN in the imaginary part also sorts last.
+        x = mx.array([3.0 + 1j, complex(1.0, mx.nan), 2.0 + 1j, 0.0 + 1j])
+        expected = mx.array([0.0 + 1j, 2.0 + 1j, 3.0 + 1j, complex(1.0, mx.nan)])
+        self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
+
     def test_argsort_nan(self):
         for dtype in [mx.float32, mx.float16, mx.bfloat16]:
             with self.subTest(dtype=dtype):
@@ -4282,6 +4297,13 @@ class TestOps(mlx_tests.MLXTestCase):
                 indices = mx.argsort(x)
                 sorted_x = mx.take(x, indices)
                 self.assertTrue(mx.array_equal(sorted_x, expected, equal_nan=True))
+
+        # Also test complex values
+        for nan_val in [mx.nan + 2j, complex(1.0, mx.nan)]:
+            x = mx.array([3.0 + 1j, nan_val, 2.0 + 1j, 0.0 + 1j])
+            expected = mx.array([0.0 + 1j, 2.0 + 1j, 3.0 + 1j, nan_val])
+            sorted_x = mx.take(x, mx.argsort(x))
+            self.assertTrue(mx.array_equal(sorted_x, expected, equal_nan=True))
 
     def test_to_from_fp8(self):
         vals = mx.array(

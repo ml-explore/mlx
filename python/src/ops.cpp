@@ -2550,6 +2550,16 @@ void init_ops(nb::module_& m) {
             array: The transposed array.
       )pbdoc");
   m.def(
+      "matrix_transpose",
+      &mx::matrix_transpose,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def matrix_transpose(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+      R"pbdoc(
+      Transpose the last two dimensions of the array.)pbdoc");
+  m.def(
       "permute_dims",
       [](const mx::array& a,
          const std::optional<std::vector<int>>& axes,
@@ -4865,7 +4875,7 @@ void init_ops(nb::module_& m) {
               :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
             mode (str, optional): The quantization mode. Default: ``"affine"``.
             global_scale (array, optional): The per-input float32 scale used for
-              ``nvfp4`` quantization of ``w``. Only supported on Metal.
+              ``nvfp4`` quantization of ``w``. Only supported on the GPU.
               Default: ``None``.
             sorted_indices (bool, optional): May allow a faster implementation
               if the passed indices are sorted. Default: ``False``.
@@ -6186,6 +6196,5 @@ void init_ops(nb::module_& m) {
   m.attr("cumulative_sum") = m.attr("cumsum");
   m.attr("empty") = m.attr("zeros");
   m.attr("empty_like") = m.attr("zeros_like");
-  m.attr("matrix_transpose") = m.attr("transpose");
   m.attr("pow") = m.attr("power");
 }
