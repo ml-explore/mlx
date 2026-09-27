@@ -381,6 +381,9 @@ inline array transpose(
   return transpose(a, std::vector<int>(axes), s);
 }
 
+/** Permutes last two dimensions of an array. */
+MLX_API array matrix_transpose(const array& a, StreamOrDevice s = {});
+
 /** Swap two axes of an array. */
 MLX_API array
 swapaxes(const array& a, int axis1, int axis2, StreamOrDevice s = {});
