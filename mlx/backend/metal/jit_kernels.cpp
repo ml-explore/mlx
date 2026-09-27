@@ -1389,11 +1389,10 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
                       bq,
                       bk,
                       bd,
+                      bv,
                       wm,
                       wn,
-                      get_type_string(m.dtype()),
-                      "float",
-                      bv));
+                      get_type_string(m.dtype())));
     return kernel_source;
   });
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);

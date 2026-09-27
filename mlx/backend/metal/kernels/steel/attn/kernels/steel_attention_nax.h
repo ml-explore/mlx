@@ -76,11 +76,11 @@ template <
     int BQ,
     int BK,
     int BD,
+    int BV,
     int WM,
     int WN,
     typename MaskType = float,
-    typename AccumType = float,
-    int BV = BD>
+    typename AccumType = float>
 [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void attention_nax(
     const device T* Q [[buffer(0)]],
     const device T* K [[buffer(1)]],

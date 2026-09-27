@@ -9,13 +9,13 @@
   instantiate_kernel(                                                    \
       "steel_attention_" #tname "_bq" #bq "_bk" #bk "_bd" #bd            \
       "_wm" #wm "_wn" #wn "_mask" #mname,                                \
-  attention_nax, dtype, bq, bk, bd, wm, wn, mtype, float)
+  attention_nax, dtype, bq, bk, bd, bd, wm, wn, mtype, float)
 
 #define instantiate_attn_asymmetric(tname, dtype, bq, bk, bd, bv, wm, wn, mname, mtype) \
   instantiate_kernel(                                                               \
       "steel_attention_" #tname "_bq" #bq "_bk" #bk "_bd" #bd "_bv" #bv             \
       "_wm" #wm "_wn" #wn "_mask" #mname,                                            \
-  attention_nax, dtype, bq, bk, bd, wm, wn, mtype, float, bv)
+  attention_nax, dtype, bq, bk, bd, bv, wm, wn, mtype, float)
 
 #define instantiate_attn_dsplit(tname, dtype, bq, bk, bd, wm, wn, mname, mtype) \
   instantiate_kernel(                                                           \
