@@ -288,6 +288,41 @@ def _interpolate_separable(
     return out
 
 
+_MATMUL_MAX_INPUT_SIZE_LINEAR = 128
+_MATMUL_MAX_INPUT_SIZE_CUBIC = 32
+
+
+def _weight_matrix(N, taps):
+    # float32, so low precision inputs are promoted as in the gather path
+    A = None
+    for idx, weight in taps:
+        onehot = mx.expand_dims(idx.reshape(-1), 1) == mx.arange(N, dtype=mx.uint32)
+        term = onehot.astype(mx.float32) * mx.expand_dims(weight.reshape(-1), 1)
+        A = term if A is None else A + term
+    return A
+
+
+def _interpolate_matmul(
+    x: mx.array, scale_factor: Tuple, indices_fn: Callable, align_corners: bool = False
+):
+    dims = x.ndim - 2
+    if dims != len(scale_factor):
+        raise ValueError("A scale needs to be provided for each spatial dimension")
+
+    _, *N, _ = x.shape
+    out = x
+    for i, (n, s) in enumerate(zip(N, scale_factor)):
+        axis = i + 1
+        A = _weight_matrix(n, indices_fn(n, s, align_corners, i, dims))
+        out = mx.moveaxis(mx.tensordot(out, A, axes=[[axis], [1]]), -1, axis)
+    return out
+
+
+def _use_matmul(N, scale_factor, max_size):
+    upscaling = all(s >= 1 for s in scale_factor)
+    return upscaling and all(n <= max_size for n in N)
+
+
 def upsample_linear(
     x: mx.array,
     scale_factor: Tuple,
@@ -300,6 +335,16 @@ def upsample_linear(
             x=x,
             scale_factor=scale_factor,
             indices_fn=_linear_aa_indices,
+            align_corners=align_corners,
+        )
+    # Dense per-axis matmuls are faster than gathers when upscaling small
+    # spatial sizes. The gradient is also a matmul, which avoids the
+    # scatter-add of gathers.
+    if _use_matmul(x.shape[1:-1], scale_factor, _MATMUL_MAX_INPUT_SIZE_LINEAR):
+        return _interpolate_matmul(
+            x=x,
+            scale_factor=scale_factor,
+            indices_fn=_linear_indices,
             align_corners=align_corners,
         )
     return _interpolate(
@@ -322,6 +367,13 @@ def upsample_cubic(
             x=x,
             scale_factor=scale_factor,
             indices_fn=_cubic_aa_indices,
+            align_corners=align_corners,
+        )
+    if _use_matmul(x.shape[1:-1], scale_factor, _MATMUL_MAX_INPUT_SIZE_CUBIC):
+        return _interpolate_matmul(
+            x=x,
+            scale_factor=scale_factor,
+            indices_fn=_cubic_indices,
             align_corners=align_corners,
         )
     return _interpolate(
