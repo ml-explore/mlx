@@ -968,9 +968,7 @@ void sdpa_vjp_blocked(
   // nonzero whenever the queries are a suffix of the keys.
   const int diag_off = kL - qL;
 
-  auto blocks = sdpa_vjp_blocks(B, H, qL, kL, q.dtype());
-  const int BQ = blocks.first;
-  const int BK = blocks.second;
+  auto [BQ, BK] = sdpa_vjp_blocks(B, H, qL, kL, q.dtype());
 
   Dtype ctype = q.dtype();
   std::string tname = get_type_string(ctype);
