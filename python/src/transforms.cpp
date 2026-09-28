@@ -1,10 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <algorithm>
-#include <numeric>
-#include <sstream>
-#include <unordered_set>
-
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
@@ -12,6 +7,11 @@
 #include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
+
+#include <algorithm>
+#include <numeric>
+#include <sstream>
+#include <unordered_set>
 
 #include "mlx/array.h"
 #include "mlx/compile.h"

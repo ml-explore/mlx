@@ -1,8 +1,8 @@
+#include <nanobind/typing.h>
+
 #include <cstdint>
 #include <cstring>
 #include <sstream>
-
-#include <nanobind/typing.h>
 
 #include "mlx/utils.h"
 #include "python/src/utils.h"

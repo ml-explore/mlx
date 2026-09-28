@@ -1,9 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-#include <cstdint>
-#include <cstring>
-#include <sstream>
-#include <tuple>
-
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/complex.h>
 #include <nanobind/stl/optional.h>
@@ -12,6 +7,11 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/typing.h>
+
+#include <cstdint>
+#include <cstring>
+#include <sstream>
+#include <tuple>
 
 #include "mlx/backend/metal/metal.h"
 #include "mlx/utils.h"

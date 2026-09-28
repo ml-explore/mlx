@@ -1,12 +1,12 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <sstream>
-#include <vector>
-
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/variant.h>
+
+#include <sstream>
+#include <vector>
 
 #include "mlx/stream.h"
 #include "mlx/utils.h"
