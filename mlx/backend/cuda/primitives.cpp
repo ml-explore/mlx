@@ -52,7 +52,8 @@ NO_GPU_MULTI(Eigh)
 
 namespace fast {
 NO_GPU_MULTI(GatedDeltaUpdate)
-}
+NO_GPU_MULTI(GatedDeltaUpdateVJP)
+} // namespace fast
 
 namespace distributed {
 NO_GPU_MULTI(Send)
