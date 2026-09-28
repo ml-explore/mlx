@@ -52,7 +52,7 @@ template <typename T>
     const device float* lse [[buffer(2)]], // [B, H, qL]
     const device float* odo [[buffer(3)]], // [B, H, qL]
     device T* dS [[buffer(4)]], // [BH, bq, bk]
-    device T* Pt [[buffer(5)]], // [BH, bk, bq]
+    device T* P [[buffer(5)]], // [BH, bk, bq]
     const constant SDPAVJPTileParams& p [[buffer(6)]],
     uint3 gid [[thread_position_in_grid]]) {
   int col = int(gid.x);
@@ -63,7 +63,6 @@ template <typename T>
   }
 
   size_t sbase = (size_t(bh) * size_t(p.bq) + size_t(row)) * size_t(p.bk);
-  size_t tbase = (size_t(bh) * size_t(p.bk) + size_t(col)) * size_t(p.bq);
   size_t qi = size_t(bh) * size_t(p.qL) + size_t(p.i0 + row);
 
   float l = lse[qi];
@@ -81,7 +80,7 @@ template <typename T>
   float dsv = pv * (static_cast<float>(dP[sbase + col]) - dlt) * p.scale;
 
   dS[sbase + col] = static_cast<T>(dsv);
-  Pt[tbase + row] = static_cast<T>(pv);
+  P[sbase + col] = static_cast<T>(pv);
 }
 
 template <typename T, bool Accum>

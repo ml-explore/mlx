@@ -980,8 +980,7 @@ void sdpa_vjp_blocked(
   // Temporary tiles
   array s_buf = vjp_alloc({BH, BQ, BK}, ctype, s);
   array dp_buf = vjp_alloc({BH, BQ, BK}, ctype, s);
-  array dst_buf = vjp_alloc({BH, BK, BQ}, ctype, s);
-  array pt_buf = vjp_alloc({BH, BK, BQ}, ctype, s);
+  array p_buf = vjp_alloc({BH, BQ, BK}, ctype, s);
 
   // Output of the gemms
   array dq_tile = vjp_alloc({BH, BQ, D}, ctype, s);
@@ -1092,7 +1091,7 @@ void sdpa_vjp_blocked(
           v_bs);
 
       array ds_v = vjp_view(s_buf, {BH, bq_len, bk_len});
-      array pt_v = vjp_view(pt_buf, {BH, bk_len, bq_len});
+      array p_v = vjp_view(p_buf, {BH, bq_len, bk_len});
 
       SDPAVJPTileParams params{
           bq_len, bk_len, qL, i0, j0, scale, diag_off, causal ? 1 : 0};
@@ -1104,7 +1103,7 @@ void sdpa_vjp_blocked(
       compute_encoder.set_input_array(lse, 2);
       compute_encoder.set_input_array(odo, 3);
       compute_encoder.set_output_array(s_v, 4);
-      compute_encoder.set_output_array(pt_v, 5);
+      compute_encoder.set_output_array(p_v, 5);
       compute_encoder.set_bytes(params, 6);
       compute_encoder.dispatch_threads(
           MTL::Size(bk_len, bq_len, BH), MTL::Size(32, 8, 1));
@@ -1145,7 +1144,7 @@ void sdpa_vjp_blocked(
           D,
           bq_len,
           BH,
-          bq_len,
+          bk_len,
           D,
           true,
           false,
@@ -1159,16 +1158,16 @@ void sdpa_vjp_blocked(
       steel_matmul(
           s,
           d,
-          pt_v,
+          p_v,
           o_sl,
           dv_v,
           bk_len,
           Dv,
           bq_len,
           BH,
-          bq_len,
+          bk_len,
           Dv,
-          false,
+          true,
           false,
           copies,
           bshape,
