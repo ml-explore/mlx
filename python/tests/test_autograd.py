@@ -4,6 +4,7 @@ import gc
 import itertools
 import math
 import unittest
+import weakref
 
 import mlx.core as mx
 import mlx_tests
@@ -1562,6 +1563,31 @@ class TestAutograd(mlx_tests.MLXTestCase):
             self.assertTrue(
                 mx.allclose(hvp(f, y, w), numerical_hvp(f, y, w), atol=1e-3)
             )
+
+    def test_transform_releases_captures(self):
+        for transform in (
+            mx.compile,
+            mx.grad,
+            mx.value_and_grad,
+            mx.vmap,
+            mx.checkpoint,
+        ):
+            for cycle in (False, True):
+                with self.subTest(transform=transform, cycle=cycle):
+                    captured = mx.array(2.0)
+                    ref = weakref.ref(captured)
+
+                    def fun(x, captured=captured):
+                        return (x * captured).sum()
+
+                    fn = transform(fun)
+                    if cycle:
+                        fun.wrapped = fn
+                    result = fn(mx.ones((2, 3)))
+                    mx.eval(result)
+                    del result, fn, fun, captured
+                    gc.collect()
+                    self.assertIsNone(ref())
 
 
 if __name__ == "__main__":

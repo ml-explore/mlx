@@ -32,8 +32,6 @@ nb::callable mlx_func(F func, const nb::callable& orig_func, Deps&&... deps) {
       return nb::cast(func(args, kwargs));
     }
   };
-  std::unique_ptr<PyFunction> callback =
-      std::make_unique<Callback>(std::move(func));
   return mlx_func(
-      std::move(callback), orig_func, std::vector<PyObject*>{deps.ptr()...});
+      std::make_unique<Callback>(std::move(func)), orig_func, {deps.ptr()...});
 }
