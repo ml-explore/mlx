@@ -34,7 +34,7 @@ bool fast::GatedDeltaUpdate::use_fallback(
   return true;
 }
 
-bool GatedDeltaUpdateVJP::use_fallback(
+bool fast::GatedDeltaUpdateVJP::use_fallback(
     const int Hk,
     const int Dk,
     const int Hv,
