@@ -15,14 +15,14 @@ namespace mlx::core::fast {
 namespace {
 
 inline int gated_delta_chunk_size(int T) {
-  int C = metal::is_nax_available() ? 16 : 8;
-  C = T > 8 ? C : 1;
-  return env::get_var("GATED_DELTA_CHUNK", C);
+  const bool nax = metal::is_nax_available();
+  const int C = env::get_var("GATED_DELTA_CHUNK", T > 8 ? (nax ? 16 : 8) : 1);
+  return (C == 16 && !nax) ? 8 : C;
 }
 
-inline int gated_delta_chunk_size_vjp(int T) {
-  int C = metal::is_nax_available() ? 16 : 1;
-  return env::get_var("GATED_DELTA_CHUNK_VJP", C);
+inline int gated_delta_chunk_size_vjp() {
+  const bool nax = metal::is_nax_available();
+  return nax ? env::get_var("GATED_DELTA_CHUNK_VJP", 16) : 1;
 }
 
 inline int gated_delta_ckpt(int chunk) {
@@ -257,7 +257,7 @@ void GatedDeltaUpdateVJP::eval_gpu(
   int Dv = v.shape(3);
 
   // 16 = chunked NAX, anything else = sequential.
-  int C = gated_delta_chunk_size_vjp(T);
+  int C = gated_delta_chunk_size_vjp();
   const bool chunked = (C == 16);
 
   const int n_chunks = (T + 15) / 16;
