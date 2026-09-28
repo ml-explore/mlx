@@ -133,8 +133,8 @@ void GatedDeltaUpdate::eval_gpu(
       std::string base_name = "gated_delta_fused_nax_" + suffix + "_" +
           std::to_string(C) + "_" + std::to_string(ckpt);
 
-      auto delta_kernel =
-          get_gated_delta_nax_kernel(d, base_name, base_name, func_consts);
+      auto delta_kernel = get_gated_delta_nax_kernel(
+          d, base_name, base_name, func_consts, q, Dk, Dv, Hk, Hv, C, ckpt);
 
       compute_encoder.set_compute_pipeline_state(delta_kernel);
       compute_encoder.set_input_array(q, 0);
@@ -333,7 +333,17 @@ void GatedDeltaUpdateVJP::eval_gpu(
         std::string base_name = "gated_delta_fused_nax_" + suffix + ckpt_suffix;
 
         auto delta_kernel = get_gated_delta_nax_kernel(
-            d, base_name, base_name + "_save", save_consts);
+            d,
+            base_name,
+            base_name + "_save",
+            save_consts,
+            q,
+            Dk,
+            Dv,
+            Hk,
+            Hv,
+            C,
+            ckpt);
 
         compute_encoder.set_compute_pipeline_state(delta_kernel);
         compute_encoder.set_input_array(q, 0);
@@ -358,8 +368,19 @@ void GatedDeltaUpdateVJP::eval_gpu(
         std::string base_name =
             "gated_delta_vjp_fused_nax_" + suffix + ckpt_suffix;
 
-        auto delta_kernel =
-            get_gated_delta_vjp_nax_kernel(d, base_name, base_name, no_consts);
+        auto delta_kernel = get_gated_delta_vjp_nax_kernel(
+            d,
+            base_name,
+            base_name,
+            no_consts,
+            q,
+            Dk,
+            Dv,
+            Hk,
+            Hv,
+            C,
+            ckpt,
+            false);
 
         compute_encoder.set_compute_pipeline_state(delta_kernel);
         compute_encoder.set_input_array(q, 0);
@@ -392,8 +413,19 @@ void GatedDeltaUpdateVJP::eval_gpu(
         std::string base_name = "gated_delta_dgamma_to_dg_" +
             get_type_string(q.dtype()) + "_" + std::to_string(C);
 
-        auto dgamma_kernel =
-            get_gated_delta_vjp_nax_kernel(d, base_name, base_name, no_consts);
+        auto dgamma_kernel = get_gated_delta_vjp_nax_kernel(
+            d,
+            base_name,
+            base_name,
+            no_consts,
+            q,
+            Dk,
+            Dv,
+            Hk,
+            Hv,
+            C,
+            ckpt,
+            true);
 
         compute_encoder.set_compute_pipeline_state(dgamma_kernel);
         compute_encoder.set_input_array(g, 0);
