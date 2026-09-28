@@ -213,7 +213,11 @@ CommandEncoder::CommandEncoder(Device& d)
 }
 
 CommandEncoder::~CommandEncoder() {
-  synchronize();
+  try {
+    synchronize();
+  } catch (...) {
+    // Synchronizing can fail when the CUDA runtime is shutting down.
+  }
   worker_->stop();
 }
 
