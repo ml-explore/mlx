@@ -1094,7 +1094,6 @@ void sdpa_vjp_blocked(
           v_bs);
 
       array ds_v = vjp_view(s_buf, {BH, bq_len, bk_len});
-      array dst_v = vjp_view(dst_buf, {BH, bk_len, bq_len});
       array pt_v = vjp_view(pt_buf, {BH, bk_len, bq_len});
 
       SDPAVJPTileParams params{
@@ -1107,9 +1106,8 @@ void sdpa_vjp_blocked(
       compute_encoder.set_input_array(lse, 2);
       compute_encoder.set_input_array(odo, 3);
       compute_encoder.set_output_array(s_v, 4);
-      compute_encoder.set_output_array(dst_v, 5);
-      compute_encoder.set_output_array(pt_v, 6);
-      compute_encoder.set_bytes(params, 7);
+      compute_encoder.set_output_array(pt_v, 5);
+      compute_encoder.set_bytes(params, 6);
       compute_encoder.dispatch_threads(
           MTL::Size(bk_len, bq_len, BH), MTL::Size(32, 8, 1));
 
@@ -1142,7 +1140,7 @@ void sdpa_vjp_blocked(
       steel_matmul(
           s,
           d,
-          dst_v,
+          ds_v,
           q_sl,
           dk_v,
           bk_len,
@@ -1151,7 +1149,7 @@ void sdpa_vjp_blocked(
           BH,
           bq_len,
           D,
-          false,
+          true,
           false,
           copies,
           bshape,
