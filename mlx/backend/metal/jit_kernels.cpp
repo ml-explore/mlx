@@ -42,6 +42,9 @@ const char* steel_attention_nax() {
 const char* gated_delta_update_nax() {
   return "";
 }
+const char* gated_delta_update_nax_vjp() {
+  return "";
+}
 } // namespace metal
 #endif // MLX_METAL_NO_NAX
 
