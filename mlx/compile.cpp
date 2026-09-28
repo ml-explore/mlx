@@ -304,8 +304,7 @@ class CompileCache {
  public:
   struct CacheEntry {
     CacheEntry(std::optional<Stream> stream, bool shapeless)
-        : stream(stream), shapeless(shapeless) {};
-    // The default stream when the function was traced, if there was one.
+        : stream(stream), shapeless(shapeless) {}
     std::optional<Stream> stream;
     bool shapeless;
     std::vector<array> inputs;
@@ -372,8 +371,7 @@ class CompileCache {
     // Loop over entries and check:
     // - Default stream and device match the entry's default stream
     // - Inputs match i.e. shapes and types must be equal.
-    // The default stream is only created when the function actually uses it.
-    auto stream = default_stream_if_exists(default_device());
+    auto stream = peek_default_stream(default_device());
     for (CacheEntry& entry : entries) {
       // Check that the default stream and device match
       if (entry.stream != stream) {
@@ -1155,8 +1153,6 @@ ArrayFnWithExtra compile(
       // Trace to build the graph
       std::tie(entry.inputs, entry.outputs, entry.extra) =
           compile_trace(fun, inputs, shapeless);
-      // Tracing may have created the default stream.
-      entry.stream = default_stream_if_exists(default_device());
 
       // DFS the graph and get a tape, and a map of array id to (parent,
       // position in parent inputs)

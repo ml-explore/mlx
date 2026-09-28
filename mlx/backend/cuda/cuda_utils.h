@@ -26,8 +26,7 @@ class CudaHandle {
   }
 
   ~CudaHandle() {
-    // Errors are ignored since destructors can not throw, and destroying can
-    // fail when the CUDA runtime is shutting down.
+    // Skip error check to avoid throwing in destructors.
     if (handle_ != nullptr) {
       Destroy(handle_);
     }

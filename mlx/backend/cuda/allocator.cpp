@@ -67,7 +67,6 @@ inline void* unified_malloc(size_t size) {
   return data;
 }
 
-// Errors are ignored since memory is freed in destructors, which can not throw.
 inline void unified_free(void* data) {
   if (supports_managed_memory()) {
     cudaFree(data);
@@ -320,8 +319,7 @@ void CudaAllocator::free_async(CudaBuffer& buf, cudaStream_t stream) {
   if (buf.device == -1) {
     unified_free(buf.data);
   } else {
-    // Free asynchronously when memory pools is supported. Errors are ignored
-    // since memory is freed in destructors, which can not throw.
+    // Free asynchronously when memory pools is supported.
     if (mem_pools_[buf.device]) {
       if (!stream) {
         stream = free_streams_[buf.device];

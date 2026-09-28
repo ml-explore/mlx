@@ -232,7 +232,6 @@ AtomicEvent::AtomicEvent(Device& d) {
     cuda_free = cudaFree;
     coherent_ = false;
   }
-  // Errors are ignored since the deleter may run after CUDA is shut down.
   buf_ = std::shared_ptr<void>(buf, [cuda_free](void* buf) { cuda_free(buf); });
   if (coherent_) {
     *ptr() = 0;

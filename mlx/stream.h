@@ -31,7 +31,7 @@ struct MLX_API ThreadLocalStream : public Stream {
 MLX_API Stream default_stream(Device d);
 
 /** Get the default stream of current thread if it exists. */
-MLX_API std::optional<Stream> default_stream_if_exists(Device d);
+MLX_API std::optional<Stream> peek_default_stream(Device d);
 
 /** Make the stream the default for its device on current thread. */
 MLX_API void set_default_stream(Stream s);

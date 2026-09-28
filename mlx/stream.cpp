@@ -50,7 +50,7 @@ Stream default_stream(Device d) {
   return s.value();
 }
 
-std::optional<Stream> default_stream_if_exists(Device d) {
+std::optional<Stream> peek_default_stream(Device d) {
   return default_stream_storage(d);
 }
 
