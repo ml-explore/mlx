@@ -132,7 +132,8 @@ template <typename T, bool Accum>
   instantiate_odo(in_type, 96);         \
   instantiate_odo(in_type, 128);        \
   instantiate_odo(in_type, 192);        \
-  instantiate_odo(in_type, 256);
+  instantiate_odo(in_type, 256);        \
+  instantiate_odo(in_type, 512);        \
 
 instantiate_odo_shapes(bfloat16_t);
 instantiate_odo_shapes(float16_t);
