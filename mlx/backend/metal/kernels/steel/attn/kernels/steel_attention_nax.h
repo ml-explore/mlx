@@ -923,7 +923,7 @@ template <
     rcp[i] = 1.f / sum_score[i];
   }
 
-  if (save_lse && d_half == 0 && sn == 0) {
+  if (save_lse && d_group == 0 && sn == 0) {
     const int lse_row_base = int(tid.x) * BQ + tm;
     const int lse_head_off = (int(tid.z) * params->H + int(tid.y)) * params->qL;
 

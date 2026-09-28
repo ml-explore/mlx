@@ -35,8 +35,7 @@ void sdpa_full_self_attention_nax(
   int bq = bd == 512 ? 32 : 64;
   int bk = 32;
 
-
-  bool split_d = (bd == 256 || bd == 512) && !sinks.has_value() && (lse == nullptr);
+  bool split_d = (bd == 256 || bd == 512);
   int wm = bd == 512 ? 2 : 4;
   int wn = split_d ? bd / 128 : 1;
   int B = q.shape(0);
