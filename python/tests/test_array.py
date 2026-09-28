@@ -1080,6 +1080,15 @@ class TestArray(mlx_tests.MLXTestCase):
         b = mx.array(b).astype(mx.float32)
         self.assertEqual(b.dtype, mx.float32)
 
+    def test_large_cpu_vector_type_cast(self):
+        values = np.arange(262144 + 37, dtype=np.int32) % 256
+        with mx.stream(mx.cpu):
+            source = mx.array(values).astype(mx.float32)
+            for dtype in (mx.float16, mx.bfloat16):
+                with self.subTest(dtype=str(dtype)):
+                    converted = source.astype(dtype).astype(mx.float32)
+                    self.assertTrue(np.array_equal(np.array(converted), values))
+
     def test_array_iteration(self):
         a = mx.array([0, 1, 2])
 

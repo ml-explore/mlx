@@ -242,7 +242,7 @@ __global__ void rope_freqs(
 
 namespace fast {
 
-bool RoPE::use_fallback(Stream s) {
+bool RoPE::use_fallback(Dtype, Stream s) {
   return s.device == Device::cpu;
 }
 

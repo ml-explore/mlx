@@ -1,12 +1,15 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
+#include <algorithm>
 #include <numeric>
+#include <type_traits>
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
+#include "mlx/backend/cpu/threading/common.h"
 #include "mlx/dtype_utils.h"
 
 namespace mlx::core {
@@ -29,10 +32,29 @@ void copy_vector(const array& src, array& dst) {
   auto size = src.data_size();
   if constexpr (std::is_same_v<SrcT, DstT>) {
     std::copy(src_ptr, src_ptr + size, dst_ptr);
-  } else {
+  } else if constexpr (
+      std::is_same_v<SrcT, complex64_t> && std::is_same_v<DstT, bool>) {
     std::transform(src_ptr, src_ptr + size, dst_ptr, [](SrcT x) {
       return static_cast<DstT>(x);
     });
+  } else {
+    auto copy_range = [&](size_t begin, size_t end) {
+      size_t i = begin;
+      constexpr int S = std::min(simd::max_size<SrcT>, simd::max_size<DstT>);
+      if constexpr (S > 1) {
+        for (; i + S <= end; i += S) {
+          simd::store(
+              dst_ptr + i,
+              simd::Simd<DstT, S>(simd::load<SrcT, S>(src_ptr + i)));
+        }
+      }
+      for (; i < end; ++i) {
+        dst_ptr[i] = static_cast<DstT>(src_ptr[i]);
+      }
+    };
+    auto& pool = cpu::ThreadPool::instance();
+    cpu::parallel_for_range(
+        cpu::effective_threads(size, pool.max_threads()), size, copy_range);
   }
 }
 
@@ -115,21 +137,37 @@ void copy_general_general(
 
   auto size = std::accumulate(
       shape.begin(), shape.end(), int64_t{1}, std::multiplies<int64_t>());
-  ContiguousIterator in(shape, strides[0], ndim - 3);
-  ContiguousIterator out(shape, strides[1], ndim - 3);
+  if (size == 0) {
+    return;
+  }
   auto stride = std::accumulate(
       shape.end() - 3, shape.end(), 1, std::multiplies<int64_t>());
-  for (int64_t elem = 0; elem < size; elem += stride) {
-    copy_dims<SrcT, DstT, 3>(
-        src_ptr + in.loc,
-        dst_ptr + out.loc,
-        shape,
-        strides[0],
-        strides[1],
-        ndim - 3);
-    in.step();
-    out.step();
+  size_t num_iterations = static_cast<size_t>(size / stride);
+
+  auto& pool = cpu::ThreadPool::instance();
+  int n_threads =
+      cpu::effective_threads(static_cast<size_t>(size), pool.max_threads());
+  if (num_iterations < static_cast<size_t>(n_threads)) {
+    n_threads = 1;
   }
+  cpu::parallel_for_range(
+      n_threads, num_iterations, [&](size_t begin, size_t end) {
+        ContiguousIterator in(shape, strides[0], ndim - 3);
+        ContiguousIterator out(shape, strides[1], ndim - 3);
+        in.seek(static_cast<int64_t>(begin));
+        out.seek(static_cast<int64_t>(begin));
+        for (size_t iter = begin; iter < end; ++iter) {
+          copy_dims<SrcT, DstT, 3>(
+              src_ptr + in.loc,
+              dst_ptr + out.loc,
+              shape,
+              strides[0],
+              strides[1],
+              ndim - 3);
+          in.step();
+          out.step();
+        }
+      });
 }
 
 template <typename SrcT, typename DstT>

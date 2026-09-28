@@ -1,4 +1,4 @@
-# Copyright © 2023-2024 Apple Inc.
+# Copyright © 2023-2026 Apple Inc.
 
 import gc
 import inspect
@@ -60,7 +60,11 @@ class TestCompile(mlx_tests.MLXTestCase):
             expected = mx.sigmoid(xd)
             fused = mx.compile(lambda a: mx.sigmoid(a) * 1.0)(xd)
             mx.eval(expected, fused)
-            self.assertTrue(mx.array_equal(fused, expected))
+            if mx.default_device() == mx.cpu:
+                # Highway eager and AVX2 JIT can differ by one float32 ULP.
+                self.assertTrue(mx.allclose(fused, expected, rtol=0, atol=2e-7))
+            else:
+                self.assertTrue(mx.array_equal(fused, expected))
 
     def test_compile_nonfinite_constants(self):
         # Regression test: a non-finite scalar constant (NaN / infinity) baked
@@ -1672,6 +1676,14 @@ class TestCompile(mlx_tests.MLXTestCase):
             x = mx.array([1, 2, 3], dtype)
             self.assertTrue(mx.array_equal(mx.compile(fun)(x), fun(x)))
 
+    def test_compile_mixed_width(self):
+        def fun(x):
+            return x.astype(mx.float32) * 2
+
+        x = mx.arange(32, dtype=mx.uint64)
+        for value in (x, x.reshape(4, 8).T):
+            self.assertTrue(mx.array_equal(mx.compile(fun)(value), fun(value)))
+
     def test_compiled_subnormal_bool_cast(self):
         f32_sub = mx.array(np.array([0x00000001] * 4, dtype=np.uint32)).view(mx.float32)
         f16_sub = mx.array(np.array([0x0001] * 4, dtype=np.uint16)).view(mx.float16)
@@ -1704,6 +1716,194 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         x = mx.array([1.0, float("nan"), 3.0])
         self.assertTrue(mx.array_equal(mx.compile(fun)(x), mx.array([False, True])))
+
+    def test_compile_large_contiguous(self):
+        """Test compiled kernels on large arrays (triggers parallel dispatch)."""
+        N = 500_000  # > 256K threshold for threading
+
+        def fn(x):
+            return mx.exp(x) + 1.0
+
+        x = mx.random.normal((N,))
+        mx.eval(x)
+
+        compiled_fn = mx.compile(fn)
+        out = compiled_fn(x)
+        expected = fn(x)
+        self.assertTrue(mx.allclose(out, expected, atol=1e-5))
+
+    def test_compile_inner_broadcast_stride(self):
+        x = mx.arange(16, dtype=mx.float32).reshape(16, 1)
+        broadcast = mx.broadcast_to(x, (16, 32))
+        fn = lambda a: (a + 1.0) * 2.0
+        self.assertTrue(mx.array_equal(mx.compile(fn)(broadcast), fn(broadcast)))
+
+    def test_compile_large_with_scalar_broadcast(self):
+        """Scalar broadcasts must not be offset in parallel dispatch."""
+        N = 500_000
+
+        def fn(x, scale):
+            return x * scale
+
+        x = mx.random.normal((N,))
+        scale = mx.array(2.5)  # scalar
+        mx.eval(x, scale)
+
+        compiled_fn = mx.compile(fn)
+        out = compiled_fn(x, scale)
+        expected = fn(x, scale)
+        self.assertTrue(mx.allclose(out, expected, atol=1e-5))
+
+    def test_compile_large_multi_output(self):
+        """Multiple outputs with large arrays and parallel dispatch."""
+        N = 500_000
+
+        def fn(x):
+            return mx.exp(x), mx.sin(x)
+
+        x = mx.random.normal((N,))
+        mx.eval(x)
+
+        compiled_fn = mx.compile(fn)
+        out_a, out_b = compiled_fn(x)
+        exp_a, exp_b = fn(x)
+        self.assertTrue(mx.allclose(out_a, exp_a, atol=1e-5))
+        self.assertTrue(mx.allclose(out_b, exp_b, atol=1e-5))
+
+    def test_compile_large_dtypes(self):
+        """Large arrays with different dtypes for parallel dispatch."""
+        N = 500_000
+
+        def fn(x):
+            return x + x
+
+        for dtype in [mx.float32, mx.float16, mx.int32]:
+            if dtype == mx.int32:
+                x = mx.random.randint(0, 100, (N,))
+            else:
+                x = mx.random.normal((N,)).astype(dtype)
+            mx.eval(x)
+
+            compiled_fn = mx.compile(fn)
+            out = compiled_fn(x)
+            expected = fn(x)
+            self.assertTrue(mx.array_equal(out, expected))
+
+    def test_compile_small_no_threading(self):
+        """Small arrays should still work (single-threaded path)."""
+
+        def fn(x, y):
+            return mx.exp(x + y)
+
+        x = mx.array([1.0, 2.0, 3.0])
+        y = mx.array([0.5, 0.5, 0.5])
+        mx.eval(x, y)
+
+        compiled_fn = mx.compile(fn)
+        out = compiled_fn(x, y)
+        expected = fn(x, y)
+        self.assertTrue(mx.allclose(out, expected, atol=1e-6))
+
+    def test_compile_strided(self):
+        """Transposed (non-contiguous) inputs exercise strided code generation."""
+
+        def fn(x, y):
+            return x + y
+
+        a = mx.arange(12, dtype=mx.float32).reshape(3, 4)
+        # Transpose makes strides non-contiguous
+        a_t = a.T
+        b = mx.ones((4, 3), dtype=mx.float32)
+        mx.eval(a_t, b)
+
+        compiled_fn = mx.compile(fn)
+        out = compiled_fn(a_t, b)
+        expected = fn(a_t, b)
+        self.assertTrue(mx.array_equal(out, expected))
+
+    def test_compile_bfloat16(self):
+        """Compiled kernel with bfloat16 dtype."""
+
+        def fn(x, y):
+            return x * y + x
+
+        x = mx.ones((64,), dtype=mx.bfloat16) * 2.0
+        y = mx.ones((64,), dtype=mx.bfloat16) * 3.0
+        mx.eval(x, y)
+
+        compiled_fn = mx.compile(fn)
+        out = compiled_fn(x, y)
+        expected = fn(x, y)
+        self.assertTrue(mx.allclose(out, expected, atol=1e-2))
+        self.assertEqual(out.dtype, mx.bfloat16)
+
+    def test_compile_large_strided(self):
+        """Large transposed array to trigger parallel strided dispatch."""
+
+        def fn(x):
+            return x * 2.0
+
+        # 500K+ elements, transposed for non-contiguous strides
+        a = mx.arange(512 * 1024, dtype=mx.float32).reshape(512, 1024)
+        a_t = a.T
+        mx.eval(a_t)
+
+        compiled_fn = mx.compile(fn)
+        out = compiled_fn(a_t)
+        expected = fn(a_t)
+        self.assertTrue(mx.array_equal(out, expected))
+
+    def test_compile_strided_multidim(self):
+        """3D array with permuted axes exercises multi-dimensional strided path."""
+
+        def fn(x, y):
+            return x + y
+
+        a = mx.arange(2 * 3 * 4, dtype=mx.float32).reshape(2, 3, 4)
+        # Permute axes: (2,3,4) -> (4,2,3)
+        a_p = mx.transpose(a, axes=(2, 0, 1))
+        b = mx.ones((4, 2, 3), dtype=mx.float32)
+        mx.eval(a_p, b)
+
+        compiled_fn = mx.compile(fn)
+        out = compiled_fn(a_p, b)
+        expected = fn(a_p, b)
+        self.assertTrue(mx.array_equal(out, expected))
+
+    def test_compile_strided_broadcast(self):
+        """Strided array combined with scalar broadcast in a compiled kernel."""
+
+        def fn(x, s):
+            return x + s
+
+        a = mx.arange(12, dtype=mx.float32).reshape(3, 4).T
+        s = mx.array(10.0)
+        mx.eval(a, s)
+
+        compiled_fn = mx.compile(fn)
+        out = compiled_fn(a, s)
+        expected = fn(a, s)
+        self.assertTrue(mx.array_equal(out, expected))
+
+    def test_compile_bypass_threshold(self):
+        """Arrays at the compile bypass boundary still produce correct results."""
+
+        def fn(x):
+            return x + 1.0
+
+        # At exactly the threshold (262144 = 2^18)
+        x_at = mx.ones(262144, dtype=mx.float32)
+        # Just below threshold
+        x_below = mx.ones(262143, dtype=mx.float32)
+        # Just above threshold
+        x_above = mx.ones(262145, dtype=mx.float32)
+        mx.eval(x_at, x_below, x_above)
+
+        compiled_fn = mx.compile(fn)
+        for x in [x_at, x_below, x_above]:
+            out = compiled_fn(x)
+            expected = fn(x)
+            self.assertTrue(mx.array_equal(out, expected))
 
 
 if __name__ == "__main__":

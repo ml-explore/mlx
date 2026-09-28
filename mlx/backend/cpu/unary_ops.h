@@ -1,10 +1,11 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2024-2026 Apple Inc.
 
 #pragma once
 
 #include <stdint.h>
 #include <cmath>
 #include <complex>
+#include <cstring>
 
 #include "mlx/backend/cpu/simd/simd.h"
 
@@ -77,8 +78,7 @@ struct Real {
 struct Sigmoid {
   template <int N, typename T>
   Simd<T, N> operator()(Simd<T, N> x) {
-    auto y = 1.0f / (1.0f + simd::exp(simd::abs(x)));
-    return simd::select(x < Simd<T, N>{0}, y, Simd<T, N>{1} - y);
+    return simd::sigmoid(x);
   }
   SINGLE()
 };
@@ -88,12 +88,12 @@ struct Sign {
   Simd<T, N> operator()(Simd<T, N> x) {
     auto z = Simd<T, N>{0};
     auto o = Simd<T, N>{1};
-    auto m = Simd<T, N>{-1};
     if constexpr (std::is_unsigned_v<T>) {
       return simd::select(x == z, z, o);
     } else if constexpr (std::is_same_v<T, complex64_t>) {
       return simd::select(x == z, x, Simd<T, N>(x / simd::abs(x)));
     } else {
+      auto m = Simd<T, N>{-1};
       return simd::select(x < z, m, simd::select(x > z, o, z));
     }
   }
@@ -160,12 +160,18 @@ struct FromFP8 {
     Simd<float, N> out;
     if constexpr (simd::max_size<float16_t> >= N) {
       auto converted = *(Simd<float16_t, N>*)(&u);
-      out = converted * 256.0;
+      out = Simd<float, N>(converted) * 256.0f;
     } else {
+      // No wide-enough float16 vector on this target; convert lanewise.
+      alignas(64) uint16_t bits[N];
+      simd::store(bits, u);
+      alignas(64) float tmp[N];
       for (int i = 0; i < N; ++i) {
-        auto converted = *(float16_t*)(&u[i]);
-        out[i] = converted * 256.0;
+        float16_t h;
+        std::memcpy(&h, &bits[i], sizeof(h));
+        tmp[i] = static_cast<float>(h) * 256.0f;
       }
+      out = simd::load<float, N>(tmp);
     }
     return out;
   }

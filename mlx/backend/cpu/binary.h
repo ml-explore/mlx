@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #pragma once
 #include <cassert>
@@ -10,6 +10,7 @@
 
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
+#include "mlx/backend/cpu/threading/common.h"
 
 namespace mlx::core {
 
@@ -18,6 +19,11 @@ struct VectorScalar {
   template <typename T, typename U>
   void operator()(const T* a, const T* b, U* dst, size_t size) {
     T scalar = *b;
+    process_chunk(a, scalar, dst, size);
+  }
+
+  template <typename T, typename U>
+  static void process_chunk(const T* a, T scalar, U* dst, size_t size) {
     constexpr int N = simd::max_size<T>;
     while (size >= N) {
       simd::store(dst, Op{}(simd::load<T, N>(a), simd::Simd<T, N>(scalar)));
@@ -38,6 +44,11 @@ struct ScalarVector {
   template <typename T, typename U>
   void operator()(const T* a, const T* b, U* dst, size_t size) {
     T scalar = *a;
+    process_chunk(scalar, b, dst, size);
+  }
+
+  template <typename T, typename U>
+  static void process_chunk(T scalar, const T* b, U* dst, size_t size) {
     constexpr int N = simd::max_size<T>;
     while (size >= N) {
       simd::store(dst, Op{}(simd::Simd<T, N>(scalar), simd::load<T, N>(b)));
@@ -57,6 +68,11 @@ template <typename Op>
 struct VectorVector {
   template <typename T, typename U>
   void operator()(const T* a, const T* b, U* dst, size_t size) {
+    process_chunk(a, b, dst, size);
+  }
+
+  template <typename T, typename U>
+  static void process_chunk(const T* a, const T* b, U* dst, size_t size) {
     constexpr int N = simd::max_size<T>;
     while (size >= N) {
       simd::store(dst, Op{}(simd::load<T, N>(a), simd::load<T, N>(b)));
@@ -117,6 +133,9 @@ void binary_op_dispatch_dims(
     const Strides& a_strides,
     const Strides& b_strides,
     const Strides& out_strides) {
+  if (size == 0) {
+    return;
+  }
   switch (dim) {
     case 1:
       binary_op_dims<T, U, Op, 1, Strided>(
@@ -132,22 +151,35 @@ void binary_op_dispatch_dims(
       return;
   }
 
-  ContiguousIterator a_it(shape, a_strides, dim - 3);
-  ContiguousIterator b_it(shape, b_strides, dim - 3);
   auto stride = out_strides[dim - 4];
-  for (int64_t elem = 0; elem < size; elem += stride) {
-    binary_op_dims<T, U, Op, 3, Strided>(
-        a + a_it.loc,
-        b + b_it.loc,
-        out + elem,
-        shape,
-        a_strides,
-        b_strides,
-        out_strides,
-        dim - 3);
-    a_it.step();
-    b_it.step();
+  size_t num_iterations = static_cast<size_t>(size / stride);
+
+  auto& pool = cpu::ThreadPool::instance();
+  int n_threads =
+      cpu::effective_threads(static_cast<size_t>(size), pool.max_threads());
+  if (num_iterations < static_cast<size_t>(n_threads)) {
+    n_threads = 1;
   }
+  cpu::parallel_for_range(
+      n_threads, num_iterations, [&](size_t begin, size_t end) {
+        ContiguousIterator a_it(shape, a_strides, dim - 3);
+        ContiguousIterator b_it(shape, b_strides, dim - 3);
+        a_it.seek(static_cast<int64_t>(begin));
+        b_it.seek(static_cast<int64_t>(begin));
+        for (size_t iter = begin; iter < end; ++iter) {
+          binary_op_dims<T, U, Op, 3, Strided>(
+              a + a_it.loc,
+              b + b_it.loc,
+              out + iter * stride,
+              shape,
+              a_strides,
+              b_strides,
+              out_strides,
+              dim - 3);
+          a_it.step();
+          b_it.step();
+        }
+      });
 }
 
 template <typename T, typename U, typename Op>
@@ -164,19 +196,66 @@ void binary_op(const array& a, const array& b, array& out, BinaryOpType bopt) {
 
   // The full computation is scalar vector so delegate to the op
   if (bopt == BinaryOpType::ScalarVector) {
-    ScalarVector<Op>{}(a_ptr, b_ptr, out_ptr, b.data_size());
+    size_t size = b.data_size();
+    auto& pool = cpu::ThreadPool::instance();
+    int n_threads = cpu::effective_threads(size, pool.max_threads());
+    if (n_threads > 1) {
+      T scalar = *a_ptr;
+      pool.parallel_for(n_threads, [&](int tid, int nth) {
+        size_t chunk = (size + nth - 1) / nth;
+        size_t start = chunk * tid;
+        size_t end = std::min(start + chunk, size);
+        if (start < end) {
+          ScalarVector<Op>::template process_chunk<T, U>(
+              scalar, b_ptr + start, out_ptr + start, end - start);
+        }
+      });
+    } else {
+      ScalarVector<Op>{}(a_ptr, b_ptr, out_ptr, size);
+    }
     return;
   }
 
   // The full computation is vector scalar so delegate to the op
   if (bopt == BinaryOpType::VectorScalar) {
-    VectorScalar<Op>{}(a_ptr, b_ptr, out_ptr, a.data_size());
+    size_t size = a.data_size();
+    auto& pool = cpu::ThreadPool::instance();
+    int n_threads = cpu::effective_threads(size, pool.max_threads());
+    if (n_threads > 1) {
+      T scalar = *b_ptr;
+      pool.parallel_for(n_threads, [&](int tid, int nth) {
+        size_t chunk = (size + nth - 1) / nth;
+        size_t start = chunk * tid;
+        size_t end = std::min(start + chunk, size);
+        if (start < end) {
+          VectorScalar<Op>::template process_chunk<T, U>(
+              a_ptr + start, scalar, out_ptr + start, end - start);
+        }
+      });
+    } else {
+      VectorScalar<Op>{}(a_ptr, b_ptr, out_ptr, size);
+    }
     return;
   }
 
   // The full computation is vector vector so delegate to the op
   if (bopt == BinaryOpType::VectorVector) {
-    VectorVector<Op>{}(a_ptr, b_ptr, out_ptr, a.size());
+    size_t size = a.size();
+    auto& pool = cpu::ThreadPool::instance();
+    int n_threads = cpu::effective_threads(size, pool.max_threads());
+    if (n_threads > 1) {
+      pool.parallel_for(n_threads, [&](int tid, int nth) {
+        size_t chunk = (size + nth - 1) / nth;
+        size_t start = chunk * tid;
+        size_t end = std::min(start + chunk, size);
+        if (start < end) {
+          VectorVector<Op>::template process_chunk<T, U>(
+              a_ptr + start, b_ptr + start, out_ptr + start, end - start);
+        }
+      });
+    } else {
+      VectorVector<Op>{}(a_ptr, b_ptr, out_ptr, size);
+    }
     return;
   }
 

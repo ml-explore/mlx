@@ -22,6 +22,12 @@ class JitCompiler {
       const std::string& source_file_name,
       const std::string& shared_lib_name);
 
+  // Identify everything besides the source text that determines the machine
+  // code: which compiler was selected and the ISA flags it is given. Both are
+  // resolved at runtime, so the same MLX build can compile the same source two
+  // different ways. Callers must fold this into any on-disk cache key.
+  static std::string toolchain_id();
+
   // Run a command and get its output.
   static std::string exec(const std::string& cmd);
 };

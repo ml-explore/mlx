@@ -164,7 +164,13 @@ void Concatenate::eval_cpu(const std::vector<array>& inputs, array& out) {
     size_t data_offset = strides[axis_] * sizes[i];
     out_slice.copy_shared_buffer(
         out, strides, flags, out_slice.size(), data_offset);
-    copy_cpu_inplace(inputs[i], out_slice, CopyType::GeneralGeneral, stream());
+    // Concatenating along axis 0 writes each row-contiguous input to a
+    // contiguous span of the output, so a flat vector copy suffices.
+    auto ctype = CopyType::GeneralGeneral;
+    if (axis_ == 0 && inputs[i].flags().row_contiguous) {
+      ctype = CopyType::Vector;
+    }
+    copy_cpu_inplace(inputs[i], out_slice, ctype, stream());
   }
 }
 
