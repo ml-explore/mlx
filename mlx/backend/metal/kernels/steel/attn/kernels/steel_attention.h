@@ -64,6 +64,7 @@ template <
     int BQ,
     int BK,
     int BD,
+    int BV,
     int WM,
     int WN,
     typename MaskType = float,
@@ -122,10 +123,10 @@ template <
 
   constexpr short LDQ_tgp = BD + padQ;
   constexpr short LDK_tgp = BK + padK;
-  constexpr short LDV_tgp = BD + padV;
+  constexpr short LDV_tgp = BV + padV;
 
   constexpr short tgp_mem_0 = (BK + padK) * (BD);
-  constexpr short tgp_mem_1 = BK * (BD + padV);
+  constexpr short tgp_mem_1 = BK * (BV + padV);
   constexpr short tgp_mem_s = tgp_mem_0 > tgp_mem_1 ? tgp_mem_0 : tgp_mem_1;
   constexpr bool q_in_registers = (WN == 2) && (BK == 32 || sizeof(T) == 4);
   constexpr short q_tgp_mem_s = q_in_registers ? 1 : BQ * (BD + padQ);
@@ -160,7 +161,7 @@ template <
   using VBlockLoader = BlockLoaderT<
       /* typename T = */ T,
       /* short BROWS = */ BK,
-      /* short BCOLS = */ BD,
+      /* short BCOLS = */ BV,
       /* short kDstStrRow = */ LDV_tgp,
       /* short kDstStrCol = */ 1,
       /* short reduction_dim = */ 0,
@@ -182,7 +183,9 @@ template <
   using MMAFrag_in_t = BaseMMAFrag<MMAInType, kFragSize, kFragSize>;
 
   static_assert(WN == 1 || WN == 2, "WN must be 1 or 2");
-  static_assert(BD % WN == 0, "The head dim must split evenly across WN");
+  static_assert(
+      BD % WN == 0 && BV % WN == 0,
+      "The head dims must split evenly across WN");
 
   constexpr int kNWarps = WM;
   static_assert(
@@ -197,6 +200,8 @@ template <
   constexpr int TD = BD / kFragSize;
   constexpr int TDh = TD / WN;
   constexpr int BDh = BD / WN;
+  constexpr int TVh = BV / (kFragSize * WN);
+  constexpr int BVh = BV / WN;
 
   static_assert(TQ == 1, "Check TQ");
 
@@ -204,7 +209,7 @@ template <
   MMATile<MMAInType, 1, TK, MMAFrag_in_t> Ktile;
   MMATile<AccumType, TQ, TK, MMAFrag_acc_t> Stile;
   MMATile<MMAInType, 1, 1, MMAFrag_in_t> Vtile;
-  MMATile<AccumType, TQ, TDh, MMAFrag_acc_t> Otile;
+  MMATile<AccumType, TQ, TVh, MMAFrag_acc_t> Otile;
   MMATile<MMAInType, 1, 1, MMAFrag_in_t> Qtiles[q_in_registers ? TDh : 1];
 
   Otile.clear();
@@ -219,7 +224,7 @@ template <
 
   const short Qs_offset = (tm + sm) * LDQ_tgp + d_half * BDh + sn;
   const short Ks_offset = d_half * BDh * LDK_tgp + sm * LDK_tgp + sn;
-  const short Vs_offset = sm * LDV_tgp + d_half * BDh + sn;
+  const short Vs_offset = sm * LDV_tgp + d_half * BVh + sn;
 
   constexpr short Qs_tile_stride = kFragSize;
   constexpr short Ks_tile_stride = kFragSize * LDK_tgp;
@@ -448,7 +453,7 @@ template <
 
     // Load V blocks
     if (!align_K && kb == (params->NK_aligned)) {
-      loader_v.load_safe(short2(BD, params->kL_rem));
+      loader_v.load_safe(short2(BV, params->kL_rem));
     } else {
       loader_v.load_unsafe();
     }
@@ -500,7 +505,7 @@ template <
     STEEL_PRAGMA_UNROLL
     for (short iq = 0; iq < TQ; iq++) {
       STEEL_PRAGMA_UNROLL
-      for (short id = 0; id < TDh; id++) {
+      for (short id = 0; id < TVh; id++) {
         STEEL_PRAGMA_UNROLL
         for (short ik = 0; ik < TK; ik++) {
           if constexpr (BD >= 128) {
@@ -550,10 +555,10 @@ template <
   }
 
   // Store results
-  O += (tm + sm) * params->O_strides[2] + d_half * BDh + sn;
+  O += (tm + sm) * params->O_strides[2] + d_half * BVh + sn;
 
   if (!align_Q && int(tid.x) == (params->NQ_aligned)) {
-    auto dst_tile_dims = short2(BDh - sn, params->qL_rem - (tm + sm));
+    auto dst_tile_dims = short2(BVh - sn, params->qL_rem - (tm + sm));
 
     if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
       return;

@@ -31,19 +31,14 @@ void sdpa_full_self_attention_nax(
   using namespace mlx::steel;
 
   int bd = q.shape(-1);
-  int bq = 64;
+  int bv = v.shape(-1);
+  int bq = bd == 512 ? 32 : 64;
   int bk = 32;
 
-  // The d-split kernel gives wn warps the same query rows and a slice of the
-  // head dim each, so every one of them runs the softmax bookkeeping for those
-  // rows. The sink seeds sum_score with exp(z - z) == 1, which then enters the
-  // denominator once per warp instead of once per row, and the logsumexp store
-  // lands before the cross-warp combine so each warp writes a partial. Keep
-  // sinks and lse on the single-warp path until both move after the combine.
-  bool split_d = (bd == 256) && !sinks.has_value() && (lse == nullptr);
-  int wm = 4;
-  int wn = split_d ? 2 : 1;
 
+  bool split_d = (bd == 256 || bd == 512) && !sinks.has_value() && (lse == nullptr);
+  int wm = bd == 512 ? 2 : 4;
+  int wn = split_d ? bd / 128 : 1;
   int B = q.shape(0);
   int H = q.shape(1);
   int D = q.shape(3);
@@ -108,6 +103,8 @@ void sdpa_full_self_attention_nax(
       bk,
       "_bd",
       bd,
+      "_bv",
+      bv,
       "_wm",
       wm,
       "_wn",
@@ -143,6 +140,7 @@ void sdpa_full_self_attention_nax(
       bq,
       bk,
       bd,
+      bv,
       wm,
       wn,
       (has_mask ? *mask : q),
@@ -228,7 +226,7 @@ void sdpa_full_self_attention_metal(
   int qL = q.shape(2);
   int kL = k.shape(2);
   if (metal::is_nax_available() &&
-      (D == 64 || D == 96 || D == 128 || D == 256) &&
+      (D == 64 || D == 96 || D == 128 || D == 256 || D == 512) &&
       (env::enable_tf32() || q.dtype() != float32)) {
     return sdpa_full_self_attention_nax(
         /* const Stream& s = */ s,
@@ -324,6 +322,7 @@ void sdpa_full_self_attention_metal(
   int gqa_factor = q.shape(1) / k.shape(1);
   char devc = d.get_architecture().back();
   int bd = q.shape(-1);
+  int bv = v.shape(-1);
   int bq = 32;
   int bk = (bd == 256) && (q.dtype() != float32) && (devc == 'd')
       ? 32
@@ -358,6 +357,8 @@ void sdpa_full_self_attention_metal(
       bk,
       "_bd",
       bd,
+      "_bv",
+      bv,
       "_wm",
       wm,
       "_wn",
@@ -393,6 +394,7 @@ void sdpa_full_self_attention_metal(
       bq,
       bk,
       bd,
+      bv,
       wm,
       wn,
       (has_mask ? *mask : q));
@@ -763,15 +765,22 @@ std::tuple<bool, std::string> has_fused_kernel(
 
   std::ostringstream msg;
   if (query_sequence_length > 8) {
-    const bool supported_head_dim = query_head_dim == value_head_dim &&
-        (query_head_dim == 64 || query_head_dim == 72 || query_head_dim == 80 ||
-         query_head_dim == 96 || query_head_dim == 128 ||
-         query_head_dim == 192 || query_head_dim == 256);
+    const bool supports_d512 = metal::is_nax_available() &&
+        (env::enable_tf32() || q.dtype() != float32);
+    const bool asymmetric = query_head_dim == 96 && value_head_dim == 64;
+    const bool supported_head_dim = asymmetric ||
+        (query_head_dim == value_head_dim &&
+         (query_head_dim == 64 || query_head_dim == 72 ||
+          query_head_dim == 80 || query_head_dim == 96 ||
+          query_head_dim == 128 || query_head_dim == 192 ||
+          query_head_dim == 256 || (query_head_dim == 512 && supports_d512)));
     if (!supported_head_dim) {
       msg << "the full attention kernel supports head dims "
-          << "{64, 72, 80, 96, 128, 192, 256} with matching query/value head "
-          << "dims; got query head dim " << query_head_dim
-          << " and value head dim " << value_head_dim << ".";
+          << "{64, 72, 80, 96, 128, 192, 256} with matching query/value dims, "
+          << "or (query, value) head dims (96, 64), "
+          << "plus head dim 512 on NAX GPUs (float32 also requires TF32); got "
+          << "query head dim " << query_head_dim << " and value head dim "
+          << value_head_dim << ".";
       return {false, msg.str()};
     }
     if (has_mask && !has_arr_mask &&
@@ -788,11 +797,12 @@ std::tuple<bool, std::string> has_fused_kernel(
          (query_head_dim == 64 || query_head_dim == 96 ||
           query_head_dim == 128 || query_head_dim == 192 ||
           query_head_dim == 256 || query_head_dim == 512)) ||
-        (query_head_dim == 192 && value_head_dim == 128);
+        (query_head_dim == 192 && value_head_dim == 128) ||
+        (query_head_dim == 96 && value_head_dim == 64);
     if (!supported_head_dim) {
       msg << "the vector attention kernel supports head dims "
           << "{64, 96, 128, 192, 256, 512} with matching query/value head "
-          << "dims, or query head dim 192 with value head dim 128; got "
+          << "dims, or (query, value) head dims (96, 64) or (192, 128); got "
           << "query head dim " << query_head_dim << " and value head dim "
           << value_head_dim << ".";
       return {false, msg.str()};
@@ -1222,6 +1232,18 @@ bool ScaledDotProductAttention::use_fallback(
   const int query_sequence_length = q.shape(2);
   const int query_head_dim = q.shape(-1);
   const int value_head_dim = v.shape(-1);
+
+  if (query_head_dim == 512 && query_sequence_length > 8) {
+    constexpr int64_t min_query_blocks = 1024;
+    const int64_t query_blocks = int64_t(q.shape(0)) * q.shape(1) *
+        int64_t(ceildiv(query_sequence_length, 32));
+    // The D512 kernel needs this many query blocks to match fallback speed.
+    const bool eligible = metal::is_nax_available() &&
+        (env::enable_tf32() || q.dtype() != float32) &&
+        query_sequence_length >= 1024 && do_causal && !has_arr_mask &&
+        query_blocks >= min_query_blocks;
+    return !eligible;
+  }
 
   // Use headdim-split kernel when NAX is enabled and there are enough query
   // blocks to fill the machine.

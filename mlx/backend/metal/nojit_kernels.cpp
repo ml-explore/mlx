@@ -79,6 +79,13 @@ MTL::ComputePipelineState* get_logsumexp_kernel(
   return d.get_kernel(kernel_name);
 }
 
+MTL::ComputePipelineState* get_cross_entropy_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&) {
+  return d.get_kernel(kernel_name);
+}
+
 MTL::ComputePipelineState* get_scan_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -490,6 +497,7 @@ MTL::ComputePipelineState* get_steel_attention_kernel(
     int,
     int,
     int,
+    int,
     const array&) {
   return d.get_kernel(kernel_name, hash_name, func_consts);
 }
@@ -500,6 +508,7 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const array&,
+    int,
     int,
     int,
     int,
