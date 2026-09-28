@@ -226,4 +226,30 @@
 instantiate_quantized_all_groups(float)
 instantiate_quantized_all_groups(float16_t)
 instantiate_quantized_all_groups(bfloat16_t)
-// clang-format on
+
+#define instantiate_qmv_mixed(type, group_size, bits, partial_rows) \
+  instantiate_kernel( \
+      "affine_qmv_fast_mixed_" #type "_gs_" #group_size "_b_" #bits "_pr_" #partial_rows, \
+      affine_qmv_fast_mixed, type, group_size, bits, partial_rows)
+
+#define instantiate_qmv_mixed_rows(type, group_size, bits) \
+  instantiate_qmv_mixed(type, group_size, bits, 0)        \
+  instantiate_qmv_mixed(type, group_size, bits, 1)
+
+#define instantiate_qmv_mixed_bits(type, group_size) \
+  instantiate_qmv_mixed_rows(type, group_size, 1)    \
+  instantiate_qmv_mixed_rows(type, group_size, 2)    \
+  instantiate_qmv_mixed_rows(type, group_size, 3)    \
+  instantiate_qmv_mixed_rows(type, group_size, 4)    \
+  instantiate_qmv_mixed_rows(type, group_size, 5)    \
+  instantiate_qmv_mixed_rows(type, group_size, 6)    \
+  instantiate_qmv_mixed_rows(type, group_size, 8)
+
+#define instantiate_qmv_mixed_groups(type) \
+  instantiate_qmv_mixed_bits(type, 32)     \
+  instantiate_qmv_mixed_bits(type, 64)     \
+  instantiate_qmv_mixed_bits(type, 128)
+
+instantiate_qmv_mixed_groups(float16_t)
+instantiate_qmv_mixed_groups(bfloat16_t)
+    // clang-format on

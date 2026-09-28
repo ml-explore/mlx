@@ -12,6 +12,29 @@ import mlx_tests
 
 
 class TestExportImport(mlx_tests.MLXTestCase):
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_quantized_matmul_narrow_constants(self):
+        for dtype in [mx.float16, mx.bfloat16]:
+            for m in [1, 3]:
+                x = mx.random.normal((m, 1024))
+                wq, scales, biases = mx.quantize(
+                    mx.random.normal((17, 1024)).astype(dtype), group_size=64, bits=4
+                )
+
+                def fun(x, scales, biases):
+                    return mx.quantized_matmul(x, wq, scales, biases, True, 64, 4)
+
+                path = os.path.join(self.test_dir, "qmm-narrow.mlxfn")
+                mx.export_function(path, fun, x, scales, biases)
+                imported = mx.import_function(path)
+                fresh = mx.random.normal(x.shape)
+                (actual,) = imported(fresh, scales, biases)
+                expected = fun(
+                    fresh, scales.astype(mx.float32), biases.astype(mx.float32)
+                )
+                self.assertEqual(actual.dtype, mx.float32)
+                self.assertTrue(mx.array_equal(actual, expected))
+
     @classmethod
     def setUpClass(cls):
         cls.test_dir_fid = tempfile.TemporaryDirectory()
