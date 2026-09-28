@@ -1377,27 +1377,17 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
         kernel_source,
         metal::utils(),
         metal::steel_attention_nax(),
-        split_d ? get_template_definition(
-                      lib_name,
-                      "attention_nax_dsplit",
-                      get_type_string(q.dtype()),
-                      bq,
-                      bk,
-                      bd,
-                      wm,
-                      wn,
-                      get_type_string(m.dtype()))
-                : get_template_definition(
-                      lib_name,
-                      "attention_nax",
-                      get_type_string(q.dtype()),
-                      bq,
-                      bk,
-                      bd,
-                      bv,
-                      wm,
-                      wn,
-                      get_type_string(m.dtype())));
+        get_template_definition(
+            lib_name,
+            split_d ? "attention_nax_dsplit" : "attention_nax",
+            get_type_string(q.dtype()),
+            bq,
+            bk,
+            bd,
+            bv,
+            wm,
+            wn,
+            get_type_string(m.dtype())));
     return kernel_source;
   });
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
