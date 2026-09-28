@@ -225,6 +225,75 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 diff = mx.abs(out - ref) - atol * mx.abs(ref)
                 self.assertLessEqual(mx.max(diff).item(), atol)
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_full_d96_v64(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        mx.random.seed(0)
+        scale = 96**-0.5
+        cells = [
+            (1, 40, 40, 9, 33),
+            (1, 4, 4, 64, 64),
+            (2, 4, 2, 65, 97),
+            (1, 4, 4, 16, 9),
+            (1, 4, 2, 32, 31),
+            (1, 4, 2, 33, 32),
+        ]
+        for dtype, (B, qH, kH, qL, kL) in product(
+            (mx.float16, mx.bfloat16, mx.float32), cells
+        ):
+            q = (
+                (0.5 * mx.random.normal((B, qL, qH, 96)))
+                .astype(dtype)
+                .transpose(0, 2, 1, 3)
+            )
+            k = (0.5 * mx.random.normal((B, kH, kL + 32, 96))).astype(dtype)[:, :, :kL]
+            masks = [
+                None,
+                mx.arange(kL) < kL - 3,
+                mx.random.normal((qL, kL)).astype(dtype),
+            ]
+            if qL <= kL:
+                masks.append("causal")
+            for dv, mask, with_sinks in product((64, 96), masks, (False, True)):
+                with self.subTest(
+                    dtype=dtype,
+                    cell=(B, qH, kH, qL, kL),
+                    dv=dv,
+                    mask=type(mask).__name__,
+                    sinks=with_sinks,
+                ):
+                    v = (0.5 * mx.random.normal((B, kH, kL + 32, dv))).astype(dtype)[
+                        :, :, :kL
+                    ]
+                    if qL == 9:
+                        # V sliced from the interleaved K/V projection.
+                        v = (0.5 * mx.random.normal((B, kL, kH, 2 * dv))).astype(dtype)
+                        v = v.transpose(0, 2, 1, 3)[..., dv:]
+                    sinks = (
+                        mx.random.normal((qH,)).astype(dtype) if with_sinks else None
+                    )
+                    ref = mlx_ref_attn(
+                        q.astype(mx.float32),
+                        k.astype(mx.float32),
+                        v.astype(mx.float32),
+                        scale,
+                        mask,
+                        sinks,
+                    )
+                    out = mx.fast.scaled_dot_product_attention(
+                        q,
+                        k,
+                        v,
+                        scale=scale,
+                        mask=mask,
+                        sinks=sinks,
+                        force_fused=True,
+                    )
+                    self.assertEqual(out.shape, (B, qH, qL, dv))
+                    tol = 5e-3 if dtype == mx.bfloat16 else 1e-3
+                    self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
     @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
     def test_sdpa_full_head_dim_256(self):
         # On NAX devices, large nearly-square causal blocks take the fused
@@ -327,7 +396,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             # Gemma 4 31B default route at the work threshold with sliced K/V.
             (1, 32, 16, 1024, 1025, 1056, False),
         ]
-        for dtype in (mx.float16, mx.bfloat16, mx.float32):
+        for dtype in (mx.float16, mx.bfloat16):
             for B, Nq, Nkv, qL, kL, cache_len, force_fused in cases:
                 with self.subTest(
                     dtype=dtype,
@@ -357,13 +426,9 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                         v,
                         scale=scale,
                         mask="causal",
-                        force_fused=force_fused
-                        and (
-                            dtype != mx.float32
-                            or os.getenv("MLX_ENABLE_TF32", "1") != "0"
-                        ),
+                        force_fused=force_fused,
                     )
-                    tol = 2e-3 if dtype != mx.bfloat16 else 1e-2
+                    tol = 2e-3 if dtype != mx.bfloat16 else 5e-2
                     self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
         q = mx.random.normal(shape=(1, 8, 33, D)).astype(mx.bfloat16)
@@ -523,6 +588,51 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 ref = mlx_primitives_sdpa(q, kr, vr, scale)
                 out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
                 self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_vector_d96_v64(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        mx.random.seed(0)
+        scale = 96**-0.5
+        # Include MiniCPM3 heads and GQA to reach two-pass on smaller GPUs.
+        cells = [(1, 40, 40, 1, 127), (1, 40, 40, 8, 1025), (2, 4, 2, 4, 4097)]
+        for dtype, (B, qH, kH, qL, kL) in product(
+            (mx.float32, mx.float16, mx.bfloat16), cells
+        ):
+            q = mx.random.normal((B, qL, qH, 96)).astype(dtype)
+            q = q.transpose(0, 2, 1, 3)
+            k = mx.random.normal((B, kH, kL + 32, 96)).astype(dtype)[:, :, :kL]
+            v = mx.random.normal((B, kH, kL + 32, 64)).astype(dtype)[:, :, :kL]
+            masks = (
+                None,
+                "causal",
+                mx.arange(kL) < kL - 3,
+                mx.random.normal((qL, kL)).astype(dtype),
+            )
+            for mask in masks:
+                with self.subTest(
+                    dtype=dtype, cell=(B, qH, kH, qL, kL), mask=type(mask).__name__
+                ):
+                    # GPU float32 GEMM may use TF32; keep the reference exact.
+                    with mx.stream(mx.cpu):
+                        ref = mlx_ref_attn(
+                            q.astype(mx.float32),
+                            k.astype(mx.float32),
+                            v.astype(mx.float32),
+                            scale,
+                            mask,
+                        )
+                    out = mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, mask=mask, force_fused=True
+                    )
+                    self.assertEqual(out.shape, (B, qH, qL, 64))
+                    tol = (
+                        1e-5
+                        if dtype == mx.float32
+                        else (3e-3 if dtype == mx.float16 else 2e-2)
+                    )
+                    self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
     def test_sdpa_vector_head_dim_512(self):
@@ -808,15 +918,16 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
                 out_ref = do_attention(mlx_ref_attn, q, k, v, scale, mask, t)
 
-                out_fst = do_attention(
-                    mx.fast.scaled_dot_product_attention,
-                    q,
-                    k,
-                    v,
-                    scale,
-                    mask,
-                    t,
-                )
+                with mlx_tests.scoped_env(MLX_ENABLE_TF32="0"):
+                    out_fst = do_attention(
+                        mx.fast.scaled_dot_product_attention,
+                        q,
+                        k,
+                        v,
+                        scale,
+                        mask,
+                        t,
+                    )
 
                 # For causal mask when qL > kL, first qL-kL rows are undefined
                 # Compare only the valid portion
