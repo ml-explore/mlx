@@ -1515,12 +1515,14 @@ template <
     const int bits,
     const bool aligned_N,
     const bool batched,
+    const bool has_global_scale = false,
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
 [[kernel]] void fp_qmm_t(
     const device uint32_t* w,
     const device uint8_t* scales,
+    const device float* global_scale,
     const device T* x,
     device T* y,
     const constant int& K,
@@ -1560,10 +1562,10 @@ template <
         s_strides,
         tid);
   }
-  fp_qmm_t_impl<T, group_size, bits, aligned_N, false, BM, BK, BN>(
+  fp_qmm_t_impl<T, group_size, bits, aligned_N, has_global_scale, BM, BK, BN>(
       w,
       scales,
-      nullptr,
+      global_scale,
       x,
       y,
       Xs,

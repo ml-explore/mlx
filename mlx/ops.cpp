@@ -5680,7 +5680,13 @@ array gather_qqmm(
   return array(
       std::move(out_shape),
       x.dtype(),
-      std::make_shared<GatherQQMM>(stream, group_size, bits, qmode),
+      std::make_shared<GatherQQMM>(
+          stream,
+          group_size,
+          bits,
+          qmode,
+          sorted_indices && !rhs_indices_,
+          sorted_indices && !lhs_indices_),
       std::move(inputs));
 }
 

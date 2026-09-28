@@ -320,6 +320,52 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    @unittest.skipIf(
+        not mx.metal.is_available(), "Global scale is only supported on Metal backend"
+    )
+    def test_qqmm_global_scale_matrix_kernels(self):
+        mx.random.seed(0)
+        dtype = mx.bfloat16
+        for M, N, K in product(
+            [32, 64],
+            [128, 130],
+            [96, 128],
+        ):
+            with self.subTest(shape=(M, N, K)):
+                x = mx.random.normal((M, K)).astype(dtype)
+                w = mx.random.normal((N, K)).astype(dtype)
+                global_scale_x = mx.max(mx.abs(x)).astype(mx.float32)
+                global_scale_w = mx.max(mx.abs(w)).astype(mx.float32)
+                x_hat = mx.dequantize(
+                    *mx.quantize(x, mode="nvfp4", global_scale=global_scale_x),
+                    mode="nvfp4",
+                    dtype=dtype,
+                    global_scale=global_scale_x,
+                )
+                w_q, scales = mx.quantize(w, mode="nvfp4", global_scale=global_scale_w)
+                w_hat = mx.dequantize(
+                    w_q,
+                    scales,
+                    mode="nvfp4",
+                    dtype=dtype,
+                    global_scale=global_scale_w,
+                )
+
+                expected = x_hat @ mx.swapaxes(w_hat, -1, -2)
+                actual = mx.qqmm(
+                    x,
+                    w_q,
+                    scales,
+                    mode="nvfp4",
+                    global_scale_x=global_scale_x,
+                    global_scale_w=global_scale_w,
+                )
+                delta = mx.abs(actual.astype(mx.float32) - expected.astype(mx.float32))
+                relative_error = delta.max() / mx.maximum(
+                    mx.abs(expected.astype(mx.float32)).max(), 1e-20
+                )
+                self.assertLess(relative_error, 3e-2)
+
     def test_qmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
@@ -1554,6 +1600,74 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 )
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+    @unittest.skipIf(mx.cuda.is_available(), "Not implemented for CUDA")
+    def test_gather_qqmm_global_scale_matrix_paths(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Not implemented for CPU")
+
+        E, N, K = 3, 64, 256
+        w = mx.random.normal((E, N, K), key=mx.random.key(10)).astype(mx.bfloat16)
+        global_scale_w = mx.max(mx.abs(w), axis=(1, 2)).astype(mx.float32)
+        quantized = [
+            mx.quantize(w[e], mode="nvfp4", global_scale=global_scale_w[e])
+            for e in range(E)
+        ]
+        w_q = mx.stack([q for q, _ in quantized])
+        scales_w = mx.stack([scales for _, scales in quantized])
+        w_hat = mx.stack(
+            [
+                mx.dequantize(
+                    q,
+                    scales,
+                    mode="nvfp4",
+                    dtype=mx.bfloat16,
+                    global_scale=global_scale_w[e],
+                )
+                for e, (q, scales) in enumerate(quantized)
+            ]
+        )
+
+        def check(x, rhs, lhs=None, sorted_indices=False):
+            global_scale_x = mx.max(mx.abs(x)).astype(mx.float32)
+            x_hat = mx.dequantize(
+                *mx.quantize(x, mode="nvfp4", global_scale=global_scale_x),
+                mode="nvfp4",
+                dtype=mx.bfloat16,
+                global_scale=global_scale_x,
+            )
+            actual = mx.gather_qqmm(
+                x,
+                w_q,
+                scales_w,
+                lhs,
+                rhs,
+                mode="nvfp4",
+                global_scale_x=global_scale_x,
+                global_scale_w=global_scale_w,
+                sorted_indices=sorted_indices,
+            )
+            expected = mx.gather_mm(
+                x_hat,
+                mx.swapaxes(w_hat, -1, -2),
+                lhs,
+                rhs,
+                sorted_indices=sorted_indices,
+            )
+            error = mx.abs(actual.astype(mx.float32) - expected.astype(mx.float32))
+            scale = mx.maximum(mx.abs(expected.astype(mx.float32)).max(), 1e-20)
+            self.assertLess(error.max() / scale, 3e-2)
+
+        # Sorted indices select the RHS-grouped matrix kernel.
+        x = mx.random.normal((24, 1, K), key=mx.random.key(20)).astype(mx.bfloat16)
+        rhs = mx.array([0] * 8 + [1] * 8 + [2] * 8)
+        check(x, rhs, sorted_indices=True)
+
+        # A large M selects the gathered matrix kernel.
+        x = mx.random.normal((2, 64, K), key=mx.random.key(30)).astype(mx.bfloat16)
+        lhs = mx.array([0, 1, 0, 1])
+        rhs = mx.array([0, 1, 2, 0])
+        check(x, rhs, lhs)
 
     def test_qmm_fp_type(self):
         indices = mx.array([[2], [0], [1]], dtype=mx.uint32)

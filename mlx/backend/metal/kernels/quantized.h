@@ -1896,6 +1896,7 @@ template <
     const int bits,
     const bool aligned_N,
     const bool batched,
+    const bool has_global_scale = false,
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
