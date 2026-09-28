@@ -72,6 +72,17 @@ class TestBindings(mlx_tests.MLXTestCase):
                     gc.collect()
                     self.assertIsNone(ref())
 
+    def test_compile_shutdown(self):
+        code = textwrap.dedent("""
+            import mlx.core as mx
+
+            mx.set_default_device(mx.cpu)
+            fn = mx.compile(lambda x: x + 1)
+            mx.eval(fn(mx.array(1)))
+            mx.clear_streams()
+            """)
+        subprocess.run([sys.executable, "-c", code], check=True)
+
     def test_random_state_created_in_thread(self):
         code = textwrap.dedent("""
             import threading
