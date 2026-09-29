@@ -263,15 +263,23 @@ METAL_FUNC static constexpr void mma(
 
   mpp::tensor_ops::matmul2d<desc, metal::execution_simdgroup> gemm_op;
 
+  using ct_a_t = decltype(gemm_op.template get_left_input_cooperative_tensor<
+                          AType,
+                          BType,
+                          CType>());
+  using ct_b_t = decltype(gemm_op.template get_right_input_cooperative_tensor<
+                          AType,
+                          BType,
+                          CType>());
+
   auto ct_a =
       gemm_op.template get_left_input_cooperative_tensor<AType, BType, CType>();
   auto ct_b =
       gemm_op
           .template get_right_input_cooperative_tensor<AType, BType, CType>();
-  auto ct_c = gemm_op.template get_destination_cooperative_tensor<
-      decltype(ct_a),
-      decltype(ct_b),
-      CType>();
+  auto ct_c =
+      gemm_op
+          .template get_destination_cooperative_tensor<ct_a_t, ct_b_t, CType>();
 
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
@@ -309,15 +317,23 @@ METAL_FUNC static constexpr void mma(
 
   mpp::tensor_ops::matmul2d<desc, metal::execution_simdgroup> gemm_op;
 
+  using ct_a_t = decltype(gemm_op.template get_left_input_cooperative_tensor<
+                          AType,
+                          BType,
+                          CType>());
+  using ct_b_t = decltype(gemm_op.template get_right_input_cooperative_tensor<
+                          AType,
+                          BType,
+                          CType>());
+
   auto ct_a =
       gemm_op.template get_left_input_cooperative_tensor<AType, BType, CType>();
   auto ct_b =
       gemm_op
           .template get_right_input_cooperative_tensor<AType, BType, CType>();
-  auto ct_c = gemm_op.template get_destination_cooperative_tensor<
-      decltype(ct_a),
-      decltype(ct_b),
-      CType>();
+  auto ct_c =
+      gemm_op
+          .template get_destination_cooperative_tensor<ct_a_t, ct_b_t, CType>();
 
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
@@ -359,6 +375,15 @@ METAL_FUNC static constexpr void mman(
   // Create matmul op
   mpp::tensor_ops::matmul2d<desc, metal::execution_simdgroup> gemm_op;
 
+  using ct_a_t = decltype(gemm_op.template get_left_input_cooperative_tensor<
+                          AType,
+                          BType,
+                          CType>());
+  using ct_b_t = decltype(gemm_op.template get_right_input_cooperative_tensor<
+                          AType,
+                          BType,
+                          CType>());
+
   // Create matmul operands in registers
   auto ct_a =
       gemm_op.template get_left_input_cooperative_tensor<AType, BType, CType>();
@@ -367,10 +392,9 @@ METAL_FUNC static constexpr void mman(
           .template get_right_input_cooperative_tensor<AType, BType, CType>();
 
   // Create matmul output in register
-  auto ct_c = gemm_op.template get_destination_cooperative_tensor<
-      decltype(ct_a),
-      decltype(ct_b),
-      CType>();
+  auto ct_c =
+      gemm_op
+          .template get_destination_cooperative_tensor<ct_a_t, ct_b_t, CType>();
 
   // Load A in to left operand registers
   STEEL_PRAGMA_UNROLL
