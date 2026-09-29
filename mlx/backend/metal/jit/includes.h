@@ -62,5 +62,6 @@ const char* steel_attention_nax();
 
 const char* gated_delta_update();
 const char* gated_delta_update_nax();
+const char* gated_delta_update_nax_vjp();
 
 } // namespace mlx::core::metal

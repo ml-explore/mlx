@@ -3,20 +3,25 @@
 
 using namespace metal;
 
-#define instantiate_gated_delta_update_fused_nax(in_type, dk, dv, hk, hv, c) \
-  instantiate_kernel(                                                        \
-      "gated_delta_fused_nax_" #in_type "_" #dk "_" #dv "_" #hk "_" #hv      \
-      "_" #c,                                                                \
-      gated_delta_fused_nax,                                                 \
-      in_type,                                                               \
-      dk,                                                                    \
-      dv,                                                                    \
-      hk,                                                                    \
-      hv,                                                                    \
-      c)
+#define instantiate_gated_delta_update_fused_nax(          \
+    in_type, dk, dv, hk, hv, c, ckpt)                      \
+  instantiate_kernel(                                      \
+      "gated_delta_fused_nax_" #in_type "_" #dk "_" #dv    \
+      "_" #hk "_" #hv "_" #c "_" #ckpt,                    \
+      gated_delta_fused_nax,                               \
+      in_type,                                             \
+      dk,                                                  \
+      dv,                                                  \
+      hk,                                                  \
+      hv,                                                  \
+      c,                                                   \
+      ckpt)
 
-#define instantiate_gated_delta_dims(in_type, dk, dv, hk, hv) \
-  instantiate_gated_delta_update_fused_nax(in_type, dk, dv, hk, hv, 16)
+#define instantiate_gated_delta_dims(in_type, dk, dv, hk, hv)          \
+  instantiate_gated_delta_update_fused_nax(in_type, dk, dv, hk, hv, 16, 1)  \
+      instantiate_gated_delta_update_fused_nax(in_type, dk, dv, hk, hv, 16, 4)  \
+          instantiate_gated_delta_update_fused_nax(in_type, dk, dv, hk, hv, 16, 8) \
+              instantiate_gated_delta_update_fused_nax(in_type, dk, dv, hk, hv, 16, 16)
 
 #define instantiate_gated_delta(in_type)                                  \
   instantiate_gated_delta_dims(in_type, 128, 128, 24, 24)                 \
