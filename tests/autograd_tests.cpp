@@ -749,7 +749,7 @@ TEST_CASE("test op vjps") {
 TEST_CASE("test gather and take grads") {
   // Check linear takes
   auto linear_f = [](array indices) {
-    auto fun_linear = [&indices](array input) { return take(input, indices); };
+    auto fun_linear = [indices](array input) { return take(input, indices); };
 
     return fun_linear;
   };

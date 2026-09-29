@@ -164,9 +164,14 @@ struct QuantizedBlockLoader {
   MLX_MTL_CONST short group_steps = group_size < BCOLS ? 1 : group_size / BCOLS;
   MLX_MTL_CONST short scale_step = group_size < BCOLS ? BCOLS / group_size : 1;
 
+  MLX_MTL_CONST bool partial_cols = group_size % BCOLS != 0;
+
   static_assert(
       (n_reads * pack_factor) <= group_size,
       "The number of reads per thread must be less than the group size.");
+  static_assert(
+      group_size % (n_reads * pack_factor) == 0,
+      "The group size must be a multiple of the columns read per thread.");
 
   const int src_ld;
   const int tile_stride;
@@ -230,14 +235,7 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    if (reduction_dim == 1 && bi >= src_tile_dim.x) {
-      for (int i = 0; i < n_reads * pack_factor; i++) {
-        dst[i] = T(0);
-      }
-      return;
-    }
-
-    if (reduction_dim == 0 && bi >= src_tile_dim.y) {
+    if (bi >= src_tile_dim.y) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
       }
@@ -866,9 +864,12 @@ METAL_FUNC void fp_qmm_t_impl(
   loader_w_t loader_w(wl, scales, K, Ws, simd_gid, simd_lid, global_scale);
   mma_t mma_op(simd_gid, simd_lid);
 
+  constexpr bool partial_k = group_size % BK != 0;
+  const int k_blocks = K_eff / BK;
+  const short num_k = partial_k ? short(K_eff - k_blocks * BK) : short(0);
   if (num_els < BM) {
     if (!aligned_N && num_outs < BN) {
-      for (int k = 0; k < K_eff; k += BK) {
+      for (int k = 0; k < k_blocks; k++) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         loader_x.load_safe(short2(BK, num_els));
         loader_w.load_safe(short2(BK, num_outs));
@@ -878,7 +879,7 @@ METAL_FUNC void fp_qmm_t_impl(
         loader_w.next();
       }
     } else {
-      for (int k = 0; k < K_eff; k += BK) {
+      for (int k = 0; k < k_blocks; k++) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         loader_x.load_safe(short2(BK, num_els));
         loader_w.load_unsafe();
@@ -888,9 +889,18 @@ METAL_FUNC void fp_qmm_t_impl(
         loader_w.next();
       }
     }
+    if constexpr (partial_k) {
+      if (num_k > 0) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(num_k, num_els));
+        loader_w.load_safe(short2(num_k, num_outs));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+      }
+    }
   } else {
     if (!aligned_N && num_outs < BN) {
-      for (int k = 0; k < K_eff; k += BK) {
+      for (int k = 0; k < k_blocks; k++) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         loader_x.load_unsafe();
         loader_w.load_safe(short2(BK, num_outs));
@@ -900,7 +910,7 @@ METAL_FUNC void fp_qmm_t_impl(
         loader_w.next();
       }
     } else {
-      for (int k = 0; k < K_eff; k += BK) {
+      for (int k = 0; k < k_blocks; k++) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         loader_x.load_unsafe();
         loader_w.load_unsafe();
@@ -909,6 +919,15 @@ METAL_FUNC void fp_qmm_t_impl(
         mma_op.mma(Xs, Ws);
         loader_x.next();
         loader_w.next();
+      }
+    }
+    if constexpr (partial_k) {
+      if (num_k > 0) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(num_k, BM));
+        loader_w.load_safe(short2(num_k, num_outs));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
       }
     }
   }
@@ -990,13 +1009,20 @@ METAL_FUNC void fp_qmm_n_impl(
   loader_w_t loader_w(wl, scales, N, Ws, simd_gid, simd_lid, global_scale);
   mma_t mma_op(simd_gid, simd_lid);
 
+  constexpr bool partial_n = group_size % BN != 0;
+  const short num_outs = partial_n ? short(min(BN, N - y_col)) : short(BN);
+
   if (num_els < BM) {
     if ((K % BK) != 0) {
       const int k_blocks = K / BK;
       for (int k = 0; k < k_blocks; k++) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         loader_x.load_safe(short2(BK, num_els));
-        loader_w.load_unsafe();
+        if constexpr (partial_n) {
+          loader_w.load_safe(short2(num_outs, BK));
+        } else {
+          loader_w.load_unsafe();
+        }
         threadgroup_barrier(mem_flags::mem_threadgroup);
         mma_op.mma(Xs, Ws);
         loader_x.next();
@@ -1005,9 +1031,19 @@ METAL_FUNC void fp_qmm_n_impl(
       const short num_k = K - k_blocks * BK;
       threadgroup_barrier(mem_flags::mem_threadgroup);
       loader_x.load_safe(short2(num_k, num_els));
-      loader_w.load_safe(short2(BN, num_k));
+      loader_w.load_safe(short2(num_outs, num_k));
       threadgroup_barrier(mem_flags::mem_threadgroup);
       mma_op.mma(Xs, Ws);
+    } else if (num_outs < BN) {
+      for (int k = 0; k < K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(BK, num_els));
+        loader_w.load_safe(short2(num_outs, BK));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
     } else {
       for (int k = 0; k < K; k += BK) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -1025,7 +1061,11 @@ METAL_FUNC void fp_qmm_n_impl(
       for (int k = 0; k < k_blocks; k++) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         loader_x.load_unsafe();
-        loader_w.load_unsafe();
+        if constexpr (partial_n) {
+          loader_w.load_safe(short2(num_outs, BK));
+        } else {
+          loader_w.load_unsafe();
+        }
         threadgroup_barrier(mem_flags::mem_threadgroup);
         mma_op.mma(Xs, Ws);
         loader_x.next();
@@ -1034,9 +1074,19 @@ METAL_FUNC void fp_qmm_n_impl(
       const short num_k = K - k_blocks * BK;
       threadgroup_barrier(mem_flags::mem_threadgroup);
       loader_x.load_safe(short2(num_k, BM));
-      loader_w.load_safe(short2(BN, num_k));
+      loader_w.load_safe(short2(num_outs, num_k));
       threadgroup_barrier(mem_flags::mem_threadgroup);
       mma_op.mma(Xs, Ws);
+    } else if (num_outs < BN) {
+      for (int k = 0; k < K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_unsafe();
+        loader_w.load_safe(short2(num_outs, BK));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
     } else {
       for (int k = 0; k < K; k += BK) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -1052,8 +1102,8 @@ METAL_FUNC void fp_qmm_n_impl(
 
   // Store results to device memory
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (num_els < BM) {
-    mma_op.store_result_safe(y, N, short2(BN, num_els));
+  if (num_els < BM || num_outs < BN) {
+    mma_op.store_result_safe(y, N, short2(num_outs, num_els));
   } else {
     mma_op.store_result(y, N);
   }
@@ -1465,12 +1515,14 @@ template <
     const int bits,
     const bool aligned_N,
     const bool batched,
+    const bool has_global_scale = false,
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
 [[kernel]] void fp_qmm_t(
     const device uint32_t* w,
     const device uint8_t* scales,
+    const device float* global_scale,
     const device T* x,
     device T* y,
     const constant int& K,
@@ -1510,10 +1562,10 @@ template <
         s_strides,
         tid);
   }
-  fp_qmm_t_impl<T, group_size, bits, aligned_N, false, BM, BK, BN>(
+  fp_qmm_t_impl<T, group_size, bits, aligned_N, has_global_scale, BM, BK, BN>(
       w,
       scales,
-      nullptr,
+      global_scale,
       x,
       y,
       Xs,
@@ -1998,11 +2050,12 @@ template <
     const device uint32_t* w,
     const device uint8_t* scales,
     const device float* global_scale,
-    const device uint32_t* indices,
+    const device int32_t* offsets,
     device T* y,
     const constant int& M,
     const constant int& N,
     const constant int& K,
+    const constant int& num_groups,
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint simd_lane_id [[thread_index_in_simdgroup]]) {
@@ -2047,13 +2100,18 @@ template <
   const int K_it = K / BK;
   const size_t stride_w = transpose ? N * K_w : K * N_w;
   const size_t stride_s = transpose ? N * K_g : K * N_g;
-  const int y_row = tid.y * BM;
+  int y_row;
+  int group;
+  short tgp_bm;
+  if (!schedule_row_tile<BM>(
+          offsets, num_groups, M, tid.y, simd_lane_id, y_row, group, tgp_bm)) {
+    return;
+  }
   const int y_col = tid.x * BN;
   const size_t y_row_long = size_t(y_row);
   const size_t y_col_long = size_t(y_col);
 
   // Prepare threadgroup bounds
-  const short tgp_bm = align_M ? BM : short(min(BM, M - y_row));
   const short tgp_bn = align_N ? BN : short(min(BN, N - y_col));
 
   // Calculate the final tiles in the case that K is not aligned
@@ -2069,113 +2127,61 @@ template <
   wl += transpose ? y_col_long * K_w : y_col * bytes_per_pack / pack_factor;
   scales += transpose ? y_col_long * K_g : y_col / group_size;
 
-  // Do as many matmuls as necessary
-  uint32_t index;
-  short offset;
-  uint32_t index_next = indices[y_row];
-  short offset_next = 0;
-  int n = 0;
-  while (n < tgp_bm) {
-    n++;
-    offset = offset_next;
-    index = index_next;
-    offset_next = tgp_bm;
-    for (; n < tgp_bm; n++) {
-      if (indices[y_row + n] != index) {
-        offset_next = n;
-        index_next = indices[y_row + n];
-        break;
-      }
+  // Prepare threadgroup mma operation
+  thread mma_t mma_op(simd_group_id, simd_lane_id);
+
+  // Prepare threadgroup loading operations
+  thread loader_x_t loader_x(x, K, Xs, simd_group_id, simd_lane_id);
+  thread loader_w_t loader_w(
+      wl + group * stride_w,
+      scales + group * stride_s,
+      transpose ? K : N,
+      Ws,
+      simd_group_id,
+      simd_lane_id,
+      global_scale + group);
+
+  // Tile aligned so check outside of the hot loop
+  if (tgp_bm == BM && (align_N || tgp_bn == BN)) {
+    gemm_loop_aligned(Xs, Ws, mma_op, loader_x, loader_w, K_it);
+    if (!align_K) {
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      gemm_loop_finalize(Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
     }
-    threadgroup_barrier(mem_flags::mem_none);
+    mma_op.store_result(y, N);
+  }
 
-    // Prepare threadgroup mma operation
-    thread mma_t mma_op(simd_group_id, simd_lane_id);
-
-    // Prepare threadgroup loading operations
-    thread loader_x_t loader_x(x, K, Xs, simd_group_id, simd_lane_id);
-    thread loader_w_t loader_w(
-        wl + index * stride_w,
-        scales + index * stride_s,
-        transpose ? K : N,
-        Ws,
-        simd_group_id,
-        simd_lane_id,
-        global_scale + index);
-
-    // Matrices are all aligned check nothing
-    if (align_M && align_N) {
-      gemm_loop_aligned(Xs, Ws, mma_op, loader_x, loader_w, K_it);
-      if (!align_K) {
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        gemm_loop_finalize(Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
-      }
-
-      // Store results to device memory
-      if (offset_next - offset == BM) {
-        mma_op.store_result(y, N);
-      } else {
-        mma_op.store_result_slice(
-            y, N, short2(0, offset), short2(BN, offset_next));
-      }
-    } else {
-      // Tile aligned so check outside of the hot loop
-      if ((align_M || tgp_bm == BM) && (align_N || tgp_bn == BN)) {
-        gemm_loop_aligned(Xs, Ws, mma_op, loader_x, loader_w, K_it);
-        if (!align_K) {
-          threadgroup_barrier(mem_flags::mem_threadgroup);
-          gemm_loop_finalize(
-              Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
-        }
-
-        // Store results to device memory
-        if (offset_next - offset == BM) {
-          mma_op.store_result(y, N);
-        } else {
-          mma_op.store_result_slice(
-              y, N, short2(0, offset), short2(BN, offset_next));
-        }
-      }
-
-      // Tile partially aligned check rows
-      else if (align_N || tgp_bn == BN) {
-        gemm_loop_unaligned<false, true, transpose>(
-            Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
-        if (!align_K) {
-          threadgroup_barrier(mem_flags::mem_threadgroup);
-          gemm_loop_finalize(
-              Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
-        }
-        mma_op.store_result_slice(
-            y, N, short2(0, offset), short2(BN, offset_next));
-      }
-
-      // Tile partially aligned check cols
-      else if (align_M || tgp_bm == BM) {
-        gemm_loop_unaligned<true, false, transpose>(
-            Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
-        if (!align_K) {
-          threadgroup_barrier(mem_flags::mem_threadgroup);
-          gemm_loop_finalize(
-              Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
-        }
-        mma_op.store_result_slice(
-            y, N, short2(0, offset), short2(tgp_bn, offset_next));
-      }
-
-      // Nothing aligned so check both rows and cols
-      else {
-        gemm_loop_unaligned<false, false, transpose>(
-            Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
-        if (!align_K) {
-          threadgroup_barrier(mem_flags::mem_threadgroup);
-          gemm_loop_finalize(
-              Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
-        }
-        mma_op.store_result_slice(
-            y, N, short2(0, offset), short2(tgp_bn, offset_next));
-      }
+  // Tile partially aligned check rows
+  else if (align_N || tgp_bn == BN) {
+    gemm_loop_unaligned<false, true, transpose>(
+        Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
+    if (!align_K) {
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      gemm_loop_finalize(Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
     }
+    mma_op.store_result_safe(y, N, short2(BN, tgp_bm));
+  }
+
+  // Tile partially aligned check cols
+  else if (tgp_bm == BM) {
+    gemm_loop_unaligned<true, false, transpose>(
+        Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
+    if (!align_K) {
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      gemm_loop_finalize(Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
+    }
+    mma_op.store_result_safe(y, N, short2(tgp_bn, BM));
+  }
+
+  // Nothing aligned so check both rows and cols
+  else {
+    gemm_loop_unaligned<false, false, transpose>(
+        Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
+    if (!align_K) {
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      gemm_loop_finalize(Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
+    }
+    mma_op.store_result_safe(y, N, short2(tgp_bn, tgp_bm));
   }
 }
 

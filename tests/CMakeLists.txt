@@ -7,11 +7,16 @@ FetchContent_MakeAvailable(doctest)
 add_executable(tests ${PROJECT_SOURCE_DIR}/tests/tests.cpp)
 
 if(MLX_BUILD_METAL OR MLX_BUILD_CUDA)
-  set(METAL_TEST_SOURCES gpu_tests.cpp)
+  set(GPU_TEST_SOURCES gpu_tests.cpp)
+endif()
+
+if(MLX_BUILD_CUDA)
+  list(APPEND GPU_TEST_SOURCES cuda_tests.cpp)
+  target_link_libraries(tests PRIVATE CUDA::cudart)
 endif()
 
 if(MLX_BUILD_METAL)
-  list(APPEND METAL_TEST_SOURCES residency_tests.cpp)
+  list(APPEND GPU_TEST_SOURCES residency_tests.cpp)
 endif()
 
 include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
@@ -38,7 +43,7 @@ target_sources(
           utils_tests.cpp
           vmap_tests.cpp
           linalg_tests.cpp
-          ${METAL_TEST_SOURCES})
+          ${GPU_TEST_SOURCES})
 
 target_link_libraries(tests PRIVATE mlx doctest)
 target_compile_options(tests PRIVATE ${SANITIZER_COMPILE_FLAGS})

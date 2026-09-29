@@ -1,4 +1,4 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
 #pragma once
 
@@ -51,6 +51,9 @@ MLX_API size_t get_cache_memory();
  *
  * When Metal is available the memory limit defaults to 1.5 times the maximum
  * recommended working set size reported by the device.
+ *
+ * On native Windows with CUDA the memory limit is also bounded by the current
+ * video memory budget reported by the operating system.
  *
  * Returns the previous memory limit.
  * */

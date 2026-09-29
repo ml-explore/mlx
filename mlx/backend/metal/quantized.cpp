@@ -6,6 +6,7 @@
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
+#include "mlx/backend/metal/matmul.h"
 #include "mlx/backend/metal/reduce.h"
 #include "mlx/backend/metal/unary.h"
 #include "mlx/backend/metal/utils.h"
@@ -66,6 +67,9 @@ inline array ensure_row_contiguous_matrix(
     const array& x,
     metal::Device& d,
     const Stream& s) {
+  if (x.flags().row_contiguous) {
+    return x;
+  }
   if (x.ndim() < 2) {
     if (x.strides()[0] == 1) {
       return x;
@@ -816,6 +820,7 @@ void qmm_nax(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& global_scale,
     array& out,
     bool transpose,
     int group_size,
@@ -862,7 +867,8 @@ void qmm_nax(
       "_wn",
       wn,
       transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
-      batched ? "_batch_1" : "_batch_0");
+      batched ? "_batch_1" : "_batch_0",
+      global_scale ? "_hgs" : "");
   std::string template_def;
   MTL::ComputePipelineState* kernel;
   if (transpose) {
@@ -880,7 +886,8 @@ void qmm_nax(
         bk,
         bn,
         wm,
-        wn);
+        wn,
+        global_scale.has_value());
   } else {
     kernel = get_qmm_nax_kernel_wrapped(
         d,
@@ -905,6 +912,11 @@ void qmm_nax(
   compute_encoder.set_input_array(scales, c++);
   if (biases) {
     compute_encoder.set_input_array(*biases, c++);
+  } else if (transpose) {
+    if (global_scale) {
+      compute_encoder.set_input_array(*global_scale, c);
+    }
+    c++;
   }
   compute_encoder.set_input_array(x, c++);
   compute_encoder.set_output_array(out, c++);
@@ -1032,6 +1044,7 @@ void qmm(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& global_scale,
     array& out,
     bool transpose,
     int group_size,
@@ -1042,6 +1055,10 @@ void qmm(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
+  assert(
+      (!global_scale || (transpose && !biases)) &&
+      "qmm global scale requires transposed weights without biases");
+
   bool has_nax_kernel =
       metal::is_nax_available() && (transpose || mode == "affine");
   bool nax_aligned = (K % 64 == 0) && (transpose || N % 64 == 0);
@@ -1052,6 +1069,7 @@ void qmm(
         /* const array& w = */ w,
         /* const array& scales = */ scales,
         /* const std::optional<array>& biases = */ biases,
+        /* const std::optional<array>& global_scale = */ global_scale,
         /* array& out = */ out,
         /* bool transpose = */ transpose,
         /* int group_size = */ group_size,
@@ -1087,7 +1105,8 @@ void qmm(
       "_b_",
       bits,
       transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
-      batched ? "_batch_1" : "_batch_0");
+      batched ? "_batch_1" : "_batch_0",
+      global_scale ? "_hgs" : "");
   std::string template_def;
   MTL::ComputePipelineState* kernel;
   if (transpose) {
@@ -1100,7 +1119,8 @@ void qmm(
         group_size,
         bits,
         aligned,
-        batched);
+        batched,
+        global_scale.has_value());
   } else {
     kernel = get_quantized_kernel_wrapped(
         d, kname, "qmm_n", mode, type_string, group_size, bits, batched);
@@ -1113,6 +1133,11 @@ void qmm(
   compute_encoder.set_input_array(scales, c++);
   if (biases) {
     compute_encoder.set_input_array(*biases, c++);
+  } else if (transpose) {
+    if (global_scale) {
+      compute_encoder.set_input_array(*global_scale, c);
+    }
+    c++;
   }
   compute_encoder.set_input_array(x, c++);
   compute_encoder.set_output_array(out, c++);
@@ -1158,7 +1183,21 @@ void qmm_splitk(
   }
   if (split_k <= 1) {
     return qmm(
-        x, w, scales, biases, out, true, group_size, bits, M, N, K, d, s, mode);
+        x,
+        w,
+        scales,
+        biases,
+        std::nullopt,
+        out,
+        true,
+        group_size,
+        bits,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
   }
 
   int k_partition_size = K / split_k;
@@ -1530,7 +1569,6 @@ void gather_qmm_rhs_nax(
   int bn = 64, bk = 64;
   int wm = 2, wn = 2;
 
-  const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
   const bool align_K = (K % bk) == 0;
 
@@ -1560,7 +1598,6 @@ void gather_qmm_rhs_nax(
       global_scale ? "_hgs" : "");
 
   metal::MTLFCList func_consts = {
-      {&align_M, MTL::DataType::DataTypeBool, 200},
       {&align_N, MTL::DataType::DataTypeBool, 201},
       {&align_K, MTL::DataType::DataTypeBool, 202},
   };
@@ -1571,12 +1608,12 @@ void gather_qmm_rhs_nax(
   concatenate(
       hash_name,
       kname,
-      "_align_M_",
-      align_M ? 't' : 'n',
       "_align_N_",
       align_N ? 't' : 'n',
       "_align_K_",
       align_K ? 't' : 'n');
+
+  array offsets = gather_mm_offsets(indices, E, M, d, s);
 
   // Get and set the kernel
   auto& compute_encoder = metal::get_command_encoder(s);
@@ -1599,7 +1636,8 @@ void gather_qmm_rhs_nax(
   compute_encoder.set_compute_pipeline_state(kernel);
 
   MTL::Size group_dims(32, wn, wm);
-  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, 1);
+  MTL::Size grid_dims(
+      (N + bn - 1) / bn, std::min(M, (M + bm - 1) / bm + E - 1), 1);
 
   compute_encoder.set_input_array(x, 0);
   compute_encoder.set_input_array(w, 1);
@@ -1610,11 +1648,12 @@ void gather_qmm_rhs_nax(
     compute_encoder.set_input_array(*gs, 3);
   }
   int c = 4;
-  compute_encoder.set_input_array(indices, c++);
+  compute_encoder.set_input_array(offsets, c++);
   compute_encoder.set_output_array(out, c++);
   compute_encoder.set_bytes(M, c++);
   compute_encoder.set_bytes(N, c++);
   compute_encoder.set_bytes(K, c++);
+  compute_encoder.set_bytes(E, c++);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
@@ -1691,10 +1730,10 @@ void gather_qmm_rhs(
   }
 
   // TODO: Tune the block sizes
+  int E = w.size() / w.shape(-1) / w.shape(-2);
   int bm = 16, bn = 32, bk = 32;
   int wm = 1, wn = 2;
 
-  const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
   const bool align_K = (K % bk) == 0;
 
@@ -1723,7 +1762,6 @@ void gather_qmm_rhs(
       global_scale ? "_hgs" : "");
 
   metal::MTLFCList func_consts = {
-      {&align_M, MTL::DataType::DataTypeBool, 200},
       {&align_N, MTL::DataType::DataTypeBool, 201},
       {&align_K, MTL::DataType::DataTypeBool, 202},
   };
@@ -1734,12 +1772,12 @@ void gather_qmm_rhs(
   concatenate(
       hash_name,
       kname,
-      "_align_M_",
-      align_M ? 't' : 'n',
       "_align_N_",
       align_N ? 't' : 'n',
       "_align_K_",
       align_K ? 't' : 'n');
+
+  array offsets = gather_mm_offsets(indices, E, M, d, s);
 
   // Get and set the kernel
   auto& compute_encoder = metal::get_command_encoder(s);
@@ -1762,7 +1800,8 @@ void gather_qmm_rhs(
   compute_encoder.set_compute_pipeline_state(kernel);
 
   MTL::Size group_dims(32, wn, wm);
-  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, 1);
+  MTL::Size grid_dims(
+      (N + bn - 1) / bn, std::min(M, (M + bm - 1) / bm + E - 1), 1);
 
   compute_encoder.set_input_array(x, 0);
   compute_encoder.set_input_array(w, 1);
@@ -1773,11 +1812,12 @@ void gather_qmm_rhs(
     compute_encoder.set_input_array(*gs, 3);
   }
   int c = 4;
-  compute_encoder.set_input_array(indices, c++);
+  compute_encoder.set_input_array(offsets, c++);
   compute_encoder.set_output_array(out, c++);
   compute_encoder.set_bytes(M, c++);
   compute_encoder.set_bytes(N, c++);
   compute_encoder.set_bytes(K, c++);
+  compute_encoder.set_bytes(E, c++);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
@@ -1862,6 +1902,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         w,
         scales,
         biases,
+        std::nullopt,
         out,
         transpose_,
         group_size_,
@@ -2078,6 +2119,26 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int K = x.shape(-1);
   int M = non_batched ? x.size() / K : x.shape(-2);
   int N = out.shape(-1);
+  if (has_global_scales && w_quantized && non_batched &&
+      x.dtype() == bfloat16 && K % 32 == 0 &&
+      M >= get_qmv_batch_limit(K, N, d)) {
+    qmm(x,
+        w_q,
+        scales_w,
+        std::nullopt,
+        global_scale_w,
+        out,
+        true,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
+    return;
+  }
   dispatch_qmv(
       x,
       w_q,
@@ -2146,6 +2207,57 @@ void GatherQQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     array gs_e(Shape{E}, float32, nullptr, {});
     broadcast(*global_scale_w, gs_e);
     global_scale_w = ensure_row_contiguous(gs_e, d, s);
+  }
+
+  int B = out.size() / M / N;
+  bool use_matrix_kernels = has_global_scales && w_quantized &&
+      x.dtype() == bfloat16 && w_q.ndim() == 3 &&
+      K % (metal::is_nax_available() ? 64 : 32) == 0;
+
+  if (use_matrix_kernels && M == 1 && B >= 16 && right_sorted_) {
+    int E = w_q.size() / w_q.shape(-1) / w_q.shape(-2);
+    if (B / E >= 4) {
+      gather_qmm_rhs(
+          x,
+          w_q,
+          scales_w,
+          std::nullopt,
+          global_scale_w,
+          rhs_indices,
+          out,
+          true,
+          group_size_,
+          bits_,
+          x.size() / K,
+          N,
+          K,
+          d,
+          s,
+          mode);
+      return;
+    }
+  }
+
+  if (use_matrix_kernels && M >= get_qmv_batch_limit(K, N, d)) {
+    gather_qmm(
+        x,
+        w_q,
+        scales_w,
+        std::nullopt,
+        global_scale_w,
+        lhs_indices,
+        rhs_indices,
+        out,
+        true,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
+    return;
   }
 
   gather_qmv(

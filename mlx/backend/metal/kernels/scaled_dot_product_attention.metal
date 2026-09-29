@@ -40,6 +40,7 @@ using namespace metal;
 
 #define instantiate_sdpa_vector_heads(type)      \
   instantiate_sdpa_vector(type, 64, 64)          \
+  instantiate_sdpa_vector(type, 96, 64)          \
   instantiate_sdpa_vector(type, 96, 96)          \
   instantiate_sdpa_vector(type, 128, 128)        \
   instantiate_sdpa_vector(type, 192, 128)        \

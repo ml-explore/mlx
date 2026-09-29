@@ -1050,9 +1050,10 @@ void init_array(nb::module_& m) {
       .def(
           "__bytes__",
           [](mx::array& a) {
-            a.eval();
+            auto c = mx::contiguous(a);
+            c.eval();
             return nb::bytes(
-                reinterpret_cast<const char*>(a.data<void>()), a.nbytes());
+                reinterpret_cast<const char*>(c.data<void>()), c.nbytes());
           })
       .def(
           "__format__",
@@ -1268,6 +1269,10 @@ void init_array(nb::module_& m) {
           "T",
           [](const mx::array& a) { return mx::transpose(a); },
           "Equivalent to calling ``self.transpose()`` with no arguments.")
+      .def_prop_ro(
+          "mT",
+          [](const mx::array& a) { return mx::matrix_transpose(a); },
+          "Equivalent to calling ``self.transpose()`` with the last two axes swapped.")
       .def(
           "sum",
           [](const mx::array& a,

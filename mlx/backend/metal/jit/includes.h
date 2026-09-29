@@ -18,6 +18,7 @@ const char* unary();
 const char* binary();
 const char* binary_two();
 const char* copy();
+const char* cross_entropy();
 const char* fft();
 const char* gather_axis();
 const char* gather_front();
@@ -58,5 +59,8 @@ const char* quantized_nax();
 const char* fp_quantized_nax();
 
 const char* steel_attention_nax();
+
+const char* gated_delta_update();
+const char* gated_delta_update_nax();
 
 } // namespace mlx::core::metal

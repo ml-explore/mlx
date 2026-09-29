@@ -492,6 +492,27 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.dtype, mx.int32)
         self.assertEqual(x.tolist(), [1, 2, 3])
 
+    def test_matrix_transpose(self):
+        x = mx.array([[1, 2], [3, 4]])
+        self.assertEqual(x.mT.tolist(), [[1, 3], [2, 4]])
+        self.assertEqual(mx.matrix_transpose(x).tolist(), [[1, 3], [2, 4]])
+
+        x = mx.arange(24).reshape((2, 3, 4))
+        self.assertEqual(x.mT.shape, (2, 4, 3))
+        self.assertEqualArray(x.mT, x.transpose((0, 2, 1)))
+        self.assertEqualArray(x.mT.mT, x)
+
+        self.assertEqual(mx.matrix_transpose(x).shape, (2, 4, 3))
+        self.assertEqualArray(mx.matrix_transpose(x), x.transpose((0, 2, 1)))
+
+        x = mx.array([1, 2, 3])
+
+        with self.assertRaises(ValueError):
+            x.mT
+
+        with self.assertRaises(ValueError):
+            mx.matrix_transpose(x)
+
     def test_bool_conversion(self):
         x = mx.array(True)
         self.assertTrue(x)
@@ -2048,6 +2069,15 @@ class TestArray(mlx_tests.MLXTestCase):
         else:
             self.assertEqual(b"aaaaaaaaaa", ab[::2])
             self.assertEqual(b"abcdefghij", ab[1::2])
+
+        # Test bytes on non-contiguous arrays
+        a = mx.arange(10, dtype=mx.uint8)
+        self.assertEqual(bytes(a[::2]), b"\x00\x02\x04\x06\x08")
+        self.assertEqual(bytes(a[::-1]), b"\x09\x08\x07\x06\x05\x04\x03\x02\x01\x00")
+        b = mx.arange(6, dtype=mx.int32).reshape(2, 3).T
+        self.assertEqual(bytes(b), np.array(b).tobytes())
+        c = mx.broadcast_to(mx.array([1, 2], dtype=mx.uint8), (3, 2))
+        self.assertEqual(bytes(c), np.array(c).tobytes())
 
     def test_buffer_protocol_ref_counting(self):
         a = mx.arange(3)
