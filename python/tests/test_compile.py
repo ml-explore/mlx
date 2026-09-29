@@ -1705,6 +1705,68 @@ class TestCompile(mlx_tests.MLXTestCase):
         x = mx.array([1.0, float("nan"), 3.0])
         self.assertTrue(mx.array_equal(mx.compile(fun)(x), mx.array([False, True])))
 
+    def test_compile_fused_reduction(self):
+        # 1-pass all_reduce (small array)
+        @mx.compile
+        def f_small(x):
+            return mx.sum(mx.abs(x))
+
+        x_small = mx.array(np.random.randn(64, 64).astype(np.float32))
+        self.assertTrue(mx.allclose(f_small(x_small), mx.sum(mx.abs(x_small))))
+
+        # 2-pass all_reduce (large array)
+        @mx.compile
+        def f_large(x):
+            return mx.sum(mx.abs(x))
+
+        x_large = mx.array(np.random.randn(512, 512).astype(np.float32))
+        self.assertTrue(
+            mx.allclose(
+                f_large(x_large), mx.sum(mx.abs(x_large)), rtol=1e-4, atol=1e-4
+            )
+        )
+
+        # Composite unary operations fused into reduction
+        @mx.compile
+        def f_composite(x):
+            return mx.max(mx.exp(-mx.abs(x)))
+
+        self.assertTrue(
+            mx.allclose(f_composite(x_small), mx.max(mx.exp(-mx.abs(x_small))))
+        )
+
+        # Different reduction operations: max, min, prod
+        @mx.compile
+        def f_ops(x):
+            return mx.stack(
+                [
+                    mx.max(mx.abs(x)),
+                    mx.min(mx.abs(x)),
+                    mx.prod(mx.abs(x[:4, :4])),
+                ]
+            )
+
+        expected_ops = mx.stack(
+            [
+                mx.max(mx.abs(x_small)),
+                mx.min(mx.abs(x_small)),
+                mx.prod(mx.abs(x_small[:4, :4])),
+            ]
+        )
+        self.assertTrue(mx.allclose(f_ops(x_small), expected_ops))
+
+        # Different dtypes
+        for dtype in [mx.float32, mx.float16, mx.bfloat16, mx.int32]:
+            x_dt = mx.array([1, -2, 3, -4], dtype=dtype)
+            fun = mx.compile(lambda x: mx.sum(mx.abs(x)))
+            expected = mx.sum(mx.abs(x_dt))
+            self.assertTrue(mx.allclose(fun(x_dt), expected))
+
+        # Empty array edge case
+        x_empty = mx.zeros((0,))
+        fun_empty = mx.compile(lambda x: mx.sum(mx.abs(x)))
+        self.assertEqual(fun_empty(x_empty).item(), 0)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

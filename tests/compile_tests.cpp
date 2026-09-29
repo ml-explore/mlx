@@ -875,3 +875,23 @@ TEST_CASE("test compile throwing first trace does not poison cache") {
   REQUIRE_EQ(out.size(), 1);
   CHECK_EQ(out[0].item<float>(), 3.0f);
 }
+
+TEST_CASE("test compile fused reduction") {
+  // Test 1-pass reduction with fused unary
+  auto fun1 = [](const std::vector<array>& inputs) {
+    return std::vector<array>{sum(abs(inputs[0]))};
+  };
+  auto cfun1 = compile(fun1);
+  auto x1 = array({-1.0f, 2.0f, -3.0f, 4.0f});
+  auto out1 = cfun1({x1})[0];
+  CHECK_EQ(out1.item<float>(), 10.0f);
+
+  // Test composite unary prefix
+  auto fun2 = [](const std::vector<array>& inputs) {
+    return std::vector<array>{max(exp(negative(abs(inputs[0]))))};
+  };
+  auto cfun2 = compile(fun2);
+  auto out2 = cfun2({x1})[0];
+  CHECK_EQ(out2.item<float>(), doctest::Approx(std::exp(-1.0f)));
+}
+

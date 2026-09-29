@@ -4221,7 +4221,8 @@ std::pair<std::vector<array>, std::vector<int>> Reduce::vmap(
 
 bool Reduce::is_equivalent(const Primitive& other) const {
   const Reduce& r_other = static_cast<const Reduce&>(other);
-  return reduce_type_ == r_other.reduce_type_ && axes_ == r_other.axes_;
+  return reduce_type_ == r_other.reduce_type_ && axes_ == r_other.axes_ &&
+      prefix_tape_.size() == r_other.prefix_tape_.size();
 }
 
 std::vector<Shape> Reduce::output_shapes(const std::vector<array>& inputs) {

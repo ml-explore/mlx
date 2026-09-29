@@ -2,13 +2,18 @@
 
 #include <algorithm>
 #include <cassert>
+#include <sstream>
+#include <fmt/format.h>
 
+#include "mlx/backend/common/compiled.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/reduce.h"
 #include "mlx/backend/metal/utils.h"
+#include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -966,27 +971,195 @@ void strided_reduce_general_dispatch(
   return strided_reduce_looped(in, out, op_name, args, compute_encoder, d, s);
 }
 
-void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  array in = inputs[0];
+void fused_all_reduce(
+    const array& in,
+    array& out,
+    const std::string& op_name,
+    const Reduce& reduce,
+    CommandEncoder& compute_encoder,
+    metal::Device& d,
+    const Stream& s) {
+  const auto& prefix_inputs = reduce.prefix_inputs();
+  const auto& prefix_tape = reduce.prefix_tape();
+  const auto& prefix_constant_ids = reduce.prefix_constant_ids();
 
-  assert(!axes_.empty());
+  auto is_constant = [&](size_t i) -> bool {
+    return prefix_constant_ids.count(prefix_inputs[i].id()) > 0;
+  };
 
-  // When all the reduced axes have size 1 at runtime, which can happen with
-  // shapeless compilation, the reduction is the identity so just cast-copy
-  // the input to the output.
-  if (in.size() > 0 && out.size() == in.size()) {
-    CopyType ctype =
-        in.flags().contiguous ? CopyType::Vector : CopyType::General;
-    copy_gpu(in, out, ctype, stream());
-    return;
+  NodeNamer namer;
+  std::ostringstream os;
+  std::ostringstream constant_hasher;
+
+  for (const auto& x : prefix_inputs) {
+    namer.get_name(x);
   }
 
-  // Continue with reduction operation
-  // Minimum of 4 bytes since we use size 4 structs for all reduce
-  // and metal will complain o/w
-  size_t min_bytes = std::max(out.nbytes(), 4ul);
-  out.set_data(allocator::malloc(min_bytes));
+  for (const auto& a : prefix_tape) {
+    os << namer.get_name(a) << kindof(a.dtype()) << a.itemsize();
+    os << a.primitive().name();
+    for (const auto& inp : a.inputs()) {
+      os << namer.get_name(inp);
+    }
+  }
+
+  for (size_t i = 0; i < prefix_inputs.size(); ++i) {
+    const auto& x = prefix_inputs[i];
+    if (is_constant(i)) {
+      os << "C";
+      print_constant(constant_hasher, x);
+    } else {
+      os << (is_scalar(x) ? "S" : "V");
+    }
+  }
+
+  os << "_" << op_name << "_" << type_to_name(in.dtype());
+  os << "_" << std::hash<std::string>{}(constant_hasher.str());
+
+  std::string kernel_prefix_name = "fused_reduce_" + os.str();
+  std::string prefix_struct_name = kernel_prefix_name + "_Prefix";
+  std::string kernel_func_name = kernel_prefix_name + "_all_reduce";
+
+  // Build prefix struct source
+  std::string prefix_struct_src;
+  prefix_struct_src += "struct " + prefix_struct_name + " {\n";
+  prefix_struct_src += "  template <typename T>\n";
+  prefix_struct_src += "  inline auto operator()(T val) const {\n";
+
+  for (size_t i = 0; i < prefix_inputs.size(); ++i) {
+    const auto& x = prefix_inputs[i];
+    const std::string& xname = namer.get_name(x);
+    std::string type = get_type_string(x.dtype());
+    if (is_constant(i)) {
+      std::ostringstream ss;
+      print_constant(ss, x);
+      prefix_struct_src += fmt::format(
+          "    auto tmp_{0} = static_cast<{1}>({2});\n",
+          xname,
+          type,
+          ss.str());
+    } else {
+      prefix_struct_src += fmt::format(
+          "    {0} tmp_{1} = static_cast<{0}>(val);\n", type, xname);
+    }
+  }
+
+  for (const auto& x : prefix_tape) {
+    const std::string& xname = namer.get_name(x);
+    std::string type = get_type_string(x.dtype());
+    std::string value;
+    if (is_static_cast(x.primitive())) {
+      value = fmt::format(
+          "cast_to<{0}>(tmp_{1})", type, namer.get_name(x.inputs()[0]));
+    } else {
+      value = x.primitive().name();
+      value += "()(";
+      for (size_t i = 0; i < x.inputs().size() - 1; ++i) {
+        value += fmt::format("tmp_{0}, ", namer.get_name(x.inputs()[i]));
+      }
+      value += fmt::format("tmp_{0})", namer.get_name(x.inputs().back()));
+    }
+    prefix_struct_src += fmt::format("    {0} tmp_{1} = {2};\n", type, xname, value);
+  }
+
+  prefix_struct_src += fmt::format(
+      "    return tmp_{0};\n", namer.get_name(prefix_tape.back()));
+  prefix_struct_src += "  }\n};\n";
+
+  auto [_, out_type] = remap_reduce_types(prefix_tape.back(), op_name);
+  auto in_type = in.dtype();
+  std::string op_type = op_name;
+  op_type[0] = std::toupper(op_name[0]);
+  auto in_t = get_type_string(in_type);
+  auto out_t = get_type_string(out_type);
+  std::string op = op_type + "<" + out_t + ">";
+
+  auto lib = d.get_library(kernel_prefix_name, [&]() {
+    std::string src = metal::utils();
+    concatenate(
+        src,
+        metal::unary_ops(),
+        metal::binary_ops(),
+        metal::ternary_ops(),
+        metal::reduce_utils(),
+        metal::reduce());
+    src += "\n" + prefix_struct_src + "\n";
+    src += get_template_definition(
+        kernel_func_name,
+        "all_reduce",
+        in_t,
+        out_t,
+        op,
+        "int64_t",
+        prefix_struct_name);
+    return src;
+  });
+
+  auto kernel = d.get_kernel(kernel_func_name, lib);
+
+  size_t in_size = in.size();
+
+  // Small array so dispatch a single threadgroup
+  if (in_size <= REDUCE_N_READS * 1024) {
+    int threadgroup_size = (in_size + REDUCE_N_READS - 1) / REDUCE_N_READS;
+    threadgroup_size = ((threadgroup_size + 31) / 32) * 32;
+    MTL::Size grid_dims(threadgroup_size, 1, 1);
+
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(out, 1);
+    compute_encoder.set_bytes(in_size, 2);
+    compute_encoder.set_bytes(in_size, 3);
+    compute_encoder.dispatch_threads(grid_dims, grid_dims);
+  } else {
+    int n_rows, threadgroup_2nd_pass;
+    if (in.nbytes() <= (1 << 26)) {
+      n_rows = 32 * REDUCE_N_READS;
+      threadgroup_2nd_pass = 32;
+    } else {
+      n_rows = 1024 * REDUCE_N_READS;
+      threadgroup_2nd_pass = 1024;
+    }
+
+    array intermediate({n_rows}, out_type, nullptr, {});
+    intermediate.set_data(allocator::malloc(intermediate.nbytes()));
+    compute_encoder.add_temporary(intermediate);
+
+    // 1st pass: dispatch fused kernel to intermediate
+    size_t row_size = (in_size + n_rows - 1) / n_rows;
+    int threadgroup_size =
+        std::min((row_size + REDUCE_N_READS - 1) / REDUCE_N_READS, 1024ul);
+    threadgroup_size = ((threadgroup_size + 31) / 32) * 32;
+    MTL::Size grid_dims(threadgroup_size, n_rows, 1);
+    MTL::Size group_dims(threadgroup_size, 1, 1);
+
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(intermediate, 1);
+    compute_encoder.set_bytes(in_size, 2);
+    compute_encoder.set_bytes(row_size, 3);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+
+    // 2nd pass: reduce intermediate to out using standard all_reduce
+    std::string kname_2nd_pass = "all_reduce";
+    concatenate(kname_2nd_pass, "_", op_name, type_to_name(intermediate));
+    auto kernel_2nd_pass = get_reduce_kernel(
+        d, kname_2nd_pass, "all_reduce", op_name, out_type, out_type, "int64_t");
+    compute_encoder.set_compute_pipeline_state(kernel_2nd_pass);
+    size_t intermediate_size = n_rows;
+    grid_dims = MTL::Size(threadgroup_2nd_pass, 1, 1);
+    group_dims = MTL::Size(threadgroup_2nd_pass, 1, 1);
+    compute_encoder.set_input_array(intermediate, 0);
+    compute_encoder.set_output_array(out, 1);
+    compute_encoder.set_bytes(intermediate_size, 2);
+    compute_encoder.set_bytes(intermediate_size, 3);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+  }
+}
+
+void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(!axes_.empty());
+
   std::string op_name;
   switch (reduce_type_) {
     case Reduce::And:
@@ -1009,10 +1182,52 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
       break;
   }
 
-  // Initialize output
   auto& s = stream();
   auto& d = metal::device(s.device);
   auto& compute_encoder = metal::get_command_encoder(s);
+
+  // Continue with reduction operation
+  // Minimum of 4 bytes since we use size 4 structs for all reduce
+  // and metal will complain o/w
+  size_t min_bytes = std::max(out.nbytes(), 4ul);
+  out.set_data(allocator::malloc(min_bytes));
+
+  if (has_fused_prefix()) {
+    array in = inputs[0];
+
+    if (in.size() == 0) {
+      init_reduce(out, op_name, compute_encoder, d, s);
+      return;
+    }
+
+    ReductionPlan plan = get_reduction_plan(in, axes_);
+
+    bool broadcasted = false;
+    for (int i = 0, j = 0; i < in.ndim() && !broadcasted; i++) {
+      if (j < axes_.size() && axes_[j] == i) {
+        j++;
+      } else {
+        broadcasted = in.strides(i) == 0;
+      }
+    }
+    if (plan.type == GeneralReduce || broadcasted || !in.flags().contiguous) {
+      array in_copy = contiguous_copy_gpu(in, s);
+      compute_encoder.add_temporary(in_copy);
+      in = in_copy;
+      plan = get_reduction_plan(in, axes_);
+    }
+
+    if (plan.type == ContiguousAllReduce) {
+      fused_all_reduce(in, out, op_name, *this, compute_encoder, d, s);
+      return;
+    }
+
+    throw std::runtime_error(
+        "Fused reduce not yet implemented for this reduction type");
+  }
+
+  assert(inputs.size() == 1);
+  array in = inputs[0];
 
   // Reduce
   if (in.size() > 0) {

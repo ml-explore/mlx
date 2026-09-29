@@ -831,6 +831,71 @@ void compile_fuse(
       continue;
     }
 
+    // If current op is a reduction on GPU, check if we can fuse prefix ops
+    // Only fuse for all_reduce (arr.size() == 1)
+    if (arr.has_primitive() && typeid(arr.primitive()) == typeid(Reduce) &&
+        arr.size() == 1 && arr.primitive().stream().device == Device::gpu) {
+      auto& reduction_input = arr.inputs()[0];
+      Stream reduction_stream = arr.primitive().stream();
+      const int max_prefix_depth = max_compile_depth - 1;
+
+      std::vector<array> prefix_tape;
+      std::vector<array> prefix_inputs;
+      std::unordered_set<uintptr_t> visited;
+
+      std::function<void(const array&, int)> collect_prefix;
+      collect_prefix = [&](const array& a, int depth) {
+        if (visited.count(a.id())) {
+          return;
+        }
+        if (depth >= max_prefix_depth || !a.has_primitive() ||
+            !is_unary(a.primitive()) ||
+            a.primitive().stream() != reduction_stream ||
+            input_ids.count(a.id()) || output_map.count(a.id())) {
+          prefix_inputs.push_back(a);
+          visited.insert(a.id());
+          return;
+        }
+        auto pit = parents_map.find(a.id());
+        if (pit != parents_map.end() && pit->second.size() > 1) {
+          prefix_inputs.push_back(a);
+          visited.insert(a.id());
+          return;
+        }
+        visited.insert(a.id());
+        for (auto& in : a.inputs()) {
+          collect_prefix(in, depth + 1);
+        }
+        prefix_tape.push_back(a);
+      };
+
+      collect_prefix(reduction_input, 0);
+
+      if (!prefix_tape.empty()) {
+        std::unordered_set<uintptr_t> constant_ids;
+        for (auto& in : prefix_inputs) {
+          if (in.size() == 1 && !in.has_primitive() &&
+              input_ids.find(in.id()) == input_ids.end()) {
+            constant_ids.insert(in.id());
+          }
+        }
+
+        auto& reduce = static_cast<Reduce&>(arr.primitive());
+        reduce.set_fused_prefix(
+            prefix_tape, prefix_inputs, std::move(constant_ids));
+
+        for (auto& p : prefix_tape) {
+          global_cache.insert(p.id());
+          parents_map.erase(p.id());
+        }
+        arr.inputs() = std::move(prefix_inputs);
+      }
+
+      new_tape.push_back(arr);
+      global_cache.insert(arr.id());
+      continue;
+    }
+
     // Two pass recursion:
     // First pass:
     //  - Collect all the primitives which we can fuse with
