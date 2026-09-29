@@ -2955,6 +2955,148 @@ array topk(const array& a, int k, int axis, StreamOrDevice s /* = {}*/) {
   return slice(a_partitioned, slice_starts, slice_ends, s);
 }
 
+std::vector<array> unique(
+    const array& a,
+    int size,
+    bool return_index /* = false */,
+    bool return_inverse /* = false */,
+    bool return_counts /* = false */,
+    const std::optional<array>& fill_value /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  // Validate args
+  if (size < 0) {
+    std::ostringstream msg;
+    msg << "[unique] Received negative size " << size << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (fill_value && fill_value->size() != 1) {
+    std::ostringstream msg;
+    msg << "[unique] Fill value must have one element, but got shape "
+        << fill_value->shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  const auto flat = flatten(a, s);
+  const int n = flat.size();
+
+  // Handle the edge case of an empty array.
+  if (n == 0) {
+    // Without an element there is no default fill value.
+    if (size > 0 && !fill_value) {
+      throw std::invalid_argument(
+          "[unique] A fill value is required for an empty input with a"
+          " non-zero size.");
+    }
+    std::vector<array> out;
+    out.push_back(
+        size == 0 ? flat
+                  : full(
+                        {size},
+                        astype(reshape(*fill_value, {}, s), flat.dtype(), s),
+                        flat.dtype(),
+                        s));
+    if (return_index) {
+      out.push_back(zeros({size}, uint32, s));
+    }
+    if (return_inverse) {
+      out.push_back(zeros(a.shape(), uint32, s));
+    }
+    if (return_counts) {
+      out.push_back(zeros({size}, int32, s));
+    }
+    return out;
+  }
+
+  // Sort the array. The values stay differentiable, the permutation does not.
+  std::optional<array> order;
+  if (return_index || return_inverse) {
+    order = stop_gradient(argsort(flat, 0, s), s);
+  }
+  const auto sorted = order ? take(flat, *order, 0, s) : sort(flat, 0, s);
+
+  // Edge detection on the sorted array, true where a new unique
+  // value starts in the sorted array.
+  const auto boundary = concatenate(
+      {array({true}),
+       not_equal(
+           slice(sorted, {1}, {n}, s), slice(sorted, {0}, {n - 1}, s), s)},
+      0,
+      s);
+
+  // Cumsum on boundary gives each sorted element the index of the unique
+  // value it belongs to. It indexes the output, so it is not differentiable.
+  const auto group = stop_gradient(
+      subtract(
+          cumsum(astype(boundary, uint32, s), 0, false, true, s),
+          array(1, uint32),
+          s),
+      s);
+
+  // Use smallest element of the sorted array (index 0) as padding by default.
+  const auto fill = fill_value
+      ? astype(reshape(*fill_value, {}, s), flat.dtype(), s)
+      : slice(sorted, {0}, {1}, s);
+
+  const int buffer_size = std::max(n, size);
+  // Scatter positions rather than values in the sorted array (64 bit values
+  // would fail to scatter on the GPU).
+  const auto slots = stop_gradient(
+      slice(
+          scatter_max(
+              zeros({buffer_size}, uint32, s),
+              group,
+              expand_dims(
+                  where(
+                      boundary,
+                      add(arange(n, uint32, s), array(1, uint32), s),
+                      array(0, uint32),
+                      s),
+                  1,
+                  s),
+              0,
+              s),
+          {0},
+          {size},
+          s),
+      s);
+  const auto used = greater(slots, array(0, uint32), s);
+  const auto positions =
+      subtract(maximum(slots, array(1, uint32), s), array(1, uint32), s);
+
+  // Build the output arrays.
+  std::vector<array> out;
+  out.push_back(where(used, take(sorted, positions, 0, s), fill, s));
+  if (return_index) {
+    // The sort is stable, so the first sorted position of a group holds the
+    // first occurrence in the input. Unused slots point at position zero,
+    // which pads with the index of the smallest unique value.
+    out.push_back(take(*order, positions, 0, s));
+  }
+  if (return_inverse) {
+    // Clamp so that the indices stay inside a truncated output. Without a
+    // truncation every group index is already smaller than size.
+    const auto clamped =
+        minimum(group, array(std::max(size - 1, 0), uint32), s);
+    const auto inverse = scatter(
+        zeros({n}, uint32, s), *order, expand_dims(clamped, 1, s), 0, s);
+    out.push_back(reshape(inverse, a.shape(), s));
+  }
+  // Padding entries count zero, so counts sum to the input size unless the
+  // output was truncated.
+  if (return_counts) {
+    out.push_back(slice(
+        scatter_add(
+            zeros({buffer_size}, int32, s),
+            group,
+            ones({n, 1}, int32, s),
+            0,
+            s),
+        {0},
+        {size},
+        s));
+  }
+  return out;
+}
+
 array logsumexp(const array& a, bool keepdims, StreamOrDevice s /* = {}*/) {
   std::vector<int> axes(a.ndim());
   std::iota(axes.begin(), axes.end(), 0);
