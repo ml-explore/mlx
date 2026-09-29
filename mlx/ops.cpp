@@ -726,7 +726,7 @@ array flip(const array& a, StreamOrDevice s /* = {} */) {
 namespace {
 
 inline auto
-normalize_slice(const Shape& shape, Shape& start, Shape stop, Shape& strides) {
+normalize_slice(const Shape& shape, Shape& start, Shape& stop, Shape& strides) {
   // - Start indices are normalized
   // - End indices are unchanged as -1 means something different
   //   pre-normalization (the end of the axis) versus post normalization (the
@@ -774,7 +774,13 @@ normalize_slice(const Shape& shape, Shape& start, Shape stop, Shape& strides) {
     }
     // Simplify the stride if it's unused
     if (out_shape[i] == 1) {
-      strides[i] = 1;
+      if (strides[i] < 0 && start[i] > 0) {
+        strides[i] = -1;
+        stop[i] = start[i] - 1;
+      } else {
+        strides[i] = 1;
+        stop[i] = start[i] + 1;
+      }
     }
   }
 
