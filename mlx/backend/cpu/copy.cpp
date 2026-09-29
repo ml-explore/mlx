@@ -27,7 +27,13 @@ void copy_vector(const array& src, array& dst) {
   auto src_ptr = src.data<SrcT>();
   auto dst_ptr = dst.data<DstT>();
   auto size = src.data_size();
-  std::copy(src_ptr, src_ptr + size, dst_ptr);
+  if constexpr (std::is_same_v<SrcT, DstT>) {
+    std::copy(src_ptr, src_ptr + size, dst_ptr);
+  } else {
+    std::transform(src_ptr, src_ptr + size, dst_ptr, [](SrcT x) {
+      return static_cast<DstT>(x);
+    });
+  }
 }
 
 template <typename SrcT, typename DstT, int D>

@@ -293,7 +293,7 @@ void float_reduction(
 struct AndReduce {
   template <typename T>
   bool operator()(bool x, T y) {
-    return x & (y != 0);
+    return x & static_cast<bool>(y);
   }
 
   bool operator()(bool x, bool y) {
@@ -319,7 +319,7 @@ struct AndReduce {
 struct OrReduce {
   template <typename T>
   bool operator()(bool x, T y) {
-    return x | (y != 0);
+    return x | static_cast<bool>(y);
   }
 
   bool operator()(bool x, bool y) {
@@ -517,11 +517,10 @@ void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {
             break;
           case uint64:
           case int64:
-          // complex64 stays on the integer path. Testing it as a complex
-          // would go through complex64_t's conversion to float and only look
-          // at the real part, which would miss 1j.
-          case complex64:
             reduce_dispatch_and_or<int64_t>(in, out, reduce_type_, axes_);
+            break;
+          case complex64:
+            reduce_dispatch_and_or<complex64_t>(in, out, reduce_type_, axes_);
             break;
           case float64:
             reduce_dispatch_and_or<double>(in, out, reduce_type_, axes_);
