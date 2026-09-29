@@ -1242,6 +1242,30 @@ class TestFast(mlx_tests.MLXTestCase):
         out = call_kernel(a).astype(mx.float32) + call_kernel(b)
         self.assertTrue(mx.allclose(out, mx.full((32,), 8.0)))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_metal_kernel_negative_template_int(self):
+        # Negative int template values used to produce a '-' in the generated
+        # kernel name (via make_template_hash), which fails Metal compilation
+        # (#4579).
+        kernel = mx.fast.metal_kernel(
+            name="negtmpl",
+            input_names=["inp"],
+            output_names=["out"],
+            source="out[thread_position_in_grid.x] = T(V);",
+        )
+        (out,) = kernel(
+            inputs=[mx.zeros((4,), dtype=mx.int32)],
+            template=[("T", mx.int32), ("V", -1)],
+            grid=(4, 1, 1),
+            threadgroup=(4, 1, 1),
+            output_shapes=[(4,)],
+            output_dtypes=[mx.int32],
+        )
+        mx.eval(out)
+        self.assertEqual(out.tolist(), [-1, -1, -1, -1])
+
+
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
