@@ -1,4 +1,4 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2026 Apple Inc.
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
