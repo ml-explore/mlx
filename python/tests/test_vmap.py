@@ -1041,7 +1041,7 @@ class TestVmap(mlx_tests.MLXTestCase):
         a = mx.arange(16, dtype=mx.uint8).reshape(4, 4)
         b = mx.arange(16, dtype=mx.int32).reshape(4, 4)
         for x, dtype in [(a, mx.int8), (a, mx.int16), (a, mx.int32), (b, mx.uint8)]:
-            for in_axes in [0, 1]:
+            for in_axes in [0, 1, -1]:
                 expected = mx.stack(
                     [mx.take(x, i, axis=in_axes).view(dtype) for i in range(4)]
                 )
