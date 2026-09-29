@@ -59,6 +59,12 @@ class TestFFT(mlx_tests.MLXTestCase):
         x = np.fft.rfft(np.real(a_np))
         self.check_mx_np(mx.fft.irfft, np.fft.irfft, x)
 
+        # Real transforms of size one
+        a_np = np.arange(1, 5, dtype=np.float32).reshape(4, 1)
+        self.check_mx_np(mx.fft.rfft, np.fft.rfft, a_np)
+        x = np.fft.rfft(a_np)
+        self.check_mx_np(mx.fft.irfft, np.fft.irfft, x, n=1)
+
     def test_fftn(self):
         r = np.random.randn(8, 8, 8).astype(np.float32)
         i = np.random.randn(8, 8, 8).astype(np.float32)
