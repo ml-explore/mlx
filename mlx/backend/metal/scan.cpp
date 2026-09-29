@@ -133,8 +133,9 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
           in.flags());
     }
   } else {
-    in = contiguous_copy_gpu(in, stream());
-    out.copy_shared_buffer(in);
+    // Output type can be wider than input
+    copy_gpu(in, out, CopyType::General, stream());
+    in = out;
   }
 
   scan_gpu_inplace(
