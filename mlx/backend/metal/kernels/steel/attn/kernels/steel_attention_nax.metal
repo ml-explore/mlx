@@ -22,10 +22,12 @@
     instantiate_attn_dsplit(iname, itype, 64, 32, 256, 4, 2, mname, mtype) \
     instantiate_attn(iname, itype, 64, 64, 128, 128, 4, 1, mname, mtype)   \
     instantiate_attn(iname, itype, 64, 64,  64,  64, 4, 1, mname, mtype)   \
+    instantiate_attn(iname, itype, 64, 32, 256, 256, 4, 1, mname, mtype)   \
     instantiate_attn(iname, itype, 64, 32, 128, 128, 4, 1, mname, mtype)   \
     instantiate_attn(iname, itype, 64, 32,  96,  96, 4, 1, mname, mtype)   \
     instantiate_attn(iname, itype, 64, 32,  96,  64, 4, 1, mname, mtype)   \
     instantiate_attn(iname, itype, 64, 32,  64,  64, 4, 1, mname, mtype)
+
 
 #define instantiate_attn_mask_helper(iname, itype) \
     instantiate_attn_shapes_helper(iname, itype, iname, itype) \
