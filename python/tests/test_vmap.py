@@ -219,6 +219,19 @@ class TestVmap(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.array_equal(out, expected))
 
+    def test_vmap_strided_slice_single_element(self):
+        # A strided slice selecting exactly one element must vmap to the
+        # batched version of what the un-batched slice returns (regression:
+        # the stored stride was collapsed to 1 without narrowing stop, so
+        # re-deriving the region returned every element in the span).
+        x = mx.arange(24, dtype=mx.float32).reshape(4, 2, 3)
+        out = mx.vmap(lambda t: t[0::2])(x)
+        self.assertTrue(mx.array_equal(out, x[:, 0:1]))
+
+        y = mx.arange(48, dtype=mx.float32).reshape(4, 4, 3)
+        out = mx.vmap(lambda t: t[0::2])(y)
+        self.assertTrue(mx.array_equal(out, y[:, 0:4:2]))
+
     def test_vmap_reduce(self):
         a = mx.ones((5, 5), mx.int32)
         out = mx.vmap(lambda x: x.sum())(a)
