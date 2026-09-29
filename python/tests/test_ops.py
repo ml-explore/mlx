@@ -3194,6 +3194,14 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(x.flatten(start_axis=1).shape, (2, 3 * 4))
         self.assertEqual(x.flatten(end_axis=1).shape, (2 * 3, 4))
 
+    def test_reshape_col_contiguous(self):
+        # Reshape without a copy
+        a = mx.arange(12).reshape(3, 4).T.reshape(2, 2, 3)
+        b = mx.arange(12).reshape(3, 2, 2).T
+        a_np = np.arange(12).reshape(3, 4).T.reshape(2, 2, 3)
+        b_np = np.arange(12).reshape(3, 2, 2).T
+        self.assertTrue(np.array_equal(a + b, a_np + b_np))
+
     def test_clip(self):
         a = np.array([1, 4, 3, 8, 5], np.int32)
         expected = np.clip(a, 2, 6)
