@@ -3817,6 +3817,11 @@ class TestOps(mlx_tests.MLXTestCase):
             a_out = out.view(mx.int32)
             self.assertTrue(mx.array_equal(a_out, a, equal_nan=True))
 
+        # Size one last axis
+        a = mx.arange(4, dtype=mx.int32).reshape(1, 4).T
+        expected = np.arange(4, dtype=np.int32).reshape(4, 1).view(np.int16)
+        self.assertTrue(np.array_equal(a.view(mx.int16), expected))
+
     def _hadamard(self, N):
         # Matches scipy.linalg.hadamard
         H = np.array([[1]], dtype=np.int64)
