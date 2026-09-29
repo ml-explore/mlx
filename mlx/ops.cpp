@@ -482,7 +482,7 @@ array unflatten(
     std::ostringstream msg;
     msg << "[unflatten] Invalid axes " << ax << " for array with " << a.ndim()
         << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
 
   size_t size = 1;
@@ -817,7 +817,7 @@ void normalize_dynamic_slice_inputs(
       std::ostringstream msg;
       msg << prefix << " Invalid axis " << ax << " for array with dimension "
           << a.ndim() << ".";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
     ax = new_ax;
   }
@@ -1770,7 +1770,7 @@ array transpose(
       std::ostringstream msg;
       msg << "[transpose] Invalid axis (" << ax << ") for array with "
           << a.ndim() << " dimensions.";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
     if (shape[ax] != 0) {
       throw std::invalid_argument("[transpose] Repeat axes not allowed.");
@@ -1791,6 +1791,17 @@ array transpose(
 array transpose(const array& a, StreamOrDevice s /* = {} */) {
   std::vector<int> axes(a.ndim());
   std::iota(axes.rbegin(), axes.rend(), 0);
+  return transpose(a, std::move(axes), to_stream(s));
+}
+
+array matrix_transpose(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.ndim() < 2) {
+    throw std::invalid_argument(
+        "[matrix_transpose] Input array must have at least 2 dimensions.");
+  }
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  std::swap(axes[a.ndim() - 1], axes[a.ndim() - 2]);
   return transpose(a, std::move(axes), to_stream(s));
 }
 
@@ -2333,7 +2344,7 @@ array mean(
       std::ostringstream msg;
       msg << "[mean] axis " << axis << " is out of bounds for array with "
           << ndim << " dimensions.";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
   }
   auto dtype = at_least_float(a.dtype());
@@ -2367,7 +2378,7 @@ array median(
       std::ostringstream msg;
       msg << "[median] axis " << axis << " is out of bounds for array with "
           << ndim << " dimensions.";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
     set_axes.insert(axis < 0 ? axis + ndim : axis);
   }
@@ -3154,8 +3165,14 @@ array floor_divide(
 
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
-  return array(
+  auto quotient = array(
       shape, dtype, std::make_shared<Divide>(to_stream(s)), std::move(inputs));
+  auto rem = remainder(a, b, s);
+  auto zero = array(0, dtype);
+  auto step = logical_and(
+      not_equal(rem, zero, s),
+      not_equal(less(a, zero, s), less(b, zero, s), s));
+  return subtract(quotient, astype(step, dtype, s), s);
 }
 
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
@@ -3677,7 +3694,7 @@ array take(
     std::ostringstream msg;
     msg << "[take] Received invalid axis " << axis << " for array with "
         << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
 
   // Check for valid take
@@ -3722,7 +3739,7 @@ array take(const array& a, int index, int axis, StreamOrDevice s /* = {} */) {
     std::ostringstream msg;
     msg << "[take] Received invalid axis " << axis << " for array with "
         << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
 
   // Check for valid take
@@ -4249,7 +4266,7 @@ array diff(
   int ndim = static_cast<int>(a.ndim());
   int ax = axis < 0 ? axis + ndim : axis;
   if (ax < 0 || ax >= ndim) {
-    throw std::invalid_argument("[diff] Axis is out of bounds for the array.");
+    throw std::out_of_range("[diff] Axis is out of bounds for the array.");
   }
   if (n < 0) {
     throw std::invalid_argument("[diff] Order `n` must be non-negative.");
@@ -5575,9 +5592,9 @@ array gather_qmm(
           << ".";
       throw std::invalid_argument(msg.str());
     }
-    if (to_stream(s).device != Device::gpu || !metal::is_available()) {
+    if (to_stream(s).device != Device::gpu) {
       throw std::invalid_argument(
-          "[gather_qmm] Global scale is only supported on the Metal backend.");
+          "[gather_qmm] Global scale is only supported on the GPU.");
     }
   }
   if (qmode == QuantizationMode::Affine) {
@@ -5802,7 +5819,7 @@ array vecdot(
   }
   int ax = axis < 0 ? axis + a.ndim() : axis;
   if (ax < 0 || ax >= a.ndim()) {
-    throw std::invalid_argument("[vecdot] axis is out of bounds.");
+    throw std::out_of_range("[vecdot] axis is out of bounds.");
   }
   if (axis < 0 ? axis + b.ndim() != ax : axis >= b.ndim()) {
     throw std::invalid_argument("[vecdot] axis is out of bounds.");
@@ -6683,7 +6700,7 @@ array roll(
       std::ostringstream msg;
       msg << "[roll] Invalid axis " << axes[i] << " for array with " << a.ndim()
           << " dimensions.";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
 
     auto sh = shift[i];
