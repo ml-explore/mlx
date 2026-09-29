@@ -3,15 +3,17 @@
 
 using namespace metal;
 
-#define instantiate_gated_delta_update_seq(in_type, dk, dv, hk, hv) \
-  instantiate_kernel(                                               \
-      "seq_gated_delta_" #in_type "_" #dk "_" #dv "_" #hk "_" #hv,  \
-      gated_delta_seq,                                              \
-      in_type,                                                      \
-      dk,                                                           \
-      dv,                                                           \
-      hk,                                                           \
-      hv)
+#define instantiate_gated_delta_update_seq(in_type, dk, dv, hk, hv, ckpt) \
+  instantiate_kernel(                                                    \
+      "seq_gated_delta_" #in_type "_" #dk "_" #dv "_" #hk "_" #hv         \
+      "_" #ckpt,                                                         \
+      gated_delta_seq,                                                   \
+      in_type,                                                           \
+      dk,                                                                \
+      dv,                                                                \
+      hk,                                                                \
+      hv,                                                                \
+      ckpt)
 
 #define instantiate_gated_delta_update_fused_chunk(in_type, dk, dv, hk, hv, c) \
   instantiate_kernel(                                                          \
@@ -25,17 +27,23 @@ using namespace metal;
       hv,                                                                      \
       c)
 
-#define instantiate_gated_delta_dims(in_type, dk, dv, hk, hv) \
-  instantiate_gated_delta_update_seq(in_type, dk, dv, hk, hv) \
-      instantiate_gated_delta_update_fused_chunk(in_type, dk, dv, hk, hv, 8)
+// Ckpt is a template parameter of the sequential kernel, so the inference path
+// has to name one even though it never stores. These must cover every value
+// gated_delta_ckpt() can return, since the host puts it in the kernel name.
+#define instantiate_gated_delta_dims(in_type, dk, dv, hk, hv)     \
+  instantiate_gated_delta_update_seq(in_type, dk, dv, hk, hv, 1)  \
+  instantiate_gated_delta_update_seq(in_type, dk, dv, hk, hv, 4)  \
+  instantiate_gated_delta_update_seq(in_type, dk, dv, hk, hv, 8)  \
+  instantiate_gated_delta_update_seq(in_type, dk, dv, hk, hv, 16) \
+  instantiate_gated_delta_update_fused_chunk(in_type, dk, dv, hk, hv, 8)
 
-#define instantiate_gated_delta(in_type)                                  \
-  instantiate_gated_delta_dims(in_type, 128, 128, 24, 24)                 \
-      instantiate_gated_delta_dims(in_type, 128, 128, 32, 32)             \
-          instantiate_gated_delta_dims(in_type, 128, 128, 16, 32)         \
-              instantiate_gated_delta_dims(in_type, 128, 128, 16, 48)     \
-                  instantiate_gated_delta_dims(in_type, 128, 128, 16, 16) \
-                      instantiate_gated_delta_dims(in_type, 128, 128, 16, 64)
+#define instantiate_gated_delta(in_type)                  \
+  instantiate_gated_delta_dims(in_type, 128, 128, 24, 24) \
+  instantiate_gated_delta_dims(in_type, 128, 128, 32, 32) \
+  instantiate_gated_delta_dims(in_type, 128, 128, 16, 32) \
+  instantiate_gated_delta_dims(in_type, 128, 128, 16, 48) \
+  instantiate_gated_delta_dims(in_type, 128, 128, 16, 16) \
+  instantiate_gated_delta_dims(in_type, 128, 128, 16, 64)
 
 instantiate_gated_delta(float);
 instantiate_gated_delta(bfloat16_t);

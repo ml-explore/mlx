@@ -189,8 +189,8 @@ void init_fast(nb::module_& parent_module) {
         Computes ``logsumexp(logits, axis=-1) - logits[..., target]`` in a
         fused kernel with accumulation in float32.
 
-        Note: Currently is implemented only on CUDA, fallback to unfused version with
-        manual casting on Metal and CPU.
+        Note: The fused kernel is available on Metal and CUDA. The CPU falls
+        back to the unfused version, which reduces in the dtype of the logits.
 
         Args:
             logits (array): The unnormalized logits. The loss is computed over
