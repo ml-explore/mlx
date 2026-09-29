@@ -977,10 +977,13 @@ std::vector<array> ScaledDotProductAttention::vjp(
     const std::vector<array>& outputs) {
   assert(primals.size() >= 3);
   assert(cotangents.size() == outputs.size());
-
   auto s = stream();
   if (ScaledDotProductAttentionVJP::use_fallback(primals[0], s)) {
     assert(outputs.size() == 1);
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
+
+  if (outputs.size() != 2) {
     return Custom::vjp(primals, cotangents, argnums, outputs);
   }
 
@@ -1157,6 +1160,54 @@ std::vector<array> gated_delta_update(
 
   auto result = fallback({q, k, v, g, beta, h0, mask});
   return result;
+}
+std::vector<array> GatedDeltaUpdate::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  const int Hk = primals[0].shape(2);
+  const int Dk = primals[0].shape(3);
+  const int Hv = primals[2].shape(2);
+  const int Dv = primals[2].shape(3);
+
+  if (GatedDeltaUpdateVJP::use_fallback(Hk, Dk, Hv, Dv, stream())) {
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
+
+  if (primals.size() != 6) {
+    throw std::runtime_error(
+        "[GatedDeltaUpdate::vjp] expected 6 primals (q,k,v,g,beta,h0), got " +
+        std::to_string(primals.size()));
+  }
+  if (cotangents.size() != 2) {
+    throw std::runtime_error(
+        "[GatedDeltaUpdate::vjp] expected 2 cotangents (out, state), got " +
+        std::to_string(cotangents.size()));
+  }
+
+  std::vector<array> inputs = primals; // q,k,v,g,beta,h0  (indices 0..5)
+  inputs.push_back(cotangents[0]); // cot_o -> index 6
+  inputs.push_back(cotangents[1]); // cot_h -> index 7
+
+  std::vector<Shape> shapes;
+  std::vector<Dtype> dtypes;
+  for (int i = 0; i < 6; ++i) {
+    shapes.push_back(primals[i].shape());
+    dtypes.push_back(i == 5 ? float32 : primals[i].dtype()); // dh is float32
+  }
+
+  auto vjps = array::make_arrays(
+      std::move(shapes),
+      std::move(dtypes),
+      std::make_shared<GatedDeltaUpdateVJP>(stream(), fallback_),
+      std::move(inputs));
+
+  std::vector<array> returned_vjps;
+  for (int arg : argnums) {
+    returned_vjps.push_back(std::move(vjps[arg]));
+  }
+  return returned_vjps;
 }
 
 bool Quantize::is_equivalent(const Primitive& other) const {
