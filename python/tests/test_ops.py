@@ -378,6 +378,31 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.dtype, mx.int32)
         self.assertEqual(z.item(), 2)
 
+    def test_floor_divide(self):
+        a = [4, 5, -1, -6]
+        b = [-2, 3, 2, -3]
+
+        mx_int_float_dtypes = mx.__array_namespace_info__().dtypes(
+            kind=("signed integer", "real floating")
+        )
+        np_int_float_dtypes = np.__array_namespace_info__().dtypes(
+            kind=("signed integer", "real floating")
+        )
+
+        for kind, dtype in mx_int_float_dtypes.items():
+            with self.subTest(dtype=dtype):
+                result = mx.floor_divide(
+                    mx.array(a, dtype=dtype), mx.array(b, dtype=dtype)
+                )
+                expected = np.floor_divide(
+                    np.array(a, dtype=np_int_float_dtypes[kind]),
+                    np.array(b, dtype=np_int_float_dtypes[kind]),
+                )
+                self.assertEqual(result.tolist(), expected.tolist())
+
+                result = mx.array(a, dtype=dtype) // mx.array(b, dtype=dtype)
+                self.assertEqual(result.tolist(), expected.tolist())
+
     def test_remainder(self):
         # Complex is not supported and has to say so rather than quietly
         # computing a componentwise remainder, which no other library defines
@@ -987,7 +1012,7 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.median(x, axis=0)
         x = mx.array([0, 1, 2, 3, 4])
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.median(x, axis=(0, 1))
         with self.assertRaises(ValueError):
             mx.median(x, axis=(0, 0))
@@ -1572,9 +1597,9 @@ class TestOps(mlx_tests.MLXTestCase):
         values = mx.ones(a.shape, dtype=a.dtype)
 
         for ax in [3, 4, 100, -4, -5, -100]:
-            with self.assertRaises(ValueError):
+            with self.assertRaises(IndexError):
                 mx.take_along_axis(a, idx, axis=ax)
-            with self.assertRaises(ValueError):
+            with self.assertRaises(IndexError):
                 mx.put_along_axis(a, idx, values, axis=ax)
 
         # Valid negative axes still work
@@ -1586,7 +1611,7 @@ class TestOps(mlx_tests.MLXTestCase):
         a = mx.array([1.0, 2.0, 3.0])
         b = mx.array([4.0, 5.0, 6.0])
         for ax in [1, 2, -2, -50]:
-            with self.assertRaises(ValueError):
+            with self.assertRaises(IndexError):
                 mx.linalg.cross(a, b, axis=ax)
 
     def test_put_along_axis(self):
@@ -1656,7 +1681,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(y.tolist(), [[3, 4]])
         self.assertEqual(z.tolist(), [[5, 6]])
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.split(a, 3, axis=2)
 
         a = mx.arange(8)
@@ -1678,7 +1703,7 @@ class TestOps(mlx_tests.MLXTestCase):
         b_np = np.array([1, 2, 3, 4])
         self.assertTrue(np.array_equal(mx.flip(mx.array(b_np)), np.flip(b_np)))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.flip(a, axis=2)
 
     def test_unstack(self):
@@ -1703,7 +1728,7 @@ class TestOps(mlx_tests.MLXTestCase):
         # stack is the inverse of unstack.
         self.assertTrue(mx.array_equal(mx.stack(mx.unstack(a, axis=1), axis=1), a))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.unstack(a, axis=2)
 
     def test_split_invalid_num_splits(self):
@@ -2589,7 +2614,7 @@ class TestOps(mlx_tests.MLXTestCase):
         for op in ["cumsum", "cumprod", "cummax", "cummin", "logcumsumexp"]:
             mxop = getattr(mx, op)
             for ax in [3, 4, 100, -4, -5, -100]:
-                with self.assertRaises(ValueError):
+                with self.assertRaises(IndexError):
                     mxop(a, axis=ax)
 
             # Valid negative axes still work and agree with the positive one
@@ -2793,7 +2818,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.diff(m, axis=0).tolist(), [[-1, 2, 0]])
         self.assertEqual(mx.diff(m, axis=1).tolist(), [[2, 3], [5, 1]])
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.diff(a, axis=1)
 
     def test_squeeze_expand(self):
@@ -2817,18 +2842,63 @@ class TestOps(mlx_tests.MLXTestCase):
         # Out of bounds negative axes must raise instead of wrapping around
         a = mx.zeros(())
         self.assertEqual(mx.expand_dims(a, (-2, -1)).shape, (1, 1))
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.expand_dims(a, (-3, -2))
 
         a = mx.zeros((2, 2))
         for axes in [(-5, -4), (-6, 0), (0, 5)]:
-            with self.assertRaises(ValueError):
+            with self.assertRaises(IndexError):
                 mx.expand_dims(a, axes)
 
         a = mx.zeros((1, 1, 1))
         for axes in [(-4,), (-5, 0), (0, 4)]:
-            with self.assertRaises(ValueError):
+            with self.assertRaises(IndexError):
                 mx.squeeze(a, axes)
+
+    def test_out_of_bounds_axis_raises_index_error(self):
+        # An out of bounds axis is an indexing error, not a value error, so
+        # every op agrees on IndexError (numpy raises AxisError, which is a
+        # subclass of both).
+        a = mx.zeros((2, 3))
+        cases = [
+            lambda: mx.sum(a, axis=5),
+            lambda: mx.mean(a, axis=5),
+            lambda: mx.median(a, axis=5),
+            lambda: mx.expand_dims(a, 5),
+            lambda: mx.squeeze(mx.zeros((1, 1)), 5),
+            lambda: mx.moveaxis(a, 5, 0),
+            lambda: mx.swapaxes(a, 5, 0),
+            lambda: mx.transpose(a, (5, 0)),
+            lambda: mx.roll(a, 1, 5),
+            lambda: mx.diagonal(a, 0, 5, 1),
+            lambda: mx.take(a, mx.array([0]), axis=5),
+            lambda: mx.vecdot(a, a, axis=5),
+            lambda: mx.diff(a, axis=5),
+            lambda: mx.take_along_axis(a, mx.zeros((2, 3), mx.int32), axis=5),
+            lambda: mx.cumsum(a, axis=5),
+            lambda: mx.argsort(a, axis=5),
+            lambda: mx.split(a, 2, axis=5),
+            lambda: mx.flip(a, axis=5),
+            lambda: mx.fft.fft(a, axis=5),
+            lambda: mx.fft.fftshift(a, axes=[5]),
+            lambda: mx.random.categorical(a, axis=5),
+            lambda: mx.unflatten(a, 5, (1, -1)),
+            lambda: mx.slice(a, mx.array([0]), [5], (1,)),
+            lambda: mx.slice_update(a, mx.zeros((1, 1)), mx.array([0]), [5]),
+            lambda: mx.vmap(mx.exp, in_axes=5)(a),
+        ]
+        for case in cases:
+            with self.assertRaises(IndexError):
+                case()
+
+        # Duplicate or mismatched axes stay ValueError, they are not a
+        # bounds problem.
+        with self.assertRaises(ValueError):
+            mx.transpose(a, (0, 0))
+        with self.assertRaises(ValueError):
+            mx.transpose(a, (0,))
+        with self.assertRaises(ValueError):
+            mx.sum(a, axis=(0, 0))
 
     def test_sort(self):
         shape = (6, 4, 10)
@@ -3659,7 +3729,7 @@ class TestOps(mlx_tests.MLXTestCase):
 
         with self.assertRaises(ValueError):
             mx.vecdot(mx.array(1), mx.array([1]))
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.vecdot(mx.array([1, 2]), mx.array([1, 2]), axis=1)
         with self.assertRaises(ValueError):
             mx.vecdot(mx.array([1, 2]), mx.array([1]))
