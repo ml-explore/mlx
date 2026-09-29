@@ -1426,6 +1426,22 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(f16_sub).item())
         self.assertTrue(mx.all(bf16_sub).item())
 
+    def test_complex_bool_cast(self):
+        # True if either part is nonzero, as in numpy
+        x_np = np.array(
+            [0j, 1j, 1 + 0j, complex(-0.0, -0.0), complex(np.nan, 0.0)],
+            dtype=np.complex64,
+        )
+        x = mx.array(x_np)
+        self.assertEqual(x.astype(mx.bool_).tolist(), x_np.astype(bool).tolist())
+        self.assertEqual(mx.logical_not(x).tolist(), np.logical_not(x_np).tolist())
+        self.assertTrue(mx.any(mx.array([0j, 1j])).item())
+        self.assertTrue(mx.all(mx.array([1j, 1 + 0j])).item())
+        self.assertFalse(mx.any(mx.array([complex(0.0, -0.0), 0j])).item())
+
+        out = mx.array([True, False]).astype(mx.complex64)
+        self.assertEqual(out.tolist(), [1 + 0j, 0j])
+
     def test_stop_gradient(self):
         def func(x):
             return mx.sum(2 * x + mx.stop_gradient(3 * x))
