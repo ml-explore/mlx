@@ -1,5 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/common/broadcasting.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
 #include "mlx/backend/cuda/quantized/qqmm_impl.h"
@@ -243,6 +244,14 @@ void GatherQQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       : std::make_tuple(
             ensure_contiguous(w_pre, encoder, s),
             ensure_contiguous(inputs[base_size - 1], encoder, s));
+
+  // The gather kernels take one global scale per expert.
+  if (global_scale_w) {
+    int E = w_q.size() / w_q.shape(-1) / w_q.shape(-2);
+    array gs_e(Shape{E}, float32, nullptr, {});
+    broadcast(*global_scale_w, gs_e);
+    global_scale_w = ensure_row_contiguous(gs_e, encoder, s);
+  }
 
   // Quantize activation.
   array x = quantize_dequantize_input(

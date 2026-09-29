@@ -69,9 +69,9 @@ inline void* unified_malloc(size_t size) {
 
 inline void unified_free(void* data) {
   if (supports_managed_memory()) {
-    CHECK_CUDA_ERROR(cudaFree(data));
+    cudaFree(data);
   } else {
-    CHECK_CUDA_ERROR(cudaFreeHost(data));
+    cudaFreeHost(data);
   }
 }
 
@@ -324,9 +324,9 @@ void CudaAllocator::free_async(CudaBuffer& buf, cudaStream_t stream) {
       if (!stream) {
         stream = free_streams_[buf.device];
       }
-      CHECK_CUDA_ERROR(cudaFreeAsync(buf.data, stream));
+      cudaFreeAsync(buf.data, stream);
     } else {
-      CHECK_CUDA_ERROR(cudaFree(buf.data));
+      cudaFree(buf.data);
     }
   }
 }
