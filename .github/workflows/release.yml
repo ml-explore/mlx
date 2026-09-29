@@ -58,7 +58,7 @@ jobs:
       matrix:
         os: ['Linux', 'Windows']
         arch: ['x86_64', 'aarch64']
-        python-version: &pyver ['3.10', '3.11', '3.12', '3.13', '3.13t', '3.14', '3.14t']
+        python-version: &pyver ['3.10', '3.11', '3.12', '3.13', '3.13t', '3.14', '3.14t', '3.15', '3.15t']
         # There is no cp310 binary for Windows on arm.
         exclude:
           - os: 'Windows'

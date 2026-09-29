@@ -1,10 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <limits>
-#include <numeric>
-#include <ostream>
-#include <variant>
-
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
@@ -12,6 +7,11 @@
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
+
+#include <limits>
+#include <numeric>
+#include <ostream>
+#include <variant>
 
 #include "mlx/einsum.h"
 #include "mlx/ops.h"
