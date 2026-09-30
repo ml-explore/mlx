@@ -15,7 +15,7 @@ repos:
     rev: 26.1.0
     hooks:
     -   id: black
-    
+
 -   repo: https://github.com/pycqa/isort
     rev: 7.0.0
     hooks:
@@ -26,3 +26,10 @@ repos:
   rev: v0.6.13
   hooks:
     - id: cmake-format
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.11.13
+  hooks:
+    - id: ruff-check
+      types_or: [python, pyi]
+    - id: ruff-format
+      types_or: [python, pyi]
