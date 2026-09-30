@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdlib>
 #include <map>
+#include <optional>
 #include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
@@ -302,9 +303,9 @@ std::uintptr_t get_function_address(const std::function<T(U...)>& fun) {
 class CompileCache {
  public:
   struct CacheEntry {
-    CacheEntry(Stream stream, bool shapeless)
-        : stream(stream), shapeless(shapeless) {};
-    Stream stream;
+    CacheEntry(std::optional<Stream> stream, bool shapeless)
+        : stream(stream), shapeless(shapeless) {}
+    std::optional<Stream> stream;
     bool shapeless;
     std::vector<array> inputs;
     std::vector<array> outputs;
@@ -370,7 +371,7 @@ class CompileCache {
     // Loop over entries and check:
     // - Default stream and device match the entry's default stream
     // - Inputs match i.e. shapes and types must be equal.
-    auto stream = default_stream(default_device());
+    auto stream = peek_default_stream(default_device());
     for (CacheEntry& entry : entries) {
       // Check that the default stream and device match
       if (entry.stream != stream) {

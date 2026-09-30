@@ -1,5 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
+import math
 from itertools import combinations, permutations
 
 import mlx.core as mx
@@ -55,6 +56,33 @@ class TestReduce(mlx_tests.MLXTestCase):
                 expected = getattr(np, op)(x_npy, axis=-1)
                 actual = getattr(mx, op)(x_mlx, axis=-1)
                 self.assertTrue(np.allclose(expected, actual))
+
+    def test_col_reduce_negative_stride(self):
+        # Exercises each Metal column reduction kernel on a negative-stride view.
+        cases = [
+            ((2, 1024, 16), 1),
+            ((2, 2, 1024, 16), 2),
+            ((2, 512, 2, 2, 16), (1, 3)),
+            ((2, 512, 64), 1),
+            ((2, 64, 512), 1),
+            ((2, 16, 16), 1),
+        ]
+        for shape, axis in cases:
+            size = math.prod(shape)
+            x_npy = np.arange(1, size + 1).reshape(shape)[::-1]
+            x_mlx = mx.arange(1, size + 1).reshape(shape)[::-1]
+            for op in ["sum", "max", "min", "mean", "var"]:
+                with self.subTest(shape=shape, axis=axis, op=op):
+                    expected = getattr(np, op)(x_npy, axis=axis)
+                    actual = getattr(mx, op)(x_mlx, axis=axis)
+                    self.assertTrue(np.allclose(expected, actual))
+            x_ones = mx.ones(shape, dtype=mx.float32)[::-1]
+            with self.subTest(shape=shape, axis=axis, op="prod"):
+                self.assertTrue(mx.all(mx.prod(x_ones, axis=axis) == 1).item())
+            x_bool = mx.ones(shape, dtype=mx.bool_)[::-1]
+            for op in ["all", "any"]:
+                with self.subTest(shape=shape, axis=axis, op=op):
+                    self.assertTrue(mx.all(getattr(mx, op)(x_bool, axis=axis)).item())
 
     def test_dtypes(self):
         int_dtypes = [

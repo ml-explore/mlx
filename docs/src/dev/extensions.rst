@@ -679,7 +679,7 @@ Finally, we build the nanobind_ bindings
 
     nanobind_add_module(
       _ext
-      NB_STATIC STABLE_ABI LTO NOMINSIZE
+      NB_STATIC FREE_THREADED LTO NOMINSIZE
       NB_DOMAIN mlx
       ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp
     )

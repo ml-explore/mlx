@@ -273,14 +273,9 @@ nb::object tree_unflatten(
 }
 
 nb::object structure_sentinel() {
-  static nb::object sentinel = []() {
-    PyObject* raw_obj = PyObject_New(PyObject, &PyBaseObject_Type);
-    nb::object sentinel = nb::steal(raw_obj);
-    sentinel.inc_ref();
-    return sentinel;
-  }();
+  static nb::handle sentinel = PyObject_New(PyObject, &PyBaseObject_Type);
 
-  return sentinel;
+  return nb::borrow(sentinel);
 }
 
 std::pair<std::vector<mx::array>, nb::object> tree_flatten_with_structure(
