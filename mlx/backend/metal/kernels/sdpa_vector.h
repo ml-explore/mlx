@@ -61,6 +61,7 @@ template <typename T, int D, int V = D>
   const int q_batch_head_idx = tid.x;
   const int q_seq_idx = tid.y;
   const int kv_head_idx = q_batch_head_idx / gqa_factor;
+  const int kv_seq_idx = simd_gid;
   const int o_offset = q_batch_head_idx * tpg.y + q_seq_idx;
   const int q_offset =
       query_transposed ? tpg.x * q_seq_idx + q_batch_head_idx : o_offset;
@@ -71,11 +72,11 @@ template <typename T, int D, int V = D>
       simd_lid * v_per_thread;
   if (bool_mask) {
     bmask += q_batch_head_idx * mask_head_stride +
-        simd_gid * mask_kv_seq_stride + q_seq_idx * mask_q_seq_stride;
+        kv_seq_idx * mask_kv_seq_stride + q_seq_idx * mask_q_seq_stride;
   }
   if (float_mask) {
     fmask += q_batch_head_idx * mask_head_stride +
-        simd_gid * mask_kv_seq_stride + q_seq_idx * mask_q_seq_stride;
+        kv_seq_idx * mask_kv_seq_stride + q_seq_idx * mask_q_seq_stride;
   }
 
   out += o_offset * V + simd_gid * v_per_thread;
