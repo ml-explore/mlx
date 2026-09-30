@@ -9,8 +9,8 @@ import mlx_tests
 
 class TestVmap(mlx_tests.MLXTestCase):
     def test_basics(self):
-        # Can't vmap over scalars
-        with self.assertRaises(ValueError):
+        # Can't vmap over scalars, axis 0 is out of bounds for a 0d array
+        with self.assertRaises(IndexError):
             mx.vmap(mx.exp)(mx.array(1.0))
 
         # Invalid input
@@ -21,13 +21,13 @@ class TestVmap(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.vmap(mx.exp, in_axes="hello")(mx.array([0, 1]))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.vmap(mx.exp, in_axes=2)(mx.array([0, 1]))
 
         with self.assertRaises(ValueError):
             mx.vmap(mx.exp, out_axes="hello")(mx.array([0, 1]))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.vmap(mx.exp, out_axes=2)(mx.array([0, 1]))
 
     def test_unary(self):
@@ -218,6 +218,19 @@ class TestVmap(mlx_tests.MLXTestCase):
             ]
         )
         self.assertTrue(mx.array_equal(out, expected))
+
+    def test_vmap_strided_slice_single_element(self):
+        # A strided slice selecting exactly one element must vmap to the
+        # batched version of what the un-batched slice returns (regression:
+        # the stored stride was collapsed to 1 without narrowing stop, so
+        # re-deriving the region returned every element in the span).
+        x = mx.arange(24, dtype=mx.float32).reshape(4, 2, 3)
+        out = mx.vmap(lambda t: t[0::2])(x)
+        self.assertTrue(mx.array_equal(out, x[:, 0:1]))
+
+        y = mx.arange(48, dtype=mx.float32).reshape(4, 4, 3)
+        out = mx.vmap(lambda t: t[0::2])(y)
+        self.assertTrue(mx.array_equal(out, y[:, 0:4:2]))
 
     def test_vmap_reduce(self):
         a = mx.ones((5, 5), mx.int32)
