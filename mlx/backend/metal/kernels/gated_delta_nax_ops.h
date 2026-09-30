@@ -1,3 +1,4 @@
+// Copyright © 2026 Apple Inc.
 #pragma once
 
 #include <metal_stdlib>
@@ -14,9 +15,7 @@ using namespace mpp::tensor_ops;
 typedef mlx::steel::NAXTile<float, 1, 1> _M16x16;
 typedef mlx::steel::NAXTile<float, 1, 2> _M16x32;
 
-// NAX MACROS I can probably do a nice template instead of doing this
-// fm = base_fm + (idx >> 2) * 8;   // idx>>2 = idx/4  -> 0 for idx 0-3, 1 for
-// idx 4-7 fn = base_fn + (idx % 4);        // 4 consecutive columns
+// NAX MACROS
 #define AT_NAX(TILE, IDX) TILE.elems()[IDX]
 
 // out = a - b
@@ -263,15 +262,23 @@ METAL_FUNC static constexpr void mma(
 
   mpp::tensor_ops::matmul2d<desc, metal::execution_simdgroup> gemm_op;
 
+  using ct_a_t = decltype(gemm_op.template get_left_input_cooperative_tensor<
+                          AType,
+                          BType,
+                          CType>());
+  using ct_b_t = decltype(gemm_op.template get_right_input_cooperative_tensor<
+                          AType,
+                          BType,
+                          CType>());
+
   auto ct_a =
       gemm_op.template get_left_input_cooperative_tensor<AType, BType, CType>();
   auto ct_b =
       gemm_op
           .template get_right_input_cooperative_tensor<AType, BType, CType>();
-  auto ct_c = gemm_op.template get_destination_cooperative_tensor<
-      decltype(ct_a),
-      decltype(ct_b),
-      CType>();
+  auto ct_c =
+      gemm_op
+          .template get_destination_cooperative_tensor<ct_a_t, ct_b_t, CType>();
 
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
@@ -309,15 +316,23 @@ METAL_FUNC static constexpr void mma(
 
   mpp::tensor_ops::matmul2d<desc, metal::execution_simdgroup> gemm_op;
 
+  using ct_a_t = decltype(gemm_op.template get_left_input_cooperative_tensor<
+                          AType,
+                          BType,
+                          CType>());
+  using ct_b_t = decltype(gemm_op.template get_right_input_cooperative_tensor<
+                          AType,
+                          BType,
+                          CType>());
+
   auto ct_a =
       gemm_op.template get_left_input_cooperative_tensor<AType, BType, CType>();
   auto ct_b =
       gemm_op
           .template get_right_input_cooperative_tensor<AType, BType, CType>();
-  auto ct_c = gemm_op.template get_destination_cooperative_tensor<
-      decltype(ct_a),
-      decltype(ct_b),
-      CType>();
+  auto ct_c =
+      gemm_op
+          .template get_destination_cooperative_tensor<ct_a_t, ct_b_t, CType>();
 
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
@@ -359,6 +374,15 @@ METAL_FUNC static constexpr void mman(
   // Create matmul op
   mpp::tensor_ops::matmul2d<desc, metal::execution_simdgroup> gemm_op;
 
+  using ct_a_t = decltype(gemm_op.template get_left_input_cooperative_tensor<
+                          AType,
+                          BType,
+                          CType>());
+  using ct_b_t = decltype(gemm_op.template get_right_input_cooperative_tensor<
+                          AType,
+                          BType,
+                          CType>());
+
   // Create matmul operands in registers
   auto ct_a =
       gemm_op.template get_left_input_cooperative_tensor<AType, BType, CType>();
@@ -367,10 +391,9 @@ METAL_FUNC static constexpr void mman(
           .template get_right_input_cooperative_tensor<AType, BType, CType>();
 
   // Create matmul output in register
-  auto ct_c = gemm_op.template get_destination_cooperative_tensor<
-      decltype(ct_a),
-      decltype(ct_b),
-      CType>();
+  auto ct_c =
+      gemm_op
+          .template get_destination_cooperative_tensor<ct_a_t, ct_b_t, CType>();
 
   // Load A in to left operand registers
   STEEL_PRAGMA_UNROLL
@@ -396,12 +419,6 @@ METAL_FUNC static constexpr void mman(
 } // namespace steel
 } // namespace mlx
 
-// Operand and accumulator types are taken from the tiles rather than pinned to
-// float. Pinning them meant a bf16 tile was widened to 32 bits in registers and
-// multiplied on the fp32 pipe, which doubled the operand register cost and
-// threw away the native bf16 throughput. elem_type is NAXTile's element type,
-// so declaring the tile as NAXTile<InT, ...> is now enough to select the right
-// instantiation.
 #define MM16x16x16(C, CO, A, TA, AO, B, TB, BO)              \
   mlx::steel::mma<                                           \
       typename decltype(C)::elem_type,                       \
@@ -561,7 +578,6 @@ METAL_FUNC static constexpr void mman(
     }                                                               \
   }
 
-// Scales row i by DEC2[group(i)] == exp(gamma_{C-1} - gamma_i).
 #define SCALE2_P(TILE0, DEC2)                                       \
   {                                                                 \
     STEEL_PRAGMA_UNROLL                                             \
@@ -569,54 +585,4 @@ METAL_FUNC static constexpr void mman(
       const short _w = _i % mlx::steel::BaseNAXFrag::kElemsPerFrag; \
       AT_NAX(TILE0, _i) *= (DEC2)[_w >> 2];                         \
     }                                                               \
-  }
-
-// sdpa stuff
-
-// Operand-typed variants. The mma template was always generic over
-// AType/BType; only the macros pinned them to float, which silently forced
-// every bf16/fp16 matmul onto the fp32 pipe. C stays float: accumulating a
-// long reduction in 16 bits loses too much.
-#define MMA16x16x32_OP(OT, C, CO, A, TA, AO, B, TB, BO)                 \
-  mlx::steel::mma<                                                      \
-      float,                                                            \
-      OT,                                                               \
-      OT,                                                               \
-      TA,                                                               \
-      TB,                                                               \
-      mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate>( \
-      C.frag_at(0, (CO)),                                               \
-      A.frag_at(0, (AO)),                                               \
-      A.frag_at(0, (AO) + 1),                                           \
-      metal::bool_constant<TA>{},                                       \
-      B.frag_at(0, (BO)),                                               \
-      B.frag_at(0, (BO) + 1),                                           \
-      metal::bool_constant<TB>{});
-
-#define MMA16x32x16_OP(OT, C, CO, A, TA, AO, B, TB, BO)                 \
-  mlx::steel::mman<                                                     \
-      float,                                                            \
-      OT,                                                               \
-      OT,                                                               \
-      TA,                                                               \
-      TB,                                                               \
-      mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate>( \
-      C.frag_at(0, (CO)),                                               \
-      C.frag_at(0, (CO) + 1),                                           \
-      A.frag_at(0, (AO)),                                               \
-      metal::bool_constant<TA>{},                                       \
-      B.frag_at(0, (BO)),                                               \
-      B.frag_at(0, (BO) + 1),                                           \
-      metal::bool_constant<TB>{});
-
-// Narrow a float tile into the operand dtype. The conversion has to be
-// explicit: elems() exposes the raw element type and MSL will not implicitly
-// convert float to bfloat.
-#define CAST_NAX(DST, SRC)                                         \
-  {                                                                \
-    using _dst_elem_t = typename decltype(DST)::elem_type;         \
-    STEEL_PRAGMA_UNROLL                                            \
-    for (short _i = 0; _i < decltype(SRC)::kElemsPerTile; _i++) {  \
-      AT_NAX(DST, _i) = static_cast<_dst_elem_t>(AT_NAX(SRC, _i)); \
-    }                                                              \
   }
