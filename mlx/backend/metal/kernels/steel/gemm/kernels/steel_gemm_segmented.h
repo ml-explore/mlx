@@ -79,8 +79,8 @@ template <
     k_start = segments[tid.z];
     k_end = segments[tid.z + 1];
   }
-  A += transpose_a ? k_start * params->lda : k_start;
-  B += transpose_b ? k_start : k_start * params->ldb;
+  A += transpose_a ? int64_t(k_start) * params->lda : k_start;
+  B += transpose_b ? k_start : int64_t(k_start) * params->ldb;
   C += tid.z * params->batch_stride_d;
 
   // Prepare threadgroup mma operation

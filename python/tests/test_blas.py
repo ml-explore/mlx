@@ -1612,6 +1612,14 @@ class TestBlas(mlx_tests.MLXTestCase):
                 c2 = mx.segmented_mm(a.T, b.T, segments)
                 self.assertTrue(mx.allclose(c1, c2, atol=1e-4))
 
+        # Negative leading dimension
+        a = mx.random.normal((8, 64))
+        b = mx.random.normal((64, 16))[::-1]
+        segments = mx.array([[0, 20], [20, 64]], dtype=mx.uint32)
+        c1 = segmented_mm_ref(a, b, segments)
+        c2 = mx.segmented_mm(a, b, segments)
+        self.assertTrue(mx.allclose(c1, c2, atol=1e-4))
+
         with self.assertRaises(ValueError):
             a = mx.ones((2, 10, 10))
             s = mx.array([[0, 5], [5, 10]]).astype(mx.uint32)
