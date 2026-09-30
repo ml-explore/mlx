@@ -26,11 +26,10 @@ class CudaHandle {
   }
 
   ~CudaHandle() {
-    // Skip if there was an error to avoid throwing in the destructors
-    if (cudaPeekAtLastError() != cudaSuccess) {
-      return;
+    // Skip error check to avoid throwing in destructors.
+    if (handle_ != nullptr) {
+      Destroy(handle_);
     }
-    reset();
   }
 
   CudaHandle(const CudaHandle&) = delete;

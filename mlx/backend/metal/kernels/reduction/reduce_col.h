@@ -117,7 +117,7 @@ template <typename T, typename U, typename Op, typename IdxT, int NDIMS>
 
   IdxT out_idx = gid.x + gsize.x * IdxT(gid.y);
   IdxT in_idx = elem_to_loc<IdxT>(out_idx, shape, strides, ndim);
-  in += in_idx + lid.x;
+  in += in_idx + IdxT(lid.x);
 
   U total = Op::init;
   IdxT total_rows = IdxT(non_col_reductions) * IdxT(reduction_size);

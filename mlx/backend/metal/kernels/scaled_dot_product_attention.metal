@@ -2,9 +2,27 @@
 
 // clang-format off
 #include "mlx/backend/metal/kernels/utils.h"
+#include "mlx/backend/metal/kernels/sdpa_blocked.h"
 #include "mlx/backend/metal/kernels/sdpa_vector.h"
 
 using namespace metal;
+
+instantiate_kernel(
+    "sdpa_blocked_scale_copy_bfloat16",
+    sdpa_blocked_scale_copy,
+    bfloat16_t)
+instantiate_kernel(
+    "sdpa_blocked_scale_copy_float16",
+    sdpa_blocked_scale_copy,
+    float16_t)
+instantiate_kernel(
+    "sdpa_blocked_causal_mask_bfloat16",
+    sdpa_blocked_causal_mask,
+    bfloat16_t)
+instantiate_kernel(
+    "sdpa_blocked_causal_mask_float16",
+    sdpa_blocked_causal_mask,
+    float16_t)
 
 // SDPA vector instantiations
 #define instantiate_sdpa_vector_aggregation(type, value_dim) \
@@ -40,6 +58,7 @@ using namespace metal;
 
 #define instantiate_sdpa_vector_heads(type)      \
   instantiate_sdpa_vector(type, 64, 64)          \
+  instantiate_sdpa_vector(type, 96, 64)          \
   instantiate_sdpa_vector(type, 96, 96)          \
   instantiate_sdpa_vector(type, 128, 128)        \
   instantiate_sdpa_vector(type, 192, 128)        \

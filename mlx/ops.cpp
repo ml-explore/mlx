@@ -482,7 +482,7 @@ array unflatten(
     std::ostringstream msg;
     msg << "[unflatten] Invalid axes " << ax << " for array with " << a.ndim()
         << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
 
   size_t size = 1;
@@ -726,7 +726,7 @@ array flip(const array& a, StreamOrDevice s /* = {} */) {
 namespace {
 
 inline auto
-normalize_slice(const Shape& shape, Shape& start, Shape stop, Shape& strides) {
+normalize_slice(const Shape& shape, Shape& start, Shape& stop, Shape& strides) {
   // - Start indices are normalized
   // - End indices are unchanged as -1 means something different
   //   pre-normalization (the end of the axis) versus post normalization (the
@@ -774,7 +774,13 @@ normalize_slice(const Shape& shape, Shape& start, Shape stop, Shape& strides) {
     }
     // Simplify the stride if it's unused
     if (out_shape[i] == 1) {
-      strides[i] = 1;
+      if (strides[i] < 0 && start[i] > 0) {
+        strides[i] = -1;
+        stop[i] = start[i] - 1;
+      } else {
+        strides[i] = 1;
+        stop[i] = start[i] + 1;
+      }
     }
   }
 
@@ -817,7 +823,7 @@ void normalize_dynamic_slice_inputs(
       std::ostringstream msg;
       msg << prefix << " Invalid axis " << ax << " for array with dimension "
           << a.ndim() << ".";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
     ax = new_ax;
   }
@@ -1770,7 +1776,7 @@ array transpose(
       std::ostringstream msg;
       msg << "[transpose] Invalid axis (" << ax << ") for array with "
           << a.ndim() << " dimensions.";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
     if (shape[ax] != 0) {
       throw std::invalid_argument("[transpose] Repeat axes not allowed.");
@@ -2344,7 +2350,7 @@ array mean(
       std::ostringstream msg;
       msg << "[mean] axis " << axis << " is out of bounds for array with "
           << ndim << " dimensions.";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
   }
   auto dtype = at_least_float(a.dtype());
@@ -2378,7 +2384,7 @@ array median(
       std::ostringstream msg;
       msg << "[median] axis " << axis << " is out of bounds for array with "
           << ndim << " dimensions.";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
     set_axes.insert(axis < 0 ? axis + ndim : axis);
   }
@@ -2955,6 +2961,148 @@ array topk(const array& a, int k, int axis, StreamOrDevice s /* = {}*/) {
   return slice(a_partitioned, slice_starts, slice_ends, s);
 }
 
+std::vector<array> unique(
+    const array& a,
+    int size,
+    bool return_index /* = false */,
+    bool return_inverse /* = false */,
+    bool return_counts /* = false */,
+    const std::optional<array>& fill_value /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  // Validate args
+  if (size < 0) {
+    std::ostringstream msg;
+    msg << "[unique] Received negative size " << size << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (fill_value && fill_value->size() != 1) {
+    std::ostringstream msg;
+    msg << "[unique] Fill value must have one element, but got shape "
+        << fill_value->shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  const auto flat = flatten(a, s);
+  const int n = flat.size();
+
+  // Handle the edge case of an empty array.
+  if (n == 0) {
+    // Without an element there is no default fill value.
+    if (size > 0 && !fill_value) {
+      throw std::invalid_argument(
+          "[unique] A fill value is required for an empty input with a"
+          " non-zero size.");
+    }
+    std::vector<array> out;
+    out.push_back(
+        size == 0 ? flat
+                  : full(
+                        {size},
+                        astype(reshape(*fill_value, {}, s), flat.dtype(), s),
+                        flat.dtype(),
+                        s));
+    if (return_index) {
+      out.push_back(zeros({size}, uint32, s));
+    }
+    if (return_inverse) {
+      out.push_back(zeros(a.shape(), uint32, s));
+    }
+    if (return_counts) {
+      out.push_back(zeros({size}, int32, s));
+    }
+    return out;
+  }
+
+  // Sort the array. The values stay differentiable, the permutation does not.
+  std::optional<array> order;
+  if (return_index || return_inverse) {
+    order = stop_gradient(argsort(flat, 0, s), s);
+  }
+  const auto sorted = order ? take(flat, *order, 0, s) : sort(flat, 0, s);
+
+  // Edge detection on the sorted array, true where a new unique
+  // value starts in the sorted array.
+  const auto boundary = concatenate(
+      {array({true}),
+       not_equal(
+           slice(sorted, {1}, {n}, s), slice(sorted, {0}, {n - 1}, s), s)},
+      0,
+      s);
+
+  // Cumsum on boundary gives each sorted element the index of the unique
+  // value it belongs to. It indexes the output, so it is not differentiable.
+  const auto group = stop_gradient(
+      subtract(
+          cumsum(astype(boundary, uint32, s), 0, false, true, s),
+          array(1, uint32),
+          s),
+      s);
+
+  // Use smallest element of the sorted array (index 0) as padding by default.
+  const auto fill = fill_value
+      ? astype(reshape(*fill_value, {}, s), flat.dtype(), s)
+      : slice(sorted, {0}, {1}, s);
+
+  const int buffer_size = std::max(n, size);
+  // Scatter positions rather than values in the sorted array (64 bit values
+  // would fail to scatter on the GPU).
+  const auto slots = stop_gradient(
+      slice(
+          scatter_max(
+              zeros({buffer_size}, uint32, s),
+              group,
+              expand_dims(
+                  where(
+                      boundary,
+                      add(arange(n, uint32, s), array(1, uint32), s),
+                      array(0, uint32),
+                      s),
+                  1,
+                  s),
+              0,
+              s),
+          {0},
+          {size},
+          s),
+      s);
+  const auto used = greater(slots, array(0, uint32), s);
+  const auto positions =
+      subtract(maximum(slots, array(1, uint32), s), array(1, uint32), s);
+
+  // Build the output arrays.
+  std::vector<array> out;
+  out.push_back(where(used, take(sorted, positions, 0, s), fill, s));
+  if (return_index) {
+    // The sort is stable, so the first sorted position of a group holds the
+    // first occurrence in the input. Unused slots point at position zero,
+    // which pads with the index of the smallest unique value.
+    out.push_back(take(*order, positions, 0, s));
+  }
+  if (return_inverse) {
+    // Clamp so that the indices stay inside a truncated output. Without a
+    // truncation every group index is already smaller than size.
+    const auto clamped =
+        minimum(group, array(std::max(size - 1, 0), uint32), s);
+    const auto inverse = scatter(
+        zeros({n}, uint32, s), *order, expand_dims(clamped, 1, s), 0, s);
+    out.push_back(reshape(inverse, a.shape(), s));
+  }
+  // Padding entries count zero, so counts sum to the input size unless the
+  // output was truncated.
+  if (return_counts) {
+    out.push_back(slice(
+        scatter_add(
+            zeros({buffer_size}, int32, s),
+            group,
+            ones({n, 1}, int32, s),
+            0,
+            s),
+        {0},
+        {size},
+        s));
+  }
+  return out;
+}
+
 array logsumexp(const array& a, bool keepdims, StreamOrDevice s /* = {}*/) {
   std::vector<int> axes(a.ndim());
   std::iota(axes.begin(), axes.end(), 0);
@@ -3165,8 +3313,14 @@ array floor_divide(
 
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
-  return array(
+  auto quotient = array(
       shape, dtype, std::make_shared<Divide>(to_stream(s)), std::move(inputs));
+  auto rem = remainder(a, b, s);
+  auto zero = array(0, dtype);
+  auto step = logical_and(
+      not_equal(rem, zero, s),
+      not_equal(less(a, zero, s), less(b, zero, s), s));
+  return subtract(quotient, astype(step, dtype, s), s);
 }
 
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
@@ -3688,7 +3842,7 @@ array take(
     std::ostringstream msg;
     msg << "[take] Received invalid axis " << axis << " for array with "
         << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
 
   // Check for valid take
@@ -3733,7 +3887,7 @@ array take(const array& a, int index, int axis, StreamOrDevice s /* = {} */) {
     std::ostringstream msg;
     msg << "[take] Received invalid axis " << axis << " for array with "
         << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
 
   // Check for valid take
@@ -4260,7 +4414,7 @@ array diff(
   int ndim = static_cast<int>(a.ndim());
   int ax = axis < 0 ? axis + ndim : axis;
   if (ax < 0 || ax >= ndim) {
-    throw std::invalid_argument("[diff] Axis is out of bounds for the array.");
+    throw std::out_of_range("[diff] Axis is out of bounds for the array.");
   }
   if (n < 0) {
     throw std::invalid_argument("[diff] Order `n` must be non-negative.");
@@ -5813,7 +5967,7 @@ array vecdot(
   }
   int ax = axis < 0 ? axis + a.ndim() : axis;
   if (ax < 0 || ax >= a.ndim()) {
-    throw std::invalid_argument("[vecdot] axis is out of bounds.");
+    throw std::out_of_range("[vecdot] axis is out of bounds.");
   }
   if (axis < 0 ? axis + b.ndim() != ax : axis >= b.ndim()) {
     throw std::invalid_argument("[vecdot] axis is out of bounds.");
@@ -6694,7 +6848,7 @@ array roll(
       std::ostringstream msg;
       msg << "[roll] Invalid axis " << axes[i] << " for array with " << a.ndim()
           << " dimensions.";
-      throw std::invalid_argument(msg.str());
+      throw std::out_of_range(msg.str());
     }
 
     auto sh = shift[i];

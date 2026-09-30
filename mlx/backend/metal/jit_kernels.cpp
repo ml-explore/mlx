@@ -42,6 +42,9 @@ const char* steel_attention_nax() {
 const char* gated_delta_update_nax() {
   return "";
 }
+const char* gated_delta_update_nax_vjp() {
+  return "";
+}
 } // namespace metal
 #endif // MLX_METAL_NO_NAX
 
@@ -358,6 +361,26 @@ MTL::ComputePipelineState* get_logsumexp_kernel(
         get_template_definition("block_" + lib_name, "logsumexp", t_str);
     kernel_source += get_template_definition(
         "looped_" + lib_name, "logsumexp_looped", t_str);
+    return kernel_source;
+  });
+  return d.get_kernel(kernel_name, lib);
+}
+
+MTL::ComputePipelineState* get_cross_entropy_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in) {
+  // Both kernels live in one library, so the name is not derived from
+  // kernel_name.
+  std::string lib_name = "cross_entropy_" + type_to_name(in);
+  auto lib = d.get_library(lib_name, [&] {
+    auto t_str = get_type_string(in.dtype());
+    std::string kernel_source = metal::utils();
+    kernel_source += metal::cross_entropy();
+    kernel_source += get_template_definition(
+        "cross_entropy_" + type_to_name(in), "cross_entropy", t_str);
+    kernel_source += get_template_definition(
+        "cross_entropy_vjp_" + type_to_name(in), "cross_entropy_vjp", t_str);
     return kernel_source;
   });
   return d.get_kernel(kernel_name, lib);
@@ -1329,6 +1352,7 @@ MTL::ComputePipelineState* get_steel_attention_kernel(
     int bq,
     int bk,
     int bd,
+    int bv,
     int wm,
     int wn,
     const array& m) {
@@ -1346,6 +1370,7 @@ MTL::ComputePipelineState* get_steel_attention_kernel(
             bq,
             bk,
             bd,
+            bv,
             wm,
             wn,
             get_type_string(m.dtype())));
@@ -1363,6 +1388,7 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     int bq,
     int bk,
     int bd,
+    int bv,
     int wm,
     int wn,
     const array& m,
@@ -1381,6 +1407,7 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
             bq,
             bk,
             bd,
+            bv,
             wm,
             wn,
             get_type_string(m.dtype())));
@@ -1389,7 +1416,31 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
 }
 
+MTL::ComputePipelineState* get_sdpa_vjp_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_sdpa_vjp_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
 MTL::ComputePipelineState* get_gated_delta_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_gated_delta_vjp_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const std::string& hash_name,
@@ -1401,11 +1452,66 @@ MTL::ComputePipelineState* get_gated_delta_nax_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const std::string& hash_name,
-    const metal::MTLFCList& func_consts) {
+    const metal::MTLFCList& func_consts,
+    const array& q,
+    int dk,
+    int dv,
+    int hk,
+    int hv,
+    int c,
+    int ckpt) {
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
     std::string kernel_source;
     concatenate(kernel_source, metal::utils(), metal::gated_delta_update_nax());
+    kernel_source += get_template_definition(
+        lib_name,
+        "gated_delta_fused_nax",
+        get_type_string(q.dtype()),
+        dk,
+        dv,
+        hk,
+        hv,
+        c,
+        ckpt);
+    return kernel_source;
+  });
+  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_gated_delta_vjp_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& q,
+    int dk,
+    int dv,
+    int hk,
+    int hv,
+    int c,
+    int ckpt,
+    bool dgamma) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::string kernel_source;
+    concatenate(
+        kernel_source, metal::utils(), metal::gated_delta_update_nax_vjp());
+    if (dgamma) {
+      kernel_source += get_template_definition(
+          lib_name, "gated_delta_dgamma_to_dg", get_type_string(q.dtype()), c);
+    } else {
+      kernel_source += get_template_definition(
+          lib_name,
+          "gated_delta_vjp_fused_nax",
+          get_type_string(q.dtype()),
+          dk,
+          dv,
+          hk,
+          hv,
+          c,
+          ckpt);
+    }
     return kernel_source;
   });
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
