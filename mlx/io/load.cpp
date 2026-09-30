@@ -1,5 +1,6 @@
 // Copyright © 2023-2026 Apple Inc.
 #include <algorithm>
+#include <cerrno>
 #include <cstring>
 #include <fstream>
 #include <limits>
@@ -387,7 +388,15 @@ ThreadPool& ParallelFileReader::thread_pool() {
 void ParallelFileReader::read(char* data, size_t n) {
   while (n != 0) {
     auto m = ::read(fd_, data, std::min(n, static_cast<size_t>(INT32_MAX)));
-    if (m <= 0) {
+    if (m < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      std::ostringstream msg;
+      msg << "[read] Unable to read " << n << " bytes from file.";
+      throw std::runtime_error(msg.str());
+    }
+    if (m == 0) {
       std::ostringstream msg;
       msg << "[read] Unable to read " << n << " bytes from file.";
       throw std::runtime_error(msg.str());
@@ -401,11 +410,18 @@ void ParallelFileReader::read(char* data, size_t n, size_t offset) {
   auto readfn = [fd = fd_](size_t offset, size_t size, char* buffer) -> bool {
     while (size != 0) {
       auto m = pread(fd, buffer, size, offset);
-      if (m <= 0) {
+      if (m < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        return false;
+      }
+      if (m == 0) {
         return false;
       }
       buffer += m;
       size -= m;
+      offset += m;
     }
     return true;
   };
