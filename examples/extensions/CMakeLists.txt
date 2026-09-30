@@ -23,7 +23,7 @@ find_package(
 FetchContent_Declare(
   nanobind
   GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-  GIT_TAG v3.0.1
+  GIT_TAG v3.1.0
   GIT_SHALLOW TRUE
   EXCLUDE_FROM_ALL)
 FetchContent_MakeAvailable(nanobind)
@@ -73,7 +73,7 @@ endif()
 nanobind_add_module(
   _ext
   NB_STATIC
-  STABLE_ABI
+  FREE_THREADED
   LTO
   NOMINSIZE
   NB_DOMAIN

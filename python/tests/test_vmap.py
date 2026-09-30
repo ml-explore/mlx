@@ -9,8 +9,8 @@ import mlx_tests
 
 class TestVmap(mlx_tests.MLXTestCase):
     def test_basics(self):
-        # Can't vmap over scalars
-        with self.assertRaises(ValueError):
+        # Can't vmap over scalars, axis 0 is out of bounds for a 0d array
+        with self.assertRaises(IndexError):
             mx.vmap(mx.exp)(mx.array(1.0))
 
         # Invalid input
@@ -21,13 +21,13 @@ class TestVmap(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.vmap(mx.exp, in_axes="hello")(mx.array([0, 1]))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.vmap(mx.exp, in_axes=2)(mx.array([0, 1]))
 
         with self.assertRaises(ValueError):
             mx.vmap(mx.exp, out_axes="hello")(mx.array([0, 1]))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.vmap(mx.exp, out_axes=2)(mx.array([0, 1]))
 
     def test_unary(self):
@@ -218,6 +218,19 @@ class TestVmap(mlx_tests.MLXTestCase):
             ]
         )
         self.assertTrue(mx.array_equal(out, expected))
+
+    def test_vmap_strided_slice_single_element(self):
+        # A strided slice selecting exactly one element must vmap to the
+        # batched version of what the un-batched slice returns (regression:
+        # the stored stride was collapsed to 1 without narrowing stop, so
+        # re-deriving the region returned every element in the span).
+        x = mx.arange(24, dtype=mx.float32).reshape(4, 2, 3)
+        out = mx.vmap(lambda t: t[0::2])(x)
+        self.assertTrue(mx.array_equal(out, x[:, 0:1]))
+
+        y = mx.arange(48, dtype=mx.float32).reshape(4, 4, 3)
+        out = mx.vmap(lambda t: t[0::2])(y)
+        self.assertTrue(mx.array_equal(out, y[:, 0:4:2]))
 
     def test_vmap_reduce(self):
         a = mx.ones((5, 5), mx.int32)
@@ -1036,6 +1049,17 @@ class TestVmap(mlx_tests.MLXTestCase):
         for axis in (0, -1):
             out = mx.vmap(lambda x: mx.argsort(x, axis=axis), in_axes=1, out_axes=1)(a)
             self.assertTrue(mx.array_equal(out, expected))
+
+    def test_vmap_view(self):
+        a = mx.arange(16, dtype=mx.uint8).reshape(4, 4)
+        b = mx.arange(16, dtype=mx.int32).reshape(4, 4)
+        for x, dtype in [(a, mx.int8), (a, mx.int16), (a, mx.int32), (b, mx.uint8)]:
+            for in_axes in [0, 1, -1]:
+                expected = mx.stack(
+                    [mx.take(x, i, axis=in_axes).view(dtype) for i in range(4)]
+                )
+                out = mx.vmap(lambda y: y.view(dtype), in_axes=in_axes)(x)
+                self.assertTrue(mx.array_equal(out, expected))
 
 
 if __name__ == "__main__":

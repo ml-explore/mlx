@@ -1,12 +1,12 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <variant>
-
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
+
+#include <variant>
 
 #include "mlx/linalg.h"
 #include "python/src/small_vector.h"

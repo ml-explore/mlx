@@ -1,4 +1,4 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
 #include "mlx/backend/cuda/cudnn_utils.h"
 #include "mlx/backend/cuda/device.h"
@@ -583,6 +583,7 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    bool has_sinks,
     bool is_training,
     bool output_logsumexp,
     bool force_fused,
