@@ -1117,6 +1117,10 @@ class TestArray(mlx_tests.MLXTestCase):
             state = pickle.dumps(x)
             y = pickle.loads(state)
             self.assertEqualArray(y, x)
+            # F-contiguous
+            x = x.T
+            y = pickle.loads(pickle.dumps(x))
+            self.assertEqualArray(y, x)
 
     def test_array_copy(self):
         dtypes = [
