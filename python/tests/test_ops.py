@@ -4637,6 +4637,12 @@ class TestOps(mlx_tests.MLXTestCase):
             )
         )
 
+        # source with a negative stride
+        a = mx.zeros((4,))
+        mask = mx.array([True, False, True, True])
+        a[mask] = mx.array([1.0, 2.0, 3.0, 4.0])[::-1]
+        self.assertTrue(mx.array_equal(a, mx.array([4.0, 0.0, 3.0, 2.0])))
+
     def test_broadcast_shapes(self):
         # Basic broadcasting
         self.assertEqual(mx.broadcast_shapes((1, 2, 3), (3,)), (1, 2, 3))
