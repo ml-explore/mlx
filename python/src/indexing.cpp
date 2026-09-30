@@ -1,9 +1,9 @@
 // Copyright © 2023-2024 Apple Inc.
+#include <nanobind/ndarray.h>
+
 #include <numeric>
 #include <optional>
 #include <sstream>
-
-#include <nanobind/ndarray.h>
 
 #include "mlx/dtype.h"
 #include "mlx/ops.h"

@@ -189,8 +189,8 @@ void init_fast(nb::module_& parent_module) {
         Computes ``logsumexp(logits, axis=-1) - logits[..., target]`` in a
         fused kernel with accumulation in float32.
 
-        Note: Currently is implemented only on CUDA, fallback to unfused version with
-        manual casting on Metal and CPU.
+        Note: The fused kernel is available on Metal and CUDA. The CPU falls
+        back to the unfused version, which reduces in the dtype of the logits.
 
         Args:
             logits (array): The unnormalized logits. The loss is computed over
@@ -385,6 +385,32 @@ void init_fast(nb::module_& parent_module) {
             scale = D ** -0.5
             out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask="causal")
       )pbdoc");
+
+  m.def(
+      "gated_delta_update",
+      &mlx::core::fast::gated_delta_update,
+      "q"_a,
+      "k"_a,
+      "v"_a,
+      "gamma"_a,
+      "beta"_a,
+      "initial_state"_a = nb::none(), // optional, defaults to None
+      "mask"_a = nb::none(), // optional, defaults to None
+      "stream"_a = nb::none(), // optional, defaults to None
+      R"(
+            Chunked gated delta network forward pass.
+
+            Args:
+                q: Queries [B, T, Hk, Dk]
+                k: Keys [B, T, Hk, Dk]
+                v: Values [B, T, Hv, Dv]
+                gamma: Decay rate in linear space [B, T, Hv]
+                beta: Delta update rates [B, T, Hv]
+                initial_state: Optional initial hidden state [B, T, Hk, Dv]
+                mask: Optional
+            Returns:
+                Tuple of (output [B, T, Hv, Dv], final_state [B, T, Hk, Dv])
+        )");
 
   m.def(
       "metal_kernel",

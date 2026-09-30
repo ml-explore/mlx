@@ -1,4 +1,4 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2024-2026 Apple Inc.
 
 #include <optional>
 #include <variant>
@@ -289,6 +289,7 @@ class ScaledDotProductAttention : public Custom {
       bool has_mask,
       bool has_arr_mask,
       bool do_causal,
+      bool has_sinks,
       bool is_training,
       bool output_logsumexp,
       bool force_fused,
@@ -393,6 +394,77 @@ class ConvertFP8 : public Primitive {
 
  private:
   bool to_fp8_;
+};
+
+class GatedDeltaUpdate : public Custom {
+ public:
+  GatedDeltaUpdate(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback)
+      : Custom(stream, std::move(fallback)) {}
+
+  static bool use_fallback(
+      const int Hk,
+      const int Dk,
+      const int Hv,
+      const int Dv,
+      const bool has_mask,
+      Stream s);
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_NAME(GatedDeltaUpdate);
+  DEFINE_INPUT_OUTPUT_SHAPE()
+  auto state() const {
+    return std::make_tuple(nullptr); /* TODO */
+  }
+
+ private:
+  bool is_training_;
+};
+
+class GatedDeltaUpdateVJP : public Custom {
+ public:
+  GatedDeltaUpdateVJP(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback)
+      : Custom(stream, std::move(fallback)) {}
+
+  static bool use_fallback(
+      const int Hk,
+      const int Dk,
+      const int Hv,
+      const int Dv,
+      Stream s);
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(GatedDeltaUpdateVJP);
+  DEFINE_INPUT_OUTPUT_SHAPE()
+  auto state() const {
+    return std::make_tuple(nullptr); /* TODO */
+  }
+
+ private:
+  bool has_cache_;
 };
 
 class Quantize : public Custom {

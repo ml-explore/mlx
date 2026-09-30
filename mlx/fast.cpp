@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 #include <cassert>
 #include <numeric>
 
@@ -934,6 +934,7 @@ array scaled_dot_product_attention(
           has_mask,
           has_arr_mask,
           do_causal,
+          has_sinks,
           is_training,
           output_logsumexp,
           force_fused,
@@ -977,10 +978,13 @@ std::vector<array> ScaledDotProductAttention::vjp(
     const std::vector<array>& outputs) {
   assert(primals.size() >= 3);
   assert(cotangents.size() == outputs.size());
-
   auto s = stream();
   if (ScaledDotProductAttentionVJP::use_fallback(primals[0], s)) {
     assert(outputs.size() == 1);
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
+
+  if (outputs.size() != 2) {
     return Custom::vjp(primals, cotangents, argnums, outputs);
   }
 
@@ -1030,6 +1034,181 @@ bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {
       static_cast<const ScaledDotProductAttentionVJP&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
       has_sinks_ == a_other.has_sinks_;
+}
+
+std::vector<array> gated_delta_update(
+    const array& queries,
+    const array& keys,
+    const array& values,
+    const array& gates,
+    const array& beta_,
+    const std::optional<array>& initial_state, /* = std::nullopt */
+    const std::optional<array>& mask_, /* = std::nullopt */
+    StreamOrDevice s_ /* = {} */) {
+  // determine output dtype
+  auto s = to_stream(s_);
+
+  auto promoted = promote_types(queries.dtype(), keys.dtype());
+  auto out_dtype = issubdtype(promoted, floating)
+      ? promoted
+      : promote_types(promoted, float32);
+
+  // cast all inputs
+  auto q = astype(queries, out_dtype, s);
+  auto k = astype(keys, out_dtype, s);
+  auto v = astype(values, out_dtype, s);
+  auto g = astype(gates, out_dtype, s);
+  auto beta = astype(beta_, out_dtype, s);
+
+  int B = q.shape(0);
+  int T = q.shape(1);
+  int Hk = q.shape(2);
+  int Dk = q.shape(3);
+  int Hv = v.shape(2);
+  int Dv = v.shape(3);
+
+  auto h0 = initial_state.has_value() ? astype(*initial_state, float32, s)
+                                      : zeros({B, Hv, Dv, Dk}, float32, s);
+
+  bool has_mask = mask_.has_value();
+  auto mask = has_mask ? astype(*mask_, bool_, s) : array(false);
+
+  auto fallback = [B, T, Hk, Dk, Hv, Dv, has_mask, s](
+                      std::vector<array> inputs) {
+    auto out_dtype = inputs[0].dtype();
+    auto q = inputs[0];
+    auto k = inputs[1];
+    auto v = inputs[2];
+    auto g = inputs[3];
+    auto beta = inputs[4];
+    auto state = astype(inputs[5], float32, s);
+
+    if (Hv != Hk) {
+      int repeat_factor = Hv / Hk;
+      q = repeat(q, repeat_factor, 2, s);
+      k = repeat(k, repeat_factor, 2, s);
+    }
+
+    array mask = has_mask ? astype(inputs[6], bool_, s) : array(false);
+    const array zero = array(0.0f, float32);
+
+    std::vector<array> outputs;
+    for (int t = 0; t < T; t++) {
+      auto get_t = [&](const array& a, int t) {
+        Shape start(a.ndim(), 0), stop = a.shape();
+        start[1] = t;
+        stop[1] = t + 1;
+        return squeeze(slice(a, start, stop, s), 1, s);
+      };
+      auto q_t = get_t(q, t);
+      auto k_t = get_t(k, t);
+      auto v_t = get_t(v, t);
+      auto g_t = get_t(g, t);
+      auto beta_t = get_t(beta, t);
+      array mask_t = has_mask ? get_t(mask, t) : array(true);
+
+      auto state_prev = state;
+
+      auto decay = (g_t.ndim() == 2)
+          ? expand_dims(g_t, {-1, -2}, s) // [B,H,1,1]
+          : expand_dims(g_t, -2, s); // [B,H,1,Dk]
+
+      auto state_next = multiply(state_prev, decay, s);
+
+      auto kv =
+          sum(multiply(state_next, expand_dims(k_t, -2, s), s),
+              -1,
+              false,
+              s); // [B,H,Dv]
+
+      auto delta = subtract(v_t, kv, s);
+      delta = multiply(delta, expand_dims(beta_t, -1, s), s);
+
+      state_next =
+          add(state_next,
+              multiply(expand_dims(delta, -1, s), expand_dims(k_t, -2, s), s),
+              s);
+
+      if (has_mask) {
+        auto state_mask = expand_dims(mask_t, {-1, -2, -3}, s);
+        state = where(state_mask, state_next, state_prev, s);
+      } else {
+        state = state_next;
+      }
+
+      auto o_t = sum(multiply(state, expand_dims(q_t, -2, s), s), -1, false, s);
+
+      if (has_mask) {
+        auto out_mask = expand_dims(mask_t, {-1, -2}, s);
+        o_t = where(out_mask, o_t, zero, s);
+      }
+      outputs.push_back(astype(o_t, out_dtype, s));
+    }
+    auto out = stack(outputs, 1, s);
+    return std::vector<array>{out, state};
+  };
+
+  if (!GatedDeltaUpdate::use_fallback(Hk, Dk, Hv, Dv, has_mask, s)) {
+    auto result = array::make_arrays(
+        /* output shapes */ {{B, T, Hv, Dv}, {B, Hv, Dv, Dk}},
+        /* dtypes */ {out_dtype, float32},
+        /* primitive */
+        std::make_shared<GatedDeltaUpdate>(s, fallback),
+        /* inputs */ {q, k, v, g, beta, h0});
+
+    return result;
+  }
+
+  auto result = fallback({q, k, v, g, beta, h0, mask});
+  return result;
+}
+std::vector<array> GatedDeltaUpdate::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  const int Hk = primals[0].shape(2);
+  const int Dk = primals[0].shape(3);
+  const int Hv = primals[2].shape(2);
+  const int Dv = primals[2].shape(3);
+
+  if (GatedDeltaUpdateVJP::use_fallback(Hk, Dk, Hv, Dv, stream())) {
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
+
+  if (primals.size() != 6) {
+    throw std::runtime_error(
+        "[GatedDeltaUpdate::vjp] expected 6 primals (q,k,v,g,beta,h0), got " +
+        std::to_string(primals.size()));
+  }
+  if (cotangents.size() != 2) {
+    throw std::runtime_error(
+        "[GatedDeltaUpdate::vjp] expected 2 cotangents (out, state), got " +
+        std::to_string(cotangents.size()));
+  }
+
+  std::vector<array> inputs = primals; // q,k,v,g,beta,h0  (indices 0..5)
+  inputs.push_back(cotangents[0]); // cot_o -> index 6
+  inputs.push_back(cotangents[1]); // cot_h -> index 7
+
+  std::vector<Shape> shapes;
+  std::vector<Dtype> dtypes;
+  for (int i = 0; i < 6; ++i) {
+    shapes.push_back(primals[i].shape());
+    dtypes.push_back(i == 5 ? float32 : primals[i].dtype()); // dh is float32
+  }
+
+  auto vjps = array::make_arrays(
+      std::move(shapes),
+      std::move(dtypes),
+      std::make_shared<GatedDeltaUpdateVJP>(stream(), fallback_),
+      std::move(inputs));
+
+  std::vector<array> returned_vjps;
+  for (int arg : argnums) {
+    returned_vjps.push_back(std::move(vjps[arg]));
+  }
+  return returned_vjps;
 }
 
 bool Quantize::is_equivalent(const Primitive& other) const {

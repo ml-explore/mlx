@@ -492,6 +492,27 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.dtype, mx.int32)
         self.assertEqual(x.tolist(), [1, 2, 3])
 
+    def test_matrix_transpose(self):
+        x = mx.array([[1, 2], [3, 4]])
+        self.assertEqual(x.mT.tolist(), [[1, 3], [2, 4]])
+        self.assertEqual(mx.matrix_transpose(x).tolist(), [[1, 3], [2, 4]])
+
+        x = mx.arange(24).reshape((2, 3, 4))
+        self.assertEqual(x.mT.shape, (2, 4, 3))
+        self.assertEqualArray(x.mT, x.transpose((0, 2, 1)))
+        self.assertEqualArray(x.mT.mT, x)
+
+        self.assertEqual(mx.matrix_transpose(x).shape, (2, 4, 3))
+        self.assertEqualArray(mx.matrix_transpose(x), x.transpose((0, 2, 1)))
+
+        x = mx.array([1, 2, 3])
+
+        with self.assertRaises(ValueError):
+            x.mT
+
+        with self.assertRaises(ValueError):
+            mx.matrix_transpose(x)
+
     def test_bool_conversion(self):
         x = mx.array(True)
         self.assertTrue(x)
@@ -1041,10 +1062,13 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual((a > 1).tolist(), [False, False, True])
         self.assertEqual((a >= 1).tolist(), [False, True, True])
 
-    def test_array_neg(self):
+    def test_array_unary_ops(self):
         a = mx.array([-1.0, 4.0, 0.0])
 
         self.assertEqual((-a).tolist(), [1.0, -4.0, 0.0])
+
+        self.assertEqual((+a).tolist(), [-1.0, 4.0, 0.0])
+        assert +a is not a
 
     def test_array_type_cast(self):
         a = mx.array([0.1, 2.3, -1.3])
@@ -2092,6 +2116,12 @@ class TestArray(mlx_tests.MLXTestCase):
         mv = None
         self.assertIsNone(wr())
 
+    def test_buffer_protocol_eval_error(self):
+        # Errors from evaluating the array are raised instead of aborting
+        a = mx.linalg.inv(mx.zeros((2, 2)), stream=mx.cpu)
+        with self.assertRaises(RuntimeError):
+            memoryview(a)
+
     def test_array_view_ref_counting(self):
         a = mx.arange(3)
         wr = weakref.ref(a)
@@ -2952,6 +2982,41 @@ class TestArray(mlx_tests.MLXTestCase):
             x[: 2**32]
         with self.assertRaises(ValueError):
             x[2**32]
+
+    @unittest.skipUnless(sys.version_info >= (3, 15), "requires Python 3.15")
+    def test_frozen_types(self):
+        types = (
+            mx.array,
+            mx.Dtype,
+            mx.finfo,
+            mx.iinfo,
+            mx.ArrayAt,
+            mx.ArrayLike,
+            mx.ArrayIterator,
+            mx.Device,
+            mx.Stream,
+            mx.ThreadLocalStream,
+            mx.StreamContext,
+            mx.PrintOptions,
+            mx.custom_function,
+            mx.FunctionExporter,
+            mx.distributed.Group,
+        )
+        for bound_type in types:
+            with self.subTest(type=bound_type):
+                with self.assertRaises(TypeError):
+                    bound_type._test_attribute = None
+                with self.assertRaises(TypeError):
+                    bound_type.__doc__ = "modified"
+                with self.assertRaises(TypeError):
+                    del bound_type.__doc__
+
+    def test_array_subclass(self):
+        class Array(mx.array):
+            def total(self):
+                return self.sum().item()
+
+        self.assertEqual(Array([1, 2, 3]).total(), 6)
 
 
 if __name__ == "__main__":

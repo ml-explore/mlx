@@ -325,6 +325,22 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
             self.assertEqual(y.shape, (world.size() * 2, 2, 4))
             self.assertTrue(mx.all(y == 1))
 
+    def test_all_gather_rank_data(self):
+        # Every rank contributes distinct data so that a missing, stale, or
+        # misplaced peer region is detected (an all-ones gather cannot tell).
+        # Sizes include one large enough that backends which slice transfers
+        # across directions/wires (e.g. the jaccl ring) exercise every slice,
+        # and odd sizes that exercise the tail clamping.
+        world = mx.distributed.init()
+        for size in [7, 1024, 1000003, 4 * 1024 * 1024]:
+            base = mx.arange(size, dtype=mx.int32) % 100003
+            x = base + world.rank()
+            y = mx.distributed.all_gather(x)
+            self.assertEqual(y.shape, (world.size() * size,))
+            regions = y.reshape(world.size(), size)
+            for r in range(world.size()):
+                self.assertTrue(mx.all(regions[r] == base + r).item())
+
     def test_clip_grad_norm_sharded(self):
         world = mx.distributed.init()
         N = world.size()
