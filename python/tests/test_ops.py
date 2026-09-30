@@ -3818,14 +3818,12 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertTrue(mx.array_equal(a_out, a, equal_nan=True))
 
         # Byte offsets that are not a multiple of the new item size
-        device = mx.gpu if mx.is_available(mx.gpu) else mx.cpu
         a = mx.arange(64, dtype=mx.uint8)
         a_np = np.arange(64, dtype=np.uint8)
-        with mx.stream(device):
-            for start in range(8):
-                out = a[start : start + 16].view(mx.int32)
-                expected = a_np[start : start + 16].view(np.int32)
-                self.assertTrue(np.array_equal(out + 0, expected))  # read in a kernel
+        for start in range(8):
+            out = a[start : start + 16].view(mx.int32)
+            expected = a_np[start : start + 16].view(np.int32)
+            self.assertTrue(np.array_equal(out + 0, expected))  # read in a kernel
 
     def _hadamard(self, N):
         # Matches scipy.linalg.hadamard
