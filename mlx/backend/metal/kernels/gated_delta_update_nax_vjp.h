@@ -1,3 +1,4 @@
+// Copyright © 2026 Apple Inc.
 #pragma once
 
 #include "mlx/backend/metal/kernels/gated_delta_nax_ops.h"

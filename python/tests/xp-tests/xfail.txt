@@ -57,7 +57,6 @@ array_api_tests/test_has_names.py::test_has_names[elementwise-copysign]
 array_api_tests/test_has_names.py::test_has_names[elementwise-hypot]
 array_api_tests/test_has_names.py::test_has_names[elementwise-nextafter]
 array_api_tests/test_has_names.py::test_has_names[elementwise-signbit]
-array_api_tests/test_has_names.py::test_has_names[array_method-__pos__]
 array_api_tests/test_has_names.py::test_has_names[array_method-to_device]
 array_api_tests/test_has_names.py::test_has_names[array_attribute-device]
 array_api_tests/test_has_names.py::test_has_names[set-isin]
@@ -102,7 +101,6 @@ array_api_tests/test_signatures.py::test_extension_func_signature[linalg.slogdet
 array_api_tests/test_signatures.py::test_extension_func_signature[linalg.solve]
 
 ## Missing functions
-array_api_tests/test_signatures.py::test_array_method_signature[__pos__]
 array_api_tests/test_signatures.py::test_array_method_signature[to_device]
 array_api_tests/test_signatures.py::test_func_signature[signbit]
 array_api_tests/test_signatures.py::test_func_signature[nextafter]
@@ -161,7 +159,6 @@ array_api_tests/test_signatures.py::test_func_signature[clip]
 array_api_tests/test_operators_and_elementwise_functions.py::test_copysign
 array_api_tests/test_operators_and_elementwise_functions.py::test_hypot
 array_api_tests/test_operators_and_elementwise_functions.py::test_nextafter
-array_api_tests/test_operators_and_elementwise_functions.py::test_positive[__pos__]
 array_api_tests/test_operators_and_elementwise_functions.py::test_signbit
 array_api_tests/test_operators_and_elementwise_functions.py::test_binary_with_scalars_real[nextafter]
 array_api_tests/test_operators_and_elementwise_functions.py::test_binary_with_scalars_real[hypot]
@@ -421,3 +418,6 @@ array_api_tests/test_special_cases.py::test_unary[acos(isfinite(real(x_i)) and i
 array_api_tests/test_special_cases.py::test_unary[acos(real(x_i) is -infinity and isfinite(imag(x_i)) and imag(x_i) > 0) -> \u03c0 - infinity j]
 array_api_tests/test_special_cases.py::test_unary[acos(real(x_i) is +infinity and isfinite(imag(x_i)) and imag(x_i) > 0) -> +0 - infinity j]
 array_api_tests/test_special_cases.py::test_unary[sign((real(x_i) is -0 or real(x_i) == +0) and (imag(x_i) is -0 or imag(x_i) == +0)) -> 0 + 0j]
+array_api_tests/test_special_cases.py::test_unary[floor(x_i.is_integer()) -> x_i]
+array_api_tests/test_special_cases.py::test_unary[round(x_i.is_integer()) -> x_i]
+array_api_tests/test_special_cases.py::test_unary[trunc(x_i.is_integer()) -> x_i]
