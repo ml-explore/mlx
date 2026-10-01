@@ -1,8 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
 import math
-import os
-import unittest
 from itertools import combinations, permutations
 
 import mlx.core as mx
