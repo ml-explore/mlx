@@ -4175,6 +4175,13 @@ class TestOps(mlx_tests.MLXTestCase):
             expected = a_np[start : start + 16].view(np.int32)
             self.assertTrue(np.array_equal(out + 0, expected))  # read in a kernel
 
+        # View of an (n, 1) array
+        a = mx.arange(4, dtype=mx.int32).reshape(4, 1).view(mx.int16)
+        b = mx.arange(8, dtype=mx.int16).reshape(2, 4).T
+        expected = np.arange(4, dtype=np.int32).reshape(4, 1).view(np.int16)
+        expected = expected + np.arange(8, dtype=np.int16).reshape(2, 4).T
+        self.assertTrue(np.array_equal(a + b, expected))
+
     def _hadamard(self, N):
         # Matches scipy.linalg.hadamard
         H = np.array([[1]], dtype=np.int64)
