@@ -1528,8 +1528,22 @@ class TestAutograd(mlx_tests.MLXTestCase):
             mx.tan: lambda x: 1 / mx.cos(x) ** 2,
             mx.tanh: lambda x: 1 - mx.tanh(x) ** 2,
             mx.log1p: lambda x: 1 / (1 + x),
+            mx.cos: lambda x: -mx.sin(x),
+            mx.sqrt: lambda x: 0.5 / mx.sqrt(x),
+            mx.rsqrt: lambda x: -0.5 * mx.rsqrt(x) / x,
+            mx.arcsin: lambda x: 1 / mx.sqrt(1 - mx.square(x)),
+            mx.arccos: lambda x: -1 / mx.sqrt(1 - mx.square(x)),
+            mx.arctan: lambda x: 1 / (1 + mx.square(x)),
+            mx.arcsinh: lambda x: 1 / mx.sqrt(mx.square(x) + 1),
+            # 1 / sqrt(x**2 - 1) has the wrong sign when Re(x) < 0
+            mx.arccosh: lambda x: 1 / (mx.sqrt(x - 1) * mx.sqrt(x + 1)),
+            mx.arctanh: lambda x: 1 / (1 - mx.square(x)),
         }
         for fn, deriv in ops.items():
+            _, (jvp,) = mx.jvp(fn, [z], [cotangent])
+            expected = cotangent * deriv(z)
+            self.assertTrue(mx.allclose(jvp, expected, atol=1e-5), msg=str(fn))
+
             _, (vjp,) = mx.vjp(fn, [z], [cotangent])
             expected = cotangent * mx.conj(deriv(z))
             self.assertTrue(mx.allclose(vjp, expected, atol=1e-5), msg=str(fn))
