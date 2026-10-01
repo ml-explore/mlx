@@ -124,8 +124,9 @@ TEST_CASE("test reshape") {
   CHECK(x.flags().col_contiguous);
   y = reshape(x, {2, 5, 10});
   eval(y);
+  // Strides (5, 1, 10) are neither row nor col major
   CHECK(!y.flags().row_contiguous);
-  CHECK(y.flags().col_contiguous);
+  CHECK(!y.flags().col_contiguous);
   y = reshape(x, {2, 50});
   eval(y);
   CHECK(y.flags().row_contiguous);
