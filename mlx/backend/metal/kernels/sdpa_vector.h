@@ -259,8 +259,78 @@ template <typename T, int D, int V = D>
     sum_exp_score = 1;
   }
 
-  // For each key
-  for (int i = block_idx; i < N; i += blocks) {
+  // For each key: unroll TK to expose independent memory loads per iter.
+  // TK=4 is chosen to keep register pressure low (TK*(qk_per_thread +
+  // v_per_thread) half-regs of prefetch = 32 for D=V=128), leaving margin
+  // for the larger head-dim variants. The specialized _gqa kernel below is
+  // not affected.
+  constexpr int TK = 4;
+  const int stride_k_tok = blocks * int(k_seq_stride);
+  const int stride_v_tok = blocks * int(v_seq_stride);
+  const int stride_mask_tok =
+      (bool_mask || float_mask) ? blocks * mask_kv_seq_stride : 0;
+  int i = block_idx;
+  for (; i + (TK - 1) * blocks < N; i += blocks * TK) {
+    // Prefetch: issue all TK K/V loads first so the HW can overlap them.
+    T k_reg[TK][qk_per_thread];
+    T v_reg[TK][v_per_thread];
+    for (int t = 0; t < TK; t++) {
+      const device T* kp = keys + t * stride_k_tok;
+      for (int j = 0; j < qk_per_thread; j++) {
+        k_reg[t][j] = kp[j];
+      }
+    }
+    for (int t = 0; t < TK; t++) {
+      const device T* vp = values + t * stride_v_tok;
+      for (int j = 0; j < v_per_thread; j++) {
+        v_reg[t][j] = vp[j];
+      }
+    }
+
+    for (int t = 0; t < TK; t++) {
+      int ii = i + t * blocks;
+      bool use_key = true;
+      if (do_causal) {
+        use_key = ii <= (N - q_seq_len + int(q_seq_idx));
+      } else if (bool_mask) {
+        use_key = bmask[t * stride_mask_tok];
+      } else if (float_mask) {
+        use_key =
+            (fmask[t * stride_mask_tok] >= Limits<T>::finite_min);
+      }
+      if (use_key) {
+        U score = 0;
+        for (int j = 0; j < qk_per_thread; j++) {
+          score += q[j] * static_cast<U>(k_reg[t][j]);
+        }
+        score = simd_sum(score);
+        if (float_mask) {
+          score += static_cast<U>(fmask[t * stride_mask_tok]);
+        }
+
+        U new_max = max(max_score, score);
+        U factor = fast::exp(max_score - new_max);
+        U exp_score = fast::exp(score - new_max);
+        max_score = new_max;
+        sum_exp_score = sum_exp_score * factor + exp_score;
+        for (int j = 0; j < v_per_thread; j++) {
+          o[j] = o[j] * factor + exp_score * static_cast<U>(v_reg[t][j]);
+        }
+      }
+    }
+
+    keys += TK * stride_k_tok;
+    values += TK * stride_v_tok;
+    if (bool_mask) {
+      bmask += TK * stride_mask_tok;
+    }
+    if (float_mask) {
+      fmask += TK * stride_mask_tok;
+    }
+  }
+
+  // Tail (fewer than TK remaining keys)
+  for (; i < N; i += blocks) {
     bool use_key = true;
     if (do_causal) {
       use_key = i <= (N - q_seq_len + int(q_seq_idx));
@@ -272,8 +342,8 @@ template <typename T, int D, int V = D>
     if (use_key) {
       // Compute the i-th score
       U score = 0;
-      for (int i = 0; i < qk_per_thread; i++) {
-        score += q[i] * keys[i];
+      for (int j = 0; j < qk_per_thread; j++) {
+        score += q[j] * keys[j];
       }
       score = simd_sum(score);
 
@@ -290,19 +360,19 @@ template <typename T, int D, int V = D>
       sum_exp_score = sum_exp_score * factor + exp_score;
 
       // Update the output accumulator
-      for (int i = 0; i < v_per_thread; i++) {
-        o[i] = o[i] * factor + exp_score * values[i];
+      for (int j = 0; j < v_per_thread; j++) {
+        o[j] = o[j] * factor + exp_score * values[j];
       }
     }
 
     // Move the pointers to the next kv
-    keys += blocks * int(k_seq_stride);
-    values += blocks * int(v_seq_stride);
+    keys += stride_k_tok;
+    values += stride_v_tok;
     if (bool_mask) {
-      bmask += blocks * mask_kv_seq_stride;
+      bmask += stride_mask_tok;
     }
     if (float_mask) {
-      fmask += blocks * mask_kv_seq_stride;
+      fmask += stride_mask_tok;
     }
   }
 
