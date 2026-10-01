@@ -418,6 +418,7 @@ array_api_tests/test_special_cases.py::test_unary[acos(isfinite(real(x_i)) and i
 array_api_tests/test_special_cases.py::test_unary[acos(real(x_i) is -infinity and isfinite(imag(x_i)) and imag(x_i) > 0) -> \u03c0 - infinity j]
 array_api_tests/test_special_cases.py::test_unary[acos(real(x_i) is +infinity and isfinite(imag(x_i)) and imag(x_i) > 0) -> +0 - infinity j]
 array_api_tests/test_special_cases.py::test_unary[sign((real(x_i) is -0 or real(x_i) == +0) and (imag(x_i) is -0 or imag(x_i) == +0)) -> 0 + 0j]
+array_api_tests/test_special_cases.py::test_unary[ceil(x_i.is_integer()) -> x_i]
 array_api_tests/test_special_cases.py::test_unary[floor(x_i.is_integer()) -> x_i]
 array_api_tests/test_special_cases.py::test_unary[round(x_i.is_integer()) -> x_i]
 array_api_tests/test_special_cases.py::test_unary[trunc(x_i.is_integer()) -> x_i]

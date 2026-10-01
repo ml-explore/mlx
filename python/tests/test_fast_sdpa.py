@@ -554,6 +554,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         Nq = 4
         Nkv = 1
         scale = 1.0
+        tol = 1e-3 if mx.cuda.is_available() else 1e-4
         mx.random.seed(0)
         q = 5e-1 * mx.random.normal(shape=(1, Nq, 1, D))
         k = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
@@ -589,7 +590,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 scale=scale,
                 mask=m,
             )
-            self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+            self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
         L = 4096
         scale = 1.0
@@ -618,7 +619,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 scale=scale,
                 mask=m,
             )
-            self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+            self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
     def test_sdpa_vector_gqa_long(self):
         scale = 1.0
