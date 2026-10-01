@@ -187,7 +187,6 @@ class TestReduce(mlx_tests.MLXTestCase):
                 with self.assertRaises(ValueError):
                     getattr(mx, op)(a_mx, axis=axis)
 
-    def test_zero_size_sum_prod_all_dtypes(self):
         # sum and prod have identities, so an empty reduction returns them for
         # every dtype. The unsigned outputs (uint32, uint64) had no init kernel
         # on Metal and aborted the process instead.
