@@ -380,6 +380,10 @@ void View::eval_cpu(const std::vector<array>& inputs, array& out) {
       strides[i] *= ibytes;
       strides[i] /= obytes;
     }
+    // Last axis can have any stride
+    if (obytes < ibytes) {
+      strides.back() = 1;
+    }
     out.copy_shared_buffer(
         in, strides, in.flags(), in.data_size() * ibytes / obytes);
   } else {

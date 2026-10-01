@@ -4162,6 +4162,11 @@ class TestOps(mlx_tests.MLXTestCase):
             a_out = out.view(mx.int32)
             self.assertTrue(mx.array_equal(a_out, a, equal_nan=True))
 
+        # Size one last axis
+        a = mx.arange(4, dtype=mx.int32).reshape(1, 4).T
+        expected = np.arange(4, dtype=np.int32).reshape(4, 1).view(np.int16)
+        self.assertTrue(np.array_equal(a.view(mx.int16), expected))
+
         # Byte offsets that are not a multiple of the new item size
         a = mx.arange(64, dtype=mx.uint8)
         a_np = np.arange(64, dtype=np.uint8)
