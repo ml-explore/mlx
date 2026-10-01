@@ -57,6 +57,30 @@ void qmm_sm80(
     QuantizationMode mode,
     cu::CommandEncoder& encoder);
 
+bool supports_gather_qmm_rhs_sm80(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& out,
+    bool transpose,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::Device& device);
+
+void gather_qmm_rhs_sm80(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& rhs_indices,
+    array& out,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::CommandEncoder& encoder);
+
 bool supports_qmm_naive(
     const array& x,
     const array& w,
