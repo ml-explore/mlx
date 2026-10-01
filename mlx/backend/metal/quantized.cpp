@@ -487,9 +487,9 @@ void qmv(
   std::string type_string = get_type_string(x.dtype());
   bool aligned = K % qmv_fast_k_alignment(bits) == 0;
   bool fast = N % bn == 0 && aligned;
-  // Affine outputs that are not a multiple of 8 can still use the fast kernel
+  // Outputs that are not a multiple of 8 can still use the fast kernel
   // when the input is aligned: its last SIMD-group covers the remaining rows.
-  bool fast_rows = !fast && aligned && mode == "affine" && !global_scale;
+  bool fast_rows = !fast && aligned;
   const char* func = fast ? "qmv_fast" : (fast_rows ? "qmv_fast_rows" : "qmv");
   // A narrower output tile reduces register pressure for large
   // floating-point quantized matrix-vector products on M5 Max GPUs.

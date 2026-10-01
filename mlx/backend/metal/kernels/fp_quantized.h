@@ -335,7 +335,8 @@ template <
     int group_size,
     int bits,
     bool has_global_scale = false,
-    int results_per_simdgroup = 4>
+    int results_per_simdgroup = 4,
+    bool partial_rows = false>
 METAL_FUNC void fp_qmv_fast_impl(
     const device uint32_t* w,
     const device uint8_t* scales,
@@ -367,6 +368,15 @@ METAL_FUNC void fp_qmv_fast_impl(
   const int out_row = tid.y * (num_simdgroups * results_per_simdgroup) +
       simd_gid * results_per_simdgroup;
 
+  // Reuse the last valid row for reads beyond the output tile.
+  int last_row = results_per_simdgroup - 1;
+  if constexpr (partial_rows) {
+    if (out_row >= out_vec_size) {
+      return;
+    }
+    last_row = min(last_row, out_vec_size - 1 - out_row);
+  }
+
   ws += out_row * in_vec_size_w + simd_lid * packs_per_thread * bytes_per_pack;
   scales += out_row * in_vec_size_g + simd_lid / scale_step_per_thread;
   x += tid.x * in_vec_size + simd_lid * values_per_thread;
@@ -376,8 +386,12 @@ METAL_FUNC void fp_qmv_fast_impl(
     load_vector<T, U, values_per_thread>(x, x_thread);
 
     for (int row = 0; row < results_per_simdgroup; row++) {
-      auto wl = (const device uint8_t*)(ws + row * in_vec_size_w);
-      const device auto* sl = scales + row * in_vec_size_g;
+      int src = row;
+      if constexpr (partial_rows) {
+        src = min(row, last_row);
+      }
+      auto wl = (const device uint8_t*)(ws + src * in_vec_size_w);
+      const device auto* sl = scales + src * in_vec_size_g;
 
       U s = dequantize_scale<U, group_size>(sl[0]);
       result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s);
@@ -395,7 +409,7 @@ METAL_FUNC void fp_qmv_fast_impl(
 
   for (int row = 0; row < results_per_simdgroup; row++) {
     result[row] = simd_sum(result[row]);
-    if (simd_lid == 0) {
+    if (simd_lid == 0 && row <= last_row) {
       if constexpr (has_global_scale) {
         y[row] = static_cast<T>(result[row] * inv_scale_enc);
       } else {
@@ -1286,6 +1300,67 @@ template <
       bits,
       has_global_scale,
       results_per_simdgroup>(
+      w,
+      scales,
+      global_scale,
+      x,
+      y,
+      in_vec_size,
+      out_vec_size,
+      tid,
+      simd_gid,
+      simd_lid);
+}
+
+template <
+    typename T,
+    int group_size,
+    int bits,
+    bool batched,
+    bool has_global_scale = false,
+    int results_per_simdgroup = 4>
+[[kernel]] void fp_qmv_fast_rows(
+    const device uint32_t* w,
+    const device uint8_t* scales,
+    const device float* global_scale,
+    const device T* x,
+    device T* y,
+    const constant int& in_vec_size,
+    const constant int& out_vec_size,
+    const constant int& x_batch_ndims,
+    const constant int* x_shape,
+    const constant int64_t* x_strides,
+    const constant int& w_batch_ndims,
+    const constant int* w_shape,
+    const constant int64_t* w_strides,
+    const constant int64_t* s_strides,
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  if (batched) {
+    int M = x_shape[x_batch_ndims];
+    adjust_matrix_offsets(
+        x,
+        w,
+        scales,
+        y,
+        out_vec_size * M,
+        x_batch_ndims,
+        x_shape,
+        x_strides,
+        w_batch_ndims,
+        w_shape,
+        w_strides,
+        s_strides,
+        tid);
+  }
+  fp_qmv_fast_impl<
+      T,
+      group_size,
+      bits,
+      has_global_scale,
+      results_per_simdgroup,
+      true>(
       w,
       scales,
       global_scale,
