@@ -106,6 +106,30 @@ void fp_qmv(
     cu::CommandEncoder& encoder,
     Stream s);
 
+bool supports_fp_gather_qmv(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& out,
+    bool transpose,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::Device& device);
+
+void fp_gather_qmv(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& global_scale,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    array& out,
+    int bits,
+    int group_size,
+    cu::CommandEncoder& encoder);
+
 bool supports_qmv(
     const array& x,
     const array& w,

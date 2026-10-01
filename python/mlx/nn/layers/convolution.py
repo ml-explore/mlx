@@ -51,7 +51,7 @@ class Conv1d(Module):
                 f"divisible by the number of groups ({groups})"
             )
 
-        scale = math.sqrt(1 / (in_channels * kernel_size))
+        scale = math.sqrt(1 / (in_channels // groups * kernel_size))
         self.weight = mx.random.uniform(
             low=-scale,
             high=scale,
@@ -132,7 +132,7 @@ class Conv2d(Module):
             lambda x: (x, x) if isinstance(x, int) else x,
             (kernel_size, stride, padding),
         )
-        scale = math.sqrt(1 / (in_channels * kernel_size[0] * kernel_size[1]))
+        scale = math.sqrt(1 / (in_channels // groups * kernel_size[0] * kernel_size[1]))
         self.weight = mx.random.uniform(
             low=-scale,
             high=scale,

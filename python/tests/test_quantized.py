@@ -1391,6 +1391,9 @@ class TestQuantized(mlx_tests.MLXTestCase):
             group_size=None,
             bits=None,
             mode="affine",
+            noncontiguous_x=False,
+            rtol=1e-5,
+            atol=1e-4,
         ):
             with self.subTest(
                 M=M,
@@ -1405,12 +1408,18 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 group_size=group_size,
                 bits=bits,
                 mode=mode,
+                noncontiguous_x=noncontiguous_x,
+                rtol=rtol,
+                atol=atol,
             ):
                 x = mx.random.normal(shape=batch_A + (M, K)).astype(dtype)
                 w = mx.random.normal(
                     shape=batch_B + ((N, K) if transpose else (K, N))
                 ).astype(dtype)
                 w_hat, qw, s, b = quantize(w, transpose, group_size, bits, mode=mode)
+
+                if noncontiguous_x:
+                    x = mx.concatenate([x, x], axis=-1)[..., : x.shape[-1]]
 
                 if lhs_indices is not None:
                     lhs_indices = mx.array(lhs_indices)
@@ -1430,7 +1439,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     bits=bits,
                     mode=mode,
                 )
-                self.assertTrue(mx.allclose(c1, c2, atol=1e-4))
+                self.assertTrue(mx.allclose(c1, c2, rtol=rtol, atol=atol))
 
         inputs = (
             {
@@ -1506,6 +1515,58 @@ class TestQuantized(mlx_tests.MLXTestCase):
             test_shape(1, 32, 512, **kwargs)
             test_shape(32, 512, 32, transpose=False, **kwargs)
             test_shape(1, 512, 32, transpose=False, **kwargs)
+
+        # Long K with many gathered vectors uses the nvfp4 gather qmv kernel on
+        # the GPU. Low precision outputs need a tolerance of about one ulp.
+        on_gpu = mx.default_device() == mx.gpu
+        bf16 = dict(dtype=mx.bfloat16 if on_gpu else mx.float32, rtol=1e-2, atol=1e-2)
+        f16 = dict(dtype=mx.float16 if on_gpu else mx.float32, rtol=1e-3, atol=1e-3)
+        test_shape(
+            1,
+            32,
+            1024,
+            batch_A=(1,),
+            batch_B=(3,),
+            lhs_indices=(0,),
+            rhs_indices=(2, 1, 0, 2, 1, 0, 2, 1, 0),
+            mode="nvfp4",
+            **bf16,
+        )
+        test_shape(
+            1,
+            33,
+            1024,
+            batch_A=(2, 2),
+            batch_B=(2,),
+            lhs_indices=((0,), (3,)),
+            rhs_indices=((1, 0, 1),),
+            mode="nvfp4",
+            noncontiguous_x=True,
+            **f16,
+        )
+        # K = 1056 leaves one warp lane active in the second reduction step.
+        test_shape(
+            1,
+            32,
+            1056,
+            batch_A=(1,),
+            batch_B=(3,),
+            lhs_indices=(0,),
+            rhs_indices=(2, 1, 0, 2, 1, 0, 2, 1, 0),
+            mode="nvfp4",
+        )
+        for mode in ("mxfp4", "mxfp8"):
+            test_shape(
+                1,
+                33,
+                1024,
+                batch_A=(1,),
+                batch_B=(3,),
+                lhs_indices=(0,),
+                rhs_indices=(2, 1, 0, 2, 1, 0, 2, 1, 0),
+                mode=mode,
+                **bf16,
+            )
 
     def test_gather_qqmm(self):
         if mx.default_device() == mx.cpu:
