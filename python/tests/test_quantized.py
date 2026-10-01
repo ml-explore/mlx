@@ -1573,6 +1573,19 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 mode=mode,
                 **bf16,
             )
+        for mode in ("nvfp4", "mxfp4", "mxfp8"):
+            for K in (448, 512, 704):
+                test_shape(
+                    1,
+                    33,
+                    K,
+                    batch_A=(1,),
+                    batch_B=(3,),
+                    lhs_indices=(0,),
+                    rhs_indices=(2, 1, 0, 2, 1, 0, 2, 1, 0),
+                    mode=mode,
+                    **bf16,
+                )
 
     def test_gather_qqmm(self):
         if mx.default_device() == mx.cpu:
