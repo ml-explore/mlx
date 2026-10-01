@@ -1050,6 +1050,17 @@ class TestVmap(mlx_tests.MLXTestCase):
             out = mx.vmap(lambda x: mx.argsort(x, axis=axis), in_axes=1, out_axes=1)(a)
             self.assertTrue(mx.array_equal(out, expected))
 
+    def test_vmap_view(self):
+        a = mx.arange(16, dtype=mx.uint8).reshape(4, 4)
+        b = mx.arange(16, dtype=mx.int32).reshape(4, 4)
+        for x, dtype in [(a, mx.int8), (a, mx.int16), (a, mx.int32), (b, mx.uint8)]:
+            for in_axes in [0, 1, -1]:
+                expected = mx.stack(
+                    [mx.take(x, i, axis=in_axes).view(dtype) for i in range(4)]
+                )
+                out = mx.vmap(lambda y: y.view(dtype), in_axes=in_axes)(x)
+                self.assertTrue(mx.array_equal(out, expected))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

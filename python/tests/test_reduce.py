@@ -1,5 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
+import math
 from itertools import combinations, permutations
 
 import mlx.core as mx
@@ -55,6 +56,33 @@ class TestReduce(mlx_tests.MLXTestCase):
                 expected = getattr(np, op)(x_npy, axis=-1)
                 actual = getattr(mx, op)(x_mlx, axis=-1)
                 self.assertTrue(np.allclose(expected, actual))
+
+    def test_col_reduce_negative_stride(self):
+        # Exercises each Metal column reduction kernel on a negative-stride view.
+        cases = [
+            ((2, 1024, 16), 1),
+            ((2, 2, 1024, 16), 2),
+            ((2, 512, 2, 2, 16), (1, 3)),
+            ((2, 512, 64), 1),
+            ((2, 64, 512), 1),
+            ((2, 16, 16), 1),
+        ]
+        for shape, axis in cases:
+            size = math.prod(shape)
+            x_npy = np.arange(1, size + 1).reshape(shape)[::-1]
+            x_mlx = mx.arange(1, size + 1).reshape(shape)[::-1]
+            for op in ["sum", "max", "min", "mean", "var"]:
+                with self.subTest(shape=shape, axis=axis, op=op):
+                    expected = getattr(np, op)(x_npy, axis=axis)
+                    actual = getattr(mx, op)(x_mlx, axis=axis)
+                    self.assertTrue(np.allclose(expected, actual))
+            x_ones = mx.ones(shape, dtype=mx.float32)[::-1]
+            with self.subTest(shape=shape, axis=axis, op="prod"):
+                self.assertTrue(mx.all(mx.prod(x_ones, axis=axis) == 1).item())
+            x_bool = mx.ones(shape, dtype=mx.bool_)[::-1]
+            for op in ["all", "any"]:
+                with self.subTest(shape=shape, axis=axis, op=op):
+                    self.assertTrue(mx.all(getattr(mx, op)(x_bool, axis=axis)).item())
 
     def test_dtypes(self):
         int_dtypes = [
@@ -158,6 +186,35 @@ class TestReduce(mlx_tests.MLXTestCase):
             for op in ["max", "min"]:
                 with self.assertRaises(ValueError):
                     getattr(mx, op)(a_mx, axis=axis)
+
+        # sum and prod have identities, so an empty reduction returns them for
+        # every dtype. The unsigned outputs (uint32, uint64) had no init kernel
+        # on Metal and aborted the process instead.
+        dtypes = [
+            mx.bool_,
+            mx.uint8,
+            mx.uint16,
+            mx.uint32,
+            mx.uint64,
+            mx.int8,
+            mx.int16,
+            mx.int32,
+            mx.int64,
+            mx.float16,
+            mx.float32,
+        ]
+        for dtype in dtypes:
+            a = mx.zeros((0,), dtype=dtype)
+            for op, identity in [("sum", 0), ("prod", 1)]:
+                out = getattr(mx, op)(a)
+                mx.eval(out)
+                self.assertEqual(out.item(), identity, f"{op} of empty {dtype}")
+            # empty because of another axis, reduced over a non-empty one
+            b = mx.zeros((0, 3), dtype=dtype)
+            for op in ["sum", "prod"]:
+                out = getattr(mx, op)(b, axis=-1)
+                mx.eval(out)
+                self.assertEqual(out.shape, (0,))
 
     def test_sum_bool(self):
         x = np.random.uniform(0, 1, size=(10, 10, 10)) > 0.5
@@ -281,6 +338,27 @@ class TestReduce(mlx_tests.MLXTestCase):
                 getattr(mx, op)(x_mx, axis=1).tolist(),
                 getattr(np, op)(x_np, axis=1).tolist(),
             )
+
+    def test_large_offsets(self):
+        # Row r holds r % 251 and row 2**15 starts at offset 2**31, so any
+        # reduction that narrows offsets or sizes to 32 bits reads the wrong
+        # rows. The views below have fewer than 2**31 elements themselves.
+        rows, cols = 2**15 + 1, 2**16
+        row_max = (mx.arange(rows) % 251).astype(mx.uint8)
+        x = mx.contiguous(mx.broadcast_to(row_max[:, None], (rows, cols)))
+
+        self.assertTrue(mx.array_equal(x[:, 7:].max(axis=-1), row_max))
+        self.assertTrue(mx.array_equal(x[:, 7:].min(axis=-1), row_max))
+        y = x.reshape(rows, 256, 256)[:, 1:, 1:]
+        self.assertTrue(mx.array_equal(y.max(axis=(1, 2)), row_max))
+        y = x.reshape(rows, 16, 16, 256)[:, 1:, :, 1:]
+        expected = mx.broadcast_to(row_max[:, None], (rows, 16))
+        self.assertTrue(mx.array_equal(y.max(axis=(1, 3)), expected))
+
+        # Reducing all 2**31 + 2**16 elements at once
+        self.assertEqual(x.max().item(), 250)
+        self.assertTrue(x.any().item())
+        self.assertFalse(x.all().item())
 
 
 if __name__ == "__main__":

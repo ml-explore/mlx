@@ -2756,6 +2756,12 @@ class TestOps(mlx_tests.MLXTestCase):
                     out = getattr(mx, op)(a, axis=0)
                     self.assertTrue(np.array_equal(np.array(out), expected))
 
+    def test_scan_strided_bool(self):
+        a_np = np.arange(16384) % 3 != 0
+        # Non-contiguous input
+        a = mx.array(a_np)[::2]
+        self.assertTrue(np.array_equal(mx.cumsum(a), np.cumsum(a_np[::2])))
+
     def test_scans_complex_exclusive(self):
         a = mx.array([-3 + 1j, -1 + 2j, -4 + 0j, 0 + 5j, 2 - 1j])
         for op in ("cummax", "cummin", "logcumsumexp"):
@@ -3463,10 +3469,6 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertEqual(inverse.shape, v_mx.shape)
             self.assertTrue(np.array_equal(np.array(values[inverse]), v_np))
 
-    @unittest.skipIf(
-        os.getenv("LOW_MEMORY", None) is not None,
-        "This test requires a lot of memory",
-    )
     def test_large_binary(self):
         a = mx.ones([1000, 2147484], mx.int8)
         b = mx.ones([2147484], mx.int8)
@@ -3524,6 +3526,14 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(x.flatten().shape, (2 * 3 * 4,))
         self.assertEqual(x.flatten(start_axis=1).shape, (2, 3 * 4))
         self.assertEqual(x.flatten(end_axis=1).shape, (2 * 3, 4))
+
+    def test_reshape_col_contiguous(self):
+        # Reshape without a copy
+        a = mx.arange(12).reshape(3, 4).T.reshape(2, 2, 3)
+        b = mx.arange(12).reshape(3, 2, 2).T
+        a_np = np.arange(12).reshape(3, 4).T.reshape(2, 2, 3)
+        b_np = np.arange(12).reshape(3, 2, 2).T
+        self.assertTrue(np.array_equal(a + b, a_np + b_np))
 
     def test_clip(self):
         a = np.array([1, 4, 3, 8, 5], np.int32)
@@ -4147,6 +4157,26 @@ class TestOps(mlx_tests.MLXTestCase):
             out = a.view(getattr(mx, t))
             a_out = out.view(mx.int32)
             self.assertTrue(mx.array_equal(a_out, a, equal_nan=True))
+
+        # Size one last axis
+        a = mx.arange(4, dtype=mx.int32).reshape(1, 4).T
+        expected = np.arange(4, dtype=np.int32).reshape(4, 1).view(np.int16)
+        self.assertTrue(np.array_equal(a.view(mx.int16), expected))
+
+        # Byte offsets that are not a multiple of the new item size
+        a = mx.arange(64, dtype=mx.uint8)
+        a_np = np.arange(64, dtype=np.uint8)
+        for start in range(8):
+            out = a[start : start + 16].view(mx.int32)
+            expected = a_np[start : start + 16].view(np.int32)
+            self.assertTrue(np.array_equal(out + 0, expected))  # read in a kernel
+
+        # View of an (n, 1) array
+        a = mx.arange(4, dtype=mx.int32).reshape(4, 1).view(mx.int16)
+        b = mx.arange(8, dtype=mx.int16).reshape(2, 4).T
+        expected = np.arange(4, dtype=np.int32).reshape(4, 1).view(np.int16)
+        expected = expected + np.arange(8, dtype=np.int16).reshape(2, 4).T
+        self.assertTrue(np.array_equal(a + b, expected))
 
     def _hadamard(self, N):
         # Matches scipy.linalg.hadamard

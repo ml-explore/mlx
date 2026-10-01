@@ -6261,7 +6261,15 @@ std::pair<std::vector<array>, std::vector<int>> View::vmap(
     const std::vector<int>& axes) {
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
-  return {{view(inputs[0], dtype_, stream())}, axes};
+  auto a = inputs[0];
+  int ax = axes[0];
+  // Changing the item size resizes the last axis, so move the vmapped axis
+  if (ax == static_cast<int>(a.ndim()) - 1 &&
+      size_of(a.dtype()) != size_of(dtype_)) {
+    a = moveaxis(a, ax, 0, stream());
+    ax = 0;
+  }
+  return {{view(a, dtype_, stream())}, {ax}};
 }
 
 const char* View::name() const {
