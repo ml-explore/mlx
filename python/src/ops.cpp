@@ -1,10 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <limits>
-#include <numeric>
-#include <ostream>
-#include <variant>
-
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
@@ -12,6 +7,11 @@
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
+
+#include <limits>
+#include <numeric>
+#include <ostream>
+#include <variant>
 
 #include "mlx/einsum.h"
 #include "mlx/ops.h"
@@ -745,6 +745,9 @@ void init_ops(nb::module_& m) {
           two dimensions of each input.
         - All but the last two dimensions of each input are broadcast with one another using
           standard numpy-style broadcasting semantics.
+
+        Only inexact types are supported. The promoted type of ``a`` and ``b``
+        must be floating point or complex.
 
         Args:
             a (array): Input array or scalar.
@@ -3245,6 +3248,108 @@ void init_ops(nb::module_& m) {
 
         Returns:
             array: The top ``k`` elements from the input.
+      )pbdoc");
+  m.def(
+      "unique",
+      [](const mx::array& a,
+         int size,
+         bool return_index,
+         bool return_inverse,
+         bool return_counts,
+         const std::optional<ScalarOrArray>& fill_value,
+         mx::StreamOrDevice s) -> nb::object {
+        std::optional<mx::array> fill_value_ = std::nullopt;
+        if (fill_value) {
+          fill_value_ = to_array(fill_value.value(), a.dtype());
+        }
+        auto out = mx::unique(
+            a,
+            size,
+            return_index,
+            return_inverse,
+            return_counts,
+            fill_value_,
+            s);
+        if (out.size() == 1) {
+          return nb::cast(out.at(0));
+        }
+        nb::list result;
+        for (auto& o : out) {
+          result.append(o);
+        }
+        return nb::tuple(result);
+      },
+      nb::arg(),
+      "size"_a,
+      "return_index"_a = false,
+      "return_inverse"_a = false,
+      "return_counts"_a = false,
+      "fill_value"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def unique(a: array, /, size: int, return_index: bool = False, return_inverse: bool = False, return_counts: bool = False, fill_value: scalar | array | None = None, *, stream: StreamOrDevice = None) -> array | tuple[array, ...]"),
+      R"pbdoc(
+        Returns the sorted unique elements of the flattened array.
+
+        The shape of the output does not depend on the values in ``a``, so
+        ``a`` is not evaluated. Unlike NumPy, the size is never inferred from
+        the values and must be provided.
+
+        Entries past the last unique element hold ``fill_value`` and their
+        count is ``0``, so ``mx.sum(counts > 0)`` gives the number of unique
+        elements as long as the output is not truncated.
+
+        A truncated output keeps the smallest ``size`` unique elements, and
+        ``index``, ``inverse`` and ``counts`` then stop describing all of ``a``,
+        and ``inverse`` and ``counts`` stop agreeing with each other: the counts
+        of the dropped elements are gone, while their indices in ``inverse`` are
+        clamped to the last entry.
+        ``inverse`` is meaningless for a ``size`` of ``0``, since there is no
+        element left for it to point at.
+
+        This op builds on ``mx.sort``, so a ``bool`` input needs the CPU
+        stream, which is where ``mx.sort`` supports it.
+
+        Args:
+            a (array): Input array.
+            size (int): The size of the output. If the size is smaller than
+              the number of unique elements of ``a``, the output is truncated.
+              If it is larger, the output is padded with ``fill_value``.
+            return_index (bool, optional): If ``True``, also return the index
+              in the flattened ``a`` of the first occurrence of each unique
+              element. Default: ``False``.
+            return_inverse (bool, optional): If ``True``, also return the
+              indices of the unique array that rebuild ``a``. The indices have
+              the same shape as ``a``. Default: ``False``.
+            return_counts (bool, optional): If ``True``, also return the number
+              of times each unique element occurs in ``a``. Default: ``False``.
+            fill_value (scalar or array, optional): The value of the entries
+              past the last unique element. If ``None``, this defaults to the
+              first of the sorted unique elements. Default: ``None``.
+
+        Returns:
+            array or tuple(array, ...): The sorted unique elements. If any of
+            ``return_index``, ``return_inverse`` or ``return_counts`` is
+            ``True``, a tuple with the requested arrays in the order values,
+            index, inverse, counts.
+
+        Example:
+            >>> a = mx.array([2, 1, 2, 3, 1])
+            >>> mx.unique(a, 3)
+            array([1, 2, 3], dtype=int32)
+            >>> mx.unique(a, 5)
+            array([1, 2, 3, 1, 1], dtype=int32)
+            >>> values, index, inverse, counts = mx.unique(
+            ...     a, 4, True, True, True, fill_value=0)
+            >>> values
+            array([1, 2, 3, 0], dtype=int32)
+            >>> index
+            array([1, 0, 3, 1], dtype=uint32)
+            >>> inverse
+            array([1, 0, 1, 2, 0], dtype=uint32)
+            >>> counts
+            array([2, 2, 1, 0], dtype=int32)
       )pbdoc");
   m.def(
       "broadcast_to",
@@ -5824,6 +5929,9 @@ void init_ops(nb::module_& m) {
       R"pbdoc(
 
       Perform the Einstein summation convention on the operands.
+
+      Contractions are implemented with :func:`matmul` and have the same
+      requirements.
 
       Args:
         subscripts (str): The Einstein summation convention equation.

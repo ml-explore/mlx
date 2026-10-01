@@ -246,15 +246,29 @@ void View::eval_gpu(const std::vector<array>& inputs, array& out) {
   // - type size is the same
   // - type size is smaller and the last axis is contiguous
   // - the entire array is row contiguous
-  if (ibytes == obytes || (obytes < ibytes && in.strides().back() == 1) ||
-      in.flags().row_contiguous) {
+  // and the offset is a multiple of the output type size
+  if (in.offset() % obytes == 0 &&
+      (ibytes == obytes || (obytes < ibytes && in.strides().back() == 1) ||
+       in.flags().row_contiguous)) {
     auto strides = in.strides();
     for (int i = 0; i < static_cast<int>(strides.size()) - 1; ++i) {
       strides[i] *= ibytes;
       strides[i] /= obytes;
     }
+    // Last axis can have any stride
+    if (obytes < ibytes) {
+      strides.back() = 1;
+    }
+    auto flags = in.flags();
+    if (ibytes != obytes) {
+      // Last axis size can change contiguity
+      auto [_, row_contiguous, col_contiguous] =
+          check_contiguity(out.shape(), strides);
+      flags.row_contiguous = row_contiguous;
+      flags.col_contiguous = col_contiguous;
+    }
     out.copy_shared_buffer(
-        in, strides, in.flags(), in.data_size() * ibytes / obytes);
+        in, strides, flags, in.data_size() * ibytes / obytes);
   } else {
     auto tmp = array(in.shape(), in.dtype(), nullptr, {});
     tmp.set_data(allocator::malloc(tmp.nbytes()));

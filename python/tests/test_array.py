@@ -1062,10 +1062,13 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual((a > 1).tolist(), [False, False, True])
         self.assertEqual((a >= 1).tolist(), [False, True, True])
 
-    def test_array_neg(self):
+    def test_array_unary_ops(self):
         a = mx.array([-1.0, 4.0, 0.0])
 
         self.assertEqual((-a).tolist(), [1.0, -4.0, 0.0])
+
+        self.assertEqual((+a).tolist(), [-1.0, 4.0, 0.0])
+        assert +a is not a
 
     def test_array_type_cast(self):
         a = mx.array([0.1, 2.3, -1.3])
@@ -1366,7 +1369,7 @@ class TestArray(mlx_tests.MLXTestCase):
         a[0:2] = 3
         self.assertEqual(a.tolist(), [3, 3, 1])
 
-        # Assigning through a bare Ellipsis, like a[:] and a[None]
+        # Assigning through a bare Ellipsis, like a[:] and a[(...,)]
         e = mx.zeros((2, 3), mx.int32)
         e[...] = 5
         self.assertEqual(e.tolist(), [[5, 5, 5], [5, 5, 5]])
@@ -1378,15 +1381,43 @@ class TestArray(mlx_tests.MLXTestCase):
         e[...] = mx.zeros((2, 3), mx.int32)
         self.assertEqual(e.tolist(), [[0, 0, 0], [0, 0, 0]])
 
+        # Leading singleton dimensions of the update are squeezed
+        e[...] = mx.array([[[1, 2, 3], [4, 5, 6]]])
+        self.assertEqual(e.tolist(), [[1, 2, 3], [4, 5, 6]])
+
+        # The target keeps its leading dimension of size 1
+        h = mx.zeros((1, 3), mx.int32)
+        h[...] = mx.array([[[1, 2, 3]]])
+        self.assertEqual(h.tolist(), [[1, 2, 3]])
+
+        # a[...] assigns the same values as a[(...,)]
+        f = mx.zeros((3,), mx.int32)
+        g = mx.zeros((3,), mx.int32)
+        f[...] = mx.array([[1, 2, 3]])
+        g[(...,)] = mx.array([[1, 2, 3]])
+        self.assertEqual(f.tolist(), [1, 2, 3])
+        self.assertEqual(f.tolist(), g.tolist())
+
         # Scalar array
         e = mx.array(0)
         e[...] = 7
         self.assertEqual(e.item(), 7)
 
+        e[...] = mx.array([[9]])
+        self.assertEqual(e.tolist(), 9)
+
         # Shapes that cannot broadcast are still rejected
         e = mx.zeros((2, 3), mx.int32)
         with self.assertRaises(ValueError):
             e[...] = mx.array([1, 2])
+
+        # The squeeze stops at the first dimension that is not 1
+        with self.assertRaises(ValueError):
+            e[...] = mx.zeros((2, 1, 3), mx.int32)
+
+        # A squeezed update that still does not broadcast is rejected
+        with self.assertRaises(ValueError):
+            e[...] = mx.zeros((1, 4), mx.int32)
 
         a[0:3] = 4
         self.assertEqual(a.tolist(), [4, 4, 4])
@@ -1903,6 +1934,33 @@ class TestArray(mlx_tests.MLXTestCase):
         b_mx = a_mx[::-1, ::-3, ::-2]
         self.assertTrue(np.array_equal(b_np, b_mx))
 
+    def test_slice_bounds_with_array_index(self):
+        # Out-of-range slice bounds must be clamped the same way NumPy clamps
+        # them when the slice is combined with an array index.
+        a_np = np.arange(20, dtype=np.int32).reshape(4, 5)
+        a_mx = mx.array(a_np)
+        idx_np = np.array([0, 1])
+        idx_mx = mx.array([0, 1], dtype=mx.uint32)
+
+        bounds = [None, -100, -6, -4, -1, 0, 1, 3, 4, 6, 100]
+        steps = [None, 1, 2, 3, -1, -2, -3]
+
+        for start in bounds:
+            for stop in bounds:
+                for step in steps:
+                    s = slice(start, stop, step)
+                    with self.subTest(start=start, stop=stop, step=step):
+                        self.assertTrue(
+                            np.array_equal(a_np[s, idx_np], a_mx[s, idx_mx])
+                        )
+
+                        # Same clamping applies when assigning through the slice
+                        u_np = a_np.copy()
+                        u_mx = mx.array(a_np)
+                        u_np[s, idx_np] = 0
+                        u_mx[s, idx_mx] = 0
+                        self.assertTrue(np.array_equal(u_np, u_mx))
+
     def test_api(self):
         x = mx.array(np.random.rand(10, 10, 10))
         ops = [
@@ -2085,6 +2143,12 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertIsNotNone(wr())
         mv = None
         self.assertIsNone(wr())
+
+    def test_buffer_protocol_eval_error(self):
+        # Errors from evaluating the array are raised instead of aborting
+        a = mx.linalg.inv(mx.zeros((2, 2)), stream=mx.cpu)
+        with self.assertRaises(RuntimeError):
+            memoryview(a)
 
     def test_array_view_ref_counting(self):
         a = mx.arange(3)
@@ -2946,6 +3010,41 @@ class TestArray(mlx_tests.MLXTestCase):
             x[: 2**32]
         with self.assertRaises(ValueError):
             x[2**32]
+
+    @unittest.skipUnless(sys.version_info >= (3, 15), "requires Python 3.15")
+    def test_frozen_types(self):
+        types = (
+            mx.array,
+            mx.Dtype,
+            mx.finfo,
+            mx.iinfo,
+            mx.ArrayAt,
+            mx.ArrayLike,
+            mx.ArrayIterator,
+            mx.Device,
+            mx.Stream,
+            mx.ThreadLocalStream,
+            mx.StreamContext,
+            mx.PrintOptions,
+            mx.custom_function,
+            mx.FunctionExporter,
+            mx.distributed.Group,
+        )
+        for bound_type in types:
+            with self.subTest(type=bound_type):
+                with self.assertRaises(TypeError):
+                    bound_type._test_attribute = None
+                with self.assertRaises(TypeError):
+                    bound_type.__doc__ = "modified"
+                with self.assertRaises(TypeError):
+                    del bound_type.__doc__
+
+    def test_array_subclass(self):
+        class Array(mx.array):
+            def total(self):
+                return self.sum().item()
+
+        self.assertEqual(Array([1, 2, 3]).total(), 6)
 
 
 if __name__ == "__main__":

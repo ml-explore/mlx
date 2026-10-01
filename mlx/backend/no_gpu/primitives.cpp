@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #include "mlx/primitives.h"
 #include "mlx/distributed/primitives.h"
@@ -30,6 +30,7 @@ bool fast::ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    bool has_sinks,
     bool is_training,
     bool output_logsumexp,
     bool force_fused,
@@ -58,6 +59,15 @@ bool fast::GatedDeltaUpdate::use_fallback(
     const int Hv,
     const int Dv,
     const bool has_mask,
+    Stream s) {
+  return true;
+}
+
+bool fast::GatedDeltaUpdateVJP::use_fallback(
+    const int Hk,
+    const int Dk,
+    const int Hv,
+    const int Dv,
     Stream s) {
   return true;
 }
@@ -190,6 +200,7 @@ NO_GPU_USE_FALLBACK(RoPE)
 NO_GPU_MULTI(ScaledDotProductAttention)
 NO_GPU_MULTI(ScaledDotProductAttentionVJP)
 NO_GPU_MULTI(GatedDeltaUpdate)
+NO_GPU_MULTI(GatedDeltaUpdateVJP)
 NO_GPU_MULTI(ConvertFP8)
 NO_GPU_MULTI(Quantize)
 NO_GPU_MULTI(CustomKernel)

@@ -267,6 +267,9 @@ CUTE_DEVICE void qmm_sm80_mainloop(
   for (int i = 0; i < size(tCrC_accu); i++) {
     tCrC(i) = Element(tCrC_accu(i));
   }
+  // The last prefetches may still be landing in the buffers C reuses.
+  cp_async_wait<0>();
+  __syncthreads();
   copy(r2s_copy_c, r2s_tCrC, r2s_tCsC);
   __syncthreads();
   copy_if(s2g_copy_c, tCpC, s2g_tCsC, s2g_tCgC);
@@ -353,6 +356,118 @@ void qmm_sm80_kernel(
       gC,
       m_max_coord,
       thread_idx);
+}
+
+template <int GroupSize,
+          typename Element,
+          typename Quant,
+          typename Scale,
+          typename CtaTiler>
+__global__
+__launch_bounds__(decltype(size(make_tiled_mma()))::value)
+void qmm_sm80_rhs_kernel(
+    const Element* A,
+    const Quant* B,
+    const Scale* S,
+    const Element* Z,
+    const uint32_t* rhs_indices,
+    Element* C,
+    int m,
+    int n,
+    int k,
+    int group_count) {
+  int thread_idx = int(threadIdx.x);
+  int m_coord = int(blockIdx.x);
+  int n_coord = int(blockIdx.y);
+
+  auto cta_tiler = CtaTiler{};
+  int tile_m = int(size<0>(cta_tiler));
+  int y_row = m_coord * tile_m;
+  int m_max_coord = m - y_row;
+  int tgp_bm = m_max_coord < tile_m ? m_max_coord : tile_m;
+
+  // Define layouts (mixed). All gathered rows form one matrix; each run of
+  // equal rhs_indices inside the row tile reuses one expert tile.
+  auto dA = make_stride(k, Int<1>{}, m * k); // (dM,dK,dL)
+  auto dB = make_stride(k, Int<1>{}, n * k); // (dN,dK,dL)
+  auto dC = make_stride(n, Int<1>{}, m * n); // (dM,dN,dL)
+  auto S_layout = make_scales_layout<GroupSize>(n, k, group_count);
+
+  Tensor mA_mkl = make_tensor(make_gmem_ptr(A),        make_shape(m, k, 1), dA); // (M,K,L)
+  Tensor mB_nkl = make_tensor(make_gmem_ptr<Quant>(B), make_shape(n, k, group_count), dB); // (N,K,L)
+  Tensor mC_mnl = make_tensor(make_gmem_ptr(C),        make_shape(m, n, 1), dC); // (M,N,L)
+
+  Tensor mS_nkl = make_tensor(make_gmem_ptr(S), S_layout); // (N,(group_size,K/group_size),L)
+  Tensor mZ_nkl = make_tensor(make_gmem_ptr(Z), S_layout); // (N,(group_size,K/group_size),L)
+
+  Tensor mA = mA_mkl(_,_,0); // (M,K)
+  Tensor mC = mC_mnl(_,_,0); // (M,N)
+  uint32_t index_next = rhs_indices[y_row];
+  int offset_next = 0;
+  while (offset_next < tgp_bm) {
+    int offset = offset_next;
+    uint32_t b_batch = index_next;
+    offset_next = tgp_bm;
+    for (int row = offset + 1; row < tgp_bm; ++row) {
+      uint32_t index = rhs_indices[y_row + row];
+      if (index != b_batch) {
+        offset_next = row;
+        index_next = index;
+        break;
+      }
+    }
+
+    int run_rows = offset_next - offset;
+    Tensor mA_offset =
+        domain_offset(make_coord(y_row + offset, 0), mA);
+    Tensor mC_offset =
+        domain_offset(make_coord(y_row + offset, 0), mC);
+    Tensor mB = mB_nkl(_,_,b_batch); // (N,K)
+    Tensor mS = mS_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
+    Tensor mZ = mZ_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
+
+    auto run_qmm = [&](auto run_tiler) {
+      Tensor gA = local_tile(mA_offset, run_tiler, make_coord(0, n_coord, _), Step<_1, X,_1>{}); // (BLK_M,BLK_K,k)
+      Tensor gB = local_tile(mB, run_tiler, make_coord(0, n_coord, _), Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
+      Tensor gC = local_tile(mC_offset, run_tiler, make_coord(0, n_coord, _), Step<_1,_1, X>{}); // (BLK_M,BLK_N)
+      Tensor gS = local_tile(mS, run_tiler, make_coord(0, n_coord, _), Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
+      Tensor gZ = local_tile(mZ, run_tiler, make_coord(0, n_coord, _), Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
+
+      qmm_sm80_mainloop(
+          run_tiler,
+          gA,
+          gB,
+          gS,
+          gZ,
+          gC,
+          run_rows,
+          thread_idx);
+    };
+
+    constexpr int tile_rows = decltype(size<0>(cta_tiler))::value;
+    if constexpr (tile_rows > 32) {
+      if (run_rows <= 16) {
+        run_qmm(make_shape(
+            Int<16>{}, size<1>(cta_tiler), size<2>(cta_tiler)));
+      } else if (run_rows <= 32) {
+        run_qmm(make_shape(
+            Int<32>{}, size<1>(cta_tiler), size<2>(cta_tiler)));
+      } else {
+        run_qmm(cta_tiler);
+      }
+    } else if constexpr (tile_rows > 16) {
+      if (run_rows <= 16) {
+        run_qmm(make_shape(
+            Int<16>{}, size<1>(cta_tiler), size<2>(cta_tiler)));
+      } else {
+        run_qmm(cta_tiler);
+      }
+    } else {
+      run_qmm(cta_tiler);
+    }
+    // The next run's loads must not overwrite C while it is still being stored.
+    __syncthreads();
+  }
 }
 
 } // namespace mlx::core::cu

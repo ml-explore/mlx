@@ -19,6 +19,8 @@ instantiate_init_reduce(or, bool_, bool, Or)
 #define instantiate_init_sum_prod(name, op)                 \
   instantiate_init_reduce(name, int32, int32_t, op)         \
   instantiate_init_reduce(name, int64, int64_t, op)         \
+  instantiate_init_reduce(name, uint32, uint32_t, op)       \
+  instantiate_init_reduce(name, uint64, uint64_t, op)       \
   instantiate_init_reduce(name, float16, float16_t, op)     \
   instantiate_init_reduce(name, bfloat16, bfloat16_t, op)   \
   instantiate_init_reduce(name, float32, float, op)         \
