@@ -165,6 +165,7 @@
   instantiate_quantized_batched(mode, name, type, 0, group_size, bits)
 
 #define instantiate_quantized_all_batched(type, mode, group_size, bits) \
+  instantiate_quantized_batched_wrap(qmv_fast_rows, type, mode, group_size, bits) \
   instantiate_quantized_batched_wrap(qmv_fast, type, mode, group_size, bits) \
   instantiate_quantized_batched_wrap(qmv, type, mode, group_size, bits)      \
   instantiate_quantized_batched_wrap(qvm, type, mode, group_size, bits) \

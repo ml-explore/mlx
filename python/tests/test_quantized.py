@@ -737,6 +737,87 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y.shape, y_hat.shape)
                 self.assertLess((y - y_hat).abs().max().item(), tol)
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_fp_qmv_fast_rows(self):
+        for n, k, mode, dtype, batched in product(
+            [1, 3, 5, 7, 8, 9, 12, 17],
+            [256, 512, 544, 1024],
+            ["mxfp4", "mxfp8", "nvfp4"],
+            [mx.float32, mx.float16, mx.bfloat16],
+            [False, True],
+        ):
+            with self.subTest(n=n, k=k, mode=mode, dtype=dtype, batched=batched):
+                key = mx.random.key(n * 7 + k)
+                w_shape = (2, n, k) if batched else (n, k)
+                x_shape = (2, 1, k) if batched else (1, k)
+                w = mx.random.normal(w_shape, key=key) / k**0.5
+                x = mx.random.normal(x_shape, key=mx.random.split(key)[0])
+                x = (x / k**0.5).astype(dtype)
+                q, s = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(q, s, mode=mode, dtype=mx.float32)
+                expected = x.astype(mx.float32) @ mx.swapaxes(w_hat, -1, -2)
+                actual = mx.quantized_matmul(x, q, s, mode=mode)
+                self.assertEqual(actual.shape, expected.shape)
+                self.assertLess((actual - expected).abs().max().item(), 1e-3)
+
+                # Compare aligned inputs with the existing full-tile kernel.
+                alignment = 256 if mode == "mxfp8" else 512
+                if k % alignment == 0:
+                    padding = [(0, 0)] * q.ndim
+                    padding[-2] = (0, (-n) % 8)
+                    padded = mx.quantized_matmul(
+                        x, mx.pad(q, padding), mx.pad(s, padding), mode=mode
+                    )
+                    self.assertTrue(mx.array_equal(actual, padded[..., :n]).item())
+
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_fp_qmv_fast_rows_global_scale(self):
+        for n, k, m, dtype in product(
+            [1, 3, 5, 7, 8, 9, 12, 17],
+            [512, 544, 1024],
+            [1, 3],
+            [mx.float32, mx.float16, mx.bfloat16],
+        ):
+            with self.subTest(n=n, k=k, m=m, dtype=dtype):
+                key = mx.random.key(n * 7 + k)
+                w = mx.random.normal((n, k), key=key) / k**0.5
+                x = mx.random.normal((m, k), key=mx.random.split(key)[0])
+                x = (x / k**0.5).astype(dtype)
+                global_scale_x = mx.max(mx.abs(x)).astype(mx.float32)
+                global_scale_w = mx.max(mx.abs(w)).astype(mx.float32)
+                q, s = mx.quantize(w, mode="nvfp4", global_scale=global_scale_w)
+                w_hat = mx.dequantize(
+                    q, s, mode="nvfp4", global_scale=global_scale_w, dtype=mx.float32
+                )
+                x_hat = mx.dequantize(
+                    *mx.quantize(x, mode="nvfp4", global_scale=global_scale_x),
+                    mode="nvfp4",
+                    global_scale=global_scale_x,
+                    dtype=dtype,
+                )
+                expected = x_hat.astype(mx.float32) @ w_hat.T
+                actual = mx.qqmm(
+                    x,
+                    q,
+                    s,
+                    mode="nvfp4",
+                    global_scale_x=global_scale_x,
+                    global_scale_w=global_scale_w,
+                )
+                self.assertEqual(actual.shape, expected.shape)
+                self.assertLess((actual - expected).abs().max().item(), 1e-3)
+
+                if k % 512 == 0:
+                    padded = mx.qqmm(
+                        x,
+                        mx.pad(q, [(0, (-n) % 8), (0, 0)]),
+                        mx.pad(s, [(0, (-n) % 8), (0, 0)]),
+                        mode="nvfp4",
+                        global_scale_x=global_scale_x,
+                        global_scale_w=global_scale_w,
+                    )
+                    self.assertTrue(mx.array_equal(actual, padded[..., :n]).item())
+
     def test_fp_qmv(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
