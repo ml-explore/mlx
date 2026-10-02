@@ -9,6 +9,7 @@ const char* binary_ops();
 const char* unary_ops();
 const char* ternary_ops();
 const char* reduce_utils();
+const char* fused_reduce();
 const char* gather();
 const char* scatter();
 const char* masked_scatter();

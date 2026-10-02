@@ -78,4 +78,42 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   throw std::runtime_error("No plan reached in reduce.");
 }
 
+void CompiledReduce::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  assert(inputs.size() == 1);
+  assert(outputs.size() == 1);
+
+  const auto& reduce = static_cast<const Reduce&>(tape().back().primitive());
+  auto [reduce_type, axes] = reduce.state();
+  array in = inputs[0];
+  auto& out = outputs[0];
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  if (in.size() == 0) {
+    init_reduce(encoder, in, out, reduce_type);
+    return;
+  }
+
+  auto plan = get_reduction_plan(in, axes);
+  bool broadcasted = false;
+  for (int i = 0, j = 0; i < in.ndim() && !broadcasted; i++) {
+    if (j < axes.size() && axes[j] == i) {
+      j++;
+    } else {
+      broadcasted = in.strides(i) == 0;
+    }
+  }
+  if (plan.type == GeneralReduce || broadcasted || !in.flags().contiguous) {
+    array in_copy = contiguous_copy_gpu(in, s);
+    encoder.add_temporary(in_copy);
+    in = in_copy;
+    plan = get_reduction_plan(in, axes);
+  }
+
+  std::vector<array> contiguous_inputs{std::move(in)};
+  fused_reduce(encoder, *this, contiguous_inputs, out, axes, plan, s);
+}
+
 } // namespace mlx::core
