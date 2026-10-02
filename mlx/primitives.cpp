@@ -4638,11 +4638,6 @@ std::pair<std::vector<array>, std::vector<int>> Scatter::vmap(
 
     // Clone updates along the vmap dimension so they can be applied to each
     // source tensor in the vmap.
-    //
-    // The updates are laid out as the index dimensions followed by one
-    // dimension per source axis. The vmap axis becomes an extra scattered
-    // source axis at position src_ax, so the singleton for it has to be
-    // inserted at src_ax *within the source part*, not at its front.
     auto& updates = inputs.back();
     int idx_ndim = static_cast<int>(inputs[1].ndim());
     int upd_src_ax = idx_ndim + src_ax;
