@@ -203,9 +203,6 @@ std::string make_template_hash(const std::string& template_def) {
   template_hash.reserve(template_def.size());
   for (size_t i = 0; i < template_def.size(); ++i) {
     auto c = template_def[i];
-    // Sanitize characters that would break the generated Metal/CUDA kernel
-    // function name. Negative int template args produce '-' (e.g. "-1"), which
-    // is not a valid C++ identifier character (see #4579).
     if (c == '<' || c == '>' || c == '-') {
       template_hash += '_';
     } else if (

@@ -1265,7 +1265,5 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertEqual(out.tolist(), [-1, -1, -1, -1])
 
 
-
-
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
