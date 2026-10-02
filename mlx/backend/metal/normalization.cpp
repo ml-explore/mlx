@@ -10,6 +10,26 @@
 
 namespace mlx::core::fast {
 
+namespace {
+
+// The kernels index w and b with 32-bit unsigned offsets. Copy the array if
+// its stride is negative or the offsets do not fit.
+inline array
+ensure_uint32_offsets(const array& w, int axis_size, const Stream& s) {
+  if (w.ndim() != 1) {
+    return w;
+  }
+  int64_t stride = w.strides()[0];
+  if (stride >= 0 && stride <= UINT32_MAX / std::max(axis_size - 1, 1)) {
+    return w;
+  }
+  auto result = contiguous_copy_gpu(w, s);
+  metal::get_command_encoder(s).add_temporary(result);
+  return result;
+}
+
+} // namespace
+
 bool RMSNorm::use_fallback(Stream s) {
   return s.device == Device::cpu;
 }
@@ -47,7 +67,7 @@ void RMSNorm::eval_gpu(
   };
 
   const array x = set_output(inputs[0]);
-  const array& w = inputs[1];
+  const array w = ensure_uint32_offsets(inputs[1], x.shape().back(), s);
 
   auto axis_size = static_cast<uint32_t>(x.shape().back());
   int n_rows = x.data_size() / axis_size;
@@ -110,7 +130,7 @@ void RMSNormVJP::eval_gpu(
     return {x_copy, true};
   };
   auto [x, copied] = check_input(inputs[0]);
-  const array& w = inputs[1];
+  const array w = ensure_uint32_offsets(inputs[1], x.shape().back(), s);
   auto [g, g_copied] = check_input(inputs[2]);
   array& gx = outputs[0];
   array& gw = outputs[1];
@@ -249,8 +269,8 @@ void LayerNorm::eval_gpu(
   };
 
   const array x = set_output(inputs[0]);
-  const array& w = inputs[1];
-  const array& b = inputs[2];
+  const array w = ensure_uint32_offsets(inputs[1], x.shape().back(), s);
+  const array b = ensure_uint32_offsets(inputs[2], x.shape().back(), s);
 
   auto axis_size = static_cast<uint32_t>(x.shape().back());
   int n_rows = x.data_size() / axis_size;
@@ -326,7 +346,7 @@ void LayerNormVJP::eval_gpu(
   bool donate_g = inputs[3].is_donatable();
   auto [x, copied] = check_input(inputs[0]);
   donate_x |= copied;
-  const array& w = inputs[1];
+  const array w = ensure_uint32_offsets(inputs[1], x.shape().back(), s);
   auto [g, g_copied] = check_input(inputs[3]);
   donate_g |= g_copied;
   array& gx = outputs[0];

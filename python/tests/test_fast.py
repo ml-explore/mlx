@@ -525,6 +525,25 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
 
+    def test_rms_norm_negative_stride(self):
+        eps = 1e-5
+        f1 = lambda x, w, y: (rms_norm(x, w, eps) * y).sum()
+        f2 = lambda x, w, y: (mx.fast.rms_norm(x, w, eps) * y).sum()
+
+        for D in [32, 8200]:
+            x = mx.random.uniform(shape=(2, 3, D))
+            w = mx.random.uniform(shape=(D,))[::-1]
+            y = mx.random.uniform(shape=(2, 3, D))
+
+            rx = rms_norm(x, w, eps)
+            rx_fast = mx.fast.rms_norm(x, w, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
+
+            gx1, gw1 = mx.grad(f1, argnums=(0, 1))(x, w, y)
+            gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
+            self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+            self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+
     def test_cross_entropy(self):
         def cross_entropy_ref(logits, targets):
             score = mx.take_along_axis(logits, mx.expand_dims(targets, -1), -1).squeeze(
@@ -693,6 +712,27 @@ class TestFast(mlx_tests.MLXTestCase):
         rx_fast = mx.fast.layer_norm(x, weight=None, bias=None, eps=eps)
         rx = layer_norm(x, None, None, eps)
         self.assertLess(mx.abs(rx - rx_fast).max(), 1e-4)
+
+    def test_layer_norm_negative_stride(self):
+        eps = 1e-5
+        f1 = lambda x, w, b, y: (layer_norm(x, w, b, eps) * y).sum()
+        f2 = lambda x, w, b, y: (mx.fast.layer_norm(x, w, b, eps) * y).sum()
+
+        for D in [32, 8200]:
+            x = mx.random.uniform(shape=(2, 3, D))
+            w = mx.random.uniform(shape=(D,))[::-1]
+            b = mx.random.uniform(shape=(D,))[::-1]
+            y = mx.random.uniform(shape=(2, 3, D))
+
+            rx = layer_norm(x, w, b, eps)
+            rx_fast = mx.fast.layer_norm(x, w, b, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
+
+            gx1, gw1, gb1 = mx.grad(f1, argnums=(0, 1, 2))(x, w, b, y)
+            gx2, gw2, gb2 = mx.grad(f2, argnums=(0, 1, 2))(x, w, b, y)
+            self.assertLess(mx.abs(gx1 - gx2).max(), 5e-5)
+            self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 5e-5)
+            self.assertLess(mx.abs(gb1 - gb2).max() / mx.abs(gb1).mean(), 5e-5)
 
     def test_layer_norm_grad(self):
         D = 32
