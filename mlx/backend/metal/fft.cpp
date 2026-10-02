@@ -542,7 +542,11 @@ void fft_op(
 
   size_t n = out.dtype() == float32 ? out.shape(axis) : in.shape(axis);
   if (n == 1) {
-    out.copy_shared_buffer(in);
+    if (in.dtype() == out.dtype()) {
+      out.copy_shared_buffer(in);
+    } else {
+      copy_gpu(in, out, CopyType::General, s);
+    }
     return;
   }
 
