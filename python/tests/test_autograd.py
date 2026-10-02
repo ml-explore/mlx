@@ -1236,6 +1236,45 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(out1[0], out2[0]))
         self.assertTrue(mx.allclose(dout1[0] + 1, dout2[0]))
 
+        # Test nested custom function with custom jvp and vmap
+        @mx.custom_function
+        def inner(x):
+            return mx.stop_gradient(x)
+
+        @inner.vjp
+        def inner_vjp(x, cot, out):
+            return cot * 2
+
+        @inner.jvp
+        def inner_jvp(x, tan):
+            return tan * 2
+
+        @inner.vmap
+        def inner_vmap(x, axis):
+            return x * 2, axis
+
+        @mx.custom_function
+        def outer(x):
+            return inner(x)
+
+        @outer.vjp
+        def outer_vjp(x, cot, out):
+            return cot * 3
+
+        @outer.jvp
+        def outer_jvp(x, tan):
+            return tan * 3
+
+        @outer.vmap
+        def outer_vmap(x, axis):
+            return x * 3, axis
+
+        self.assertTrue(mx.allclose(mx.grad(outer)(mx.array(1.0)), mx.array(3.0)))
+        _, j_out = mx.jvp(outer, [mx.array(1.0)], [mx.array(1.0)])
+        self.assertTrue(mx.allclose(j_out[0], mx.array(3.0)))
+        v_out = mx.vmap(outer)(mx.ones(4))
+        self.assertTrue(mx.allclose(v_out, mx.full((4,), 3.0)))
+
     def test_complex_vjps(self):
         def fun(x):
             return (2.0 * mx.real(x)).sum()

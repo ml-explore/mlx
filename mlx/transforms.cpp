@@ -75,6 +75,17 @@ array make_tracer(const array& p, StreamOrDevice fallback_stream) {
   return out;
 }
 
+// For CustomTransforms, trailing inputs are outputs for buffer sharing in eval.
+size_t transform_inputs_size(const array& a) {
+  if (a.has_primitive()) {
+    auto& p = a.primitive();
+    if (typeid(p) == typeid(CustomTransforms)) {
+      return a.inputs().size() - a.outputs().size();
+    }
+  }
+  return a.inputs().size();
+}
+
 } // namespace
 
 /* This class is only meant to be used in eval
@@ -504,8 +515,9 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
       cache.insert(s.id());
     }
 
-    for (auto& input : a.inputs()) {
-      recurse(input);
+    auto num_inputs = transform_inputs_size(a);
+    for (int i = 0; i < num_inputs; ++i) {
+      recurse(a.inputs()[i]);
     }
 
     // Stop grad
@@ -516,8 +528,8 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     }
 
     // Calculate gradient if any inputs require gradient
-    for (auto& input : a.inputs()) {
-      if (calc_grad.find(input.id()) != calc_grad.end()) {
+    for (int i = 0; i < num_inputs; ++i) {
+      if (calc_grad.find(a.inputs()[i].id()) != calc_grad.end()) {
         tape.push_back(a);
         calc_grad.insert(a.id());
         for (auto& s : a.siblings()) {
@@ -673,8 +685,9 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
       cache.insert(s.id());
     }
 
-    for (auto input : a.inputs()) {
-      recurse(input);
+    auto num_inputs = transform_inputs_size(a);
+    for (int i = 0; i < num_inputs; ++i) {
+      recurse(a.inputs()[i]);
     }
 
     // Stop grad
@@ -685,8 +698,8 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     }
 
     // Calculate gradient if any inputs require gradient
-    for (auto& input : a.inputs()) {
-      if (calc_grad.find(input.id()) != calc_grad.end()) {
+    for (int i = 0; i < num_inputs; ++i) {
+      if (calc_grad.find(a.inputs()[i].id()) != calc_grad.end()) {
         tape.push_back(a);
         calc_grad.insert(a.id());
         for (auto& s : a.siblings()) {
@@ -904,14 +917,15 @@ std::vector<array> vmap_replace(
       cache.insert(s.id());
     }
 
+    auto num_inputs = transform_inputs_size(a);
     // Recurse on inputs
-    for (auto& input : a.inputs()) {
-      recurse(input);
+    for (int i = 0; i < num_inputs; ++i) {
+      recurse(a.inputs()[i]);
     }
     // If any input needs a vmap, then the outputs also need
     // a vmap
-    for (auto& input : a.inputs()) {
-      if (needs_vmap.find(input.id()) != needs_vmap.end()) {
+    for (int i = 0; i < num_inputs; ++i) {
+      if (needs_vmap.find(a.inputs()[i].id()) != needs_vmap.end()) {
         tape.push_back(a);
         tape.back().set_tracer(false);
         needs_vmap.insert(a.id());
