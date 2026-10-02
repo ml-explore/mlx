@@ -313,7 +313,7 @@ class TestReduce(mlx_tests.MLXTestCase):
     def test_and_or_negative_zero(self):
         # -0.0 equals zero but has its sign bit set, so it must not be treated
         # as truthy just because its bit pattern is nonzero
-        for dtype in ["float32", "float16", "float64"]:
+        for dtype in ["float32", "float16", "float64", "complex64"]:
             with self.subTest(dtype=dtype):
                 for values in [
                     [0.0, -0.0],
