@@ -1,7 +1,9 @@
 // Copyright © 2024 Apple Inc.
 
 #include <iostream>
+#include <mutex>
 #include <sstream>
+#include <unordered_map>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/metal.h"
@@ -217,6 +219,36 @@ std::string make_template_hash(const std::string& template_def) {
   return template_hash;
 }
 
+// Generated source and its hash per kernel variant. Each variant is generated
+// and hashed one time, not on each call.
+struct GeneratedSource {
+  std::string source;
+  std::size_t hash;
+};
+
+class GeneratedSourceCache {
+ public:
+  template <typename F>
+  std::shared_ptr<const GeneratedSource> get(const std::string& name, F make) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = cache_.find(name);
+    if (it != cache_.end()) {
+      return it->second;
+    }
+    auto source = make();
+    auto hash = std::hash<std::string>{}(source);
+    auto entry = std::make_shared<const GeneratedSource>(
+        GeneratedSource{std::move(source), hash});
+    cache_.emplace(name, entry);
+    return entry;
+  }
+
+ private:
+  std::mutex mutex_;
+  std::unordered_map<std::string, std::shared_ptr<const GeneratedSource>>
+      cache_;
+};
+
 } // namespace
 
 CustomKernelFunction metal_kernel(
@@ -269,6 +301,8 @@ CustomKernelFunction metal_kernel(
       attributes.push_back("  " + dtype + " " + attr + " [[" + attr + "]]");
     }
   }
+
+  auto generated = std::make_shared<GeneratedSourceCache>();
 
   return [=,
           shape_infos = std::move(shape_infos),
@@ -324,29 +358,44 @@ CustomKernelFunction metal_kernel(
       kernel_name += get_type_string(dtype);
     }
 
-    std::string kernel_source = write_signature(
-        kernel_name,
-        header,
-        source,
-        input_names,
-        inputs,
-        output_names,
-        output_dtypes,
-        template_args,
-        attributes,
-        shape_infos,
-        atomic_outputs);
-
-    if (!template_args.empty()) {
-      template_def = kernel_name + template_def;
-      kernel_source += "\ntemplate [[host_name(\"";
-      kernel_source += kernel_name;
-      kernel_source += "\")]] [[kernel]] decltype(";
-      kernel_source += template_def;
-      kernel_source += ") ";
-      kernel_source += template_def;
-      kernel_source += ";\n";
+    // The signature also depends on the template parameter names and types.
+    // The kernel name does not contain them (int 1 and bool true are both 1).
+    std::string cache_key = kernel_name;
+    for (const auto& [param, arg] : template_args) {
+      cache_key += ":";
+      cache_key += param;
+      cache_key += ":";
+      cache_key += std::to_string(arg.index());
     }
+
+    auto entry = generated->get(cache_key, [&] {
+      std::string kernel_source = write_signature(
+          kernel_name,
+          header,
+          source,
+          input_names,
+          inputs,
+          output_names,
+          output_dtypes,
+          template_args,
+          attributes,
+          shape_infos,
+          atomic_outputs);
+
+      if (!template_args.empty()) {
+        template_def = kernel_name + template_def;
+        kernel_source += "\ntemplate [[host_name(\"";
+        kernel_source += kernel_name;
+        kernel_source += "\")]] [[kernel]] decltype(";
+        kernel_source += template_def;
+        kernel_source += ") ";
+        kernel_source += template_def;
+        kernel_source += ";\n";
+      }
+
+      return kernel_source;
+    });
+    const std::string& kernel_source = entry->source;
 
     if (verbose) {
       std::cout << "Generated source code for `" << name << "`:" << std::endl
@@ -361,7 +410,7 @@ CustomKernelFunction metal_kernel(
         std::make_shared<CustomKernel>(
             s,
             std::move(kernel_name),
-            std::move(kernel_source),
+            kernel_source,
             grid,
             threadgroup,
             shape_infos,
@@ -370,7 +419,8 @@ CustomKernelFunction metal_kernel(
             std::vector<ScalarArg>{},
             false,
             0,
-            compile_options.serialize()),
+            compile_options.serialize(),
+            entry->hash),
         std::move(inputs));
   };
 }
