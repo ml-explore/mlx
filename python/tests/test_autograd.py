@@ -41,6 +41,38 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(out[0].item(), 4.0 * 1.0 + 2.0 * 3.0)
         self.assertEqual(out[1].item(), 4.0 * 1.0 + 6.0 * 3.0)
 
+    def test_logcumsumexp_jvp(self):
+        x = mx.array([0.0, 0.0, 0.0])
+        t = mx.array([1.0, 1.0, 1.0])
+
+        for rev in (False, True):
+            f = lambda z: mx.logcumsumexp(z, axis=0, reverse=rev, inclusive=True)
+            _, (dout,) = mx.jvp(f, [x], [t])
+            self.assertTrue(mx.allclose(dout, mx.array([1.0, 1.0, 1.0])))
+
+        f = lambda z: mx.logcumsumexp(z, axis=0, reverse=False, inclusive=False)
+        _, (dout,) = mx.jvp(f, [x], [t])
+        self.assertTrue(mx.allclose(dout, mx.array([0.0, 1.0, 1.0])))
+
+        f = lambda z: mx.logcumsumexp(z, axis=0, reverse=True, inclusive=False)
+        _, (dout,) = mx.jvp(f, [x], [t])
+        self.assertTrue(mx.allclose(dout, mx.array([1.0, 1.0, 0.0])))
+
+        x = mx.array([1000.0, 1000.0, 1000.0])
+        f = lambda z: mx.logcumsumexp(z, axis=0, reverse=False, inclusive=True)
+        _, (dout,) = mx.jvp(f, [x], [t])
+        self.assertTrue(mx.allclose(dout, mx.array([1.0, 1.0, 1.0])))
+
+        x = mx.array([1.0, 2.0, 3.0])
+        t = mx.array([1.0, -2.0, 0.5])
+        eps = 1e-3
+
+        f = lambda z: mx.logcumsumexp(z, axis=0)
+        _, (dout,) = mx.jvp(f, [x], [t])
+
+        expected = (f(x + eps * t) - f(x - eps * t)) / (2 * eps)
+        self.assertTrue(mx.allclose(dout, expected, atol=1e-3))
+
     def test_jvp_comparison_tangent_dtype(self):
         # Comparison op JVP tangents should preserve the input tangent's
         # dtype (e.g. float32), not return bool. Using bool tangents causes

@@ -4443,6 +4443,45 @@ std::vector<array> Scan::jvp(
 
   if (reduce_type_ == Scan::Sum) {
     return {cumsum(tangents[0], axis_, reverse_, inclusive_, stream())};
+  } else if (reduce_type_ == Scan::LogAddExp) {
+    auto x = primals[0];
+    auto t = tangents[0];
+    auto y = logcumsumexp(x, axis_, reverse_, inclusive_, stream());
+
+    auto zero = zeros({1}, t.dtype(), stream());
+    auto t_min = array(finfo(t.dtype()).min, t.dtype());
+    auto log_abs_t = log(abs(t, stream()), stream());
+    auto log_t_positive =
+        where(greater(t, zero, stream()), log_abs_t, t_min, stream());
+    auto log_t_negative =
+        where(less(t, zero, stream()), log_abs_t, t_min, stream());
+
+    auto out_pos = exp(subtract(
+        logcumsumexp(
+            add(log_t_positive, x, stream()),
+            axis_,
+            reverse_,
+            inclusive_,
+            stream()),
+        y,
+        stream()));
+
+    auto out_neg = exp(subtract(
+        logcumsumexp(
+            add(log_t_negative, x, stream()),
+            axis_,
+            reverse_,
+            inclusive_,
+            stream()),
+        y,
+        stream()));
+
+    return {where(
+        isneginf(y, stream()),
+        zeros_like(y, stream()),
+        subtract(out_pos, out_neg, stream()),
+        stream())};
+
   } else {
     throw std::runtime_error(
         "JVP is not implemented for cumulative prod/min/max");
