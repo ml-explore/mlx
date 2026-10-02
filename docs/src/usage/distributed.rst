@@ -292,6 +292,29 @@ The following JSON defines the valid 4-node mesh from the image above.
         }
     ]
 
+Two Macs can also be connected with more than one thunderbolt cable. In that
+case, write a list of rdma devices for the peer instead of one device. The
+device at position ``k`` in the list must be connected to the device at
+position ``k`` in the list of the peer. JACCL sends large messages over all
+the cables at the same time. If some pairs have fewer cables than others, JACCL
+uses the smallest number of cables for all pairs. The following JSON defines
+two Macs connected with two cables.
+
+.. code-block:: json
+
+    [
+        {
+            "ssh": "m3-ultra-1",
+            "ips": ["123.123.123.1"],
+            "rdma": [null, ["rdma_en2", "rdma_en3"]]
+        },
+        {
+            "ssh": "m3-ultra-2",
+            "ips": [],
+            "rdma": [["rdma_en2", "rdma_en3"], null]
+        }
+    ]
+
 Even though TCP/IP is not used when communicating with Thunderbolt RDMA,
 disabling the thunderbolt bridge is still required as well as setting up
 isolated local networks for each thunderbolt connection.

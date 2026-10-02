@@ -466,14 +466,19 @@ def configure_jaccl(args, hosts, ips, sshinfo):
     log(args.verbose, "Prepare a jaccl hostfile")
     add_ips(hosts, args.verbose)
 
+    num_nodes = len(hosts)
+    count = min(
+        len(ips.ips[i, j]) for i in range(num_nodes) for j in range(num_nodes) if i != j
+    )
     jaccl_hosts = []
     for i, h in enumerate(hosts):
         rdma = []
-        for j in range(len(hosts)):
+        for j in range(num_nodes):
             if i == j:
                 rdma.append(None)
             else:
-                rdma.append(f"rdma_{ips.ips[i, j][0][0]}")
+                devices = [f"rdma_{ips.ips[i, j][c][0]}" for c in range(count)]
+                rdma.append(devices[0] if count == 1 else devices)
         jaccl_hosts.append(Host(i, h.ssh_hostname, h.ips, rdma))
     hostfile = Hostfile(jaccl_hosts, "jaccl", args.env)
 
