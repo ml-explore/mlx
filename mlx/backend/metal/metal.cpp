@@ -46,6 +46,14 @@ void start_capture(std::string path) {
   return start_capture(path, device.mtl_device());
 }
 
+std::pair<int, int> set_command_buffer_limits(int max_ops, int max_mb) {
+  auto& d = metal::device(mlx::core::Device::gpu);
+  auto [ops, mb] = d.get_max_ops_mb_per_buffer();
+  d.set_max_ops_mb_per_buffer(
+      max_ops > 0 ? max_ops : ops, max_mb > 0 ? max_mb : mb);
+  return {ops, mb};
+}
+
 void stop_capture() {
   auto pool = new_scoped_memory_pool();
   auto manager = MTL::CaptureManager::sharedCaptureManager();

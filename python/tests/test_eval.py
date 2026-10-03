@@ -196,6 +196,26 @@ class TestEval(mlx_tests.MLXTestCase):
         mx.set_memory_limit(old_limit)
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_command_buffer_limits(self):
+        x = mx.random.normal((64, 64))
+        expected = mx.sum(x @ x + 1)
+        mx.eval(expected)
+
+        previous = mx.metal.set_command_buffer_limits(1, 1)
+        self.assertEqual(len(previous), 2)
+        self.assertTrue(all(limit > 0 for limit in previous))
+        try:
+            # A value <= 0 keeps that limit
+            self.assertEqual(mx.metal.set_command_buffer_limits(0, -1), (1, 1))
+            # Results do not depend on how work is split into command buffers
+            self.assertTrue(mx.allclose(mx.sum(x @ x + 1), expected))
+            mx.metal.set_command_buffer_limits(10_000, 100_000)
+            self.assertTrue(mx.allclose(mx.sum(x @ x + 1), expected))
+        finally:
+            mx.metal.set_command_buffer_limits(*previous)
+        self.assertEqual(mx.metal.set_command_buffer_limits(0, 0), previous)
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_eval_exception_does_not_corrupt_state(self):
         # An exception thrown from inside a primitive's eval (here a Metal
         # compile error raised lazily at eval time) must not corrupt arrays
