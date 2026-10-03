@@ -6,14 +6,28 @@
 # Copyright © 2023-2026 Apple Inc.
 
 
+# Optional arguments must come last: CMake writes empty arguments into the
+# generated build files unquoted, and the shell then drops them, silently
+# shifting everything after into the wrong variable. Keeping the optional ones
+# trailing means a dropped empty just leaves them unset.
 OUTPUT_FILE=$1
 GCC=$2
 SRCDIR=$3
-CLANG=$4
+PREAMBLE_MODE=$4
 ARCH=$5
-SIMD_FLAGS=$6  # Optional, e.g. "-mavx2 -mfma -mf16c"
+FUNCTION_NAME=${6:-get_prebuilt_preamble}
+SIMD_FLAGS=$7  # Optional, e.g. "-mavx2 -mbmi2 -mfma -mf16c"
+EXTRA_INCLUDE=$8  # Optional, e.g. Highway headers for JIT SIMD preambles.
 
-if [ "$CLANG" = "TRUE" ]; then
+case "$FUNCTION_NAME" in
+  [A-Za-z_]*) ;;
+  *)
+    echo "Bad preamble function name '$FUNCTION_NAME' -- arguments shifted" >&2
+    exit 1
+    ;;
+esac
+
+if [ "$PREAMBLE_MODE" = "DARWIN" ]; then
   read -r -d '' INCLUDES <<- EOM
 #include <cmath>
 #include <complex>
@@ -24,14 +38,32 @@ if [ "$CLANG" = "TRUE" ]; then
 #endif
 EOM
 CC_FLAGS="-arch ${ARCH} -nobuiltininc -nostdinc"
+elif [ "$PREAMBLE_MODE" = "KEEP_SYSTEM_INCLUDES" ]; then
+  # Reparse system headers at JIT time; expanded libstdc++ is not valid Clang input.
+  CC_FLAGS="-std=c++17 -fkeep-system-includes"
 else
 CC_FLAGS="-std=c++17"
 fi
 
-CONTENT=$("$GCC" $CC_FLAGS $SIMD_FLAGS -I "$SRCDIR" -E -P "$SRCDIR/mlx/backend/cpu/compiled_preamble.h" 2>/dev/null)
+EXTRA_INCLUDE_FLAGS=()
+if [ -n "$EXTRA_INCLUDE" ]; then
+  EXTRA_INCLUDE_FLAGS=(-I "$EXTRA_INCLUDE")
+fi
+
+CONTENT=$(
+  "$GCC" $CC_FLAGS $SIMD_FLAGS -I "$SRCDIR" "${EXTRA_INCLUDE_FLAGS[@]}" \
+    -E -P "$SRCDIR/mlx/backend/cpu/compiled_preamble.h"
+) || {
+  echo "Failed to preprocess JIT preamble (flags: $SIMD_FLAGS)" >&2
+  exit 1
+}
+if [ -z "$CONTENT" ]; then
+  echo "Preprocessed JIT preamble is empty (flags: $SIMD_FLAGS)" >&2
+  exit 1
+fi
 
 cat << EOF > "$OUTPUT_FILE"
-const char* get_prebuilt_preamble() {
+const char* $FUNCTION_NAME() {
 return R"preamble(
 $INCLUDES
 $CONTENT

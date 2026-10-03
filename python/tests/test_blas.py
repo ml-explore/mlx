@@ -176,6 +176,22 @@ class TestBlas(mlx_tests.MLXTestCase):
 
             self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-6))
 
+    def test_cpu_mixed_lowp_matmul(self):
+        np.random.seed(0)
+        a = mx.array(np.random.normal(0, 1 / 1024, (3, 1024)).astype(np.float32))
+        b = mx.array(np.random.normal(0, 1 / 1024, (128, 1024)).astype(np.float32))
+
+        with mx.stream(mx.cpu):
+            for dtype in (mx.float16, mx.bfloat16):
+                with self.subTest(dtype=str(dtype)):
+                    b_lowp = b.astype(dtype)
+                    for rhs in (b_lowp.T, mx.asarray(b_lowp.T, copy=True)):
+                        out = a @ rhs
+                        ref = a @ rhs.astype(mx.float32)
+                        mx.eval(out, ref)
+                        self.assertEqual(out.dtype, mx.float32)
+                        self.assertTrue(np.allclose(out, ref, atol=1e-5))
+
     def test_matmul_batched(self):
         np.random.seed(0)
         # Batched matmul

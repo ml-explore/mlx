@@ -10,7 +10,11 @@
 
 namespace mlx::core::fast {
 
-bool RMSNorm::use_fallback(Stream s) {
+bool RMSNorm::use_fallback(Dtype, Stream s) {
+  return s.device == Device::cpu;
+}
+
+bool RMSNormVJP::use_fallback(Stream s) {
   return s.device == Device::cpu;
 }
 
@@ -212,7 +216,11 @@ void RMSNormVJP::eval_gpu(
   }
 }
 
-bool LayerNorm::use_fallback(Stream s) {
+bool LayerNorm::use_fallback(Dtype, Stream s) {
+  return s.device == Device::cpu;
+}
+
+bool LayerNormVJP::use_fallback(Stream s) {
   return s.device == Device::cpu;
 }
 

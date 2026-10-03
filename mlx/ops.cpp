@@ -3658,6 +3658,8 @@ array matmul(
     throw std::invalid_argument(msg.str());
   }
 
+  auto stream = to_stream(s);
+
   // Type promotion
   auto out_type = promote_types(a.dtype(), b.dtype());
 
@@ -3668,10 +3670,19 @@ array matmul(
         << " in " << out_type << ", which is not a floating point type.";
     throw std::invalid_argument(msg.str());
   }
+  bool preserve_cpu_lowp_rhs = false;
+#if defined(MLX_USE_HIGHWAY_KERNELS)
+  // Keep the CPU output head in its storage dtype for the few-row kernel.
+  preserve_cpu_lowp_rhs = stream.device == Device::cpu && out_type == float32 &&
+      a.dtype() == float32 && (b.dtype() == float16 || b.dtype() == bfloat16) &&
+      a.shape(-2) <= 192 &&
+      static_cast<size_t>(a.shape(-1)) * static_cast<size_t>(b.shape(-1)) >=
+          65536;
+#endif
   if (a.dtype() != out_type) {
     a = astype(a, out_type, s);
   }
-  if (b.dtype() != out_type) {
+  if (b.dtype() != out_type && !preserve_cpu_lowp_rhs) {
     b = astype(b, out_type, s);
   }
 
@@ -3693,7 +3704,7 @@ array matmul(
   auto out = array(
       std::move(out_shape),
       out_type,
-      std::make_shared<Matmul>(to_stream(s)),
+      std::make_shared<Matmul>(stream),
       {a, b});
 
   if (flattened_a) {

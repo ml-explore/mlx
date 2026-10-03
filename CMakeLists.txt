@@ -42,6 +42,16 @@ option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
 option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
 option(MLX_BUILD_PYTHON_STUBS "Build stub files for python bindings" ON)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
+if(MLX_BUILD_CPU AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|x86")
+  set(_X86_SIMD_DEFAULT ON)
+else()
+  set(_X86_SIMD_DEFAULT OFF)
+endif()
+# Referenced by mlx.pc.in for installed-package dependencies; the Highway
+# acquisition knobs live in mlx/backend/cpu/CMakeLists.txt.
+option(MLX_ENABLE_X86_SIMD
+       "Enable runtime-dispatched x86 CPU SIMD kernels via Highway"
+       ${_X86_SIMD_DEFAULT})
 option(MLX_USE_CCACHE "Use CCache for compilation cache when available" ON)
 option(MLX_EXPORT_ALL_SYMBOLS "Export all symbols in the library" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)

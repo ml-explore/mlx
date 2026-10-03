@@ -110,7 +110,7 @@ array rms_norm(
   auto passed_weight =
       (has_weight) ? astype(*weight, out_type, s) : array(1, out_type);
 
-  if (!RMSNorm::use_fallback(s)) {
+  if (!RMSNorm::use_fallback(out_type, s)) {
     return array(
         x.shape(),
         out_type,
@@ -130,6 +130,9 @@ std::vector<array> RMSNorm::vjp(
   assert(cotangents.size() == 1);
 
   auto s = stream();
+  if (RMSNormVJP::use_fallback(s)) {
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
   auto fallback = [eps = eps_, s](const std::vector<array>& inputs) {
     auto& x = inputs[0];
     auto& w = inputs[1];
@@ -371,7 +374,7 @@ array layer_norm(
   auto passed_bias =
       (has_bias) ? astype(*bias, out_type, s) : array(0, out_type);
 
-  if (!LayerNorm::use_fallback(s)) {
+  if (!LayerNorm::use_fallback(out_type, s)) {
     return array(
         x.shape(),
         out_type,
@@ -391,6 +394,9 @@ std::vector<array> LayerNorm::vjp(
   assert(cotangents.size() == 1);
 
   auto s = stream();
+  if (LayerNormVJP::use_fallback(s)) {
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
   auto fallback = [eps = eps_, s](const std::vector<array>& inputs) {
     auto& x = inputs[0];
     auto& w = inputs[1];
@@ -618,7 +624,7 @@ array rope(
     }
   };
   auto stream = to_stream(s);
-  if (!RoPE::use_fallback(stream)) {
+  if (!RoPE::use_fallback(x.dtype(), stream)) {
     return array(
         x.shape(),
         x.dtype(),
