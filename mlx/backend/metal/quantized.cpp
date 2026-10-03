@@ -1401,9 +1401,25 @@ void gather_qmv(
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
   bool fast = N % bn == 0 && K % qmv_fast_k_alignment(bits) == 0;
+  int pf = get_pack_factor(bits, 32);
+  int medium_alignment = pf * 32;
+  // Medium fast (packs_per_thread=1): relaxed alignment for bits>=4 when the
+  // full fast alignment is not met. E.g. K=768 with bits=4 satisfies
+  // K % 256 == 0 but not K % 512 == 0. These shapes can use the unguarded
+  // qmv_fast_impl loop with a smaller per-thread K tile instead of qmv_impl's
+  // guarded final block.
+  bool medium =
+      mode == "affine" && !fast && bits >= 4 && N % bn == 0 &&
+      K % medium_alignment == 0;
+  const char* variant = fast ? "_gather_qmv_fast_"
+      : medium              ? "_gather_qmv_fast_medium_"
+                            : "_gather_qmv_";
+  const char* base_variant = fast ? "gather_qmv_fast"
+      : medium                    ? "gather_qmv_fast_medium"
+                                  : "gather_qmv";
   concatenate(
       kname,
-      mode + (fast ? "_gather_qmv_fast_" : "_gather_qmv_"),
+      mode + variant,
       type_string,
       "_gs_",
       group_size,
@@ -1414,7 +1430,7 @@ void gather_qmv(
   auto kernel = get_quantized_kernel_wrapped(
       d,
       kname,
-      (fast ? "gather_qmv_fast" : "gather_qmv"),
+      base_variant,
       mode,
       type_string,
       group_size,
