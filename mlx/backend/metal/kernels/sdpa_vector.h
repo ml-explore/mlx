@@ -259,16 +259,16 @@ template <typename T, int D, int V = D>
     sum_exp_score = 1;
   }
 
-  // For each key: unroll TK to expose independent memory loads per iter.
-  // TK=4 is chosen to keep register pressure low (TK*(qk_per_thread +
-  // v_per_thread) half-regs of prefetch = 32 for D=V=128), leaving margin
-  // for the larger head-dim variants. The specialized _gqa kernel below is
-  // not affected.
-  constexpr int TK = 4;
   const int stride_k_tok = blocks * int(k_seq_stride);
   const int stride_v_tok = blocks * int(v_seq_stride);
   const int stride_mask_tok =
       (bool_mask || float_mask) ? blocks * mask_kv_seq_stride : 0;
+
+  // TK=4 is chosen to keep register pressure low.
+  // TODO: For some hardwares TK=1 would run faster for certain shapes.
+  constexpr int TK = 4;
+
+  // For each key
   int i = block_idx;
   for (; i + (TK - 1) * blocks < N; i += blocks * TK) {
     // Prefetch: issue all TK K/V loads first so the HW can overlap them.
@@ -295,8 +295,7 @@ template <typename T, int D, int V = D>
       } else if (bool_mask) {
         use_key = bmask[t * stride_mask_tok];
       } else if (float_mask) {
-        use_key =
-            (fmask[t * stride_mask_tok] >= Limits<T>::finite_min);
+        use_key = (fmask[t * stride_mask_tok] >= Limits<T>::finite_min);
       }
       if (use_key) {
         U score = 0;
