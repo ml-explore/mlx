@@ -214,6 +214,24 @@ def _launch_with_io(command_class, arguments, verbose):
             if stop:
                 command.terminate()
                 break
+
+        # The process can write its last output and exit between select() and
+        # poll() above, so read what is left in the pipes before giving up on it.
+        for fd in to_read:
+            is_stdout = fd == p.stdout.fileno()
+            while True:
+                try:
+                    data = os.read(fd, 8192)
+                except BlockingIOError:
+                    break
+                if not data:
+                    break
+                msg = command.preprocess_output(data.decode(errors="ignore"), is_stdout)
+                if is_stdout:
+                    stdout_queue.put(msg.encode())
+                else:
+                    stderr_queue.put(msg.encode())
+
         exit_codes[rank] = command.exit_status
 
         if exit_codes[rank][1]:
