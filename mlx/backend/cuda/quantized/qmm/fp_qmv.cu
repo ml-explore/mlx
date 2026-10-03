@@ -385,9 +385,8 @@ bool supports_fp_gather_qmv(
   if (!w.flags().row_contiguous || !scales.flags().row_contiguous) {
     return false;
   }
-  // Four packed words fill a warp at K = 1024; shorter K uses the qmm kernels.
   int k = x.shape(-1);
-  if (k < 1024 || k % 32 != 0) {
+  if (k < 512 || k % 32 != 0) {
     return false;
   }
   uint32_t n = out.shape(-1);
