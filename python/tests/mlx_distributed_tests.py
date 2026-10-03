@@ -9,6 +9,21 @@ from mlx.nn.layers.distributed import shard_inplace, shard_linear
 from mlx.nn.utils import average_gradients, clip_grad_norm_sharded
 
 
+class _FakeGroup:
+    """A group that only reports its size and rank so that every rank's shard
+    can be checked in a single process."""
+
+    def __init__(self, size, rank):
+        self._size = size
+        self._rank = rank
+
+    def size(self):
+        return self._size
+
+    def rank(self):
+        return self._rank
+
+
 class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
     def test_average_gradients(self):
         original_all_sum = mx.distributed.all_sum
@@ -264,6 +279,249 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
                 rtol=self.rtol,
             )
         )
+
+    def test_shard_linear_uneven(self):
+        mx.random.seed(0xF0F0F0F0)
+        world = mx.distributed.init()
+        N = world.size()
+
+        def part(sizes):
+            start = sum(sizes[: world.rank()])
+            return slice(None), slice(start, start + sizes[world.rank()])
+
+        # Explicit sizes and the default remainder split
+        explicit = [16 * (i + 1) for i in range(N)]
+        default = [17] + [16] * (N - 1)
+        for sizes, kwargs in ((explicit, {"sizes": explicit}), (default, {})):
+            dims = sum(sizes)
+            x = mx.random.normal((4, dims))
+            lin = nn.Linear(dims, dims, bias=True)
+            slin1 = shard_linear(lin, "all-to-sharded", **kwargs)
+            slin2 = shard_linear(lin, "sharded-to-all", **kwargs)
+            y = lin(x)
+            self.assertTrue(
+                mx.allclose(y[part(sizes)], slin1(x), atol=self.atol, rtol=self.rtol)
+            )
+            self.assertTrue(
+                mx.allclose(y, slin2(x[part(sizes)]), atol=self.atol, rtol=self.rtol)
+            )
+
+        # QuantizedMatmul is not supported on CUDA
+        if not mx.cuda.is_available():
+            # Explicit sizes and the default split keep quantization groups intact
+            explicit = [32 * (i + 1) for i in range(N)]
+            default = [96] + [64] * (N - 1)
+            for sizes, kwargs in ((explicit, {"sizes": explicit}), (default, {})):
+                dims = sum(sizes)
+                x = mx.random.normal((4, dims))
+                qlin = nn.Linear(dims, dims).to_quantized(group_size=32, bits=4)
+                slin1 = shard_linear(qlin, "all-to-sharded", **kwargs)
+                slin2 = shard_linear(qlin, "sharded-to-all", **kwargs)
+                y = qlin(x)
+                # Uneven splits change the per-rank matmul sizes, so the
+                # quantized accumulation order (and thus rounding) differs
+                # from the unsharded reference more than an even split does.
+                self.assertTrue(
+                    mx.allclose(y[part(sizes)], slin1(x), atol=1e-5, rtol=1e-3)
+                )
+                self.assertTrue(
+                    mx.allclose(y, slin2(x[part(sizes)]), atol=1e-5, rtol=1e-3)
+                )
+
+        # Check the backward pass
+        def dummy_loss(model, x, y):
+            return (model(x) * y).sum()
+
+        sizes = [16 * (i + 1) for i in range(N)]
+        dims = sum(sizes)
+        mod = nn.Sequential(nn.Linear(dims, dims), nn.Linear(dims, dims))
+        smod = nn.Sequential(
+            shard_linear(mod.layers[0], "all-to-sharded", sizes=sizes),
+            shard_linear(mod.layers[1], "sharded-to-all", sizes=sizes),
+        )
+        x = mx.random.normal((4, dims))
+        y = mx.random.normal((4, dims))
+        l1, g1 = nn.value_and_grad(mod, dummy_loss)(mod, x, y)
+        l2, g2 = nn.value_and_grad(smod, dummy_loss)(smod, x, y)
+        mx.eval(l1, g1, l2, g2)
+
+        # Uneven splits change the summation order of the distributed
+        # gradient reduction, so the tolerance is looser than an even split
+        # needs.
+        rows = part(sizes)[1]
+        self.assertTrue(mx.allclose(l1, l2, atol=1e-5, rtol=1e-3))
+        for key in ("weight", "bias"):
+            self.assertTrue(
+                mx.allclose(
+                    g1["layers"][0][key][rows],
+                    g2["layers"][0][key],
+                    atol=1e-5,
+                    rtol=1e-3,
+                )
+            )
+        self.assertTrue(
+            mx.allclose(
+                g1["layers"][1]["weight"][:, rows],
+                g2["layers"][1]["weight"],
+                atol=1e-5,
+                rtol=1e-3,
+            )
+        )
+
+    def test_shard_linear_uneven_shards(self):
+        lin = nn.Linear(11, 12)
+
+        # Explicit sizes
+        sizes = [5, 4, 3]
+        shards = [
+            shard_linear(lin, "all-to-sharded", sizes=sizes, group=_FakeGroup(3, r))
+            for r in range(3)
+        ]
+        self.assertEqual([s.weight.shape for s in shards], [(5, 11), (4, 11), (3, 11)])
+        self.assertTrue(
+            mx.array_equal(mx.concatenate([s.weight for s in shards]), lin.weight)
+        )
+        self.assertTrue(
+            mx.array_equal(mx.concatenate([s.bias for s in shards]), lin.bias)
+        )
+        self.assertIn("output_dims=12", repr(shards[0]))
+
+        # The default split gives the remainder to the first ranks
+        shards = [
+            shard_linear(lin, "sharded-to-all", group=_FakeGroup(3, r))
+            for r in range(3)
+        ]
+        self.assertEqual([s.weight.shape for s in shards], [(12, 4), (12, 4), (12, 3)])
+        self.assertTrue(
+            mx.array_equal(
+                mx.concatenate([s.weight for s in shards], axis=1), lin.weight
+            )
+        )
+        self.assertIn("input_dims=11", repr(shards[0]))
+
+    def test_shard_linear_uneven_quantized_shards(self):
+        # Split the packed weights, scales and biases at the same boundaries
+        sizes = [96, 64, 32]
+        for bits in (2, 3, 4, 5, 6, 8):
+            qlin = nn.Linear(192, 16).to_quantized(group_size=32, bits=bits)
+            shards = [
+                shard_linear(
+                    qlin, "sharded-to-all", sizes=sizes, group=_FakeGroup(3, r)
+                )
+                for r in range(3)
+            ]
+            for key in ("weight", "scales", "biases"):
+                parts = [s[key] for s in shards]
+                self.assertEqual(
+                    [p.shape[1] for p in parts],
+                    [qlin[key].shape[1] * s // 192 for s in sizes],
+                )
+                self.assertTrue(
+                    mx.array_equal(mx.concatenate(parts, axis=1), qlin[key])
+                )
+            self.assertIn("input_dims=192", repr(shards[0]))
+
+        # Output rows can be split anywhere
+        qlin = nn.Linear(64, 10).to_quantized(group_size=32, bits=4)
+        shards = [
+            shard_linear(qlin, "all-to-sharded", sizes=[7, 3], group=_FakeGroup(2, r))
+            for r in range(2)
+        ]
+        for key in ("weight", "scales", "biases", "bias"):
+            self.assertTrue(
+                mx.array_equal(mx.concatenate([s[key] for s in shards]), qlin[key])
+            )
+        self.assertIn("output_dims=10", repr(shards[0]))
+
+        # Paired default splits match when the output rows allow it
+        qin = nn.Linear(64, 160).to_quantized(group_size=32, bits=4)
+        qout = nn.Linear(160, 64).to_quantized(group_size=32, bits=4)
+        for r, rows in enumerate((64, 64, 32)):
+            s1 = shard_linear(qin, "all-to-sharded", group=_FakeGroup(3, r))
+            s2 = shard_linear(qout, "sharded-to-all", group=_FakeGroup(3, r))
+            self.assertEqual(s1.weight.shape[0], rows)
+            self.assertEqual(s2.scales.shape[1] * s2.group_size, rows)
+
+    def test_shard_linear_uneven_errors(self):
+        lin = nn.Linear(10, 12)
+        group = _FakeGroup(3, 0)
+
+        # The sizes must have one entry per rank and sum to the sharded dimension
+        with self.assertRaises(ValueError):
+            shard_linear(lin, "all-to-sharded", sizes=[5, 4, 2], group=group)
+        with self.assertRaises(ValueError):
+            shard_linear(lin, "all-to-sharded", sizes=[6, 6], group=group)
+
+        # Every rank needs a non-empty shard
+        with self.assertRaises(ValueError):
+            shard_linear(lin, "all-to-sharded", sizes=[12, 0, 0], group=group)
+        with self.assertRaises(ValueError):
+            shard_linear(lin, "sharded-to-all", sizes=[11, -1, 0], group=group)
+        with self.assertRaises(ValueError):
+            shard_linear(nn.Linear(10, 2), "all-to-sharded", group=group)
+
+        # Uneven splits require a single segment
+        with self.assertRaises(ValueError):
+            shard_linear(
+                lin, "all-to-sharded", segments=2, sizes=[4, 4, 4], group=group
+            )
+        with self.assertRaises(ValueError):
+            shard_linear(nn.Linear(10, 14), "all-to-sharded", segments=2, group=group)
+
+        # Quantized input shards must be multiples of the group size
+        qlin = nn.Linear(96, 10).to_quantized(group_size=32, bits=4)
+        with self.assertRaisesRegex(ValueError, "multiples of 32"):
+            shard_linear(qlin, "sharded-to-all", sizes=[48, 48], group=_FakeGroup(2, 0))
+        with self.assertRaises(ValueError):
+            shard_linear(qlin, "sharded-to-all", group=_FakeGroup(4, 0))
+        with self.assertRaises(ValueError):
+            shard_linear(qlin, "all-to-sharded", group=_FakeGroup(11, 0))
+
+    def test_shard_inplace_uneven(self):
+        # A dimension that does not divide by the number of devices is split
+        # as evenly as possible instead of raising.
+        lin = nn.Linear(12, 11)
+        shards = []
+        for r in range(3):
+            m = nn.Linear(12, 11)
+            m.update(lin.parameters())
+            shard_inplace(m, "all-to-sharded", group=_FakeGroup(3, r))
+            shards.append(m.weight)
+        self.assertEqual([s.shape[0] for s in shards], [4, 4, 3])
+        self.assertTrue(mx.array_equal(mx.concatenate(shards), lin.weight))
+
+        # QuantizedMatmul is not supported on CUDA
+        if not mx.cuda.is_available():
+            # A quantized module's packed weight and its grouped scales and
+            # biases must be split at the same boundaries, so the sizes are
+            # multiples of the group size.
+            qlin = nn.Linear(1408, 64).to_quantized(group_size=64, bits=4)
+            parts = {"weight": [], "scales": [], "biases": []}
+            for r in range(3):
+                m = nn.Linear(1408, 64).to_quantized(group_size=64, bits=4)
+                m.update(qlin.parameters())
+                shard_inplace(m, "sharded-to-all", group=_FakeGroup(3, r))
+                for key in parts:
+                    parts[key].append(m[key])
+            # 1408 is 22 groups of 64, split as 8, 7 and 7 groups.
+            self.assertEqual([p.shape[-1] for p in parts["weight"]], [64, 56, 56])
+            self.assertEqual([p.shape[-1] for p in parts["scales"]], [8, 7, 7])
+            for key, whole in parts.items():
+                self.assertTrue(
+                    mx.array_equal(mx.concatenate(whole, axis=-1), qlin[key])
+                )
+
+            # A paired all-to-sharded layer splits the same dimension the same
+            # way, so the two layers agree on each rank's share.
+            qout = nn.Linear(64, 1408).to_quantized(group_size=64, bits=4)
+            rows = []
+            for r in range(3):
+                m = nn.Linear(64, 1408).to_quantized(group_size=64, bits=4)
+                m.update(qout.parameters())
+                shard_inplace(m, "all-to-sharded", group=_FakeGroup(3, r))
+                rows.append(m.weight.shape[0])
+            self.assertEqual(rows, [512, 448, 448])
+            self.assertEqual(rows, [p.shape[-1] * 64 for p in parts["scales"]])
 
     def test_shard_predicate(self):
         mx.random.seed(0xF0F0F0F0)
