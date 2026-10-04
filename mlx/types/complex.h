@@ -45,6 +45,11 @@ struct complex64_t : public std::complex<float> {
   operator float() const {
     return real();
   };
+
+  // Explicit, so int casts still go through operator float
+  explicit operator bool() const {
+    return real() != 0 || imag() != 0;
+  };
 };
 
 inline bool operator>=(const complex64_t& a, const complex64_t& b) {
