@@ -504,10 +504,11 @@ void qmv(
       group_size,
       "_b_",
       bits,
-      use_narrow_qmv ? "_r_2" : "",
       B > 1 ? "_batch_1" : "_batch_0",
       partial_rows ? "_pr_1" : "_pr_0",
-      global_scale ? "_hgs" : "");
+      global_scale ? "_hgs_1" : "_hgs_0",
+      "_r_",
+      results_per_simdgroup);
   auto kernel = get_quantized_kernel_wrapped(
       d,
       kname,
