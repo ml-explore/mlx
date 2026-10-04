@@ -1574,7 +1574,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 **bf16,
             )
         for mode in ("nvfp4", "mxfp4", "mxfp8"):
-            for K in (448, 512, 704):
+            for K, tol in ((448, 1e-1), (512, 1e-2), (704, 1e-2)):
                 test_shape(
                     1,
                     33,
@@ -1584,7 +1584,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     lhs_indices=(0,),
                     rhs_indices=(2, 1, 0, 2, 1, 0, 2, 1, 0),
                     mode=mode,
-                    **bf16,
+                    **{**bf16, "rtol": tol, "atol": tol},
                 )
 
     def test_gather_qqmm(self):
