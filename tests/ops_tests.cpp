@@ -978,6 +978,29 @@ TEST_CASE("test comparison ops") {
   }
 }
 
+TEST_CASE("test float16 sigmoid mixed lanes") {
+  const float values[] = {-12, -4, -1, 0, 1, 4, 12, -2};
+  for (int size : {1, 7, 8, 9, 15, 16, 17}) {
+    for (int offset = 0; offset < 8; ++offset) {
+      std::vector<float> input(size);
+      for (int i = 0; i < size; ++i) {
+        input[i] = values[(i + offset) % 8];
+      }
+      auto result = sigmoid(array(input.begin(), {size}, float16), Device::cpu);
+      result.eval();
+      for (int i = 0; i < size; ++i) {
+        CAPTURE(size);
+        CAPTURE(offset);
+        CAPTURE(i);
+        auto expected = 1.0 / (1.0 + std::exp(-double(input[i])));
+        CHECK_EQ(
+            static_cast<float>(result.data<float16_t>()[i]),
+            doctest::Approx(expected).epsilon(0.002));
+      }
+    }
+  }
+}
+
 TEST_CASE("test is nan") {
   array x(1.0f);
   CHECK_FALSE(isnan(x).item<bool>());
