@@ -21,7 +21,7 @@
       bits,           \
       true)
 
-#define instantiate_quantized_batched(mode, name, type, batched, group_size, bits) \
+#define instantiate_quantized_batched(mode, name, type, group_size, bits, batched) \
   instantiate_kernel( \
       #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_batch_" #batched, \
       fp_ ## name,    \
@@ -36,6 +36,25 @@
       group_size,     \
       bits,           \
       batched,        \
+      true)
+
+#define instantiate_quantized_partial_rows(mode, name, type, group_size, bits, batched, partial_rows) \
+  instantiate_kernel( \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_batch_" #batched "_pr_" #partial_rows, \
+      fp_ ## name,    \
+      type,           \
+      group_size,     \
+      bits,           \
+      batched,        \
+      partial_rows)   \
+  instantiate_kernel( \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_batch_" #batched "_pr_" #partial_rows "_hgs", \
+      fp_ ## name,    \
+      type,           \
+      group_size,     \
+      bits,           \
+      batched,        \
+      partial_rows,   \
       true)
 
 #define instantiate_quantized_aligned(mode, name, type, aligned, group_size, bits) \
@@ -79,29 +98,33 @@
       batched, \
       true)
 
-#define instantiate_quantized_qmv_fast(mode, type, results, batched, group_size, bits) \
+#define instantiate_quantized_qmv_fast(mode, type, results, batched, group_size, bits, partial_rows) \
   instantiate_kernel( \
-      #mode "_qmv_fast_" #type "_gs_" #group_size "_b_" #bits "_r_" #results "_batch_" #batched, \
+      #mode "_qmv_fast_" #type "_gs_" #group_size "_b_" #bits "_r_" #results "_batch_" #batched "_pr_" #partial_rows, \
       fp_qmv_fast, \
       type, \
       group_size, \
       bits, \
       batched, \
+      partial_rows, \
       false, \
       results) \
   instantiate_kernel( \
-      #mode "_qmv_fast_" #type "_gs_" #group_size "_b_" #bits "_r_" #results "_batch_" #batched "_hgs", \
+      #mode "_qmv_fast_" #type "_gs_" #group_size "_b_" #bits "_r_" #results "_batch_" #batched "_pr_" #partial_rows "_hgs", \
       fp_qmv_fast, \
       type, \
       group_size, \
       bits, \
       batched, \
+      partial_rows, \
       true, \
       results)
 
 #define instantiate_quantized_qmv_fast_r2(mode, type, group_size, bits) \
-  instantiate_quantized_qmv_fast(mode, type, 2, 1, group_size, bits) \
-  instantiate_quantized_qmv_fast(mode, type, 2, 0, group_size, bits)
+  instantiate_quantized_qmv_fast(mode, type, 2, 1, group_size, bits, 0) \
+  instantiate_quantized_qmv_fast(mode, type, 2, 1, group_size, bits, 1) \
+  instantiate_quantized_qmv_fast(mode, type, 2, 0, group_size, bits, 0) \
+  instantiate_quantized_qmv_fast(mode, type, 2, 0, group_size, bits, 1)
 
 #define instantiate_quantized_quad(mode, name, type, D, batched, group_size, bits) \
   instantiate_kernel( \
@@ -161,14 +184,18 @@
       true)
 
 #define instantiate_quantized_batched_wrap(name, type, mode, group_size, bits) \
-  instantiate_quantized_batched(mode, name, type, 1, group_size, bits)         \
-  instantiate_quantized_batched(mode, name, type, 0, group_size, bits)
+  instantiate_quantized_batched(mode, name, type, group_size, bits, 1)         \
+  instantiate_quantized_batched(mode, name, type, group_size, bits, 0)
 
-#define instantiate_quantized_all_batched(type, mode, group_size, bits) \
-  instantiate_quantized_batched_wrap(qmv_fast_rows, type, mode, group_size, bits) \
-  instantiate_quantized_batched_wrap(qmv_fast, type, mode, group_size, bits) \
-  instantiate_quantized_batched_wrap(qmv, type, mode, group_size, bits)      \
-  instantiate_quantized_batched_wrap(qvm, type, mode, group_size, bits) \
+#define instantiate_quantized_partial_rows_wrap(name, type, mode, group_size, bits, partial_rows) \
+  instantiate_quantized_partial_rows(mode, name, type, group_size, bits, 1, partial_rows)         \
+  instantiate_quantized_partial_rows(mode, name, type, group_size, bits, 0, partial_rows)
+
+#define instantiate_quantized_all_batched(type, mode, group_size, bits)              \
+  instantiate_quantized_partial_rows_wrap(qmv_fast, type, mode, group_size, bits, 1) \
+  instantiate_quantized_partial_rows_wrap(qmv_fast, type, mode, group_size, bits, 0) \
+  instantiate_quantized_partial_rows_wrap(qmv, type, mode, group_size, bits, 0)      \
+  instantiate_quantized_batched_wrap(qvm, type, mode, group_size, bits)              \
   instantiate_quantized_batched_wrap(qmm_n, type, mode, group_size, bits)
 
 #define instantiate_quantized_all_single(type, mode, group_size, bits) \
