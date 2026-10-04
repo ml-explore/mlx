@@ -4424,6 +4424,23 @@ class TestOps(mlx_tests.MLXTestCase):
         expected[1:, 2:, 3:] = update
         self.assertTrue(mx.array_equal(expected, out))
 
+        # Strided, broadcast and reversed start indices
+        x = mx.arange(64).reshape(8, 8)
+        update = mx.zeros((2, 2), dtype=x.dtype)
+        starts = [
+            (mx.array([1, 5, 2, 5])[::2], (1, 2)),
+            (mx.broadcast_to(mx.array([2]), (2,)), (2, 2)),
+            (mx.array([4, 1])[::-1], (1, 4)),
+        ]
+        for start, (i, j) in starts:
+            out = mx.slice(x, start, (0, 1), (2, 2))
+            self.assertTrue(mx.array_equal(out, x[i : i + 2, j : j + 2]))
+
+            out = mx.slice_update(x, update, start, (0, 1))
+            expected = mx.arange(64).reshape(8, 8)
+            expected[i : i + 2, j : j + 2] = update
+            self.assertTrue(mx.array_equal(out, expected))
+
     def test_broadcast_arrays(self):
         a = mx.array(1)
         b = mx.array(1.0)
