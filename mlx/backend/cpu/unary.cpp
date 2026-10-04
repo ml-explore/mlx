@@ -1,8 +1,5 @@
 // Copyright © 2024 Apple Inc.
 
-// Required for using M_LN2 in MSVC.
-#define _USE_MATH_DEFINES
-
 #include <cassert>
 
 #include "mlx/backend/cpu/unary.h"

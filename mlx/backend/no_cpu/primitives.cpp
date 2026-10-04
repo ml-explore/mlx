@@ -1,4 +1,4 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2024-2026 Apple Inc.
 
 #include "mlx/primitives.h"
 #include "mlx/distributed/primitives.h"
@@ -135,6 +135,12 @@ NO_CPU(View)
 namespace fast {
 NO_CPU_MULTI(Quantize)
 NO_CPU_MULTI(ConvertFP8)
+// These have native CPU implementations in backend/cpu when the CPU backend
+// is built; without it their eval_cpu declarations still need definitions.
+NO_CPU_MULTI(RMSNorm)
+NO_CPU_MULTI(LayerNorm)
+NO_CPU_MULTI(RoPE)
+NO_CPU_MULTI(ScaledDotProductAttention)
 } // namespace fast
 
 namespace distributed {

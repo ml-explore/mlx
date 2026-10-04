@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #include <numeric>
 
@@ -107,4 +107,23 @@ TEST_CASE("test matmul") {
   b = ones({2, 4, 2});
   out = matmul(transpose(a, {0, 2, 1}), transpose(b, {0, 2, 1}));
   CHECK(array_equal(out, full({2, 4, 4}, 2.0f)).item<bool>());
+}
+
+TEST_CASE("test matmul large transposed lhs") {
+  constexpr int M = 32;
+  constexpr int N = 32;
+  constexpr int K = 64;
+
+  auto check = [](Dtype dtype, float rtol, float atol) {
+    auto a = astype(reshape(arange(K * M, float32) * 0.001f, {K, M}), dtype);
+    auto b = astype(reshape(arange(K * N, float32) * 0.002f, {K, N}), dtype);
+    auto lhs = transpose(a);
+    auto out = matmul(lhs, b);
+    auto expected = matmul(contiguous(lhs), b);
+    CHECK(allclose(out, expected, rtol, atol).item<bool>());
+  };
+
+  check(complex64, 1e-5f, 1e-5f);
+  check(float16, 1e-2f, 1e-2f);
+  check(bfloat16, 2e-2f, 2e-2f);
 }

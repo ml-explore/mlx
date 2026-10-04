@@ -45,12 +45,10 @@ class RMSNorm : public Custom {
       float eps)
       : Custom(stream, std::move(fallback)), eps_(eps) {}
 
-  static bool use_fallback(Stream stream);
+  static bool use_fallback(Dtype dtype, Stream stream);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
-    throw std::runtime_error("NYI");
-  }
+      override;
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
@@ -80,9 +78,12 @@ class RMSNormVJP : public Custom {
       float eps)
       : Custom(stream, std::move(fallback)), eps_(eps) {}
 
+  static bool use_fallback(Stream stream);
+
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
-    throw std::runtime_error("NYI");
+    throw std::runtime_error(
+        "[RMSNormVJP::eval_cpu] Should have used the fallback at build time.");
   }
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
@@ -166,12 +167,10 @@ class LayerNorm : public Custom {
       float eps)
       : Custom(stream, std::move(fallback)), eps_(eps) {}
 
-  static bool use_fallback(Stream s);
+  static bool use_fallback(Dtype dtype, Stream s);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
-    throw std::runtime_error("NYI");
-  }
+      override;
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
@@ -200,9 +199,13 @@ class LayerNormVJP : public Custom {
       float eps)
       : Custom(stream, std::move(fallback)), eps_(eps) {}
 
+  static bool use_fallback(Stream stream);
+
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
-    throw std::runtime_error("NYI");
+    throw std::runtime_error(
+        "[LayerNormVJP::eval_cpu] Should have used the fallback at build "
+        "time.");
   }
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
@@ -234,12 +237,10 @@ class RoPE : public Custom {
         scale_(scale),
         forward_(forward) {}
 
-  static bool use_fallback(Stream s);
+  static bool use_fallback(Dtype dtype, Stream s);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
-    throw std::runtime_error("NYI");
-  }
+      override;
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
@@ -297,10 +298,7 @@ class ScaledDotProductAttention : public Custom {
   static bool supports_bool_mask();
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
-    throw std::runtime_error("NYI");
-  }
-
+      override;
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 

@@ -458,7 +458,11 @@ __global__ void rms_norm_vjp(
 
 namespace fast {
 
-bool RMSNorm::use_fallback(Stream s) {
+bool RMSNorm::use_fallback(Dtype, Stream s) {
+  return s.device == Device::cpu;
+}
+
+bool RMSNormVJP::use_fallback(Stream s) {
   return s.device == Device::cpu;
 }
 

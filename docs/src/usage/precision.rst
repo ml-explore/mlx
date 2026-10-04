@@ -19,3 +19,8 @@ To keep these operations in full ``float32``, set
 
 Which operations take the reduced-precision path, and how large the
 difference is, depends on the backend and the hardware.
+
+For some affine-quantized CPU matrix multiplications, the accelerated path
+quantizes activations to 8-bit integers per group before computing integer
+dot products. Setting :envvar:`MLX_ENABLE_TF32` to ``0`` disables that path
+and uses the full-precision calculation instead, at reduced speed.

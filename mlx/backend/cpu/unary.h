@@ -1,10 +1,11 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #pragma once
 
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
+#include "mlx/backend/cpu/threading/common.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/utils.h"
 
@@ -18,38 +19,68 @@ void unary_op(const T* a, U* out, size_t shape, size_t stride) {
   }
 }
 
+// Helper to process a contiguous chunk of unary op with SIMD
+template <typename T, typename U, typename Op>
+void unary_op_contiguous_chunk(const T* src, U* dst, size_t size) {
+  constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
+  while (size >= N) {
+    simd::store(dst, simd::Simd<U, N>(Op{}(simd::load<T, N>(src))));
+    size -= N;
+    src += N;
+    dst += N;
+  }
+  while (size > 0) {
+    *dst = Op{}(*src);
+    size--;
+    dst++;
+    src++;
+  }
+}
+
 template <typename T, typename U = T, typename Op>
 void unary_op(const array& a, array& out, Op) {
+  if (a.size() == 0) {
+    return;
+  }
   const T* src = a.data<T>();
   U* dst = out.data<U>();
   auto ndim = a.ndim();
   if (a.flags().contiguous) {
     auto size = a.data_size();
-    constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
-    while (size >= N) {
-      simd::store(dst, simd::Simd<U, N>(Op{}(simd::load<T, N>(src))));
-      size -= N;
-      src += N;
-      dst += N;
-    }
-    while (size > 0) {
-      *dst = Op{}(*src);
-      size--;
-      dst++;
-      src++;
-    }
+    auto& pool = cpu::ThreadPool::instance();
+    int n_threads = cpu::effective_threads(size, pool.max_threads());
+    cpu::parallel_for_range(n_threads, size, [&](size_t begin, size_t end) {
+      unary_op_contiguous_chunk<T, U, Op>(
+          src + begin, dst + begin, end - begin);
+    });
   } else {
-    size_t shape = ndim > 0 ? a.shape().back() : 1;
-    size_t stride = ndim > 0 ? a.strides().back() : 1;
+    size_t inner_shape = ndim > 0 ? a.shape().back() : 1;
+    size_t inner_stride = ndim > 0 ? a.strides().back() : 1;
     if (ndim <= 1) {
-      unary_op<T, U, Op>(src, dst, shape, stride);
+      unary_op<T, U, Op>(src, dst, inner_shape, inner_stride);
       return;
     }
-    auto it = ContiguousIterator(a.shape(), a.strides(), ndim - 1);
-    for (size_t elem = 0; elem < a.size(); elem += shape) {
-      unary_op<T, U, Op>(src + it.loc, dst + elem, shape, stride);
-      it.step();
+
+    size_t num_iterations = a.size() / inner_shape;
+
+    auto& pool = cpu::ThreadPool::instance();
+    int n_threads = cpu::effective_threads(a.size(), pool.max_threads());
+    if (num_iterations < static_cast<size_t>(n_threads)) {
+      n_threads = 1;
     }
+    cpu::parallel_for_range(
+        n_threads, num_iterations, [&](size_t begin, size_t end) {
+          ContiguousIterator it(a.shape(), a.strides(), ndim - 1);
+          it.seek(static_cast<int64_t>(begin));
+          for (size_t iter = begin; iter < end; ++iter) {
+            unary_op<T, U, Op>(
+                src + it.loc,
+                dst + iter * inner_shape,
+                inner_shape,
+                inner_stride);
+            it.step();
+          }
+        });
   }
 }
 

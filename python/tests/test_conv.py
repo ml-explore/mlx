@@ -55,6 +55,41 @@ class TestConv(mlx_tests.MLXTestCase):
         expected = mx.array([4.0, 4.0, 10.0, 10.0]).reshape(1, 2, 2)
         self.assertTrue(mx.allclose(out, expected))
 
+    def test_conv_1d_depthwise_kernel4(self):
+        rng = np.random.default_rng(0)
+        for dtype, atol in (
+            (mx.float32, 1e-6),
+            (mx.float16, 1e-3),
+            (mx.bfloat16, 3e-3),
+        ):
+            for C in (31, 64):
+                with self.subTest(dtype=dtype, C=C):
+                    N = 2
+                    S = 7
+                    x = mx.array(
+                        rng.normal(0, 0.25, (N, S + 3, C)).astype(np.float32),
+                        dtype=dtype,
+                    )
+                    w = mx.array(
+                        rng.normal(0, 0.25, (C, 4, 1)).astype(np.float32),
+                        dtype=dtype,
+                    )
+                    out = mx.conv1d(x, w, groups=C, stream=mx.cpu)
+
+                    x_np = np.array(x.astype(mx.float32))
+                    w_np = np.array(w.astype(mx.float32))
+                    expected = sum(
+                        x_np[:, i : i + S, :] * w_np[:, i, 0] for i in range(4)
+                    )
+                    self.assertTrue(
+                        np.allclose(
+                            np.array(out.astype(mx.float32)),
+                            expected,
+                            atol=atol,
+                            rtol=atol,
+                        )
+                    )
+
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_1D(self):
         def run_conv1D(

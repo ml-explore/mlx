@@ -26,6 +26,24 @@ General
    on supported hardware. The default is ``1``. Set it to ``0`` to keep these
    operations in full ``float32`` precision. See :doc:`precision`.
 
+.. envvar:: MLX_CPU_THREADS
+
+   Number of threads in the Linux/Windows CPU thread pool. By default it uses
+   the number of physical cores, up to the thread-pool limit. On supported
+   hybrid Windows CPUs, it selects performance cores. This setting does not
+   affect the macOS GCD thread pool.
+
+.. envvar:: MLX_QMM_BLAS_THRESHOLD
+
+   Minimum number of matrix rows before affine-quantized CPU matmul
+   dequantizes weights and uses BLAS. The default is ``768``, measured on
+   Zen 4; other CPUs may benefit from tuning.
+
+.. envvar:: MLX_FP_QMM_BLAS_THRESHOLD
+
+   Minimum number of matrix rows before FP-quantized CPU matmul dequantizes
+   weights and uses BLAS. The default is ``512``.
+
 Distributed
 -----------
 

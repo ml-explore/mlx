@@ -35,6 +35,11 @@ bool fast::ScaledDotProductAttention::use_fallback(
     bool output_logsumexp,
     bool force_fused,
     Stream s) {
+  // Native CPU SDPA supports inference for these dtypes and head dimensions.
+  if (s.device == Device::cpu && !output_logsumexp && q.dtype() != float64 &&
+      q.shape(-1) <= 256 && v.shape(-1) <= 256) {
+    return false;
+  }
   if (force_fused) {
     throw std::invalid_argument(
         "[scaled_dot_product_attention] force_fused=True but no fused "
@@ -192,11 +197,29 @@ NO_GPU(MaskedScatter)
 namespace fast {
 NO_GPU_USE_FALLBACK(CrossEntropy)
 NO_GPU_MULTI(CrossEntropyVJP)
-NO_GPU_USE_FALLBACK(LayerNorm)
+// LayerNorm, RMSNorm, and RoPE have native CPU implementations (norms.cpp,
+// rope.cpp) for f32/f16/bf16; other dtypes route through the fallback graph.
+bool LayerNorm::use_fallback(Dtype dtype, Stream) {
+  return dtype == float64;
+}
+NO_GPU_MULTI(LayerNorm)
+// The VJPs are composed from existing ops at graph-build time.
+bool LayerNormVJP::use_fallback(Stream) {
+  return true;
+}
 NO_GPU_MULTI(LayerNormVJP)
-NO_GPU_USE_FALLBACK(RMSNorm)
+bool RMSNorm::use_fallback(Dtype dtype, Stream) {
+  return dtype == float64;
+}
+NO_GPU_MULTI(RMSNorm)
+bool RMSNormVJP::use_fallback(Stream) {
+  return true;
+}
 NO_GPU_MULTI(RMSNormVJP)
-NO_GPU_USE_FALLBACK(RoPE)
+bool RoPE::use_fallback(Dtype dtype, Stream) {
+  return dtype == float64;
+}
+NO_GPU_MULTI(RoPE)
 NO_GPU_MULTI(ScaledDotProductAttention)
 NO_GPU_MULTI(ScaledDotProductAttentionVJP)
 NO_GPU_MULTI(GatedDeltaUpdate)

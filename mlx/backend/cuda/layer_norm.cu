@@ -219,7 +219,11 @@ __global__ void layer_norm_vjp(
 
 namespace fast {
 
-bool LayerNorm::use_fallback(Stream s) {
+bool LayerNorm::use_fallback(Dtype, Stream s) {
+  return s.device == Device::cpu;
+}
+
+bool LayerNormVJP::use_fallback(Stream s) {
   return s.device == Device::cpu;
 }
 

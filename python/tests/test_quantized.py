@@ -237,8 +237,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 x_shape = (1, N)
                 w_shape = (M, N)
 
-                # TODO: Fix qmv with global scale in CPU backend.
-                has_global_scale = mode == "nvfp4" and mx.default_device() == mx.gpu
+                has_global_scale = mode == "nvfp4"
 
                 x = mx.random.normal(shape=x_shape, key=k1)
                 global_scale_x = mx.max(mx.abs(x)) if has_global_scale else None
@@ -272,10 +271,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
     def test_qqmm(self):
-        if mx.default_device() == mx.cpu:
-            self.skipTest("Not implemented for CPU")
-            return
-
         tol = 5e-2 if mx.cuda.is_available() else 1e-3
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
@@ -366,6 +361,43 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     mx.abs(expected.astype(mx.float32)).max(), 1e-20
                 )
                 self.assertLess(relative_error, 3e-2)
+    def test_qqmv_nvfp4_global_scale(self):
+        if mx.default_device() == mx.gpu:
+            self.skipTest("nvfp4 global scales are not supported on Metal")
+
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        x = mx.random.normal(shape=(1, 256), key=k1)
+        w = mx.random.normal(shape=(128, 256), key=k2)
+        x_scale = x.abs().max().astype(mx.float32)
+        w_scale = w.abs().max().astype(mx.float32)
+
+        x_hat = mx.dequantize(
+            *mx.quantize(x, mode="nvfp4", global_scale=x_scale),
+            mode="nvfp4",
+            dtype=mx.float32,
+            global_scale=x_scale,
+        )
+        w_q, scales = mx.quantize(w, mode="nvfp4", global_scale=w_scale)
+        w_hat = mx.dequantize(
+            w_q,
+            scales,
+            mode="nvfp4",
+            dtype=mx.float32,
+            global_scale=w_scale,
+        )
+
+        y_q = mx.qqmm(
+            x,
+            w_q,
+            scales,
+            mode="nvfp4",
+            global_scale_x=x_scale,
+            global_scale_w=w_scale,
+        )
+        y_hat = x_hat @ mx.swapaxes(w_hat, -1, -2)
+        self.assertEqual(y_q.shape, y_hat.shape)
+        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
     def test_qmm(self):
         key = mx.random.key(0)
@@ -619,6 +651,45 @@ class TestQuantized(mlx_tests.MLXTestCase):
             )
             self.assertTrue(mx.allclose(jvp_out[0], expected_out))
 
+    def test_qmm_int8_activation_path(self):
+        # The CPU int8 activation-quantization fast path only engages with
+        # MLX_ENABLE_TF32=1. The test harness pins MLX_ENABLE_TF32=0 (and the
+        # value is cached at first use), so exercise the path in a subprocess.
+        if mx.default_device() != mx.cpu:
+            self.skipTest("int8 activation path is CPU-only")
+        import os
+        import sys
+
+        script = (
+            "import mlx.core as mx\n"
+            "mx.random.seed(7)\n"
+            "for bits, gs in [(4, 64), (8, 64)]:\n"
+            "    for m in [1, 4, 33]:\n"
+            "        x = mx.random.normal((m, 512))\n"
+            "        w = mx.random.normal((256, 512))\n"
+            "        w_q, s, b = mx.quantize(w, group_size=gs, bits=bits)\n"
+            "        y = mx.quantized_matmul(\n"
+            "            x, w_q, s, b, group_size=gs, bits=bits, transpose=True\n"
+            "        )\n"
+            "        ref = x @ mx.dequantize(\n"
+            "            w_q, s, b, group_size=gs, bits=bits\n"
+            "        ).T\n"
+            "        err = (y - ref).abs().max().item()\n"
+            "        scale = ref.abs().max().item()\n"
+            "        # int8 activation quantization trades ~a few percent\n"
+            "        # accuracy for speed (analogous to TF32 on CUDA)\n"
+            "        assert err < 5e-2 * scale, (bits, gs, m, err, scale)\n"
+        )
+        env = os.environ.copy()
+        env["MLX_ENABLE_TF32"] = "1"
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_qmm_shapes(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
@@ -671,6 +742,21 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 y_hat = x @ mx.swapaxes(w_hat, -1, -2)
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+    def test_fp_qmm_prompt_blas(self):
+        key = mx.random.key(0)
+        kx, kw = mx.random.split(key)
+        x = mx.random.normal((512, 128), key=kx)
+        for mode, n in product(["mxfp4", "nvfp4", "mxfp8"], [128, 1024]):
+            with self.subTest(mode=mode, n=n):
+                w = mx.random.normal((n, 128), key=kw)
+                w_q, scales = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(w_q, scales, mode=mode)
+                actual = mx.quantized_matmul(
+                    x, w_q, scales, transpose=True, mode=mode
+                )
+                expected = x @ mx.swapaxes(w_hat, -1, -2)
+                self.assertLess((actual - expected).abs().max(), 1e-3)
 
     def test_fp_qmv(self):
         key = mx.random.key(0)
@@ -1119,6 +1205,30 @@ class TestQuantized(mlx_tests.MLXTestCase):
             for K, N, transpose in shapes:
                 for sorted_indices in [True, False]:
                     check(K, N, transpose, sorted_indices, dtype)
+
+    def test_fp_gather_qmm_wide(self):
+        key = mx.random.key(0)
+        kx, kw = mx.random.split(key)
+        x = mx.random.normal((8, 1, 128), key=kx)
+        w = mx.random.normal((4, 1024, 128), key=kw)
+        lhs = mx.arange(8, dtype=mx.uint32)
+        rhs = mx.array([0, 1, 2, 3, 3, 2, 1, 0], dtype=mx.uint32)
+
+        for mode in ["mxfp4", "nvfp4", "mxfp8"]:
+            with self.subTest(mode=mode):
+                w_q, scales = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(w_q, scales, mode=mode)
+                actual = mx.gather_qmm(
+                    x,
+                    w_q,
+                    scales,
+                    lhs_indices=lhs,
+                    rhs_indices=rhs,
+                    transpose=True,
+                    mode=mode,
+                )
+                expected = x @ mx.swapaxes(mx.take(w_hat, rhs, axis=0), -1, -2)
+                self.assertLess((actual - expected).abs().max(), 1e-3)
 
     def test_mode_error_cases(self):
         w = mx.random.normal(shape=(256, 256))
@@ -1575,10 +1685,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
             )
 
     def test_gather_qqmm(self):
-        if mx.default_device() == mx.cpu:
-            self.skipTest("Not implemented for CPU")
-            return
-
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
         batches = (

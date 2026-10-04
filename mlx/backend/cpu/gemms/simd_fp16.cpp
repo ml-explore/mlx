@@ -1,8 +1,7 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
-#include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/gemm.h"
-#include "mlx/backend/cpu/gemms/simd_gemm.h"
+#include "mlx/backend/cpu/gemms/simd_low_precision_gemm.h"
 
 namespace mlx::core {
 
@@ -23,23 +22,22 @@ void matmul<float16_t>(
     const Strides& a_strides,
     const Shape& b_shape,
     const Strides& b_strides) {
-  auto ndim = a_shape.size();
-  size_t M = a_shape[ndim - 2];
-  size_t N = b_shape[ndim - 1];
-  size_t K = a_shape[ndim - 1];
-  for (int i = 0; i < batch_size; ++i) {
-    simd_gemm<float16_t, float>(
-        a + elem_to_loc(M * K * i, a_shape, a_strides),
-        b + elem_to_loc(K * N * i, b_shape, b_strides),
-        out + M * N * i,
-        a_transposed,
-        b_transposed,
-        M,
-        N,
-        K,
-        alpha,
-        beta);
-  }
+  detail::matmul_lowp(
+      a,
+      b,
+      out,
+      a_transposed,
+      b_transposed,
+      lda,
+      ldb,
+      ldc,
+      alpha,
+      beta,
+      batch_size,
+      a_shape,
+      a_strides,
+      b_shape,
+      b_strides);
 }
 
 } // namespace mlx::core

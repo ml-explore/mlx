@@ -3,6 +3,9 @@
 #include <cassert>
 #include <numeric>
 
+#ifdef MLX_USE_HIGHWAY_KERNELS
+#include "mlx/backend/cpu/conv_highway.h"
+#endif
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/lapack.h"
@@ -1110,6 +1113,47 @@ void explicit_gemm_conv_ND_cpu(
 // Conv routing
 ///////////////////////////////////////////////////////////////////////////////
 
+#ifdef MLX_USE_HIGHWAY_KERNELS
+bool get_conv_highway_dtype(
+    Dtype dtype,
+    fast::ConvHighwayDType& highway_dtype) {
+  if (dtype == float32) {
+    highway_dtype = fast::ConvHighwayDType::Float32;
+    return true;
+  } else if (dtype == float16) {
+    highway_dtype = fast::ConvHighwayDType::Float16;
+    return true;
+  } else if (dtype == bfloat16) {
+    highway_dtype = fast::ConvHighwayDType::BFloat16;
+    return true;
+  }
+  return false;
+}
+
+void dispatch_depthwise_conv_1D_kernel4_highway(
+    const array& in,
+    const array& wt,
+    array out,
+    fast::ConvHighwayDType dtype,
+    Stream stream) {
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(in);
+  encoder.set_input_array(wt);
+  encoder.set_output_array(out);
+  encoder.dispatch([out_ptr = out.data<void>(),
+                    in_ptr = in.data<void>(),
+                    wt_ptr = wt.data<void>(),
+                    dtype,
+                    N = in.shape(0),
+                    iH = in.shape(1),
+                    C = in.shape(2),
+                    oH = out.shape(1)]() {
+    fast::depthwise_conv1d_kernel4_highway(
+        out_ptr, in_ptr, wt_ptr, dtype, N, iH, C, oH);
+  });
+}
+#endif
+
 void conv_1D_cpu(
     const array& in,
     const array& wt,
@@ -1122,6 +1166,20 @@ void conv_1D_cpu(
     bool flip,
     Stream stream) {
   const int groups = in.shape().back() / wt.shape().back();
+#ifdef MLX_USE_HIGHWAY_KERNELS
+  if (wt_strides[0] == 1 && wt_dilation[0] == 1 && in_dilation[0] == 1 &&
+      padding_lo[0] == 0 && padding_hi[0] == 0 && !flip &&
+      in.flags().row_contiguous && wt.flags().row_contiguous &&
+      out.flags().row_contiguous && in.dtype() == wt.dtype() &&
+      in.dtype() == out.dtype() && wt.shape(1) == 4 && wt.shape(2) == 1 &&
+      groups == in.shape(2) && wt.shape(0) == in.shape(2)) {
+    fast::ConvHighwayDType dtype;
+    if (get_conv_highway_dtype(in.dtype(), dtype)) {
+      dispatch_depthwise_conv_1D_kernel4_highway(in, wt, out, dtype, stream);
+      return;
+    }
+  }
+#endif
   if (wt_dilation[0] == 1 && in_dilation[0] == 1 && !flip) {
     return explicit_gemm_conv_1D_cpu(
         in, wt, out, padding_lo, padding_hi, wt_strides, wt_dilation, stream);

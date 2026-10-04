@@ -30,6 +30,10 @@ if(@MLX_BUILD_CUDA@)
     unset(_MLX_SAVED_CMAKE_MODULE_PATH)
 endif()
 
+if(@MLX_BUILD_CPU@ AND @MLX_ENABLE_X86_SIMD@)
+    find_dependency(hwy CONFIG PATHS "${PACKAGE_PREFIX_DIR}" NO_DEFAULT_PATH)
+endif()
+
 include(@PACKAGE_MLX_CMAKE_INSTALL_MODULE_DIR@/MLXTargets.cmake)
 include(@PACKAGE_MLX_CMAKE_INSTALL_MODULE_DIR@/extension.cmake)
 
