@@ -485,12 +485,8 @@ void qmv(
   std::string kname;
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
-  bool aligned = K % qmv_fast_k_alignment(bits) == 0;
-  bool fast = N % bn == 0 && aligned;
-  // Outputs that are not a multiple of 8 can still use the fast kernel
-  // when the input is aligned: its last SIMD-group covers the remaining rows.
-  bool fast_rows = !fast && aligned;
-  const char* func = fast ? "qmv_fast" : (fast_rows ? "qmv_fast_rows" : "qmv");
+  bool fast = (K % qmv_fast_k_alignment(bits) == 0);
+  bool partial_rows = (N % bn != 0);
   // A narrower output tile reduces register pressure for large
   // floating-point quantized matrix-vector products on M5 Max GPUs.
   bool use_narrow_qmv = fast && N >= 4096 && d.get_architecture_gen() == 17 &&
@@ -502,7 +498,7 @@ void qmv(
 
   concatenate(
       kname,
-      mode + "_" + func + "_",
+      mode + (fast ? "_qmv_fast_" : "_qmv_"),
       type_string,
       "_gs_",
       group_size,
@@ -510,16 +506,18 @@ void qmv(
       bits,
       use_narrow_qmv ? "_r_2" : "",
       B > 1 ? "_batch_1" : "_batch_0",
+      partial_rows ? "_pr_1" : "_pr_0",
       global_scale ? "_hgs" : "");
   auto kernel = get_quantized_kernel_wrapped(
       d,
       kname,
-      func,
+      (fast ? "qmv_fast" : "qmv"),
       mode,
       type_string,
       group_size,
       bits,
       B > 1,
+      partial_rows,
       global_scale.has_value(),
       results_per_simdgroup);
 

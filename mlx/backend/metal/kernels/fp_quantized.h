@@ -334,9 +334,9 @@ template <
     typename T,
     int group_size,
     int bits,
+    bool partial_rows = false,
     bool has_global_scale = false,
-    int results_per_simdgroup = 4,
-    bool partial_rows = false>
+    int results_per_simdgroup = 4>
 METAL_FUNC void fp_qmv_fast_impl(
     const device uint32_t* w,
     const device uint8_t* scales,
@@ -1257,6 +1257,7 @@ template <
     int group_size,
     int bits,
     bool batched,
+    bool partial_rows = false,
     bool has_global_scale = false,
     int results_per_simdgroup = 4>
 [[kernel]] void fp_qmv_fast(
@@ -1298,6 +1299,7 @@ template <
       T,
       group_size,
       bits,
+      partial_rows,
       has_global_scale,
       results_per_simdgroup>(
       w,
@@ -1317,67 +1319,7 @@ template <
     int group_size,
     int bits,
     bool batched,
-    bool has_global_scale = false,
-    int results_per_simdgroup = 4>
-[[kernel]] void fp_qmv_fast_rows(
-    const device uint32_t* w,
-    const device uint8_t* scales,
-    const device float* global_scale,
-    const device T* x,
-    device T* y,
-    const constant int& in_vec_size,
-    const constant int& out_vec_size,
-    const constant int& x_batch_ndims,
-    const constant int* x_shape,
-    const constant int64_t* x_strides,
-    const constant int& w_batch_ndims,
-    const constant int* w_shape,
-    const constant int64_t* w_strides,
-    const constant int64_t* s_strides,
-    uint3 tid [[threadgroup_position_in_grid]],
-    uint simd_gid [[simdgroup_index_in_threadgroup]],
-    uint simd_lid [[thread_index_in_simdgroup]]) {
-  if (batched) {
-    int M = x_shape[x_batch_ndims];
-    adjust_matrix_offsets(
-        x,
-        w,
-        scales,
-        y,
-        out_vec_size * M,
-        x_batch_ndims,
-        x_shape,
-        x_strides,
-        w_batch_ndims,
-        w_shape,
-        w_strides,
-        s_strides,
-        tid);
-  }
-  fp_qmv_fast_impl<
-      T,
-      group_size,
-      bits,
-      has_global_scale,
-      results_per_simdgroup,
-      true>(
-      w,
-      scales,
-      global_scale,
-      x,
-      y,
-      in_vec_size,
-      out_vec_size,
-      tid,
-      simd_gid,
-      simd_lid);
-}
-
-template <
-    typename T,
-    int group_size,
-    int bits,
-    bool batched,
+    bool partial_rows = false,
     bool has_global_scale = false,
     int results_per_simdgroup = 4>
 [[kernel]] void fp_qmv(
@@ -1478,6 +1420,7 @@ template <
     int group_size,
     int bits,
     bool batched,
+    bool partial_rows = false,
     bool has_global_scale = false>
 [[kernel]] void fp_qvm(
     const device uint32_t* w,
@@ -1586,14 +1529,15 @@ template <typename T, const int group_size, int bits, int split_k = 32>
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool aligned_N,
-    const bool batched,
-    const bool has_global_scale = false,
-    const int BM = 32,
-    const int BK = 32,
-    const int BN = 32>
+    int group_size,
+    int bits,
+    bool aligned_N,
+    bool batched,
+    bool partial_rows = false,
+    bool has_global_scale = false,
+    int BM = 32,
+    int BK = 32,
+    int BN = 32>
 [[kernel]] void fp_qmm_t(
     const device uint32_t* w,
     const device uint8_t* scales,
@@ -1660,6 +1604,7 @@ template <
     int group_size,
     int bits,
     bool batched,
+    bool partial_rows = false,
     bool has_global_scale = false,
     int BM = 32,
     int BK = 32,

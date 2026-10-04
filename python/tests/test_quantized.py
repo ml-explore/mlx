@@ -703,7 +703,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.array_equal(y, expected).item())
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
-    def test_qmv_fast_rows(self):
+    def test_qmv_fast_unaligned_n(self):
         # Output sizes that are not a multiple of 8 with an aligned input size.
         # "vector" is one input row, "batched" two weight batches, and "rows"
         # is M = 3, which reaches this kernel only on GPUs before gen 15, since
@@ -738,7 +738,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertLess((y - y_hat).abs().max().item(), tol)
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
-    def test_fp_qmv_fast_rows(self):
+    def test_fp_qmv_fast_unaligned_n(self):
         for n, k, mode, dtype, batched in product(
             [1, 3, 5, 7, 8, 9, 12, 17],
             [256, 512, 544, 1024],
@@ -771,7 +771,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     self.assertTrue(mx.array_equal(actual, padded[..., :n]).item())
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
-    def test_fp_qmv_fast_rows_global_scale(self):
+    def test_fp_qmv_fast_unaligned_n_global_scale(self):
         for n, k, m, dtype in product(
             [1, 3, 5, 7, 8, 9, 12, 17],
             [512, 544, 1024],
