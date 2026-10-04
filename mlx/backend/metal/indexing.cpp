@@ -205,16 +205,29 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_output_array(out, 1);
 
   // Set source info
-  compute_encoder.set_vector_bytes(src.shape(), 2);
-  compute_encoder.set_vector_bytes(src.strides(), 3);
+  if (ndim == 0) {
+    compute_encoder.set_bytes(0, 2);
+    compute_encoder.set_bytes(int64_t{0}, 3);
+    compute_encoder.set_bytes(0, 5);
+  } else {
+    compute_encoder.set_vector_bytes(src.shape(), 2);
+    compute_encoder.set_vector_bytes(src.strides(), 3);
+    compute_encoder.set_vector_bytes(slice_sizes_, 5);
+  }
   compute_encoder.set_bytes(ndim, 4);
-  compute_encoder.set_vector_bytes(slice_sizes_, 5);
-  compute_encoder.set_vector_bytes(axes_, 6);
+  if (nidx == 0) {
+    compute_encoder.set_bytes(0, 6);
+  } else {
+    compute_encoder.set_vector_bytes(axes_, 6);
+  }
 
   // Set index info
-  //
-  // We don't need to check for empty idx_shapes because gather has a
-  // idx_ndim == 0 specialization
+  if (idx_ndim == 0) {
+    // Bind unused scalar metadata for Metal validation.
+    idx_shapes.push_back(0);
+    idx_strides.push_back(0);
+    idx_contigs.push_back(false);
+  }
   compute_encoder.set_vector_bytes(idx_shapes, 7);
   compute_encoder.set_vector_bytes(idx_strides, 8);
   compute_encoder.set_vector_bytes(idx_contigs, 9);
@@ -405,7 +418,11 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder.set_vector_bytes(out.strides(), 8);
   }
   compute_encoder.set_bytes(out_ndim, 9);
-  compute_encoder.set_vector_bytes(axes_, 10);
+  if (nidx == 0) {
+    compute_encoder.set_bytes(0, 10);
+  } else {
+    compute_encoder.set_vector_bytes(axes_, 10);
+  }
 
   // Set index info
   if (idx_ndim == 0) {
