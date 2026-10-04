@@ -2634,6 +2634,49 @@ class TestOps(mlx_tests.MLXTestCase):
         c_mlx = mxop(a_mlx, axis=-1)
         self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
 
+    def test_logcumsumexp_integer_promotion(self):
+        # logaddexp has no integer form, so the scan promotes like logaddexp.
+        a_npy = np.array([1, 2, 3, 4])
+        int_types = (
+            mx.bool_,
+            mx.uint8,
+            mx.uint16,
+            mx.uint32,
+            mx.uint64,
+            mx.int8,
+            mx.int16,
+            mx.int32,
+            mx.int64,
+        )
+
+        for dtype in int_types:
+            a_mlx = mx.array(a_npy).astype(dtype)
+            ref = mx.logcumsumexp(a_mlx.astype(mx.float32), axis=0)
+            for reverse in (False, True):
+                for inclusive in (True, False):
+                    out = mx.logcumsumexp(
+                        a_mlx, axis=0, reverse=reverse, inclusive=inclusive
+                    )
+                    self.assertEqual(out.dtype, mx.float32)
+            self.assertTrue(mx.allclose(mx.logcumsumexp(a_mlx, axis=0), ref))
+
+        # The exclusive scan starts from -inf, not from the dtype minimum.
+        for dtype in (mx.uint8, mx.int8):
+            out = mx.logcumsumexp(
+                mx.array(a_npy).astype(dtype), axis=0, inclusive=False
+            )
+            self.assertEqual(out[0].item(), -float("inf"))
+
+        # numpy promotes the same way.
+        out = mx.logcumsumexp(mx.array(a_npy).astype(mx.int32), axis=0)
+        c_npy = np.logaddexp.accumulate(a_npy.astype(np.float32))
+        self.assertTrue(np.allclose(out, c_npy, rtol=1e-3, atol=1e-3))
+
+        # Inexact inputs keep their dtype.
+        for dtype in (mx.float16, mx.bfloat16, mx.float32, mx.complex64):
+            out = mx.logcumsumexp(mx.array(a_npy).astype(dtype), axis=0)
+            self.assertEqual(out.dtype, dtype)
+
     def test_scan_invalid_axis(self):
         a = mx.arange(24).reshape(2, 3, 4)
 
@@ -2644,11 +2687,9 @@ class TestOps(mlx_tests.MLXTestCase):
                     mxop(a, axis=ax)
 
             # Valid negative axes still work and agree with the positive one
-            # logcumsumexp has no integer kernel, so use a float input
-            a_ = a.astype(mx.float32) if op == "logcumsumexp" else a
             for ax in [-1, -2, -3]:
-                out_neg = mxop(a_, axis=ax)
-                out_pos = mxop(a_, axis=ax + a_.ndim)
+                out_neg = mxop(a, axis=ax)
+                out_pos = mxop(a, axis=ax + a.ndim)
                 self.assertTrue(mx.array_equal(out_neg, out_pos))
 
     def test_scans(self):
