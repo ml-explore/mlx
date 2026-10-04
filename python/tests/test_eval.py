@@ -1,7 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
 import unittest
-from functools import partial
 
 import mlx.core as mx
 import mlx_tests
@@ -115,10 +114,10 @@ class TestEval(mlx_tests.MLXTestCase):
             mx.eval(a)
             return a
 
-        out = mx.vjp(fn, (x,), (y,))
-        out = mx.vjp(fn, (x,), (y,))
+        _out = mx.vjp(fn, (x,), (y,))
+        _out = mx.vjp(fn, (x,), (y,))
         peak_mem = mx.get_peak_memory()
-        out = mx.vjp(fn, (x,), (y,))
+        _out = mx.vjp(fn, (x,), (y,))
         self.assertEqual(peak_mem, mx.get_peak_memory())
 
     def test_async_eval_with_multiple_streams(self):
@@ -128,7 +127,7 @@ class TestEval(mlx_tests.MLXTestCase):
         b = mx.array([1.0])
 
         d = mx.default_device()
-        s2 = mx.new_stream(d)
+        _s2 = mx.new_stream(d)
 
         for _ in range(50):
             for _ in range(20):
@@ -138,7 +137,6 @@ class TestEval(mlx_tests.MLXTestCase):
 
     def test_donation_for_noops(self):
         def fun(x):
-            s = x.shape
             for _ in range(10):
                 x = mx.abs(x)
                 x = mx.reshape(x, (-1,))

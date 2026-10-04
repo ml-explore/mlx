@@ -47,11 +47,11 @@ def make_pt_conv_3D(strides=(1, 1, 1), padding=(0, 0, 0), groups=1):
     return pt_conv_3D
 
 
-def bench_shape(N, D, H, W, C, kD, kH, kW, O, strides, padding, groups, np_dtype):
+def bench_shape(N, D, H, W, C, kD, kH, kW, OC, strides, padding, groups, np_dtype):
     scale = 1.0 / math.sqrt(kD * kH * kW * C)
     a_np = np.random.uniform(0, 0.5, (N, D, H, W, C))
-    b_np = np.random.uniform(-scale, scale, (O, kD, kH, kW, int(C / groups)))
-    b_prime_np = np.random.uniform(-scale, scale, (C, kD, kH, kW, int(O / groups)))
+    b_np = np.random.uniform(-scale, scale, (OC, kD, kH, kW, int(C / groups)))
+    b_prime_np = np.random.uniform(-scale, scale, (C, kD, kH, kW, int(OC / groups)))
 
     a_np, b_np, b_prime_np = map(lambda x: x.astype(np_dtype), (a_np, b_np, b_prime_np))
     a_mx, b_mx, b_prime_mx = map(lambda x: mx.array(x), (a_np, b_np, b_prime_np))
@@ -97,7 +97,7 @@ def bench_shape(N, D, H, W, C, kD, kH, kW, O, strides, padding, groups, np_dtype
 
     if not np.allclose(out_pt, out_mx, atol=atol):
         print(
-            f"Failed at {(N, D, H, W, C)}, {(O, kD, kH, kW, C)} "
+            f"Failed at {(N, D, H, W, C)}, {(OC, kD, kH, kW, C)} "
             f"[strides = {strides}, padding = {padding}, groups = {groups}] "
             f"with max(|a - b|) = {np.max(np.abs(out_pt - out_mx))}"
         )
@@ -130,23 +130,24 @@ if __name__ == "__main__":
     )
 
     for dtype in dtypes:
-        print(f"\n{'=' * 120}" f"\n  dtype: {dtype}" f"\n{'=' * 120}")
+        print(f"\n{'=' * 120}\n  dtype: {dtype}\n{'=' * 120}")
         print(
             f"{'(N,   D,   H,   W,   C)':<26s} {'(  O, kD, kH, kW,   C)':<24s} "
             f"{'stride':<12s} {'pads':<12s} {'groups':>6s} "
             f"{'diff%':>7s}  "
             f"{'MLX peak':>9s} {'MLX act':>8s} {'PT cur':>8s} {'PT drv':>8s}"
         )
-        for N, D, H, W, C, kD, kH, kW, O, strides, padding, groups in shapes:
+        for N, D, H, W, C, kD, kH, kW, OC, strides, padding, groups in shapes:
             np_dtype = getattr(np, dtype)
             time_mlx, time_torch, mlx_peak, mlx_act, pt_cur, pt_drv = bench_shape(
-                N, D, H, W, C, kD, kH, kW, O, strides, padding, groups, np_dtype
+                N, D, H, W, C, kD, kH, kW, OC, strides, padding, groups, np_dtype
             )
             diff = time_torch / time_mlx - 1.0
 
             print(
-                f"({N}, {D:3d}, {H:3d}, {W:3d}, {C:3d}), ({O:3d}, {kD:2d}, {kH:2d}, {kW:2d}, {C:3d}), "
+                f"({N}, {D:3d}, {H:3d}, {W:3d}, {C:3d}), ({OC:3d}, {kD:2d}, {kH:2d}, "
+                f"{kW:2d}, {C:3d}), "
                 f"{strides}, {padding}, {groups:6d}, "
-                f"{100. * diff:+6.1f}%  "
+                f"{100.0 * diff:+6.1f}%  "
                 f"{mlx_peak:8.1f}  {mlx_act:7.1f}  {pt_cur:7.1f}  {pt_drv:7.1f}"
             )

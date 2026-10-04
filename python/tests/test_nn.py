@@ -264,7 +264,7 @@ class TestBase(mlx_tests.MLXTestCase):
         m = nn.Sequential(
             nn.Embedding(5, 256), nn.ReLU(), nn.Linear(256, 256, bias=False)
         )
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(ValueError):
             nn.quantize(m, group_size=32, mode="mxfp8", quantize_input=True)
 
     def test_quantize_freeze(self):

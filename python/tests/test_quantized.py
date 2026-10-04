@@ -2035,8 +2035,10 @@ class TestQuantized(mlx_tests.MLXTestCase):
         k1, k2, k3 = mx.random.split(key, 3)
         dtype = mx.float16 if (mx.default_device() == mx.gpu) else mx.float32
 
-        for L, K, D, E, I, transpose, mode in parameters:
-            with self.subTest(L=L, K=K, D=D, E=E, I=I, transpose=transpose, mode=mode):
+        for L, K, D, E, num_indices, transpose, mode in parameters:
+            with self.subTest(
+                L=L, K=K, D=D, E=E, I=num_indices, transpose=transpose, mode=mode
+            ):
                 if mode != "affine":
                     group_size = None
                     dtype = (
@@ -2049,7 +2051,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     )
 
                 K, D = (K, D) if transpose else (D, K)
-                ishape = (L, I)
+                ishape = (L, num_indices)
                 xshape = (L, 1, 1, K)
                 wshape = (E, D, K) if transpose else (E, K, D)
 
@@ -2366,7 +2368,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
             # Should raise
             with self.assertRaises(ValueError):
-                ds = mx.grad(mm)(s, x, wq)
+                mx.grad(mm)(s, x, wq)
 
             rhs_indices = mx.array(0)
             with self.assertRaises(ValueError):
@@ -2380,7 +2382,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                         mode=mode,
                     ).sum()
 
-                ds = mx.grad(gmm)(s, x, wq)
+                _ds = mx.grad(gmm)(s, x, wq)
 
     @unittest.skipIf(
         not mx.is_available(mx.gpu), "Global scale is only supported on the GPU"

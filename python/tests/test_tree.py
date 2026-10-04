@@ -1,6 +1,5 @@
 # Copyright © 2023 Apple Inc.
 
-import unittest
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -97,7 +96,8 @@ class TestTreeUtils(mlx_tests.MLXTestCase):
         params1 = Params(m=mx.array([0, 1]), b=mx.array(2))
         dict1 = {"m": mx.array([0, 1]), "b": mx.array(2)}
 
-        add_one = lambda x: x + 1
+        def add_one(x):
+            return x + 1
 
         list2 = mlx.utils.tree_map(add_one, list1)
         tuple2 = mlx.utils.tree_map(add_one, tuple1)

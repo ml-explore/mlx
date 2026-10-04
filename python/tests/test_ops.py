@@ -1506,15 +1506,15 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_take(self):
         # Shape: 4 x 3 x 2
-        l = [
+        values = [
             [[1, 3], [-2, -2], [-3, -2]],
             [[2, 4], [-3, 2], [-4, -2]],
             [[2, 3], [2, 4], [2, 1]],
             [[1, -5], [3, -1], [2, 3]],
         ]
 
-        a = mx.array(l)
-        a_npy = np.array(l)
+        a = mx.array(values)
+        a_npy = np.array(values)
 
         indices = [0, -1]
         flatten_take = mx.take(a, mx.array(indices)).tolist()
@@ -1595,7 +1595,7 @@ class TestOps(mlx_tests.MLXTestCase):
         idx_mlx = mx.array(idx_np)
 
         for ax in [None, 0, 1, 2]:
-            if ax == None:
+            if ax is None:
                 shape = [-1]
             else:
                 shape = [2] * 3
@@ -1635,7 +1635,7 @@ class TestOps(mlx_tests.MLXTestCase):
             a_np = np.arange(16).reshape(2, 2, 4).astype(np.int32)
             a_mlx = mx.array(a_np)
 
-            if ax == None:
+            if ax is None:
                 idx_np = np.random.permutation(a_np.size)
                 values_np = np.random.randint(low=0, high=100, size=(16,))
             else:
@@ -2153,8 +2153,12 @@ class TestOps(mlx_tests.MLXTestCase):
                     y_ = mx.array(x_)
                     op_ = op
 
-                    np_vjp = lambda x: np_vjp_funcs[op_](primal_np, x)
-                    mx_vjp = lambda x: mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
+                    def np_vjp(x):
+                        return np_vjp_funcs[op_](primal_np, x)
+
+                    def mx_vjp(x):
+                        return mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
+
                     test_ops(np_vjp, mx_vjp, x_, y_, 1e-5, 1e-5)
 
                 with self.subTest(op="arc" + op):
@@ -2172,8 +2176,12 @@ class TestOps(mlx_tests.MLXTestCase):
                     y_ = mx.array(x_)
                     op_ = "arc" + op
 
-                    np_vjp = lambda x: np_vjp_funcs[op_](primal_np, x)
-                    mx_vjp = lambda x: mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
+                    def np_vjp(x):
+                        return np_vjp_funcs[op_](primal_np, x)
+
+                    def mx_vjp(x):
+                        return mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
+
                     test_ops(np_vjp, mx_vjp, x_, y_, 1e-5, 1e-5)
 
     def test_binary_ops(self):
@@ -2474,7 +2482,9 @@ class TestOps(mlx_tests.MLXTestCase):
         # Test grads
         a_fwd = mx.array(np.random.rand(16, 16).astype(np.float32))
         a_bwd = mx.ones((22, 22))
-        f = lambda x: mx.pad(x, ((4, 2), (2, 4)))
+
+        def f(x):
+            return mx.pad(x, ((4, 2), (2, 4)))
 
         _, df = mx.vjp(f, [a_fwd], [a_bwd])
         self.assertTrue(mx.allclose(a_bwd[4:-2, 2:-4], df[0]).item())

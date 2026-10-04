@@ -1,6 +1,5 @@
 # Copyright © 2023 Apple Inc.
 import math
-import unittest
 
 import mlx.core as mx
 import mlx.nn.init as init
@@ -129,10 +128,11 @@ class TestInit(mlx_tests.MLXTestCase):
         self.assertEqual(result.shape, shape)
         self.assertEqual(result.dtype, mx.float32)
 
-        I = result @ result.T
+        identity = result @ result.T
         eye = mx.eye(shape[0], dtype=mx.float32)
         self.assertTrue(
-            mx.allclose(I, eye, atol=1e-5), "Orthogonal init failed on a square matrix."
+            mx.allclose(identity, eye, atol=1e-5),
+            "Orthogonal init failed on a square matrix.",
         )
 
         # Test with a rectangular matrix: more rows than cols
@@ -141,10 +141,10 @@ class TestInit(mlx_tests.MLXTestCase):
         self.assertEqual(result.shape, shape)
         self.assertEqual(result.dtype, mx.float32)
 
-        I = result.T @ result
+        identity = result.T @ result
         eye = mx.eye(shape[1], dtype=mx.float32)
         self.assertTrue(
-            mx.allclose(I, eye, atol=1e-5),
+            mx.allclose(identity, eye, atol=1e-5),
             "Orthogonal init failed on a rectangular matrix.",
         )
 

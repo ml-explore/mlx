@@ -143,7 +143,6 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             return ((logits - y) ** 2).mean()
 
         for dtype, atol, rtol in dtypes:
-
             mx.random.seed(0xF0F0F0F0)
 
             kx, ky = mx.random.split(mx.random.key(rank))

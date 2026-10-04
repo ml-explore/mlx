@@ -74,7 +74,6 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None):
     scores = q @ mx.swapaxes(k, -1, -2)
 
     if mask is not None:
-
         if mask == "causal":
             q_offset = max(0, kL - L)
             q_indices = mx.arange(q_offset, q_offset + L)
@@ -149,7 +148,9 @@ def bench_shape(
 
     if not mx.allclose(o_mlx_fused, o_mlx_unfused, atol=atol, rtol=atol):
         print(
-            f"Failed at (B: {B}, qsl: {qsl}, ksl: {ksl}, head_dim: {head_dim}, n_qh: {n_q_heads}, n_kvh: {n_kv_heads}, mask: {mask_in}) [tpose = {transpose}] with max(|a - b|) = {mx.max(mx.abs(o_mlx_unfused - o_mlx_fused)):3.2e}"
+            f"Failed at (B: {B}, qsl: {qsl}, ksl: {ksl}, head_dim: {head_dim}, n_qh: "
+            f"{n_q_heads}, n_kvh: {n_kv_heads}, mask: {mask_in}) [tpose = {transpose}] "
+            f"with max(|a - b|) = {mx.max(mx.abs(o_mlx_unfused - o_mlx_fused)):3.2e}"
         )
 
     return time_mlx_fused, time_mlx_unfused
@@ -230,7 +231,9 @@ def bench_shape_vjp(
 
     if rel > atol:
         print(
-            f"Failed at (B: {B}, qsl: {qsl}, ksl: {ksl}, head_dim: {head_dim}, n_qh: {n_q_heads}, n_kvh: {n_kv_heads}, mask: {mask_in}) [tpose = {transpose}] with max rel = {rel:3.2e}"
+            f"Failed at (B: {B}, qsl: {qsl}, ksl: {ksl}, head_dim: {head_dim}, n_qh: "
+            f"{n_q_heads}, n_kvh: {n_kv_heads}, mask: {mask_in}) [tpose = {transpose}] "
+            f"with max rel = {rel:3.2e}"
         )
 
     return time_vjp, time_fallback, mem_vjp, mem_fallback, rel
@@ -319,7 +322,8 @@ if __name__ == "__main__":
         masks = [None, "causal"]
 
         print(
-            "  B,   qsl,   ksl, hdim, n_qh, n_kvh, t,   dtype,     mask, t_fall,  t_vjp, speedup, m_fall,  m_vjp,  mem_x,     rel"
+            "  B,   qsl,   ksl, hdim, n_qh, n_kvh, t,   dtype,     mask, t_fall,  "
+            "t_vjp, speedup, m_fall,  m_vjp,  mem_x,     rel"
         )
 
         for dtype in ["float32"]:
@@ -341,14 +345,19 @@ if __name__ == "__main__":
                         mem_x = m_fall / max(m_vjp, 1e-9)
                         t_str = 1 if transpose else 0
                         print(
-                            f"{B:3d}, {qsl:5d}, {ksl:5d}, {head_dim:4d}, {n_q_heads:4d}, {n_kv_heads:5d}, {t_str:1d}, {dtype}, {str(mask_in):>8}, {t_fall: 2.3f}, {t_vjp: 2.3f}, {speedup:6.2f}x, {m_fall:6.2f}, {m_vjp:6.2f}, {mem_x:5.2f}x, {rel:3.1e}"
+                            f"{B:3d}, {qsl:5d}, {ksl:5d}, {head_dim:4d}, "
+                            f"{n_q_heads:4d}, {n_kv_heads:5d}, {t_str:1d}, {dtype}, "
+                            f"{str(mask_in):>8}, {t_fall: 2.3f}, {t_vjp: 2.3f}, "
+                            f"{speedup:6.2f}x, {m_fall:6.2f}, {m_vjp:6.2f}, "
+                            f"{mem_x:5.2f}x, {rel:3.1e}"
                         )
         exit(0)
 
     masks = [None, "bool", "causal"]
 
     print(
-        "  B,   qsl,   ksl, hdim, n_qh, n_kvh, t,   dtype,     mask, t_unfs, t_fuse, diff%"
+        "  B,   qsl,   ksl, hdim, n_qh, n_kvh, t,   dtype,     mask, t_unfs, t_fuse, "
+        "diff%"
     )
 
     for dtype in dtypes:
@@ -369,5 +378,8 @@ if __name__ == "__main__":
                     diff = time_mlx_unfused / time_mlx_fused - 1.0
                     t_str = 1 if transpose else 0
                     print(
-                        f"{B:3d}, {qsl:5d}, {ksl:5d}, {head_dim:4d}, {n_q_heads:4d}, {n_kv_heads:5d}, {t_str:1d}, {dtype}, {str(mask_in):>8}, {time_mlx_unfused: 2.3f}, {time_mlx_fused: 2.3f}, {100. * diff:+5.2f}%"
+                        f"{B:3d}, {qsl:5d}, {ksl:5d}, {head_dim:4d}, {n_q_heads:4d}, "
+                        f"{n_kv_heads:5d}, {t_str:1d}, {dtype}, {str(mask_in):>8}, "
+                        f"{time_mlx_unfused: 2.3f}, {time_mlx_fused: 2.3f}, "
+                        f"{100.0 * diff:+5.2f}%"
                     )
