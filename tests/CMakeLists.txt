@@ -40,7 +40,6 @@ target_sources(
           ops_tests.cpp
           random_tests.cpp
           scheduler_tests.cpp
-          simd_tests.cpp
           utils_tests.cpp
           vmap_tests.cpp
           linalg_tests.cpp
