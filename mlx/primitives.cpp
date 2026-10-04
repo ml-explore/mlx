@@ -4444,6 +4444,10 @@ std::vector<array> Scan::jvp(
   if (reduce_type_ == Scan::Sum) {
     return {cumsum(tangents[0], axis_, reverse_, inclusive_, stream())};
   } else if (reduce_type_ == Scan::LogAddExp) {
+    if (issubdtype(tangents[0].dtype(), complexfloating)) {
+      throw std::invalid_argument(
+          "[logcumsumexp] JVP is not supported for complex inputs.");
+    }
     auto x = primals[0];
     auto t = tangents[0];
     auto y = logcumsumexp(x, axis_, reverse_, inclusive_, stream());

@@ -73,6 +73,11 @@ class TestAutograd(mlx_tests.MLXTestCase):
         expected = (f(x + eps * t) - f(x - eps * t)) / (2 * eps)
         self.assertTrue(mx.allclose(dout, expected, atol=1e-3))
 
+        x = mx.array([1.0, 2.0], dtype=mx.complex64)
+        t = mx.array([1 + 1j, 2 - 1j])
+        with self.assertRaises(ValueError):
+            mx.jvp(f, [x], [t])
+
     def test_jvp_comparison_tangent_dtype(self):
         # Comparison op JVP tangents should preserve the input tangent's
         # dtype (e.g. float32), not return bool. Using bool tangents causes
