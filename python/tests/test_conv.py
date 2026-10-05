@@ -497,6 +497,21 @@ class TestConv(mlx_tests.MLXTestCase):
                     dtype=dtype,
                 )
 
+            # Depthwise with C % 16 != 0 and grouped with C_per_group = 8
+            for N, C, O, groups in ((2, 24, 24, 24), (2, 40, 40, 40), (2, 64, 128, 8)):
+                for stride in ((1, 1), (2, 2)):
+                    run_conv2D_grad(
+                        N,
+                        C,
+                        O,
+                        (16, 16),
+                        (3, 3),
+                        stride,
+                        (1, 1),
+                        groups=groups,
+                        dtype=dtype,
+                    )
+
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_3D(self):
         def run_conv3D(
@@ -1079,6 +1094,9 @@ class TestConv(mlx_tests.MLXTestCase):
             ( 1,  32,  32,   32,   7,   7,  32,  (1, 1),  (3, 3),    32),
             ( 3,  32,  32,   32,   5,   5,  32,  (1, 2),  (0, 0),    32),
             ( 1,  32,  32,   32,   7,   7,  32,  (2, 1),  (1, 3),    32),
+            ( 2,  16,  16,   24,   3,   3,  24,  (1, 1),  (1, 1),    24),
+            ( 1,  14,  14,   40,   5,   5,  40,  (2, 2),  (2, 2),    40),
+            ( 2,   9,   9,    8,   3,   3,   8,  (1, 1),  (1, 1),     8),
         )
         # fmt: on
 
@@ -1214,6 +1232,173 @@ class TestConv(mlx_tests.MLXTestCase):
         y = mx.conv_transpose2d(x, w, stream=mx.cpu)
         y_hat = mx.conv_transpose2d(x, w)
         self.assertTrue(mx.allclose(y, y_hat))
+
+    def __assert_gpu_matches_cpu(self, f, *args, **kwargs):
+        out_gpu = f(*args, **kwargs, stream=mx.gpu)
+        out_cpu = f(*args, **kwargs, stream=mx.cpu)
+        self.assertEqual(out_gpu.shape, out_cpu.shape)
+        atol = 1e-4 if args[0].dtype == mx.float32 else 5e-3
+        self.assertTrue(
+            mx.allclose(
+                out_gpu.astype(mx.float32), out_cpu.astype(mx.float32), atol=atol
+            )
+        )
+
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_conv_grouped_c_per_group_8(self):
+        # fmt: off
+        shapes_2d = (
+            # N,   H,   W, groups, O_per_group, k, stride, padding, dilation
+            ( 2,  14,  14,      2,           8, 3,      1,       1,        1),
+            ( 2,  13,   9,     16,          16, 3,      2,       1,        1),
+            ( 1,   7,   7,     32,           8, 3,      1,       1,        1),
+            ( 2,  14,  14,     32,          16, 3,      2,       1,        1),
+            ( 2,  14,  14,     16,           8, 5,      1,       2,        1),
+            ( 2,  14,  14,     16,           8, 3,      1,       2,        2),
+            ( 2,  14,  14,      8,          32, 3,      1,       1,        1),
+            ( 2,  14,  14,      8,          64, 3,      1,       1,        1),
+            ( 1,  33,  31,      4,           8, 3,      2,       0,        1),
+            ( 1,   9,   9,      1,           8, 3,      1,       1,        1),
+        )
+        shapes_1d = (
+            # N,   L, groups, O_per_group, k, stride, padding
+            ( 2,  64,      2,           8, 3,      1,       1),
+            ( 2,  63,     16,          16, 3,      2,       1),
+            ( 1, 100,     32,           8, 5,      1,       2),
+            ( 2,  64,     32,          16, 3,      2,       0),
+        )
+        # fmt: on
+
+        for dtype in (mx.float32, mx.float16):
+            for N, H, W, groups, opg, k, stride, padding, dilation in shapes_2d:
+                C, O = 8 * groups, opg * groups
+                for flip in (False, True):
+                    x = mx.random.normal((N, H, W, C)).astype(dtype)
+                    w = (0.2 * mx.random.normal((O, k, k, 8))).astype(dtype)
+                    with self.subTest(
+                        dtype=dtype,
+                        in_shape=x.shape,
+                        wt_shape=w.shape,
+                        groups=groups,
+                        stride=stride,
+                        padding=padding,
+                        dilation=dilation,
+                        flip=flip,
+                    ):
+                        self.__assert_gpu_matches_cpu(
+                            mx.conv_general,
+                            x,
+                            w,
+                            stride=stride,
+                            padding=padding,
+                            kernel_dilation=dilation,
+                            groups=groups,
+                            flip=flip,
+                        )
+
+            for N, L, groups, opg, k, stride, padding in shapes_1d:
+                C, O = 8 * groups, opg * groups
+                x = mx.random.normal((N, L, C)).astype(dtype)
+                w = (0.2 * mx.random.normal((O, k, 8))).astype(dtype)
+                with self.subTest(dtype=dtype, in_shape=x.shape, wt_shape=w.shape):
+                    self.__assert_gpu_matches_cpu(
+                        mx.conv1d,
+                        x,
+                        w,
+                        stride=stride,
+                        padding=padding,
+                        groups=groups,
+                    )
+
+        # Non-contiguous input and weight go through a contiguous copy
+        x = mx.random.normal((2, 128, 14, 14)).transpose(0, 2, 3, 1)
+        w = 0.2 * mx.random.normal((3, 3, 8, 256)).transpose(3, 0, 1, 2)
+        self.__assert_gpu_matches_cpu(mx.conv2d, x, w, padding=1, groups=16)
+
+        # Gradients with respect to the input and the weight
+        def vjp(f, x, w, stream):
+            out, grads = mx.vjp(
+                lambda a, b: f(a, b, stream=stream),
+                [x, w],
+                [mx.ones(f(x, w, stream=mx.cpu).shape)],
+            )
+            return grads
+
+        x = mx.random.normal((2, 14, 14, 128))
+        w = 0.2 * mx.random.normal((256, 3, 3, 8))
+        f = lambda a, b, stream: mx.conv2d(
+            a, b, stride=2, padding=1, groups=16, stream=stream
+        )
+        for g_gpu, g_cpu in zip(vjp(f, x, w, mx.gpu), vjp(f, x, w, mx.cpu)):
+            self.assertTrue(mx.allclose(g_gpu, g_cpu, atol=1e-4))
+
+        x = mx.random.normal((2, 64, 128))
+        w = 0.2 * mx.random.normal((128, 3, 8))
+        f = lambda a, b, stream: mx.conv1d(a, b, padding=1, groups=16, stream=stream)
+        for g_gpu, g_cpu in zip(vjp(f, x, w, mx.gpu), vjp(f, x, w, mx.cpu)):
+            self.assertTrue(mx.allclose(g_gpu, g_cpu, atol=1e-4))
+
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_conv_depthwise_c_multiple_of_8(self):
+        # fmt: off
+        shapes = (
+            # N,   H,   W,   C,  k, stride, padding
+            ( 2,  16,  16,  24,  3,      1,       1),
+            ( 2,  17,  15,  24,  3,      2,       1),
+            ( 1,  14,  14,  40,  5,      1,       2),
+            ( 1,  14,  14,  40,  5,      2,       2),
+            ( 2,   9,   9,   8,  3,      1,       1),
+            ( 1,  12,  12,  56,  7,      1,       3),
+        )
+        # fmt: on
+
+        for dtype in (mx.float32, mx.float16):
+            for N, H, W, C, k, stride, padding in shapes:
+                for flip in (False, True):
+                    x = mx.random.normal((N, H, W, C)).astype(dtype)
+                    w = (0.2 * mx.random.normal((C, k, k, 1))).astype(dtype)
+                    with self.subTest(
+                        dtype=dtype,
+                        in_shape=x.shape,
+                        wt_shape=w.shape,
+                        stride=stride,
+                        padding=padding,
+                        flip=flip,
+                    ):
+                        self.__assert_gpu_matches_cpu(
+                            mx.conv_general,
+                            x,
+                            w,
+                            stride=stride,
+                            padding=padding,
+                            groups=C,
+                            flip=flip,
+                        )
+
+            # conv1d depthwise with padding also uses the 2D depthwise kernel
+            for C, k, stride in ((24, 3, 1), (40, 5, 2)):
+                x = mx.random.normal((2, 64, C)).astype(dtype)
+                w = (0.2 * mx.random.normal((C, k, 1))).astype(dtype)
+                with self.subTest(dtype=dtype, in_shape=x.shape, wt_shape=w.shape):
+                    self.__assert_gpu_matches_cpu(
+                        mx.conv1d, x, w, stride=stride, padding=k // 2, groups=C
+                    )
+
+        # Gradients with respect to the input and the weight
+        for C, k, stride in ((24, 3, 1), (40, 5, 2)):
+            x = mx.random.normal((2, 16, 16, C))
+            w = 0.2 * mx.random.normal((C, k, k, 1))
+
+            def f(a, b, stream):
+                return mx.conv2d(
+                    a, b, stride=stride, padding=k // 2, groups=C, stream=stream
+                )
+
+            cotan = mx.ones(f(x, w, mx.cpu).shape)
+            _, grads_gpu = mx.vjp(lambda a, b: f(a, b, mx.gpu), [x, w], [cotan])
+            _, grads_cpu = mx.vjp(lambda a, b: f(a, b, mx.cpu), [x, w], [cotan])
+            for g_gpu, g_cpu in zip(grads_gpu, grads_cpu):
+                self.assertTrue(mx.allclose(g_gpu, g_cpu, atol=1e-4))
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_conv2d_winograd_batch_tiling(self):

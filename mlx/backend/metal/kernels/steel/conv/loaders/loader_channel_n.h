@@ -71,6 +71,7 @@ struct Conv2DInputBlockLoaderSmallChannels {
 
   // Rows / strided reads within the block
   STEEL_CONST short n_rows = BROWS / TROWS;
+  static_assert(n_rows > 0, "BM must be at least tgp_size * vec_size / BK");
 
   // Thread location indices
   const short thread_idx;
