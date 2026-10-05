@@ -2,7 +2,7 @@
 
 struct fp8_e4m3 {
   template <typename T>
-  fp8_e4m3(T f) {
+  fp8_e4m3(T f) thread {
     // From PyTorch
     // https://github.com/pytorch/pytorch/blob/e3643e1e0e923f0fc063dfab6f45c956d568919d/c10/util/Float8_e4m3fn.h#L148
     uint32_t fp8_max = 543 << 21;
@@ -29,19 +29,19 @@ struct fp8_e4m3 {
     bits |= static_cast<uint8_t>(sign >> 24);
   }
 
-  operator float16_t() {
-    uint16_t v = (bits & 127) << 7;
-    half converted = as_type<half>(v);
-    converted *= 256.0;
-    auto sign = bits & 128;
-    return (sign ? -converted : converted);
+  operator float16_t() thread {
+    uint16_t v = bits & 127;
+    uint16_t sign_bit = ((uint16_t)((bits >> 7) & 1)) << 15;
+    uint16_t u = (v << 7) | (((v + 1) >> 7) << 14) | sign_bit;
+    half converted = as_type<half>(u);
+    return converted * 256.0;
   }
 
-  operator bfloat16_t() {
+  operator bfloat16_t() thread {
     return static_cast<bfloat16_t>(this->operator float16_t());
   }
 
-  operator float() {
+  operator float() thread {
     return static_cast<float>(this->operator float16_t());
   }
 
@@ -49,7 +49,7 @@ struct fp8_e4m3 {
 };
 
 struct fp8_e8m0 {
-  fp8_e8m0(float x) {
+  fp8_e8m0(float x) thread {
     if (!metal::isfinite(x)) {
       bits = 0xFF;
       return;
@@ -66,15 +66,26 @@ struct fp8_e8m0 {
     bits = static_cast<uint8_t>(n + 127);
   }
 
-  operator bfloat16_t() {
+  operator bfloat16_t() thread {
     uint16_t out = (bits == 0 ? 0x40 : (static_cast<uint16_t>(bits) << 7));
     return as_type<bfloat16_t>(out);
   }
 
-  operator float() {
+  operator float() thread {
     uint32_t out = (bits == 0 ? 0x400000 : (static_cast<uint16_t>(bits) << 23));
     return as_type<float>(out);
   }
 
   uint8_t bits;
 };
+
+// Smallest E8M0 >= x. Scales are amax/max_element, so rounding one down
+// leaves the block's largest elements outside the element range, where they
+// saturate. Matches the CUDA backend, which rounds up via cutlass ue8m0.
+inline float mx_scale_round_up(float x) {
+  fp8_e8m0 s(x);
+  if (s.bits < 0xFE && float(s) < x) {
+    s.bits += 1;
+  }
+  return float(s);
+}

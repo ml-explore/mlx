@@ -5,6 +5,9 @@
 
 #include "doctest/doctest.h"
 
+#include <cmath>
+#include <limits>
+
 #include "mlx/mlx.h"
 #include "mlx/primitives.h"
 
@@ -107,6 +110,34 @@ TEST_CASE("test enable and disable compile") {
   compile(nullptr);
   enable_compile();
   CHECK_THROWS(compile(nullptr));
+}
+
+std::vector<array> nan_const_fun(const std::vector<array>& inputs) {
+  auto nan = array(std::numeric_limits<float>::quiet_NaN());
+  return {where(greater(inputs[0], array(0.0f)), inputs[0], nan)};
+}
+
+std::vector<array> neg_inf_const_fun(const std::vector<array>& inputs) {
+  auto inf = array(-std::numeric_limits<float>::infinity());
+  return {where(greater(inputs[0], array(0.0f)), inputs[0], inf)};
+}
+
+TEST_CASE("test compile with non-finite constants") {
+  // Regression test: baking a non-finite scalar constant (NaN / infinity) into
+  // a fused compiled kernel used to stream a bare token (e.g. `nan`) into the
+  // generated kernel source, which is not a valid identifier and broke
+  // compilation (notably on the Metal backend).
+  auto out = compile(nan_const_fun)({array({1.0f, -1.0f})})[0];
+  eval(out);
+  CHECK_EQ(out.shape(), Shape{2});
+  CHECK_EQ(out.data<float>()[0], 1.0f);
+  CHECK(std::isnan(out.data<float>()[1]));
+
+  out = compile(neg_inf_const_fun)({array({1.0f, -1.0f})})[0];
+  eval(out);
+  CHECK_EQ(out.data<float>()[0], 1.0f);
+  CHECK(std::isinf(out.data<float>()[1]));
+  CHECK_LT(out.data<float>()[1], 0.0f);
 }
 
 auto add_scalars(const std::vector<array>&) {
@@ -815,4 +846,32 @@ TEST_CASE("test compile random bits") {
   auto expected = fun({in})[0];
   auto out = compile(fun)({in})[0];
   CHECK(array_equal(out, expected).item<bool>());
+}
+
+TEST_CASE("test compile throwing first trace does not poison cache") {
+  // A nullary function whose first trace raises. Without rolling the cache
+  // entry back, the second call with matching (empty) inputs would hit a
+  // half-filled entry, skip tracing, and silently return empty outputs.
+  bool should_throw = true;
+  auto fun = [&should_throw](const std::vector<array>& inputs) {
+    if (should_throw) {
+      throw std::runtime_error("trace failure");
+    }
+    return std::vector<array>{array(1.0f) + array(2.0f)};
+  };
+
+  auto cfun = compile(fun);
+
+  // First call: the trace raises and must propagate.
+  CHECK_THROWS_AS(cfun({}), std::runtime_error);
+
+  // Second call: still raising. It must re-trace and raise again rather than
+  // return an empty result from a poisoned cache entry.
+  CHECK_THROWS_AS(cfun({}), std::runtime_error);
+
+  // Once the function stops raising, a retry must trace cleanly and succeed.
+  should_throw = false;
+  auto out = cfun({});
+  REQUIRE_EQ(out.size(), 1);
+  CHECK_EQ(out[0].item<float>(), 3.0f);
 }

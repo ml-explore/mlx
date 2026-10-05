@@ -1,0 +1,7 @@
+# 64bit dtype not supported https://github.com/ml-explore/mlx/issues/4300
+array_api_tests/test_creation_functions.py::test_eye
+
+array_api_tests/test_array_object.py::test_getitem_arrays_and_ints_2[None]
+array_api_tests/test_array_object.py::test_getitem_arrays_and_ints_2[1]
+array_api_tests/test_array_object.py::test_getitem_arrays_and_ints_1[None]
+array_api_tests/test_array_object.py::test_getitem_arrays_and_ints_1[1]

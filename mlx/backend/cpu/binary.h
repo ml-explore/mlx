@@ -6,6 +6,7 @@
 #include "mlx/array.h"
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/dtype_utils.h"
 
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
@@ -15,7 +16,7 @@ namespace mlx::core {
 template <typename Op>
 struct VectorScalar {
   template <typename T, typename U>
-  void operator()(const T* a, const T* b, U* dst, int size) {
+  void operator()(const T* a, const T* b, U* dst, size_t size) {
     T scalar = *b;
     constexpr int N = simd::max_size<T>;
     while (size >= N) {
@@ -35,7 +36,7 @@ struct VectorScalar {
 template <typename Op>
 struct ScalarVector {
   template <typename T, typename U>
-  void operator()(const T* a, const T* b, U* dst, int size) {
+  void operator()(const T* a, const T* b, U* dst, size_t size) {
     T scalar = *a;
     constexpr int N = simd::max_size<T>;
     while (size >= N) {
@@ -55,7 +56,7 @@ struct ScalarVector {
 template <typename Op>
 struct VectorVector {
   template <typename T, typename U>
-  void operator()(const T* a, const T* b, U* dst, int size) {
+  void operator()(const T* a, const T* b, U* dst, size_t size) {
     constexpr int N = simd::max_size<T>;
     while (size >= N) {
       simd::store(dst, Op{}(simd::load<T, N>(a), simd::load<T, N>(b)));
@@ -309,50 +310,10 @@ void binary_op_cpu(
                     b = array::unsafe_weak_copy(b),
                     out = array::unsafe_weak_copy(out),
                     bopt]() mutable {
-    switch (out.dtype()) {
-      case bool_:
-        binary_op<bool, Op>(a, b, out, bopt);
-        break;
-      case uint8:
-        binary_op<uint8_t, Op>(a, b, out, bopt);
-        break;
-      case uint16:
-        binary_op<uint16_t, Op>(a, b, out, bopt);
-        break;
-      case uint32:
-        binary_op<uint32_t, Op>(a, b, out, bopt);
-        break;
-      case uint64:
-        binary_op<uint64_t, Op>(a, b, out, bopt);
-        break;
-      case int8:
-        binary_op<int8_t, Op>(a, b, out, bopt);
-        break;
-      case int16:
-        binary_op<int16_t, Op>(a, b, out, bopt);
-        break;
-      case int32:
-        binary_op<int32_t, Op>(a, b, out, bopt);
-        break;
-      case int64:
-        binary_op<int64_t, Op>(a, b, out, bopt);
-        break;
-      case float16:
-        binary_op<float16_t, Op>(a, b, out, bopt);
-        break;
-      case float32:
-        binary_op<float, Op>(a, b, out, bopt);
-        break;
-      case float64:
-        binary_op<double, Op>(a, b, out, bopt);
-        break;
-      case bfloat16:
-        binary_op<bfloat16_t, Op>(a, b, out, bopt);
-        break;
-      case complex64:
-        binary_op<complex64_t, Op>(a, b, out, bopt);
-        break;
-    }
+    dispatch_all_types(out.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      binary_op<T, Op>(a, b, out, bopt);
+    });
   });
 }
 
@@ -374,50 +335,10 @@ void comparison_op_cpu(
                     b = array::unsafe_weak_copy(b),
                     out = array::unsafe_weak_copy(out),
                     bopt]() mutable {
-    switch (a.dtype()) {
-      case bool_:
-        binary_op<bool, bool, Op>(a, b, out, bopt);
-        break;
-      case uint8:
-        binary_op<uint8_t, bool, Op>(a, b, out, bopt);
-        break;
-      case uint16:
-        binary_op<uint16_t, bool, Op>(a, b, out, bopt);
-        break;
-      case uint32:
-        binary_op<uint32_t, bool, Op>(a, b, out, bopt);
-        break;
-      case uint64:
-        binary_op<uint64_t, bool, Op>(a, b, out, bopt);
-        break;
-      case int8:
-        binary_op<int8_t, bool, Op>(a, b, out, bopt);
-        break;
-      case int16:
-        binary_op<int16_t, bool, Op>(a, b, out, bopt);
-        break;
-      case int32:
-        binary_op<int32_t, bool, Op>(a, b, out, bopt);
-        break;
-      case int64:
-        binary_op<int64_t, bool, Op>(a, b, out, bopt);
-        break;
-      case float16:
-        binary_op<float16_t, bool, Op>(a, b, out, bopt);
-        break;
-      case float32:
-        binary_op<float, bool, Op>(a, b, out, bopt);
-        break;
-      case float64:
-        binary_op<double, bool, Op>(a, b, out, bopt);
-        break;
-      case bfloat16:
-        binary_op<bfloat16_t, bool, Op>(a, b, out, bopt);
-        break;
-      case complex64:
-        binary_op<complex64_t, bool, Op>(a, b, out, bopt);
-        break;
-    }
+    dispatch_all_types(a.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      binary_op<T, bool, Op>(a, b, out, bopt);
+    });
   });
 }
 
@@ -439,26 +360,9 @@ void binary_float_op_cpu(
                     b = array::unsafe_weak_copy(b),
                     out = array::unsafe_weak_copy(out),
                     bopt]() mutable {
-    switch (out.dtype()) {
-      case float16:
-        binary_op<float16_t, Op>(a, b, out, bopt);
-        break;
-      case float32:
-        binary_op<float, Op>(a, b, out, bopt);
-        break;
-      case float64:
-        binary_op<double, Op>(a, b, out, bopt);
-        break;
-      case bfloat16:
-        binary_op<bfloat16_t, Op>(a, b, out, bopt);
-        break;
-      case complex64:
-        binary_op<complex64_t, Op>(a, b, out, bopt);
-        break;
-      default:
-        throw std::runtime_error(
-            "[binary_float] Only supports floating point types.");
-    }
+    dispatch_inexact_types(out.dtype(), "[binary_float]", [&](auto type_tag) {
+      binary_op<MLX_GET_TYPE(type_tag), Op>(a, b, out, bopt);
+    });
   });
 }
 

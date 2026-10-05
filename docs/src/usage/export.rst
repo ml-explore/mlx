@@ -109,6 +109,35 @@ keyword arguments when calling the imported function.
   out, = imported_fun(x, z=y)
 
 
+Saving Metadata
+---------------
+
+You can save metadata, such as a model configuration, alongside an exported
+function. The metadata is a string, so structured data can be encoded with
+JSON:
+
+.. code-block:: python
+
+  import json
+
+  def fun(x, y):
+    return x + y
+
+  x = mx.array(1.0)
+  y = mx.array(1.0)
+  config = {"description": "adds two arrays", "version": 1}
+  mx.export_function("add.mlxfn", fun, x, y, metadata=json.dumps(config))
+
+Pass ``return_metadata=True`` to read the metadata back when importing:
+
+.. code-block:: python
+
+  imported_fun, metadata = mx.import_function("add.mlxfn", return_metadata=True)
+
+  # Prints: adds two arrays
+  print(json.loads(metadata)["description"])
+
+
 Exporting Modules
 -----------------
 
@@ -178,7 +207,7 @@ The argument to the callback (``args``) is a dictionary which includes a
 * ``"keyword_inputs"``: The keyword specified inputs to the exported function
 * ``"outputs"``: The ordered outputs of the exported function
 * ``"constants"``: Any graph constants
-* ``"primitives"``: Inner graph nodes representating the operations
+* ``"primitive"``: An inner graph node representing an operation
 
 Each type has additional fields in the ``args`` dictionary.
 

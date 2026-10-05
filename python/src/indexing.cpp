@@ -1,10 +1,11 @@
 // Copyright © 2023-2024 Apple Inc.
+#include <nanobind/ndarray.h>
+
 #include <numeric>
 #include <optional>
 #include <sstream>
 
-#include <nanobind/ndarray.h>
-
+#include "mlx/dtype.h"
 #include "mlx/ops.h"
 #include "python/src/convert.h"
 #include "python/src/indexing.h"
@@ -18,6 +19,9 @@ bool is_none_slice(const nb::slice& in_slice) {
 
 bool is_index_scalar(const nb::object& obj) {
   if (nb::isinstance<nb::bool_>(obj)) {
+    return false;
+  }
+  if (nb::isinstance<mx::array>(obj)) {
     return false;
   }
   if (!PyIndex_Check(obj.ptr())) {
@@ -69,6 +73,33 @@ void get_slice_params(
       nb::getattr(in_slice, "start"), strides < 0 ? axis_size - 1 : 0);
   ends = get_slice_int(
       nb::getattr(in_slice, "stop"), strides < 0 ? -axis_size - 1 : axis_size);
+}
+
+// Resolve negative bounds and clamp into range, mirroring CPython's
+// PySlice_AdjustIndices. Needed wherever a slice is expanded into an explicit
+// arange, since out-of-range bounds would otherwise be used verbatim.
+void adjust_slice_bounds(
+    mx::ShapeElem& start,
+    mx::ShapeElem& end,
+    mx::ShapeElem stride,
+    int axis_size) {
+  if (start < 0) {
+    start += axis_size;
+    if (start < 0) {
+      start = (stride < 0) ? -1 : 0;
+    }
+  } else if (start >= axis_size) {
+    start = (stride < 0) ? axis_size - 1 : axis_size;
+  }
+
+  if (end < 0) {
+    end += axis_size;
+    if (end < 0) {
+      end = (stride < 0) ? -1 : 0;
+    }
+  } else if (end >= axis_size) {
+    end = (stride < 0) ? axis_size - 1 : axis_size;
+  }
 }
 
 mx::array get_int_index(nb::object idx, int axis_size) {
@@ -151,9 +182,7 @@ mx::array mlx_gather_nd(
       get_slice_params(
           start, end, stride, nb::cast<nb::slice>(idx), src.shape(i));
 
-      // Handle negative indices
-      start = (start < 0) ? start + src.shape(i) : start;
-      end = (end < 0) ? end + src.shape(i) : end;
+      adjust_slice_bounds(start, end, stride, src.shape(i));
 
       gather_indices.push_back(arange(start, end, stride, mx::uint32));
       num_slices++;
@@ -253,8 +282,14 @@ auto mlx_expand_ellipsis(const mx::Shape& shape, const nb::tuple& entries) {
 
   // Expand ellipsis
   if (has_ellipsis) {
+    int ndim = static_cast<int>(shape.size());
+    if (non_none_indices > ndim) {
+      std::ostringstream msg;
+      msg << "Too many indices for array with " << ndim << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
     for (int axis = non_none_indices_before;
-         axis < shape.size() - non_none_indices_after;
+         axis < ndim - non_none_indices_after;
          axis++) {
       indices.push_back(
           nb::slice(mx::ShapeElem{0}, shape[axis], mx::ShapeElem{1}));
@@ -676,9 +711,7 @@ mlx_scatter_args_nd(
       get_slice_params(
           start, end, stride, nb::cast<nb::slice>(pyidx), axis_size);
 
-      // Handle negative indices
-      start = (start < 0) ? start + axis_size : start;
-      end = (end < 0) ? end + axis_size : end;
+      adjust_slice_bounds(start, end, stride, axis_size);
 
       mx::Shape idx_shape(idx_ndim, 1);
 
@@ -778,6 +811,9 @@ mlx_compute_scatter_args(
     return mlx_scatter_args_int(src, obj, vals);
   } else if (nb::isinstance<nb::tuple>(obj)) {
     return mlx_scatter_args_nd(src, nb::cast<nb::tuple>(obj), vals);
+  } else if (nb::isinstance<nb::ellipsis>(obj)) {
+    return {
+        {}, broadcast_to(squeeze_leading_singletons(vals), src.shape()), {}};
   } else if (obj.is_none()) {
     return {{}, broadcast_to(vals, src.shape()), {}};
   } else if (nb::isinstance<nb::list>(obj)) {
@@ -905,7 +941,7 @@ mlx_compute_slice_update_args(
       upd_ax--;
     } else if (is_index_scalar(pyidx)) {
       int st = safe_to_int32(pyidx);
-      st = (st < 0) ? st + src.shape(i) : st;
+      st = (st < 0) ? st + src.shape(ax) : st;
       starts[ax] = st;
       stops[ax] = st + 1;
       if (upd_ax >= 0) {
@@ -926,7 +962,7 @@ mlx_compute_slice_update_args(
 }
 
 std::optional<mx::array> extract_boolean_mask(const nb::object& obj) {
-  using NDArray = nb::ndarray<nb::ro, nb::c_contig>;
+  using NDArray = nb::ndarray<nb::ro>;
   if (nb::isinstance<nb::bool_>(obj)) {
     return mx::array(nb::cast<bool>(obj), mx::bool_);
   } else if (nb::isinstance<mx::array>(obj)) {

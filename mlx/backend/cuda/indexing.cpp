@@ -87,7 +87,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
       dtype_to_string(idx_dtype),
       nidx);
 
-  cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
+  cu::JitModule& mod = cu::get_jit_module(encoder.device(), module_name, [&]() {
     std::vector<std::string> kernel_names;
     for (int ndim = 0; ndim <= MAX_NDIM; ++ndim) {
       for (int large = 0; large <= 1; ++large) {
@@ -182,7 +182,9 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       nidx);
 
   auto& s = stream();
-  cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
+  auto& encoder = cu::get_command_encoder(s);
+
+  cu::JitModule& mod = cu::get_jit_module(encoder.device(), module_name, [&]() {
     std::vector<std::string> kernel_names;
     for (int ndim = 0; ndim <= MAX_NDIM; ++ndim) {
       for (int large = 0; large <= 1; ++large) {
@@ -231,7 +233,6 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       idx_ndim,
       large ? "int64_t" : "int32_t");
 
-  auto& encoder = cu::get_command_encoder(s);
   for (const auto& in : inputs) {
     encoder.set_input_array(in);
   }
@@ -262,7 +263,7 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
       dtype_to_string(out.dtype()),
       dtype_to_string(idx.dtype()));
 
-  cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
+  cu::JitModule& mod = cu::get_jit_module(encoder.device(), module_name, [&]() {
     std::vector<std::string> kernel_names;
     for (int ndim = 0; ndim <= MAX_NDIM; ++ndim) {
       for (int contiguous = 0; contiguous < 4; ++contiguous) {
@@ -366,7 +367,9 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
       op);
 
   auto& s = stream();
-  cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
+  auto& encoder = cu::get_command_encoder(s);
+
+  cu::JitModule& mod = cu::get_jit_module(encoder.device(), module_name, [&]() {
     std::vector<std::string> kernel_names;
     for (int ndim = 0; ndim <= MAX_NDIM; ++ndim) {
       for (int contiguous = 0; contiguous < 4; ++contiguous) {
@@ -429,7 +432,6 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
       idx.flags().row_contiguous,
       large ? "int64_t" : "int32_t");
 
-  auto& encoder = cu::get_command_encoder(s);
   for (const auto& in : inputs) {
     encoder.set_input_array(in);
   }
@@ -489,7 +491,7 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   std::string module_name =
       fmt::format("masked_scatter_{}", dtype_to_string(out.dtype()));
-  cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
+  cu::JitModule& mod = cu::get_jit_module(encoder.device(), module_name, [&]() {
     std::vector<std::string> kernel_names;
     for (int src_contiguous = 0; src_contiguous <= 1; ++src_contiguous) {
       for (int dst_contiguous = 0; dst_contiguous <= 1; ++dst_contiguous) {
@@ -626,7 +628,7 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
-  cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
+  cu::JitModule& mod = cu::get_jit_module(encoder.device(), module_name, [&]() {
     std::vector<std::string> kernel_names;
     for (int out_c = 0; out_c <= 1; ++out_c) {
       for (int upd_c = 0; upd_c <= 1; ++upd_c) {

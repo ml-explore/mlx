@@ -8,6 +8,7 @@
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/gemm.h"
 #include "mlx/backend/cpu/lapack.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
@@ -525,83 +526,26 @@ void SegmentedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
                     b_transposed = b_transposed,
                     lda = lda,
                     ldb = ldb]() {
-    switch (a.dtype()) {
-      case float64:
-        segmented_mm<double>(
-            a.data<double>(),
-            b.data<double>(),
-            segments.data<uint32_t>(),
-            static_cast<double*>(out_ptr),
-            a_transposed,
-            b_transposed,
-            lda,
-            ldb,
-            a.shape(),
-            a.strides(),
-            b.shape(),
-            b.strides(),
-            segments.size() / 2,
-            segments.shape(),
-            segments.strides());
-        break;
-      case float32:
-        segmented_mm<float>(
-            a.data<float>(),
-            b.data<float>(),
-            segments.data<uint32_t>(),
-            static_cast<float*>(out_ptr),
-            a_transposed,
-            b_transposed,
-            lda,
-            ldb,
-            a.shape(),
-            a.strides(),
-            b.shape(),
-            b.strides(),
-            segments.size() / 2,
-            segments.shape(),
-            segments.strides());
-        break;
-      case float16:
-        segmented_mm<float16_t>(
-            a.data<float16_t>(),
-            b.data<float16_t>(),
-            segments.data<uint32_t>(),
-            static_cast<float16_t*>(out_ptr),
-            a_transposed,
-            b_transposed,
-            lda,
-            ldb,
-            a.shape(),
-            a.strides(),
-            b.shape(),
-            b.strides(),
-            segments.size() / 2,
-            segments.shape(),
-            segments.strides());
-        break;
-      case bfloat16:
-        segmented_mm<bfloat16_t>(
-            a.data<bfloat16_t>(),
-            b.data<bfloat16_t>(),
-            segments.data<uint32_t>(),
-            static_cast<bfloat16_t*>(out_ptr),
-            a_transposed,
-            b_transposed,
-            lda,
-            ldb,
-            a.shape(),
-            a.strides(),
-            b.shape(),
-            b.strides(),
-            segments.size() / 2,
-            segments.shape(),
-            segments.strides());
-        break;
-      default:
-        throw std::invalid_argument(
-            "Segmented mm supports only real float types.");
-    }
+    dispatch_float_types(
+        a.dtype(), "[SegmentedMM::eval_cpu]", [&](auto type_tag) {
+          using T = MLX_GET_TYPE(type_tag);
+          segmented_mm<T>(
+              a.data<T>(),
+              b.data<T>(),
+              segments.data<uint32_t>(),
+              static_cast<T*>(out_ptr),
+              a_transposed,
+              b_transposed,
+              lda,
+              ldb,
+              a.shape(),
+              a.strides(),
+              b.shape(),
+              b.strides(),
+              segments.size() / 2,
+              segments.shape(),
+              segments.strides());
+        });
   });
 }
 

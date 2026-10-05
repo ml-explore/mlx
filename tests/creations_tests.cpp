@@ -218,10 +218,18 @@ TEST_CASE("test full") {
     CHECK_EQ(y.dtype(), int32);
     CHECK(array_equal(x, y).item<bool>());
 
+    auto z = zeros_like(x, float16);
+    CHECK_EQ(z.dtype(), float16);
+    CHECK(array_equal(z, zeros({2, 2}, float16)).item<bool>());
+
     x = ones({2, 2}, int32);
     y = ones_like(x);
     CHECK_EQ(y.dtype(), int32);
     CHECK(array_equal(x, y).item<bool>());
+
+    z = ones_like(x, float16);
+    CHECK_EQ(z.dtype(), float16);
+    CHECK(array_equal(z, ones({2, 2}, float16)).item<bool>());
   }
 
   // Works for empty shape and empty array

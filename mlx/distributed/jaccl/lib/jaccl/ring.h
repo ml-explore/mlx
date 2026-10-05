@@ -24,7 +24,7 @@ class RingGroup : public Group {
       int size,
       const std::vector<std::string>& left_devices,
       const std::vector<std::string>& right_devices,
-      const std::string& coordinator_addr);
+      SideChannel sc);
 
   int rank() override {
     return rank_;
@@ -45,6 +45,9 @@ class RingGroup : public Group {
 
   void all_gather(const void* input, void* output, size_t n_bytes) override;
 
+  void sum_scatter(const void* input, void* output, size_t n_bytes, int dtype)
+      override;
+
   void send(const void* input, size_t n_bytes, int dst) override;
   void recv(void* output, size_t n_bytes, int src) override;
 
@@ -53,6 +56,13 @@ class RingGroup : public Group {
  private:
   template <typename T, typename ReduceOp>
   void all_reduce(
+      const void* input,
+      void* output,
+      size_t n_bytes,
+      ReduceOp reduce_op);
+
+  template <typename T, typename ReduceOp>
+  void reduce_scatter(
       const void* input,
       void* output,
       size_t n_bytes,
@@ -78,6 +88,8 @@ class RingGroup : public Group {
   std::vector<Connection> right_;
   std::vector<SharedBuffer> send_buffers_;
   std::vector<SharedBuffer> recv_buffers_;
+  // Declared before ring_ so it outlives the RingImpl that points at it.
+  ThreadPool pool_;
   RingImpl ring_;
 };
 

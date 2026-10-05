@@ -9,6 +9,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/arange.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/binary_two.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/cholesky.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/copy.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_contiguous.cu
@@ -19,7 +20,9 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/conv/gemm_conv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/conv/gemm_grouped_conv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/cublas_utils.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/cross_entropy.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/cudnn_utils.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/cusolver_utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device_info.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/custom_kernel.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
@@ -58,6 +61,12 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/sort.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm/qmm.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm/qmm_naive.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm/qmm_sm80.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm/qmm_sm90.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm/qmv.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm/fp_qmv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/affine_quantize.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/fp_quantize.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/quantized.cpp
@@ -66,8 +75,16 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
+# Put dynamic defines in the dirs.cpp file.
+add_library(mlx_dirs OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/dirs.cpp)
+target_include_directories(mlx_dirs PRIVATE "${PROJECT_SOURCE_DIR}")
+target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:mlx_dirs>)
+# TODO: Remove after removing std::atomic_store/load.
+target_compile_definitions(
+  mlx_dirs
+  PUBLIC _SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING)
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/binary)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
 
 # fp4 is not available on < 12.8
@@ -168,14 +185,34 @@ message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
                                      "${MLX_CUDA_ARCHITECTURES}")
 
-# Skip Hopper-only kernels when not building for sm90a.
-if(("90a" IN_LIST MLX_CUDA_ARCHITECTURES) OR ("90a-real" IN_LIST
-                                              MLX_CUDA_ARCHITECTURES))
-  target_compile_definitions(mlx PRIVATE MLX_CUDA_SM90A_ENABLED)
-endif()
-
-# Search CUDA libs from installed python packages.
+# Configure Windows CUDA DLL loading.
 if(WIN32)
+  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/wddm.cpp)
+  target_link_libraries(mlx PRIVATE dxgi)
+  set(MLX_CUDA_BIN_DIR
+      ""
+      CACHE STRING "Directory containing CUDA DLLs for Windows delay-loading")
+  set(MLX_CUDNN_BIN_DIR
+      ""
+      CACHE STRING "Directory containing cuDNN DLLs for Windows delay-loading")
+
+  # With MLX_LOAD_CUDA_LIBS_FROM_PYTHON, unset dirs use the wheel layout.
+  # Relative dirs are resolved from the MLX binary.
+  if(NOT MLX_LOAD_CUDA_LIBS_FROM_PYTHON)
+    if("${MLX_CUDA_BIN_DIR}" STREQUAL "")
+      set(MLX_CUDA_BIN_DIR "${CUDAToolkit_BIN_DIR}/x64")
+    endif()
+    if("${MLX_CUDNN_BIN_DIR}" STREQUAL "")
+      set(MLX_CUDNN_BIN_DIR "${CUDNN_BIN_DIR}")
+    endif()
+  endif()
+
+  function(mlx_add_dir_definition name)
+    if(NOT "${${name}}" STREQUAL "")
+      target_compile_definitions(mlx_dirs PRIVATE ${name}="${${name}}")
+    endif()
+  endfunction()
+
   # Resolve paths of unfound DLL at runtime.
   if(BUILD_SHARED_LIBS)
     target_link_libraries(mlx PRIVATE "delayimp.lib")
@@ -196,11 +233,9 @@ if(WIN32)
     target_link_options(mlx PUBLIC "/DELAYLOAD:${CUDA_DLL}")
   endforeach()
   # Pass the locations where CUDA DLLs are placed.
-  if(NOT MLX_LOAD_CUDA_LIBS_FROM_PYTHON)
-    target_compile_definitions(
-      mlx PUBLIC MLX_CUDA_BIN_DIR="${CUDAToolkit_BIN_DIR}/x64"
-                 MLX_CUDNN_BIN_DIR="${CUDNN_BIN_DIR}")
-  endif()
+  foreach(dir_var MLX_CUDA_BIN_DIR MLX_CUDNN_BIN_DIR)
+    mlx_add_dir_definition(${dir_var})
+  endforeach()
 else()
   # For POSIX we rely on RPATH to search for CUDA libs.
   if(MLX_LOAD_CUDA_LIBS_FROM_PYTHON)
@@ -209,9 +244,12 @@ else()
       APPEND
       PROPERTY INSTALL_RPATH
                # The paths here should match the install_requires in setup.py.
+               "$ORIGIN/../../nvidia/cu13/lib"
                "$ORIGIN/../../nvidia/cublas/lib"
                "$ORIGIN/../../nvidia/cuda_nvrtc/lib"
                "$ORIGIN/../../nvidia/cudnn/lib"
+               "$ORIGIN/../../nvidia/cufft/lib"
+               "$ORIGIN/../../nvidia/cusolver/lib"
                "$ORIGIN/../../nvidia/nccl/lib")
   endif()
 endif()
@@ -234,7 +272,7 @@ install(DIRECTORY ${cccl_SOURCE_DIR}/include/nv
 # The binary of C++ tests will not be installed so it can not find the CCCL
 # headers, and we have to hard-code the path.
 if(MLX_BUILD_TESTS)
-  target_compile_definitions(mlx
+  target_compile_definitions(mlx_dirs
                              PRIVATE MLX_CCCL_DIR="${cccl_SOURCE_DIR}/include")
 endif()
 
@@ -257,6 +295,9 @@ target_link_libraries(mlx PRIVATE CUDA::cublasLt)
 # Use cuFFT.
 target_link_libraries(mlx PRIVATE CUDA::cufft)
 
+# Use cuSOLVER.
+target_link_libraries(mlx PRIVATE CUDA::cusolver)
+
 # Use NVRTC and driver APIs.
 target_link_libraries(mlx PRIVATE CUDA::nvrtc CUDA::cuda_driver)
 
@@ -272,7 +313,7 @@ set(CUDNN_FRONTEND_BUILD_SAMPLES OFF)
 set(CUDNN_FRONTEND_BUILD_TESTS OFF)
 set(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS OFF)
 FetchContent_MakeAvailable(cudnn)
-target_link_libraries(mlx PRIVATE cudnn_frontend)
+target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:cudnn_frontend>)
 # Link with the actual cuDNN libraries.
 target_link_libraries(mlx PRIVATE CUDNN::cudnn_all)
 
@@ -286,3 +327,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(cutlass)
 target_include_directories(
   mlx SYSTEM PRIVATE $<BUILD_INTERFACE:${cutlass_SOURCE_DIR}/include>)
+
+# Install CUTLASS headers for JIT.
+install(DIRECTORY ${cutlass_SOURCE_DIR}/include/cute
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(DIRECTORY ${cutlass_SOURCE_DIR}/include/cutlass
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

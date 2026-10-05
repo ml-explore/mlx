@@ -167,6 +167,9 @@ inline __device__ void store_vector(
 // Type limits utils
 ///////////////////////////////////////////////////////////////////////////////
 
+constexpr float F8E4M3_MAX = 448.0f;
+constexpr float F4E2M1_MAX = 6.0f;
+
 template <typename T, typename = void>
 struct Limits {
   static constexpr __host__ __device__ T max() {

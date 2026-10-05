@@ -20,60 +20,44 @@ Group to_group(std::optional<Group> group) {
   }
 }
 
+array all_reduce(
+    const array& x,
+    const std::optional<Group>& group_,
+    StreamOrDevice s,
+    AllReduce::ReduceType reduce_type) {
+  auto group = to_group(group_);
+  if (group.size() == 1) {
+    return x;
+  }
+  auto stream = detail::communication_stream(group, s);
+  return array(
+      x.shape(),
+      x.dtype(),
+      std::make_shared<AllReduce>(stream, group, reduce_type),
+      {x});
+}
+
 } // namespace
 
 array all_sum(
     const array& x,
     std::optional<Group> group_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
-  auto group = to_group(group_);
-
-  if (group.size() == 1) {
-    return x;
-  }
-  auto stream = detail::communication_stream(group, s);
-
-  return array(
-      x.shape(),
-      x.dtype(),
-      std::make_shared<AllReduce>(stream, group, AllReduce::Sum),
-      {x});
+  return all_reduce(x, group_, s, AllReduce::Sum);
 }
 
 array all_max(
     const array& x,
     std::optional<Group> group_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
-  auto group = to_group(group_);
-
-  if (group.size() == 1) {
-    return x;
-  }
-  auto stream = detail::communication_stream(group, s);
-
-  return array(
-      x.shape(),
-      x.dtype(),
-      std::make_shared<AllReduce>(stream, group, AllReduce::Max),
-      {x});
+  return all_reduce(x, group_, s, AllReduce::Max);
 }
 
 array all_min(
     const array& x,
     std::optional<Group> group_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
-  auto group = to_group(group_);
-
-  if (group.size() == 1) {
-    return x;
-  }
-  auto stream = detail::communication_stream(group, s);
-
-  return array(
-      x.shape(),
-      x.dtype(),
-      std::make_shared<AllReduce>(stream, group, AllReduce::Min),
-      {x});
+  return all_reduce(x, group_, s, AllReduce::Min);
 }
 
 array all_gather(
@@ -165,11 +149,11 @@ array sum_scatter(
   if (group.size() == 1) {
     return x;
   }
-  if (x.shape()[0] % group.size() != 0) {
+  if (x.ndim() == 0 || x.shape()[0] % group.size() != 0) {
     std::ostringstream msg;
     msg << "[sum_scatter] Invalid shape=" << x.shape()
         << " for a group of size " << group.size()
-        << ". The first dimension (axis 0) must be divisible by the group size.";
+        << ". The first dimension (axis 0) must be divisible by the group size and input mst have at least one.";
     throw std::invalid_argument(msg.str());
   }
 

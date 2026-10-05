@@ -28,12 +28,11 @@ For multi-dimensional arrays, the ``...`` or :obj:`Ellipsis` syntax works as in 
 
   >>> arr = mx.arange(8).reshape(2, 2, 2)
   >>> arr[:, :, 0]
-  array(3, dtype=int32)
   array([[0, 2],
-         [4, 6]], dtype=int32
+         [4, 6]], dtype=int32)
   >>> arr[..., 0]
   array([[0, 2],
-         [4, 6]], dtype=int32
+         [4, 6]], dtype=int32)
 
 You can index with ``None`` to create a new axis:
 
@@ -41,9 +40,9 @@ You can index with ``None`` to create a new axis:
 
   >>> arr = mx.arange(8)
   >>> arr.shape
-  [8]
+  (8,)
   >>> arr[None].shape
-  [1, 8]
+  (1, 8)
 
 
 You can also use an :obj:`array` to index another :obj:`array`:
@@ -161,7 +160,7 @@ Other index types are routed through the standard scatter code.
    >>> updates = mx.array([5.0, 6.0])
    >>> a[mask] = updates
    >>> a
-   array([5.0, 2.0, 6.0], dtype=float32)
+   array([5, 2, 6], dtype=float32)
 
 Scalar assignments broadcast to every ``True`` entry in ``mask``. For non-scalar
 assignments, ``updates`` must provide at least as many elements as there are
@@ -174,8 +173,8 @@ assignments, ``updates`` must provide at least as many elements as there are
                         [False, False, True]])
    >>> a[mask] = 1.0
    >>> a
-   array([[1.0, 0.0, 1.0],
-          [0.0, 0.0, 1.0]], dtype=float32)
+   array([[1, 0, 1],
+          [0, 0, 1]], dtype=float32)
 
 Boolean masks follow NumPy semantics:
 

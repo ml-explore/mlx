@@ -97,12 +97,13 @@ def tree_map_with_path(
     elif isinstance(tree, (list, tuple)):
         prefix = f"{path}." if path else ""
         TreeType = type(tree)
-        return TreeType(
+        subtrees = (
             tree_map_with_path(
                 fn, child, *(r[i] for r in rest), is_leaf=is_leaf, path=f"{prefix}{i}"
             )
             for i, child in enumerate(tree)
         )
+        return TreeType(*subtrees) if hasattr(tree, "_fields") else TreeType(subtrees)
     elif isinstance(tree, dict):
         prefix = f"{path}." if path else ""
         return {
@@ -207,8 +208,8 @@ def tree_unflatten(tree: Union[List[Tuple[str, Any]], Dict[str, Any]]) -> Any:
         # {"hello": {"world": 42}}
 
     Args:
-        tree (list[tuple[str, Any]] or dict[str, Any]): The flat representation of a Python tree.
-           For instance as returned by :meth:`tree_flatten`.
+        tree (list[tuple[str, Any]] or dict[str, Any]): The flat representation of a
+           Python tree. For instance as returned by :meth:`tree_flatten`.
 
     Returns:
         A Python tree.
@@ -228,16 +229,24 @@ def tree_unflatten(tree: Union[List[Tuple[str, Any]], Dict[str, Any]]) -> Any:
         next_idx = "" if not next_idx else next_idx[0]
         children[current_idx].append((next_idx, value))
 
-    # Assume they are a list and fail to dict if the keys are not all integers
+    # Assume list when all keys are integers.
     try:
-        keys = sorted((int(idx), idx) for idx in children.keys())
-        l = []
-        for i, k in keys:
-            # if i <= len(l), no {} will be appended.
-            l.extend([{} for _ in range(i - len(l))])
-            l.append(tree_unflatten(children[k]))
-        return l
+        keys = {}
+        for idx in children:
+            keys[int(idx)] = idx
+        # Guard against "01" and "1" treated as one key.
+        is_list = len(keys) == len(children)
     except ValueError:
+        is_list = False
+
+    if is_list:
+        items = []
+        for i, k in sorted(keys.items()):
+            # if i <= len(items), no {} will be appended.
+            items.extend([{} for _ in range(i - len(items))])
+            items.append(tree_unflatten(children[k]))
+        return items
+    else:
         return {k: tree_unflatten(v) for k, v in children.items()}
 
 
@@ -285,7 +294,8 @@ def tree_reduce(fn, tree, initializer=None, is_leaf=None):
 
 def tree_merge(tree_a, tree_b, merge_fn=None):
     """Merge two Python trees in one containing the values of both. It can be
-    thought of as a deep dict.update method.
+    thought of as a deep dict.update method. Empty containers are treated as
+    empty subtrees.
 
     Args:
         tree_a (Any): The first Python tree.
@@ -296,9 +306,19 @@ def tree_merge(tree_a, tree_b, merge_fn=None):
         The Python tree containing the values of both ``tree_a`` and
         ``tree_b``.
     """
-    if isinstance(tree_a, (dict, list, tuple)) and len(tree_a) == 0:
+    empty_a = isinstance(tree_a, (dict, list, tuple)) and len(tree_a) == 0
+    empty_b = isinstance(tree_b, (dict, list, tuple)) and len(tree_b) == 0
+
+    if empty_a and empty_b:
+        if type(tree_a) is not type(tree_b):
+            raise ValueError(
+                f"Cannot merge {type(tree_a).__name__} with {type(tree_b).__name__}"
+            )
+        return type(tree_a)()
+
+    if empty_a:
         tree_a = None
-    if isinstance(tree_b, (dict, list, tuple)) and len(tree_b) == 0:
+    if empty_b:
         tree_b = None
     if tree_a is None and tree_b is not None:
         return tree_b
@@ -307,9 +327,8 @@ def tree_merge(tree_a, tree_b, merge_fn=None):
 
     if isinstance(tree_a, (list, tuple)) and isinstance(tree_b, (list, tuple)):
         TreeType = type(tree_a)
-        return TreeType(
-            tree_merge(a, b, merge_fn) for a, b in zip_longest(tree_a, tree_b)
-        )
+        subtrees = (tree_merge(a, b, merge_fn) for a, b in zip_longest(tree_a, tree_b))
+        return TreeType(*subtrees) if hasattr(tree_a, "_fields") else TreeType(subtrees)
     elif isinstance(tree_a, dict) and isinstance(tree_b, dict):
         return {
             k: tree_merge(tree_a.get(k, None), tree_b.get(k, None), merge_fn)

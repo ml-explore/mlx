@@ -17,9 +17,18 @@ struct FloorDivide {
   template <typename T>
   __device__ T operator()(T x, T y) {
     if constexpr (cuda::std::is_integral_v<T>) {
+      auto q = x / y;
+      if constexpr (cuda::std::is_signed_v<T>) {
+        if (x % y != 0 && (x < 0) != (y < 0)) {
+          q -= 1;
+        }
+      }
+      return q;
+    } else if constexpr (is_complex_v<T>) {
+      // Complex is not supported, simply make compiler happy.
       return x / y;
     } else {
-      return cuda::std::trunc(x / y);
+      return cuda::std::floor(x / y);
     }
   }
 };

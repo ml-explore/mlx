@@ -44,10 +44,12 @@ if(MLX_METAL_JIT)
   make_jit_source(binary_two)
   make_jit_source(fft kernels/fft/radix.h kernels/fft/readwrite.h)
   make_jit_source(logsumexp)
+  make_jit_source(cross_entropy)
   make_jit_source(ternary)
   make_jit_source(softmax)
   make_jit_source(scan)
   make_jit_source(sort)
+  make_jit_source(searchsorted kernels/sort.h)
   make_jit_source(
     reduce kernels/reduction/reduce_all.h kernels/reduction/reduce_col.h
     kernels/reduction/reduce_row.h kernels/reduction/reduce_init.h)
@@ -79,23 +81,39 @@ if(MLX_METAL_JIT)
   make_jit_source(quantized kernels/quantized_utils.h)
   make_jit_source(fp_quantized kernels/quantized_utils.h kernels/fp8.h
                   kernels/fp4.h)
+  make_jit_source(gemv)
   make_jit_source(gemv_masked)
 
   make_jit_source(steel/attn/kernels/steel_attention)
 
-  make_jit_source(
-    steel/gemm/gemm_nax kernels/steel/utils.h kernels/steel/gemm/nax.h
-    kernels/steel/gemm/params.h kernels/steel/gemm/transforms.h)
-  make_jit_source(steel/gemm/kernels/steel_gemm_fused_nax)
-  make_jit_source(steel/gemm/kernels/steel_gemm_gather_nax)
-  make_jit_source(steel/gemm/kernels/steel_gemm_splitk_nax)
-  make_jit_source(steel/gemm/kernels/steel_gemm_segmented_nax)
+  if(MLX_METAL_VERSION GREATER_EQUAL 400
+     AND MACOS_SDK_VERSION VERSION_GREATER_EQUAL 26.2
+     AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_GREATER_EQUAL 26.2)
 
-  make_jit_source(quantized_nax kernels/quantized_utils.h)
-  make_jit_source(fp_quantized_nax kernels/quantized_utils.h kernels/fp8.h
-                  kernels/fp4.h)
+    make_jit_source(
+      steel/gemm/gemm_nax kernels/steel/utils.h kernels/steel/gemm/nax.h
+      kernels/steel/gemm/params.h kernels/steel/gemm/transforms.h)
+    make_jit_source(steel/gemm/kernels/steel_gemm_fused_nax)
+    make_jit_source(steel/gemm/kernels/steel_gemm_gather_nax)
+    make_jit_source(steel/gemm/kernels/steel_gemm_splitk_nax)
+    make_jit_source(steel/gemm/kernels/steel_gemm_segmented_nax)
 
-  make_jit_source(steel/attn/kernels/steel_attention_nax)
+    make_jit_source(quantized_nax kernels/quantized_utils.h)
+    make_jit_source(fp_quantized_nax kernels/quantized_utils.h kernels/fp8.h
+                    kernels/fp4.h)
+
+    make_jit_source(steel/attn/kernels/steel_attention_nax)
+    make_jit_source(gated_delta_update_nax kernels/gated_delta_nax_ops.h)
+    make_jit_source(gated_delta_update_nax_vjp kernels/gated_delta_nax_ops.h)
+
+  else()
+    message(
+      WARNING "NAX kernels require Metal 4, macOS SDK >= 26.2, and "
+              "MACOSX_DEPLOYMENT_TARGET >= 26.2 (SDK ${MACOS_SDK_VERSION}, "
+              "CMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}). "
+              "Building without NAX kernels.")
+    target_compile_definitions(mlx PRIVATE MLX_METAL_NO_NAX)
+  endif()
 
 else()
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/nojit_kernels.cpp)
@@ -119,8 +137,10 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/hadamard.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/logsumexp.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/cross_entropy.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/gated_delta_update.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/metal.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized.cpp

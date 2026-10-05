@@ -1,12 +1,17 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/backend/gpu/device_info.h"
+#include "mlx/device.h"
 #include "mlx/memory.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
+
+#ifdef _WIN32
+#include "mlx/backend/cuda/wddm.h"
+#endif
 
 #include <cuda_runtime.h>
 #include <fmt/format.h>
@@ -28,40 +33,22 @@ constexpr int small_block_size = 8;
 // size and small_block_size.
 constexpr int small_pool_size = 4 * page_size;
 
-// Check if running on Windows or Windows Subsystem for Linux
-bool is_windows() {
-#if defined(_WIN32)
-  return true;
-#elif defined(__linux__)
-  // WSL kernels contain "microsoft" or "WSL" in /proc/version
-  static bool is_wsl = []() {
-    std::ifstream version("/proc/version");
-    if (version.is_open()) {
-      std::string line;
-      std::getline(version, line);
-      return line.find("microsoft") != std::string::npos ||
-          line.find("Microsoft") != std::string::npos ||
-          line.find("WSL") != std::string::npos;
-    }
-    return false;
-  }();
-  return is_wsl;
-#else
-  return false;
-#endif
-}
-
 bool supports_managed_memory() {
   static bool managed_memory = []() {
     int device_count = gpu::device_count();
     for (int i = 0; i < device_count; ++i) {
       auto& d = cu::device(i);
-      if (!d.managed_memory()) {
-        return false;
-      }
       // Empirically on Windows (and WSL) if there is no concurrentManagedAccess
       // the managed memory also does not work.
-      if (is_windows() && !d.concurrent_managed_access()) {
+      // The same has been observed on NVIDIA Tegra, typically on Jetson Orin
+      // Nano boards.
+      // NVIDIA documentation describes Windows, WSL, and Tegra as having a
+      // specific unified memory paradigm called "Limited unified memory
+      // support", which corresponds to concurrentManagedAccess = 0.
+      // See:
+      //   https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/understanding-memory.html#table-unified-memory-levels
+      //   https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/unified-memory.html#um-legacy-devices
+      if (!d.concurrent_managed_access()) {
         return false;
       }
     }
@@ -82,9 +69,9 @@ inline void* unified_malloc(size_t size) {
 
 inline void unified_free(void* data) {
   if (supports_managed_memory()) {
-    CHECK_CUDA_ERROR(cudaFree(data));
+    cudaFree(data);
   } else {
-    CHECK_CUDA_ERROR(cudaFreeHost(data));
+    cudaFreeHost(data);
   }
 }
 
@@ -204,7 +191,7 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
   if (!buf) {
     // If we have a lot of memory pressure try to reclaim memory from the cache.
     int64_t mem_to_free =
-        get_active_memory() + get_cache_memory() + size - memory_limit_;
+        get_active_memory() + get_cache_memory() + size - get_memory_limit();
     if (mem_to_free > 0) {
       buffer_cache_.release_cached_buffers(mem_to_free);
     }
@@ -318,7 +305,7 @@ void CudaAllocator::move_to_unified_memory(
   buf.device = -1;
 }
 
-// This must be called with mutex_ aquired
+// This must be called with mutex_ acquired
 void CudaAllocator::free_cuda_buffer(CudaBuffer* buf) {
   if (scalar_pool_.in_pool(buf)) {
     scalar_pool_.free(buf);
@@ -337,9 +324,9 @@ void CudaAllocator::free_async(CudaBuffer& buf, cudaStream_t stream) {
       if (!stream) {
         stream = free_streams_[buf.device];
       }
-      CHECK_CUDA_ERROR(cudaFreeAsync(buf.data, stream));
+      cudaFreeAsync(buf.data, stream);
     } else {
-      CHECK_CUDA_ERROR(cudaFree(buf.data));
+      cudaFree(buf.data);
     }
   }
 }
@@ -358,7 +345,13 @@ void CudaAllocator::reset_peak_memory() {
 }
 
 size_t CudaAllocator::get_memory_limit() {
+#ifdef _WIN32
+  int device = default_device().index;
+  return std::min(
+      memory_limit_, get_wddm_memory_limit(device, mem_pools_[device]));
+#else
   return memory_limit_;
+#endif
 }
 
 size_t CudaAllocator::set_memory_limit(size_t limit) {
@@ -378,8 +371,17 @@ size_t CudaAllocator::set_cache_limit(size_t limit) {
 }
 
 void CudaAllocator::clear_cache() {
-  std::lock_guard lk(mutex_);
-  buffer_cache_.clear();
+  {
+    std::lock_guard lk(mutex_);
+    buffer_cache_.clear();
+  }
+  for (size_t i = 0; i < mem_pools_.size(); ++i) {
+    if (mem_pools_[i]) {
+      cu::device(static_cast<int>(i)).make_current();
+      CHECK_CUDA_ERROR(cudaStreamSynchronize(free_streams_[i]));
+      CHECK_CUDA_ERROR(cudaMemPoolTrimTo(mem_pools_[i], 0));
+    }
+  }
 }
 
 CudaAllocator& allocator() {
@@ -414,6 +416,10 @@ void* Buffer::raw_ptr() {
   auto& cbuf = *static_cast<cu::CudaBuffer*>(ptr_);
   cu::allocator().move_to_unified_memory(cbuf);
   return cbuf.data;
+}
+
+bool can_reuse_alien_buffer(void* ptr) {
+  return true;
 }
 
 } // namespace allocator

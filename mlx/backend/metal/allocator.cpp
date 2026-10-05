@@ -7,6 +7,7 @@
 
 #include <mach/vm_page_size.h>
 #include <unistd.h>
+#include <cassert>
 #include <cstdlib>
 
 namespace mlx::core {
@@ -24,7 +25,17 @@ void* Buffer::raw_ptr() {
   if (!ptr_) {
     return nullptr;
   }
-  return static_cast<MTL::Buffer*>(ptr_)->contents();
+  auto* buf = static_cast<MTL::Buffer*>(ptr_);
+  assert(buf->storageMode() != MTL::StorageModePrivate);
+  return buf->contents();
+}
+
+bool can_reuse_alien_buffer(void* ptr) {
+  if (!ptr) {
+    return true;
+  }
+  auto* buf = static_cast<MTL::Buffer*>(ptr);
+  return buf->storageMode() != MTL::StorageModePrivate;
 }
 
 } // namespace allocator
@@ -33,13 +44,13 @@ namespace metal {
 
 MetalAllocator::MetalAllocator(Device& d)
     : device_(d.mtl_device()),
-      residency_set_(d.residency_set()),
+      residency_sets_(d.residency_sets()),
       buffer_cache_(
           vm_page_size,
           [](MTL::Buffer* buf) { return buf->length(); },
           [this](MTL::Buffer* buf) {
             if (!buf->heap()) {
-              residency_set_.erase(buf);
+              residency_sets_.erase(buf);
             }
             auto pool = metal::new_scoped_memory_pool();
             buf->release();
@@ -62,7 +73,7 @@ MetalAllocator::MetalAllocator(Device& d)
   heap_desc->setResourceOptions(resource_options);
   heap_desc->setSize(heap_size_);
   heap_ = NS::TransferPtr(device_->newHeap(heap_desc));
-  residency_set_.insert(heap_.get());
+  residency_sets_.insert(heap_.get());
 }
 
 MetalAllocator::~MetalAllocator() = default;
@@ -89,7 +100,7 @@ size_t MetalAllocator::get_memory_limit() {
 size_t MetalAllocator::set_wired_limit(size_t limit) {
   std::unique_lock lk(mutex_);
   std::swap(limit, wired_limit_);
-  residency_set_.resize(wired_limit_);
+  residency_sets_.resize(wired_limit_);
   return limit;
 };
 
@@ -148,7 +159,7 @@ Buffer MetalAllocator::malloc(size_t size) {
     lk.lock();
     num_resources_++;
     if (!buf->heap()) {
-      residency_set_.insert(buf);
+      residency_sets_.insert(buf);
     }
   }
 
@@ -181,7 +192,7 @@ void MetalAllocator::free(Buffer buffer) {
   } else {
     num_resources_--;
     if (!buf->heap()) {
-      residency_set_.erase(buf);
+      residency_sets_.erase(buf);
     }
     lk.unlock();
     auto pool = metal::new_scoped_memory_pool();
@@ -199,7 +210,7 @@ Buffer MetalAllocator::make_buffer(void* ptr, size_t size) {
     return Buffer{nullptr};
   }
   std::unique_lock lk(mutex_);
-  residency_set_.insert(buf);
+  residency_sets_.insert(buf);
   active_memory_ += buf->length();
   peak_memory_ = std::max(peak_memory_, active_memory_);
   num_resources_++;
@@ -214,7 +225,7 @@ void MetalAllocator::release(Buffer buffer) {
   std::unique_lock lk(mutex_);
   active_memory_ -= buf->length();
   num_resources_--;
-  residency_set_.erase(buf);
+  residency_sets_.erase(buf);
   lk.unlock();
   auto pool = metal::new_scoped_memory_pool();
   buf->release();

@@ -166,6 +166,11 @@ struct MPIWrapper {
     if (!is_available()) {
       return false;
     }
+    // MPI_Init is an error to call twice, and init() can run more than once
+    // when it returns without a group.
+    if (initialized_) {
+      return true;
+    }
     bool success = init(nullptr, nullptr) == MPI_SUCCESS;
 
     // Initialize custom types and ops
@@ -491,6 +496,19 @@ std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
   if (!mpi().init_safe()) {
     if (strict) {
       throw std::runtime_error("Cannot initialize MPI");
+    }
+    return nullptr;
+  }
+
+  // Open MPI initializes a world of size 1 for a program that was not started
+  // with mpirun, which is not a distributed group.
+  int size = 1;
+  mpi().size(mpi().world(), &size);
+  if (size <= 1) {
+    if (strict) {
+      throw std::runtime_error(
+          "[mpi] The world has a single process. Launch with mpirun to "
+          "initialize the mpi backend.");
     }
     return nullptr;
   }

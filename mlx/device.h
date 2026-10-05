@@ -5,6 +5,7 @@
 #include "mlx/api.h"
 
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <variant>
 
@@ -27,7 +28,7 @@ struct MLX_API Device {
   // TODO: Use default three-way comparison when it gets supported in XCode.
   bool operator==(const Device&) const = default;
   bool operator<(const Device& rhs) const {
-    return type < rhs.type || index < rhs.index;
+    return std::tie(type, index) < std::tie(rhs.type, rhs.index);
   }
 };
 

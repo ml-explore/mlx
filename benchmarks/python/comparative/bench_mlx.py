@@ -189,24 +189,10 @@ def relu(x):
     mx.eval(y)
 
 
-def leaky_relu(x: mx.array):
-    y = x
-    for i in range(100):
-        y = nn.leaky_relu(y)
-    mx.eval(y)
-
-
 def prelu(x: mx.array):
     y = x
     for i in range(100):
         y = nn.prelu(y, mx.ones(1))
-    mx.eval(y)
-
-
-def softplus(x: mx.array):
-    y = x
-    for i in range(100):
-        y = nn.softplus(y)
     mx.eval(y)
 
 
@@ -301,7 +287,6 @@ def rope(x):
     *_, N, D = x.shape
     ys = []
     for i in range(10):
-        shape = x.shape
         x = mx.reshape(x, (-1, N, D))
         positions = mx.arange(N)
         freqs = mx.exp(mx.arange(0.0, D // 2) / math.log(10000 / (D // 2 - 1)))

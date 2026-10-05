@@ -1,12 +1,11 @@
 # Copyright © 2023-2024 Apple Inc.
 
-import gc
 import operator
-import os
 import pickle
 import platform
 import sys
 import unittest
+import warnings
 import weakref
 from copy import copy, deepcopy
 from itertools import permutations
@@ -14,7 +13,6 @@ from itertools import permutations
 import mlx.core as mx
 import mlx_tests
 import numpy as np
-import psutil
 
 try:
     import tensorflow as tf
@@ -23,10 +21,19 @@ try:
 except ImportError:
     has_tf = False
 
+
 try:
     import torch
 
-    has_torch_mps = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+    torch_version = [int(v) for v in torch.__version__.split("+")[0].split(".")]
+    is_torch_212 = torch_version[0] > 2 or (
+        torch_version[0] == 2 and torch_version[1] >= 12
+    )
+    has_torch_mps = (
+        is_torch_212
+        and hasattr(torch.backends, "mps")
+        and torch.backends.mps.is_available()
+    )
 except ImportError:
     torch = None
     has_torch_mps = False
@@ -39,6 +46,37 @@ class TestVersion(mlx_tests.MLXTestCase):
         self.assertGreaterEqual(len(vnums), 3)
         v = ".".join(str(int(vn)) for vn in vnums[:3])
         self.assertEqual(v, mx.__version__[: len(v)])
+
+
+class TestArrayNamespsceInfo(mlx_tests.MLXTestCase):
+    def test(self):
+        namespace = mx.__array_namespace_info__()
+
+        self.assertEqual(namespace.default_device(), mx.default_device())
+        self.assertEqual(
+            namespace.default_dtypes(),
+            {
+                "real floating": mx.float32,
+                "complex floating": mx.complex64,
+                "integral": mx.int32,
+                "indexing": mx.int32,
+            },
+        )
+        self.assertEqual(
+            namespace.dtypes(device=mx.Device(mx.cpu), kind="real floating"),
+            {"float32": mx.float32, "float64": mx.float64},
+        )
+        if mx.is_available(mx.gpu):
+            self.assertEqual(
+                namespace.dtypes(device=mx.Device(mx.gpu), kind="real floating"),
+                {"float32": mx.float32},
+            )
+        self.assertEqual(
+            namespace.dtypes(kind=("bool", "complex floating")),
+            {"bool": mx.bool_, "complex64": mx.complex64},
+        )
+        with self.assertRaises(ValueError):
+            namespace.dtypes(kind="invalid")
 
 
 class TestDtypes(mlx_tests.MLXTestCase):
@@ -101,6 +139,30 @@ class TestDtypes(mlx_tests.MLXTestCase):
                 self.assertListEqual(list(z.shape), list(x.shape))
                 self.assertListEqual(list(z.shape), list(y.shape))
 
+    def test_index_conversion(self):
+        for dtype in [
+            mx.uint8,
+            mx.uint16,
+            mx.uint32,
+            mx.uint64,
+            mx.int8,
+            mx.int16,
+            mx.int32,
+            mx.int64,
+        ]:
+            with self.subTest(dtype=dtype):
+                self.assertEqual(operator.index(mx.array(2, dtype)), 2)
+                self.assertEqual(list(range(mx.array(3, dtype))), [0, 1, 2])
+
+    def test_index_conversion_invalid(self):
+        for dtype in [mx.float16, mx.float32, mx.bfloat16, mx.complex64, mx.bool_]:
+            with self.subTest(dtype=dtype):
+                with self.assertRaises(TypeError):
+                    operator.index(mx.array(2, dtype))
+
+                with self.assertRaises(TypeError):
+                    list(range(mx.array(3, dtype)))
+
     def test_finfo(self):
         with self.assertRaises(ValueError):
             mx.finfo(mx.int32)
@@ -108,12 +170,32 @@ class TestDtypes(mlx_tests.MLXTestCase):
         self.assertEqual(mx.finfo(mx.float32).min, np.finfo(np.float32).min)
         self.assertEqual(mx.finfo(mx.float32).max, np.finfo(np.float32).max)
         self.assertEqual(mx.finfo(mx.float32).eps, np.finfo(np.float32).eps)
+        self.assertEqual(mx.finfo(mx.float32).bits, np.finfo(np.float32).bits)
+        self.assertEqual(
+            mx.finfo(mx.float32).smallest_normal,
+            float(np.finfo(np.float32).smallest_normal),
+        )
         self.assertEqual(mx.finfo(mx.float32).dtype, mx.float32)
 
         self.assertEqual(mx.finfo(mx.float16).min, np.finfo(np.float16).min)
         self.assertEqual(mx.finfo(mx.float16).max, np.finfo(np.float16).max)
         self.assertEqual(mx.finfo(mx.float16).eps, np.finfo(np.float16).eps)
+        self.assertEqual(mx.finfo(mx.float16).bits, np.finfo(np.float16).bits)
+        self.assertEqual(
+            mx.finfo(mx.float16).smallest_normal,
+            float(np.finfo(np.float16).smallest_normal),
+        )
         self.assertEqual(mx.finfo(mx.float16).dtype, mx.float16)
+
+        # bfloat16 has no numpy equivalent; check against known IEEE values.
+        self.assertEqual(mx.finfo(mx.bfloat16).bits, 16)
+        self.assertAlmostEqual(
+            mx.finfo(mx.bfloat16).smallest_normal, 2.0**-126, places=40
+        )
+
+        # finfo of a complex type reports its real component (array API).
+        self.assertEqual(mx.finfo(mx.complex64).dtype, mx.float32)
+        self.assertEqual(mx.finfo(mx.complex64).bits, 32)
 
     def test_iinfo(self):
         with self.assertRaises(ValueError):
@@ -126,6 +208,55 @@ class TestDtypes(mlx_tests.MLXTestCase):
         self.assertEqual(mx.iinfo(mx.uint32).min, np.iinfo(np.uint32).min)
         self.assertEqual(mx.iinfo(mx.uint32).max, np.iinfo(np.uint32).max)
         self.assertEqual(mx.iinfo(mx.int8).dtype, mx.int8)
+
+    def test_result_type(self):
+        self.assertEqual(mx.result_type(mx.int8, mx.int16), mx.int16)
+        self.assertEqual(mx.result_type(mx.float32, mx.float64), mx.float64)
+        # Accepts arrays as well as dtypes, and more than two inputs.
+        self.assertEqual(
+            mx.result_type(mx.array([1], dtype=mx.int8), mx.int16, mx.int32),
+            mx.int32,
+        )
+        self.assertEqual(
+            mx.result_type(mx.array(1.0), mx.array(1, dtype=mx.int32)),
+            mx.float32,
+        )
+        with self.assertRaises(ValueError):
+            mx.result_type()
+
+    def test_can_cast(self):
+        self.assertTrue(mx.can_cast(mx.int8, mx.int16))
+        self.assertFalse(mx.can_cast(mx.int16, mx.int8))
+        self.assertTrue(mx.can_cast(mx.float32, mx.float64))
+        self.assertFalse(mx.can_cast(mx.float64, mx.float32))
+        self.assertTrue(mx.can_cast(mx.uint8, mx.int16))
+        self.assertFalse(mx.can_cast(mx.uint16, mx.int16))
+        # Accepts an array for the source.
+        self.assertTrue(mx.can_cast(mx.array([1, 2, 3], dtype=mx.int8), mx.int32))
+
+    def test_isdtype(self):
+        self.assertTrue(mx.isdtype(mx.int32, mx.int32))
+        self.assertFalse(mx.isdtype(mx.int32, mx.int16))
+        self.assertTrue(mx.isdtype(mx.int32, "signed integer"))
+        self.assertTrue(mx.isdtype(mx.uint8, "unsigned integer"))
+        self.assertFalse(mx.isdtype(mx.uint8, "signed integer"))
+        self.assertTrue(mx.isdtype(mx.int16, "integral"))
+        self.assertTrue(mx.isdtype(mx.float32, "real floating"))
+        self.assertTrue(mx.isdtype(mx.complex64, "complex floating"))
+        self.assertTrue(mx.isdtype(mx.bool_, "bool"))
+        self.assertFalse(mx.isdtype(mx.bool_, "numeric"))
+        self.assertTrue(mx.isdtype(mx.float32, "numeric"))
+        # Tuple of kinds (any match).
+        self.assertTrue(mx.isdtype(mx.float32, ("integral", "real floating")))
+        self.assertTrue(mx.isdtype(mx.int8, (mx.int8, mx.int16)))
+        self.assertFalse(mx.isdtype(mx.int32, ("bool", "real floating")))
+        with self.assertRaises(ValueError):
+            mx.isdtype(mx.int32, "not a kind")
+
+        # Reachable through the array API namespace.
+        xp = mx.array(1.0).__array_namespace__()
+        for name in ("result_type", "can_cast", "isdtype", "vecdot"):
+            self.assertTrue(hasattr(xp, name), msg=name)
 
 
 class TestEquality(mlx_tests.MLXTestCase):
@@ -202,7 +333,7 @@ class TestInequality(mlx_tests.MLXTestCase):
     def test_dlx_device_type(self):
         a = mx.array([1, 2, 3])
         device_type, device_id = a.__dlpack_device__()
-        self.assertIn(device_type, [1, 8, 13])
+        self.assertIn(device_type, [1, 8])
         self.assertEqual(device_id, 0)
 
         if device_type == 8:
@@ -360,6 +491,27 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.dtype, mx.int32)
         self.assertEqual(x.tolist(), [1, 2, 3])
 
+    def test_matrix_transpose(self):
+        x = mx.array([[1, 2], [3, 4]])
+        self.assertEqual(x.mT.tolist(), [[1, 3], [2, 4]])
+        self.assertEqual(mx.matrix_transpose(x).tolist(), [[1, 3], [2, 4]])
+
+        x = mx.arange(24).reshape((2, 3, 4))
+        self.assertEqual(x.mT.shape, (2, 4, 3))
+        self.assertEqualArray(x.mT, x.transpose((0, 2, 1)))
+        self.assertEqualArray(x.mT.mT, x)
+
+        self.assertEqual(mx.matrix_transpose(x).shape, (2, 4, 3))
+        self.assertEqualArray(mx.matrix_transpose(x), x.transpose((0, 2, 1)))
+
+        x = mx.array([1, 2, 3])
+
+        with self.assertRaises(ValueError):
+            x.mT
+
+        with self.assertRaises(ValueError):
+            mx.matrix_transpose(x)
+
     def test_bool_conversion(self):
         x = mx.array(True)
         self.assertTrue(x)
@@ -446,6 +598,33 @@ class TestArray(mlx_tests.MLXTestCase):
         out = mx.array([x], dtype=mx.float64).item()
         self.assertEqual(out, x)
 
+    def test_construction_from_lists_wide_ints(self):
+        # A python int that does not fit in int32 widens to int64, the same
+        # rule the scalar path already uses. It used to raise std::bad_cast.
+        for value in (2**31, 2**40, -(2**31) - 1, -(2**40)):
+            for make in (
+                lambda v: [v],
+                lambda v: (v,),
+                lambda v: [[v]],
+                lambda v: [v, 1],
+            ):
+                x = mx.array(make(value))
+                self.assertEqual(x.dtype, mx.int64, msg=f"{value} {make(value)}")
+                self.assertEqual(x.flatten()[0].item(), value)
+                self.assertEqual(mx.array(value).dtype, mx.int64)
+
+        # Values that still fit keep int32, including both boundaries.
+        for value in (0, 1, 2**31 - 1, -(2**31)):
+            x = mx.array([value])
+            self.assertEqual(x.dtype, mx.int32, msg=str(value))
+            self.assertEqual(x[0].item(), value)
+
+        # An explicit dtype still wins.
+        self.assertEqual(mx.array([2**40], mx.int64).dtype, mx.int64)
+        self.assertEqual(mx.array([1, 2], mx.int64).dtype, mx.int64)
+        # A float in the list still makes it float, not int64.
+        self.assertEqual(mx.array([2**40, 1.5]).dtype, mx.float32)
+
     def test_construction_from_lists_of_mlx_arrays(self):
         dtypes = [
             mx.bool_,
@@ -469,7 +648,8 @@ class TestArray(mlx_tests.MLXTestCase):
             expected = mx.stack([x, y], axis=0)
             self.assertEqualArray(z, expected)
 
-            # check heterogeneous construction with mlx arrays and python primitive types
+            # check heterogeneous construction with mlx arrays and python primitive
+            # types
             x, y = mx.array([True], x_t), mx.array([False], y_t)
             z = mx.array([[x, [2.0]], [[3.0], y]])
             expected = mx.array([[[x.item()], [2.0]], [[3.0], [y.item()]]], z.dtype)
@@ -882,10 +1062,13 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual((a > 1).tolist(), [False, False, True])
         self.assertEqual((a >= 1).tolist(), [False, True, True])
 
-    def test_array_neg(self):
+    def test_array_unary_ops(self):
         a = mx.array([-1.0, 4.0, 0.0])
 
         self.assertEqual((-a).tolist(), [1.0, -4.0, 0.0])
+
+        self.assertEqual((+a).tolist(), [-1.0, 4.0, 0.0])
+        assert +a is not a
 
     def test_array_type_cast(self):
         a = mx.array([0.1, 2.3, -1.3])
@@ -908,6 +1091,10 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.tolist(), [1.0, 2.0])
         self.assertEqual(y.tolist(), [3.0, 4.0])
         self.assertEqual(z.tolist(), [5.0, 6.0])
+
+        a = mx.array(3)
+        with self.assertRaises(TypeError):
+            list(a)
 
     def test_array_pickle(self):
         dtypes = [
@@ -1071,7 +1258,7 @@ class TestArray(mlx_tests.MLXTestCase):
             idx_mlx = [
                 mx.array(idx) if isinstance(idx, np.ndarray) else idx for idx in idx_np
             ]
-            slice_mlx = arr_mlx[tuple(idx_mlx)]
+            _slice_mlx = arr_mlx[tuple(idx_mlx)]
             self.assertTrue(
                 np.array_equal(arr_np[tuple(idx_np)], arr_mlx[tuple(idx_mlx)])
             )
@@ -1132,12 +1319,19 @@ class TestArray(mlx_tests.MLXTestCase):
         a_mlx = mx.array(a_np)
         self.assertTrue(np.array_equal(a_np[2:-1, 0], np.array(a_mlx[2:-1, 0])))
 
+        # Ellipsis with more trailing indices than dimensions
+        a_mlx = mx.array([1, 2, 3])
+        with self.assertRaises(ValueError):
+            a_mlx[..., 0, 0]
+        with self.assertRaises(ValueError):
+            a_mlx[..., 0, 0] = 5
+
     def test_indexing_grad(self):
         x = mx.array([[1, 2], [3, 4]]).astype(mx.float32)
         ind = mx.array([0, 1, 0]).astype(mx.float32)
 
         def index_fn(x, ind):
-            return x[ind.astype(mx.int32)].sum()
+            return x[mx.stop_gradient(ind.astype(mx.int32))].sum()
 
         grad_x, grad_ind = mx.grad(index_fn, argnums=(0, 1))(x, ind)
         expected = mx.array([[2, 2], [1, 1]])
@@ -1175,6 +1369,56 @@ class TestArray(mlx_tests.MLXTestCase):
         a[0:2] = 3
         self.assertEqual(a.tolist(), [3, 3, 1])
 
+        # Assigning through a bare Ellipsis, like a[:] and a[(...,)]
+        e = mx.zeros((2, 3), mx.int32)
+        e[...] = 5
+        self.assertEqual(e.tolist(), [[5, 5, 5], [5, 5, 5]])
+
+        # Broadcasting an array update through Ellipsis
+        e[...] = mx.array([1, 2, 3])
+        self.assertEqual(e.tolist(), [[1, 2, 3], [1, 2, 3]])
+
+        e[...] = mx.zeros((2, 3), mx.int32)
+        self.assertEqual(e.tolist(), [[0, 0, 0], [0, 0, 0]])
+
+        # Leading singleton dimensions of the update are squeezed
+        e[...] = mx.array([[[1, 2, 3], [4, 5, 6]]])
+        self.assertEqual(e.tolist(), [[1, 2, 3], [4, 5, 6]])
+
+        # The target keeps its leading dimension of size 1
+        h = mx.zeros((1, 3), mx.int32)
+        h[...] = mx.array([[[1, 2, 3]]])
+        self.assertEqual(h.tolist(), [[1, 2, 3]])
+
+        # a[...] assigns the same values as a[(...,)]
+        f = mx.zeros((3,), mx.int32)
+        g = mx.zeros((3,), mx.int32)
+        f[...] = mx.array([[1, 2, 3]])
+        g[(...,)] = mx.array([[1, 2, 3]])
+        self.assertEqual(f.tolist(), [1, 2, 3])
+        self.assertEqual(f.tolist(), g.tolist())
+
+        # Scalar array
+        e = mx.array(0)
+        e[...] = 7
+        self.assertEqual(e.item(), 7)
+
+        e[...] = mx.array([[9]])
+        self.assertEqual(e.tolist(), 9)
+
+        # Shapes that cannot broadcast are still rejected
+        e = mx.zeros((2, 3), mx.int32)
+        with self.assertRaises(ValueError):
+            e[...] = mx.array([1, 2])
+
+        # The squeeze stops at the first dimension that is not 1
+        with self.assertRaises(ValueError):
+            e[...] = mx.zeros((2, 1, 3), mx.int32)
+
+        # A squeezed update that still does not broadcast is rejected
+        with self.assertRaises(ValueError):
+            e[...] = mx.zeros((1, 4), mx.int32)
+
         a[0:3] = 4
         self.assertEqual(a.tolist(), [4, 4, 4])
 
@@ -1183,6 +1427,13 @@ class TestArray(mlx_tests.MLXTestCase):
 
         a[0:1] = mx.array([1])
         self.assertEqual(a.tolist(), [1, 4, 4])
+
+        # Regression test: a negative integer index after a None
+        # (newaxis) used to be normalized against the wrong axis size,
+        # silently writing nothing instead of updating the last row.
+        b = mx.zeros((3, 4))
+        b[None, -1] = 9
+        self.assertEqual(b.tolist(), [[0, 0, 0, 0], [0, 0, 0, 0], [9, 9, 9, 9]])
 
         with self.assertRaises(ValueError):
             a[0:1] = mx.array([2, 3])
@@ -1480,6 +1731,37 @@ class TestArray(mlx_tests.MLXTestCase):
         a = a.at[1:3, :, 0].minimum(update)
         self.assertEqualArray(a[1:3, :, 0], mx.minimum(a[1:3, :, 0], update))
 
+    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
+    def test_array_at_complex_add_gpu(self):
+        n = 4096
+        base = [1 + 10j, 2 + 20j, 3 + 30j, 4 + 40j]
+
+        with mx.stream(mx.gpu):
+            a = mx.array(base, dtype=mx.complex64)
+            update_indices = mx.full((n,), 3, dtype=mx.int32)
+            updates = mx.full((n,), 1 + 3j, dtype=mx.complex64)
+            out = a.at[update_indices].add(updates)
+            mx.eval(out)
+
+            indices = mx.array([1, 1, 3])
+            x = mx.array([1 + 0j, 3 + 4j, 6 + 8j, 5 + 12j], dtype=mx.complex64)
+
+            def loss(z):
+                return mx.square(mx.abs(z[indices])).sum()
+
+            _, gradient = mx.value_and_grad(loss)(x)
+            mx.eval(gradient)
+
+        expected = base.copy()
+        expected[-1] += n * (1 + 3j)
+        self.assertEqual(out.tolist(), expected)
+        np.testing.assert_allclose(
+            np.array(gradient),
+            np.array([0, 12 + 16j, 0, 10 + 24j], dtype=np.complex64),
+            rtol=0,
+            atol=1e-5,
+        )
+
     def test_array_at_slice_update_extensive(self):
         # Test with transposed inputs
         a = mx.zeros((4, 5))
@@ -1652,6 +1934,33 @@ class TestArray(mlx_tests.MLXTestCase):
         b_mx = a_mx[::-1, ::-3, ::-2]
         self.assertTrue(np.array_equal(b_np, b_mx))
 
+    def test_slice_bounds_with_array_index(self):
+        # Out-of-range slice bounds must be clamped the same way NumPy clamps
+        # them when the slice is combined with an array index.
+        a_np = np.arange(20, dtype=np.int32).reshape(4, 5)
+        a_mx = mx.array(a_np)
+        idx_np = np.array([0, 1])
+        idx_mx = mx.array([0, 1], dtype=mx.uint32)
+
+        bounds = [None, -100, -6, -4, -1, 0, 1, 3, 4, 6, 100]
+        steps = [None, 1, 2, 3, -1, -2, -3]
+
+        for start in bounds:
+            for stop in bounds:
+                for step in steps:
+                    s = slice(start, stop, step)
+                    with self.subTest(start=start, stop=stop, step=step):
+                        self.assertTrue(
+                            np.array_equal(a_np[s, idx_np], a_mx[s, idx_mx])
+                        )
+
+                        # Same clamping applies when assigning through the slice
+                        u_np = a_np.copy()
+                        u_mx = mx.array(a_np)
+                        u_np[s, idx_np] = 0
+                        u_mx[s, idx_mx] = 0
+                        self.assertTrue(np.array_equal(u_np, u_mx))
+
     def test_api(self):
         x = mx.array(np.random.rand(10, 10, 10))
         ops = [
@@ -1771,7 +2080,8 @@ class TestArray(mlx_tests.MLXTestCase):
                 self.assertEqual(mv_mx.shape, mv_np.shape, f"{mlx_dtype}{np_dtype}")
                 # correct buffer format for 8 byte (unsigned) 'long long' is Q/q, see
                 # https://docs.python.org/3.10/library/struct.html#format-characters
-                # numpy returns L/l, as 'long' is equivalent to 'long long' on 64bit machines, so q and l are equivalent
+                # numpy returns L/l, as 'long' is equivalent to 'long long' on 64bit
+                # machines, so q and l are equivalent
                 # see https://github.com/pybind/pybind11/issues/1908
                 if np_dtype == np.uint64:
                     self.assertEqual(mv_mx.format, "Q", f"{mlx_dtype}{np_dtype}")
@@ -1800,11 +2110,10 @@ class TestArray(mlx_tests.MLXTestCase):
         mv_mx = memoryview(a_mx)
         self.assertEqual(mv_mx.strides, (8, 2))
         self.assertEqual(mv_mx.shape, (3, 4))
-        self.assertEqual(mv_mx.format, "B")
-        with self.assertRaises(RuntimeError) as cm:
+        self.assertIn(mv_mx.format, "bfloat16")
+        with self.assertRaises(ValueError) as cm:
             np.array(a_mx)
-        e = cm.exception
-        self.assertTrue("Item size 2 for PEP 3118 buffer format string" in str(e))
+        self.assertIn("bfloat16", str(cm.exception))
 
         # Test buffer protocol with non-arrays ie bytes
         a = ord("a") * 257 + mx.arange(10).astype(mx.int16)
@@ -1817,6 +2126,15 @@ class TestArray(mlx_tests.MLXTestCase):
             self.assertEqual(b"aaaaaaaaaa", ab[::2])
             self.assertEqual(b"abcdefghij", ab[1::2])
 
+        # Test bytes on non-contiguous arrays
+        a = mx.arange(10, dtype=mx.uint8)
+        self.assertEqual(bytes(a[::2]), b"\x00\x02\x04\x06\x08")
+        self.assertEqual(bytes(a[::-1]), b"\x09\x08\x07\x06\x05\x04\x03\x02\x01\x00")
+        b = mx.arange(6, dtype=mx.int32).reshape(2, 3).T
+        self.assertEqual(bytes(b), np.array(b).tobytes())
+        c = mx.broadcast_to(mx.array([1, 2], dtype=mx.uint8), (3, 2))
+        self.assertEqual(bytes(c), np.array(c).tobytes())
+
     def test_buffer_protocol_ref_counting(self):
         a = mx.arange(3)
         wr = weakref.ref(a)
@@ -1824,8 +2142,14 @@ class TestArray(mlx_tests.MLXTestCase):
         mv = memoryview(a)
         a = None
         self.assertIsNotNone(wr())
-        mv = None
+        del mv
         self.assertIsNone(wr())
+
+    def test_buffer_protocol_eval_error(self):
+        # Errors from evaluating the array are raised instead of aborting
+        a = mx.linalg.inv(mx.zeros((2, 2)), stream=mx.cpu)
+        with self.assertRaises(RuntimeError):
+            memoryview(a)
 
     def test_array_view_ref_counting(self):
         a = mx.arange(3)
@@ -1834,7 +2158,7 @@ class TestArray(mlx_tests.MLXTestCase):
         a_np = np.array(a, copy=False)
         a = None
         self.assertIsNotNone(wr())
-        a_np = None
+        del a_np
         self.assertIsNone(wr())
 
     def test_create_from_buffer(self):
@@ -2034,33 +2358,394 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(z.item(), 3)
 
     def test_dlpack(self):
+        class CpuDLPack:
+            def __init__(self, array):
+                self.array = array
+
+            def __dlpack_device__(self):
+                return (1, 0)
+
+            def __dlpack__(self, *args, **kwargs):
+                kwargs["dl_device"] = (1, 0)
+                return self.array.__dlpack__(*args, **kwargs)
+
         x = mx.array(1, dtype=mx.int32)
-        y = np.from_dlpack(x)
+        y = np.from_dlpack(CpuDLPack(x))
         self.assertTrue(mx.array_equal(y, x))
 
         x = mx.array([[1.0, 2.0], [3.0, 4.0]])
-        y = np.from_dlpack(x)
+        y = np.from_dlpack(CpuDLPack(x))
         self.assertTrue(mx.array_equal(y, x))
 
         x = mx.arange(16).reshape(4, 4)
         x = x[::2, ::2]
-        y = np.from_dlpack(x)
+        y = np.from_dlpack(CpuDLPack(x))
         self.assertTrue(mx.array_equal(y, x))
 
+    def test_from_dlpack_cpu(self):
+        x = np.arange(3, dtype=np.float32)
+
+        # copy=None may adopt the buffer or copy; either way the values match
+        # the source at import time.
+        y = mx.from_dlpack(x)
+        self.assertEqual(y.tolist(), [0.0, 1.0, 2.0])
+
+        # copy=True always copies, so later mutations of the source are not seen.
+        y = mx.from_dlpack(x, copy=True)
+        x += 10
+        self.assertEqual(y.tolist(), [0.0, 1.0, 2.0])
+
+        # copy=False adopts the buffer when possible and raises otherwise; it
+        # must never silently copy.
+        x = np.arange(3, dtype=np.float32)
+        try:
+            y = mx.from_dlpack(x, copy=False)
+            x += 10
+        except ValueError:
+            pass
+        else:
+            self.assertEqual(y.tolist(), [10.0, 11.0, 12.0])
+
+    def test_dlpack_cpu_dtype_mapping(self):
+        class CpuDLPack:
+            def __init__(self, array):
+                self.array = array
+
+            def __dlpack_device__(self):
+                return (1, 0)
+
+            def __dlpack__(self, *args, **kwargs):
+                kwargs["dl_device"] = (1, 0)
+                return self.array.__dlpack__(*args, **kwargs)
+
+        dlpack_to_mlx = [
+            (np.bool_, mx.bool_),
+            (np.uint8, mx.uint8),
+            (np.uint16, mx.uint16),
+            (np.uint32, mx.uint32),
+            (np.uint64, mx.uint64),
+            (np.int8, mx.int8),
+            (np.int16, mx.int16),
+            (np.int32, mx.int32),
+            (np.int64, mx.int64),
+            (np.float16, mx.float16),
+            (np.float32, mx.float32),
+            (np.float64, mx.float32),
+            (np.complex64, mx.complex64),
+            (np.complex128, mx.complex64),
+        ]
+        for np_dtype, mlx_dtype in dlpack_to_mlx:
+            with self.subTest(direction="import", dtype=np_dtype):
+                x = np.ones(3, dtype=np_dtype)
+                y = mx.from_dlpack(x)
+                self.assertEqual(y.dtype, mlx_dtype)
+
+        if torch is not None:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                x = torch.ones(3, dtype=torch.complex32)
+            with self.assertRaises(ValueError):
+                mx.from_dlpack(x)
+
+        mlx_to_dlpack = [
+            (mx.bool_, np.bool_),
+            (mx.uint8, np.uint8),
+            (mx.uint16, np.uint16),
+            (mx.uint32, np.uint32),
+            (mx.uint64, np.uint64),
+            (mx.int8, np.int8),
+            (mx.int16, np.int16),
+            (mx.int32, np.int32),
+            (mx.int64, np.int64),
+            (mx.float16, np.float16),
+            (mx.float32, np.float32),
+            (mx.complex64, np.complex64),
+        ]
+        for mlx_dtype, np_dtype in mlx_to_dlpack:
+            with self.subTest(direction="export", dtype=mlx_dtype):
+                x = mx.ones((3,), dtype=mlx_dtype)
+                y = np.from_dlpack(CpuDLPack(x))
+                self.assertEqual(y.dtype, np_dtype)
+
+        if torch is not None and has_torch_mps:
+            x = mx.ones((3,), dtype=mx.bfloat16)
+            y = torch.from_dlpack(x)
+            self.assertEqual(y.dtype, torch.bfloat16)
+
+    def test_from_dlpack_cpu_strided(self):
+        x = np.arange(12, dtype=np.float32).reshape(3, 4)
+        view = x.T
+        y = mx.from_dlpack(view)
+
+        self.assertEqual(y.tolist(), view.tolist())
+        self.assertFalse(memoryview(y).c_contiguous)
+        self.assertEqual(memoryview(y).strides, view.strides)
+
+        stepped = np.arange(20, dtype=np.int32)[2:10:2]
+        y = mx.from_dlpack(stepped)
+        self.assertEqual(y.tolist(), [2, 4, 6, 8])
+        self.assertFalse(memoryview(y).c_contiguous)
+        self.assertEqual(memoryview(y).strides, stepped.strides)
+
+        broadcast = np.broadcast_to(np.array([7], dtype=np.int32), (3,))
+        y = mx.from_dlpack(broadcast)
+        self.assertEqual(y.tolist(), [7, 7, 7])
+        self.assertFalse(memoryview(y).c_contiguous)
+        self.assertEqual(memoryview(y).strides, broadcast.strides)
+
+        negative_stride = np.arange(5, dtype=np.float32)[::-1]
+        with self.assertRaises(ValueError):
+            mx.from_dlpack(negative_stride)
+
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_torch_mps_dlpack_non_cpu_error(self):
+    def test_torch_mps_dlpack_import(self):
+        assert torch is not None
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
         self.assertEqual(x.__dlpack_device__()[0], 8)
 
-        with self.assertRaisesRegex(ValueError, "non-CPU DLPack"):
-            mx.array(x)
+        y = mx.asarray(x)
+        self.assertEqual(y.dtype, mx.float32)
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), x.cpu().numpy().tolist())
+        self.assertIn("array(", repr(y))
+        mv = memoryview(y)
+        self.assertEqual(mv.tolist(), x.cpu().numpy().tolist())
 
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_array_copies_dlpack_input(self):
+        assert torch is not None
+        x = torch.arange(3, device="mps", dtype=torch.float32)
+        torch.mps.synchronize()
+        y = mx.array(x)
+
+        x.zero_()
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [0.0, 1.0, 2.0])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_asarray_copy_true_copies_dlpack_input(self):
+        assert torch is not None
+        x = torch.arange(3, device="mps", dtype=torch.float32)
+        torch.mps.synchronize()
+        y = mx.asarray(x, copy=True)
+
+        x.zero_()
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [0.0, 1.0, 2.0])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_zero_copy_shares_updates(self):
+        assert torch is not None
+        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        torch.mps.synchronize()
+        y = mx.asarray(x)
+
+        x.zero_()
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), x.cpu().numpy().tolist())
+
+        y += 10
+        mx.eval(y)
+        self.assertEqual(x.cpu().numpy().tolist(), y.tolist())
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_matching_dtype_argument_shares_updates(self):
+        assert torch is not None
+        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        torch.mps.synchronize()
+        y = mx.asarray(x, dtype=mx.float32, copy=False)
+        self.assertEqual(y.dtype, mx.float32)
+
+        x.zero_()
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), x.cpu().numpy().tolist())
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_different_dtype_argument_copies(self):
+        assert torch is not None
+        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        torch.mps.synchronize()
+        z = mx.asarray(x, dtype=mx.float16)
+        expected = x.to(torch.float16).cpu().numpy().tolist()
+
+        self.assertEqual(z.dtype, mx.float16)
+        self.assertEqual(z.tolist(), expected)
+
+        x.zero_()
+        torch.mps.synchronize()
+        self.assertEqual(z.tolist(), expected)
+
+        with self.assertRaises(ValueError):
+            mx.asarray(x, dtype=mx.float16, copy=False)
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_data_offset(self):
+        assert torch is not None
+        view = torch.arange(12, device="mps", dtype=torch.float32)[3:9]
+        view_mx = mx.asarray(view)
+        torch.mps.synchronize()
+        self.assertEqual(view_mx.tolist(), view.cpu().numpy().tolist())
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_strided_view(self):
+        assert torch is not None
+        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        view = x.T
+        torch.mps.synchronize()
+        y = mx.asarray(view, copy=False)
+        self.assertEqual(y.tolist(), view.cpu().numpy().tolist())
+
+        x[0, 1] = 99
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), view.cpu().numpy().tolist())
+
+        y_copy = mx.asarray(view, copy=True)
+        expected = view.cpu().numpy().tolist()
+        self.assertFalse(memoryview(y_copy).c_contiguous)
+        self.assertEqual(
+            memoryview(y_copy).strides,
+            tuple(s * view.element_size() for s in view.stride()),
+        )
+        x[0, 2] = 77
+        torch.mps.synchronize()
+        self.assertEqual(y_copy.tolist(), expected)
+
+        z = mx.asarray(view, dtype=mx.float16)
+        self.assertEqual(z.dtype, mx.float16)
+        self.assertFalse(memoryview(z).c_contiguous)
+        self.assertEqual(memoryview(z).strides, tuple(s * 2 for s in view.stride()))
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_stepped_view(self):
+        x = torch.arange(20, device="mps", dtype=torch.int32)
+        view = x[2:10:2]
+        torch.mps.synchronize()
+        y = mx.asarray(view, copy=False)
+        self.assertEqual(y.tolist(), [2, 4, 6, 8])
+
+        x[4] = 99
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [2, 99, 6, 8])
+
+        y_copy = mx.asarray(view, copy=True)
+        expected = y.tolist()
+        x[6] = 77
+        torch.mps.synchronize()
+        self.assertEqual(y_copy.tolist(), expected)
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_broadcast_stride(self):
+        assert torch is not None
+        x = torch.tensor([7], device="mps", dtype=torch.int32)
+        view = x.expand(3)
+        torch.mps.synchronize()
+        y = mx.asarray(view, copy=False)
+        self.assertEqual(y.tolist(), [7, 7, 7])
+
+        x.zero_()
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [0, 0, 0])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_bfloat16(self):
+        assert torch is not None
+        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        bf = x.to(torch.bfloat16)
+        bf_mx = mx.asarray(bf)
+
+        self.assertEqual(bf_mx.dtype, mx.bfloat16)
+        torch.mps.synchronize()
+        self.assertEqual(
+            bf_mx.astype(mx.float32).tolist(),
+            bf.to(torch.float32).cpu().numpy().tolist(),
+        )
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_array_operand(self):
+        assert torch is not None
         a = mx.array([1])
         b = torch.tensor([2])
         self.assertTrue(mx.array_equal(a + b, mx.array([3])))
 
-        with self.assertRaisesRegex(ValueError, "non-CPU DLPack"):
-            a + b.to("mps")
+        b_mps = b.to("mps")
+        torch.mps.synchronize()
+        self.assertTrue(mx.array_equal(a + b_mps, mx.array([3])))
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_mlx_dlpack_exports_mps_tensor_to_torch(self):
+        assert torch is not None
+        x = mx.array([1]).astype(mx.float16)
+        mx.eval(x)
+        y = torch.utils.dlpack.from_dlpack(x)
+        torch.mps.synchronize()
+
+        self.assertEqual(y.device.type, "mps")
+        self.assertEqual(y.dtype, torch.float16)
+        self.assertEqual(y.cpu().numpy().tolist(), [1.0])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_mlx_dlpack_exports_mps_tensor_to_torch_tensor(self):
+        assert torch is not None
+        x = mx.array([1]).astype(mx.float16)
+        mx.eval(x)
+        y = torch.tensor(x)
+        torch.mps.synchronize()
+
+        self.assertEqual(y.device.type, "mps")
+        self.assertEqual(y.dtype, torch.float16)
+        self.assertEqual(y.cpu().numpy().tolist(), [1.0])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_mlx_dlpack_export_torch_update_writes_mlx_buffer(self):
+        x = mx.arange(8, dtype=mx.float32)
+        y = x[2:6]
+        mx.eval(y)
+        t = torch.utils.dlpack.from_dlpack(y)
+
+        self.assertEqual(t.device.type, "mps")
+        self.assertEqual(t.cpu().numpy().tolist(), [2.0, 3.0, 4.0, 5.0])
+
+        t.zero_()
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [0.0, 0.0, 0.0, 0.0])
+        self.assertEqual(x.tolist(), [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 6.0, 7.0])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_from_dlpack_torch_mps_copy_none_shares_updates(self):
+        assert torch is not None
+        x = torch.arange(3, device="mps", dtype=torch.float32)
+        torch.mps.synchronize()
+        y = mx.from_dlpack(x)
+
+        x.zero_()
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [0.0, 0.0, 0.0])
+
+        y += 10
+        mx.eval(y)
+        self.assertEqual(x.cpu().numpy().tolist(), [10.0, 10.0, 10.0])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_from_dlpack_torch_mps_copy_false_shares_updates(self):
+        assert torch is not None
+        x = torch.arange(3, device="mps", dtype=torch.float32)
+        torch.mps.synchronize()
+        y = mx.from_dlpack(x, copy=False)
+
+        x.zero_()
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [0.0, 0.0, 0.0])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_from_dlpack_torch_mps_copy_true_copies(self):
+        assert torch is not None
+        x = torch.arange(3, device="mps", dtype=torch.float32)
+        torch.mps.synchronize()
+        y = mx.from_dlpack(x, copy=True)
+
+        x.zero_()
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [0.0, 1.0, 2.0])
 
     def test_getitem_with_list(self):
         a = mx.array([1, 2, 3, 4, 5])
@@ -2175,6 +2860,18 @@ class TestArray(mlx_tests.MLXTestCase):
         arr_pass = xp.asarray(existing)
         self.assertEqual(arr_pass.tolist(), [4, 5, 6])
 
+    def test_asarray_copy(self):
+        existing = mx.array([1, 2, 3])
+
+        self.assertEqual(mx.asarray(existing, copy=True).tolist(), [1, 2, 3])
+        self.assertEqual(
+            mx.asarray(existing, dtype=mx.float32, copy=True).dtype, mx.float32
+        )
+        with self.assertRaises(ValueError):
+            mx.asarray(existing, copy=False)
+        with self.assertRaises(ValueError):
+            mx.asarray(existing, dtype=mx.float32, copy=False)
+
     def test_asarray(self):
         # List inputs
         self.assertEqual(mx.asarray([1, 2, 3]).tolist(), [1, 2, 3])
@@ -2197,17 +2894,33 @@ class TestArray(mlx_tests.MLXTestCase):
         # MLX array inputs
         arr = mx.array([1, 2, 3])
         self.assertEqual(mx.asarray(arr).tolist(), [1, 2, 3])
+        self.assertEqual(mx.asarray(arr, copy=True).tolist(), [1, 2, 3])
+        with self.assertRaises(ValueError):
+            mx.asarray(arr, copy=False)
 
         arr_int = mx.array([1, 2, 3], dtype=mx.int32)
         arr_float = mx.asarray(arr_int, dtype=mx.float32)
         self.assertEqual(arr_float.dtype, mx.float32)
         self.assertEqual(arr_float.tolist(), [1.0, 2.0, 3.0])
+        with self.assertRaises(ValueError):
+            mx.asarray(arr_int, dtype=mx.float32, copy=False)
 
         # NumPy array inputs
         np_arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         mx_arr = mx.asarray(np_arr)
         self.assertEqual(mx_arr.tolist(), [1.0, 2.0, 3.0])
         self.assertEqual(mx_arr.dtype, mx.float32)
+        # copy=False adopts the buffer when possible and raises otherwise; it
+        # must never silently copy.
+        try:
+            mx_arr = mx.asarray(np_arr, copy=False)
+        except ValueError:
+            pass
+        else:
+            self.assertEqual(mx_arr.tolist(), [1.0, 2.0, 3.0])
+
+        with self.assertRaises(ValueError):
+            mx.asarray([1, 2, 3], copy=False)
 
         # dtype parameter
         self.assertEqual(mx.asarray([1, 2, 3], dtype=mx.float32).dtype, mx.float32)
@@ -2217,16 +2930,23 @@ class TestArray(mlx_tests.MLXTestCase):
         a = mx.array(1)
         self.assertEqual(int(a), 1)
         self.assertEqual(float(a), 1)
+        self.assertEqual(complex(a), 1 + 0j)
 
         a = mx.array(1.5)
         self.assertEqual(float(a), 1.5)
         self.assertEqual(int(a), 1)
+        self.assertEqual(complex(a), 1.5 + 0j)
+
+        a = mx.array(1 + 2j, dtype=mx.complex64)  # type: ignore
+        self.assertEqual(complex(a), 1 + 2j)
 
         a = mx.zeros((2, 1))
         with self.assertRaises(ValueError):
             float(a)
         with self.assertRaises(ValueError):
             int(a)
+        with self.assertRaises(ValueError):
+            complex(a)
 
     def test_format(self):
         a = mx.arange(3)
@@ -2236,7 +2956,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(f"{b:.1f}", "0.4")
 
         with self.assertRaises(TypeError):
-            s = f"{a:.2f}"
+            f"{a:.2f}"
 
         a = mx.array([1, 2, 3])
         self.assertEqual(f"{a}", "array([1, 2, 3], dtype=int32)")
@@ -2268,29 +2988,6 @@ class TestArray(mlx_tests.MLXTestCase):
             x = mx.sin(x)
         mx.eval(x)
 
-    @unittest.skipIf(platform.system() == "Windows", "Memory info not accurate")
-    def test_siblings_without_eval(self):
-        def get_mem():
-            process = psutil.Process(os.getpid())
-            return process.memory_info().rss
-
-        key = mx.array([1, 2])
-
-        def t():
-            a, b = mx.split(key, 2)
-            a = mx.reshape(a, [])
-            b = mx.reshape(b, [])
-            return b
-
-        mx.synchronize()
-        t()
-        gc.collect()
-        expected = get_mem()
-        for _ in range(100):
-            t()
-        used = get_mem()
-        self.assertEqual(expected, used)
-
     def test_scalar_integer_conversion_overflow(self):
         y = mx.array(2000000000, dtype=mx.int32)
         x = 3000000000
@@ -2314,6 +3011,41 @@ class TestArray(mlx_tests.MLXTestCase):
             x[: 2**32]
         with self.assertRaises(ValueError):
             x[2**32]
+
+    @unittest.skipUnless(sys.version_info >= (3, 15), "requires Python 3.15")
+    def test_frozen_types(self):
+        types = (
+            mx.array,
+            mx.Dtype,
+            mx.finfo,
+            mx.iinfo,
+            mx.ArrayAt,
+            mx.ArrayLike,
+            mx.ArrayIterator,
+            mx.Device,
+            mx.Stream,
+            mx.ThreadLocalStream,
+            mx.StreamContext,
+            mx.PrintOptions,
+            mx.custom_function,
+            mx.FunctionExporter,
+            mx.distributed.Group,
+        )
+        for bound_type in types:
+            with self.subTest(type=bound_type):
+                with self.assertRaises(TypeError):
+                    bound_type._test_attribute = None
+                with self.assertRaises(TypeError):
+                    bound_type.__doc__ = "modified"
+                with self.assertRaises(TypeError):
+                    del bound_type.__doc__
+
+    def test_array_subclass(self):
+        class Array(mx.array):
+            def total(self):
+                return self.sum().item()
+
+        self.assertEqual(Array([1, 2, 3]).total(), 6)
 
 
 if __name__ == "__main__":

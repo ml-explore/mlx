@@ -155,10 +155,12 @@ void eigh_impl(
   auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_output_array(vectors);
   encoder.set_output_array(values);
+  // LAPACK reads the row-major input as its (conjugate) transpose, so the
+  // requested triangle is the opposite one in LAPACK's view.
   encoder.dispatch([vec_ptr,
                     eig_ptr,
                     jobz,
-                    uplo = uplo[0],
+                    uplo = uplo[0] == 'L' ? 'U' : 'L',
                     N = vectors.shape(-1),
                     size = vectors.size()]() mutable {
     // Work query
@@ -190,11 +192,19 @@ void Eigh::eval_cpu(
   const auto& a = inputs[0];
   auto& values = outputs[0];
 
+  values.set_data(allocator::malloc(values.nbytes()));
+
+  // Nothing to decompose for n = 0; LAPACK rejects lda = 0.
+  if (a.shape(-1) == 0) {
+    if (compute_eigenvectors_) {
+      outputs[1].set_data(allocator::malloc(outputs[1].nbytes()));
+    }
+    return;
+  }
+
   auto vectors = compute_eigenvectors_
       ? outputs[1]
       : array(a.shape(), a.dtype(), nullptr, {});
-
-  values.set_data(allocator::malloc(values.nbytes()));
 
   copy_cpu(
       a,
@@ -234,7 +244,7 @@ void Eigh::eval_cpu(
       break;
     default:
       throw std::runtime_error(
-          "[Eigh::eval_cpu] only supports float32 or float64.");
+          "[Eigh::eval_cpu] only supports float32, float64, or complex64.");
   }
 }
 

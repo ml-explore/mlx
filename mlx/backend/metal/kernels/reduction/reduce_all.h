@@ -37,13 +37,13 @@ template <
 
   for (IdxT b = 0; b < blocks; b++) {
     for (int i = 0; i < N_READS; i++) {
-      total = op(static_cast<U>(in[i]), total);
+      total = op(cast_to<U>(in[i]), total);
     }
     in += lsize.x * N_READS;
   }
   if (extra > 0) {
     for (int i = 0; i < extra; i++) {
-      total = op(static_cast<U>(in[i]), total);
+      total = op(cast_to<U>(in[i]), total);
     }
   }
 

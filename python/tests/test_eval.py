@@ -1,7 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
 import unittest
-from functools import partial
 
 import mlx.core as mx
 import mlx_tests
@@ -115,10 +114,10 @@ class TestEval(mlx_tests.MLXTestCase):
             mx.eval(a)
             return a
 
-        out = mx.vjp(fn, (x,), (y,))
-        out = mx.vjp(fn, (x,), (y,))
+        _out = mx.vjp(fn, (x,), (y,))
+        _out = mx.vjp(fn, (x,), (y,))
         peak_mem = mx.get_peak_memory()
-        out = mx.vjp(fn, (x,), (y,))
+        _out = mx.vjp(fn, (x,), (y,))
         self.assertEqual(peak_mem, mx.get_peak_memory())
 
     def test_async_eval_with_multiple_streams(self):
@@ -128,7 +127,7 @@ class TestEval(mlx_tests.MLXTestCase):
         b = mx.array([1.0])
 
         d = mx.default_device()
-        s2 = mx.new_stream(d)
+        _s2 = mx.new_stream(d)
 
         for _ in range(50):
             for _ in range(20):
@@ -138,7 +137,6 @@ class TestEval(mlx_tests.MLXTestCase):
 
     def test_donation_for_noops(self):
         def fun(x):
-            s = x.shape
             for _ in range(10):
                 x = mx.abs(x)
                 x = mx.reshape(x, (-1,))
@@ -194,6 +192,68 @@ class TestEval(mlx_tests.MLXTestCase):
         z = mx.abs(y, stream=s2)
         mx.eval(z)
         mx.set_memory_limit(old_limit)
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_eval_exception_does_not_corrupt_state(self):
+        # An exception thrown from inside a primitive's eval (here a Metal
+        # compile error raised lazily at eval time) must not corrupt arrays
+        # evaluated earlier in the same batch: they are already marked
+        # evaluated, so their pending command buffers must still be
+        # committed before the exception propagates.
+        a = mx.full((1024,), 3.0)
+        b = a * 2.0  # encoded in the same eval batch as the failing kernel
+
+        kernel = mx.fast.metal_kernel(
+            name="test_eval_exception_bad_kernel",
+            input_names=["inp"],
+            output_names=["out"],
+            source="this is not metal code {",
+        )
+        with self.assertRaises(Exception):
+            (y,) = kernel(
+                inputs=[b],
+                output_shapes=[b.shape],
+                output_dtypes=[b.dtype],
+                grid=(1, 1, 1),
+                threadgroup=(1, 1, 1),
+            )
+            mx.eval(y)
+
+        self.assertTrue(mx.all(b == 6.0).item())
+
+        # Fresh computations after the failure stay correct.
+        x = mx.full((512,), 2.0)
+        self.assertEqual((x + 1.0).sum().item(), 512.0 * 3.0)
+
+    @unittest.skipIf(
+        mx.cuda.is_available(), "CUDA backend waits cpu stream synchronously"
+    )
+    def test_async_eval_error_in_synchronize(self):
+        a = mx.linalg.inv(mx.array([[1.0, 2.0], [2.0, 4.0]]), stream=mx.cpu)
+        mx.async_eval(a)
+        with self.assertRaises(RuntimeError):
+            mx.synchronize(mx.cpu)
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_eval_exception_after_cross_stream_wait(self):
+        # gather_qqmm has no CPU kernel. It fails in eval after the CPU
+        # stream waits for x from the GPU.
+        x = mx.multiply(
+            mx.full((2, 64), 3.0, stream=mx.gpu),
+            2.0,
+            stream=mx.gpu,
+        )
+        wq, scales = mx.quantize(
+            mx.ones((32, 64), stream=mx.gpu),
+            mode="nvfp4",
+            stream=mx.gpu,
+        )[:2]
+        y = mx.gather_qqmm(x, wq, scales, mode="nvfp4", stream=mx.cpu)
+        with self.assertRaises(RuntimeError):
+            mx.eval(y)
+
+        self.assertTrue(mx.all(x == 6.0).item())
+        self.assertEqual((mx.ones((4,), stream=mx.cpu) + 1).sum().item(), 8.0)
 
 
 if __name__ == "__main__":

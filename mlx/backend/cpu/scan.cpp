@@ -163,7 +163,8 @@ void scan_op(
     const Op& op,
     U init) {
   if (in.flags().row_contiguous) {
-    if (in.strides()[axis] == 1) {
+    // A size-one axis can carry any stride and still be row contiguous.
+    if (in.strides()[axis] == 1 || in.shape(axis) == 1) {
       contiguous_scan(
           in.data<T>(),
           out.data<U>(),
@@ -190,6 +191,19 @@ void scan_op(
   }
 }
 
+template <typename U>
+U scan_init(const Dtype& dtype, bool maximum) {
+  constexpr auto inf = std::numeric_limits<float>::infinity();
+  if constexpr (std::is_same_v<U, complex64_t>) {
+    return maximum ? complex64_t{inf, inf} : complex64_t{-inf, -inf};
+  } else if (issubdtype(dtype, floating)) {
+    return maximum ? static_cast<U>(inf) : static_cast<U>(-inf);
+  } else {
+    return maximum ? std::numeric_limits<U>::max()
+                   : std::numeric_limits<U>::min();
+  }
+}
+
 template <typename T, typename U>
 void scan_dispatch(
     Scan::ReduceType rtype,
@@ -212,18 +226,28 @@ void scan_dispatch(
       break;
     }
     case Scan::Min: {
-      auto op = [](U y, T x) { return x < y ? x : y; };
-      auto init = (issubdtype(in.dtype(), floating))
-          ? static_cast<U>(std::numeric_limits<float>::infinity())
-          : std::numeric_limits<U>::max();
+      auto op = [](U y, T x) {
+        if constexpr (is_floating_point_v<U>) {
+          if (std::isnan(y) || std::isnan(static_cast<U>(x))) {
+            return std::numeric_limits<U>::quiet_NaN();
+          }
+        }
+        return x < y ? x : y;
+      };
+      auto init = scan_init<U>(in.dtype(), /* maximum = */ true);
       scan_op<T, U>(in, out, axis, reverse, inclusive, op, init);
       break;
     }
     case Scan::Max: {
-      auto op = [](U y, T x) { return x < y ? y : x; };
-      auto init = (issubdtype(in.dtype(), floating))
-          ? static_cast<U>(-std::numeric_limits<float>::infinity())
-          : std::numeric_limits<U>::min();
+      auto op = [](U y, T x) {
+        if constexpr (is_floating_point_v<U>) {
+          if (std::isnan(y) || std::isnan(static_cast<U>(x))) {
+            return std::numeric_limits<U>::quiet_NaN();
+          }
+        }
+        return x < y ? y : x;
+      };
+      auto init = scan_init<U>(in.dtype(), /* maximum = */ false);
       scan_op<T, U>(in, out, axis, reverse, inclusive, op, init);
       break;
     }
@@ -231,7 +255,7 @@ void scan_dispatch(
       auto op = [](U a, T b) {
         return detail::LogAddExp{}(a, static_cast<U>(b));
       };
-      auto init = (issubdtype(in.dtype(), floating))
+      auto init = (issubdtype(in.dtype(), inexact))
           ? static_cast<U>(-std::numeric_limits<float>::infinity())
           : std::numeric_limits<U>::min();
       scan_op<T, U>(in, out, axis, reverse, inclusive, op, init);
@@ -245,6 +269,11 @@ void scan_dispatch(
 void Scan::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
 
+  if (out.size() == 0) {
+    out.set_data(allocator::malloc(0));
+    return;
+  }
+
   auto& encoder = cpu::get_command_encoder(stream());
 
   // Ensure contiguity
@@ -254,6 +283,9 @@ void Scan::eval_cpu(const std::vector<array>& inputs, array& out) {
     encoder.add_temporary(in);
   }
   out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
 
   encoder.set_input_array(in);
   encoder.set_output_array(out);

@@ -10,6 +10,16 @@
 
 namespace mlx::core::distributed::detail {
 
+namespace {
+
+[[noreturn]] void throw_socket_error(const char* tag, const char* action) {
+  std::ostringstream msg;
+  msg << tag << " " << action << " (error: " << errno << ")";
+  throw std::runtime_error(msg.str());
+}
+
+} // namespace
+
 /**
  * Parse a sockaddr from an ip and port provided as strings.
  */
@@ -53,9 +63,7 @@ address_t parse_address(const std::string& ip_port) {
 TCPSocket::TCPSocket(const char* tag) {
   sock_ = socket(AF_INET, SOCK_STREAM, 0);
   if (sock_ < 0) {
-    std::ostringstream msg;
-    msg << tag << " Couldn't create socket (error: " << errno << ")";
-    throw std::runtime_error(msg.str());
+    throw_socket_error(tag, "Couldn't create socket");
   }
 }
 
@@ -95,40 +103,30 @@ void TCPSocket::listen(const char* tag, const address_t& addr) {
   int enable = 1;
   success = setsockopt(sock_, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
   if (success < 0) {
-    std::ostringstream msg;
-    msg << tag << " Couldn't enable reuseaddr (error: " << errno << ")";
-    throw std::runtime_error(msg.str());
+    throw_socket_error(tag, "Couldn't enable reuseaddr");
   }
   success = setsockopt(sock_, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int));
   if (success < 0) {
-    std::ostringstream msg;
-    msg << tag << " Couldn't enable reuseport (error: " << errno << ")";
-    throw std::runtime_error(msg.str());
+    throw_socket_error(tag, "Couldn't enable reuseport");
   }
 
   // Bind the socket to the address and port
   success = bind(sock_, addr.get(), addr.len);
   if (success < 0) {
-    std::ostringstream msg;
-    msg << tag << " Couldn't bind socket (error: " << errno << ")";
-    throw std::runtime_error(msg.str());
+    throw_socket_error(tag, "Couldn't bind socket");
   }
 
   // Prepare waiting for connections
   success = ::listen(sock_, 0);
   if (success < 0) {
-    std::ostringstream msg;
-    msg << tag << " Couldn't listen (error: " << errno << ")";
-    throw std::runtime_error(msg.str());
+    throw_socket_error(tag, "Couldn't listen");
   }
 }
 
 TCPSocket TCPSocket::accept(const char* tag) {
   int peer = ::accept(sock_, nullptr, nullptr);
   if (peer < 0) {
-    std::ostringstream msg;
-    msg << tag << " Accept failed (error: " << errno << ")";
-    throw std::runtime_error(msg.str());
+    throw_socket_error(tag, "Accept failed");
   }
 
   return TCPSocket(peer);
@@ -173,10 +171,7 @@ TCPSocket TCPSocket::connect(
     // Create the socket
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
-      std::ostringstream msg;
-      msg << tag << " Couldn't create socket to connect (error: " << errno
-          << ")";
-      throw std::runtime_error(msg.str());
+      throw_socket_error(tag, "Couldn't create socket to connect");
     }
 
     success = ::connect(sock, addr.get(), addr.len);
@@ -195,9 +190,7 @@ TCPSocket TCPSocket::connect(
   }
 
   if (success < 0) {
-    std::ostringstream msg;
-    msg << tag << " Couldn't connect (error: " << errno << ")";
-    throw std::runtime_error(msg.str());
+    throw_socket_error(tag, "Couldn't connect");
   }
 
   return TCPSocket(sock);

@@ -5,3 +5,13 @@ requires = [
   "typing_extensions",
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# These modules expose imports as their public API.
+"python/mlx/nn/__init__.py" = ["F401", "F403"]
+"python/mlx/nn/layers/__init__.py" = ["F401"]
+"python/mlx/optimizers/__init__.py" = ["F403"]
+"examples/extensions/mlx_sample_extensions/__init__.py" = ["F401"]

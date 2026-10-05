@@ -6,11 +6,11 @@
 #include <functional>
 #include <mutex>
 #include <shared_mutex>
-#include <string>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "mlx/array.h"
+#include "mlx/backend/common/metal_kernel.h"
 #include "mlx/backend/metal/resident.h"
 #include "mlx/device.h"
 
@@ -23,7 +23,7 @@ class Device;
 
 class MLX_API CommandEncoder {
  public:
-  CommandEncoder(Device& d, int index, ResidencySet& residency_set);
+  CommandEncoder(Device& d, int index, ResidencySets& residency_sets);
   ~CommandEncoder();
 
   CommandEncoder(const CommandEncoder&) = delete;
@@ -62,8 +62,13 @@ class MLX_API CommandEncoder {
 
   template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
   void set_vector_bytes(const Vec& vec, size_t nelems, int idx) {
-    get_command_encoder()->setBytes(
-        vec.data(), nelems * sizeof(typename Vec::value_type), idx);
+    using T = typename Vec::value_type;
+    if (nelems > 0) {
+      get_command_encoder()->setBytes(vec.data(), nelems * sizeof(T), idx);
+    } else {
+      T val{};
+      get_command_encoder()->setBytes(&val, sizeof(T), idx);
+    }
   }
   template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
   void set_vector_bytes(const Vec& vec, int idx) {
@@ -90,13 +95,12 @@ class MLX_API CommandEncoder {
 
   void barrier();
   void end_encoding();
+  void wait_event(Event event, uint64_t value);
+  void signal_event(Event event, uint64_t value);
   bool needs_commit() const;
-  void commit();
+  void commit(std::function<void()> completion = nullptr);
   void synchronize();
 
-  MTL::CommandQueue* get_command_queue() const {
-    return queue_.get();
-  }
   MTL::CommandBuffer* get_command_buffer() const {
     return buffer_.get();
   }
@@ -113,6 +117,17 @@ class MLX_API CommandEncoder {
   int buffer_ops_{0};
   size_t buffer_sizes_{0};
 
+  // The residency set and how many of its sets this queue has attached.
+  ResidencySets& residency_sets_;
+  uint64_t sets_attached_{0};
+
+  // The events hooked to current command buffer.
+  std::vector<Event> wait_events_;
+  std::vector<std::tuple<Event, uint64_t>> signal_events_;
+
+  // Error from previous commited command buffer.
+  Error error_;
+
   // Encoder for issuing GPU commands.
   // The members are used within a single ComputeCommandEncoder and will be
   // reset after calling end_encoding().
@@ -121,7 +136,9 @@ class MLX_API CommandEncoder {
   bool needs_barrier_{false};
   bool concurrent_{false};
   std::vector<array> temporaries_;
+  std::unordered_set<MTL::Resource*> prev_inputs_;
   std::unordered_set<MTL::Resource*> prev_outputs_;
+  std::unordered_set<MTL::Resource*> next_inputs_;
   std::unordered_set<MTL::Resource*> next_outputs_;
   std::unordered_set<MTL::Resource*> concurrent_outputs_;
   std::unordered_set<const void*> all_inputs_;
@@ -159,7 +176,14 @@ class MLX_API Device {
 
   MTL::Library* get_library(
       const std::string& name,
+      const CompileOptions& compile_options,
       const std::function<std::string(void)>& builder);
+
+  MTL::Library* get_library(
+      const std::string& name,
+      const std::function<std::string(void)>& builder) {
+    return get_library(name, {}, builder);
+  }
 
   void clear_library(const std::string& name);
 
@@ -176,12 +200,14 @@ class MLX_API Device {
       const MTLFCList& func_consts = {},
       const std::vector<MTL::Function*>& linked_functions = {});
 
-  ResidencySet& residency_set() {
-    return residency_set_;
+  ResidencySets& residency_sets() {
+    return residency_sets_;
   }
 
  private:
-  NS::SharedPtr<MTL::Library> build_library_(const std::string& source_string);
+  NS::SharedPtr<MTL::Library> build_library_(
+      const std::string& source_string,
+      const CompileOptions& compile_options = {});
 
   NS::SharedPtr<MTL::Function> get_function_(
       const std::string& name,
@@ -211,7 +237,7 @@ class MLX_API Device {
       const std::vector<MTL::Function*>& linked_functions = {});
 
   NS::SharedPtr<MTL::Device> device_;
-  ResidencySet residency_set_;
+  ResidencySets residency_sets_;
 
   std::shared_mutex kernel_mtx_;
   std::shared_mutex library_mtx_;
@@ -231,6 +257,7 @@ MLX_API Device& device(mlx::core::Device);
 MLX_API CommandEncoder& get_command_encoder(Stream s);
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders();
+std::unordered_map<int, CommandEncoder>& get_global_command_encoders();
 NS::SharedPtr<NS::AutoreleasePool> new_scoped_memory_pool();
 
 bool is_nax_available();

@@ -228,6 +228,16 @@ void Eig::eval_cpu(
   const auto& a = inputs[0];
   auto& values = outputs[0];
 
+  values.set_data(allocator::malloc(values.nbytes()));
+
+  // Nothing to decompose for n = 0; LAPACK rejects lda = 0.
+  if (a.shape(-1) == 0) {
+    if (compute_eigenvectors_) {
+      outputs[1].set_data(allocator::malloc(outputs[1].nbytes()));
+    }
+    return;
+  }
+
   auto vectors = compute_eigenvectors_
       ? outputs[1]
       : array(a.shape(), complex64, nullptr, {});
@@ -238,8 +248,6 @@ void Eig::eval_cpu(
       a_copy,
       a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
       stream());
-
-  values.set_data(allocator::malloc(values.nbytes()));
 
   if (compute_eigenvectors_) {
     // Set the strides and flags so the eigenvectors

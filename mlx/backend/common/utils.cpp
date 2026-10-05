@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <dlfcn.h>
+#include <numeric>
 
 #include "mlx/backend/common/utils.h"
 
@@ -174,6 +175,22 @@ Dims get_2d_grid_dims_common(
     const Shape& shape,
     const Strides& strides,
     size_t divisor) {
+  // Shortcut when size is a multiple of divisor, for example:
+  // 36: {2 / 2, 4 / 2, 9 / 9} = {1, 2, 1}
+  Shape divided_shape = shape;
+  size_t remaining_divisor = divisor;
+  for (int i = 0; i < shape.size(); ++i) {
+    if (strides[i] == 0) {
+      continue;
+    }
+    auto factor = std::gcd(static_cast<size_t>(shape[i]), remaining_divisor);
+    divided_shape[i] /= factor;
+    remaining_divisor /= factor;
+  }
+  if (remaining_divisor == 1) {
+    return get_2d_grid_dims_common(divided_shape, strides);
+  }
+
   // Compute the 2d grid dimensions such that the total size of the grid is
   // divided by divisor.
   size_t grid_x = 1;

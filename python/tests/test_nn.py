@@ -1,5 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
+import math
 import os
 import tempfile
 import unittest
@@ -9,6 +10,13 @@ import mlx.nn as nn
 import mlx_tests
 import numpy as np
 from mlx.utils import tree_flatten, tree_map, tree_reduce
+
+try:
+    import torch
+
+    has_torch = True
+except ImportError:
+    has_torch = False
 
 
 class TestBase(mlx_tests.MLXTestCase):
@@ -192,6 +200,23 @@ class TestBase(mlx_tests.MLXTestCase):
         m.state["hello"] = "world"
         self.assertEqual(m.state["hello"], "world")
 
+    def test_freeze_strict_keys(self):
+        # "bias" is present in the model but not in every submodule, so a
+        # recursive freeze should accept it rather than raising on the first
+        # submodule that happens not to have one.
+        m = nn.Sequential(nn.Linear(2, 2, bias=False), nn.Linear(2, 2))
+        m.freeze(keys="bias", strict=True)
+        trainable = dict(tree_flatten(m.trainable_parameters()))
+        self.assertFalse(any(k.endswith("bias") for k in trainable))
+
+        m.unfreeze(keys="bias", strict=True)
+        trainable = dict(tree_flatten(m.trainable_parameters()))
+        self.assertTrue(any(k.endswith("bias") for k in trainable))
+
+        # A key that is nowhere in the model is still an error.
+        with self.assertRaises(KeyError):
+            m.freeze(keys="not_a_member", strict=True)
+
     def test_chaining(self):
         m = nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 1))
         pre_freeze_num_params = len(m.parameters())
@@ -239,7 +264,7 @@ class TestBase(mlx_tests.MLXTestCase):
         m = nn.Sequential(
             nn.Embedding(5, 256), nn.ReLU(), nn.Linear(256, 256, bias=False)
         )
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(ValueError):
             nn.quantize(m, group_size=32, mode="mxfp8", quantize_input=True)
 
     def test_quantize_freeze(self):
@@ -330,6 +355,19 @@ class TestBase(mlx_tests.MLXTestCase):
         m = MyModel()
         m.update_modules(m.leaf_modules())
 
+        # A list with more entries than the destination is rejected when strict
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+        with self.assertRaises(ValueError):
+            m.update_modules({"layers": [{}, {}, nn.Linear(3, 4)]})
+
+        # ...and the extra entries are skipped (not a crash) when strict=False
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+        m.update_modules(
+            {"layers": [{}, nn.Linear(3, 4), nn.Linear(5, 5)]}, strict=False
+        )
+        self.assertEqual(len(m.layers), 2)
+        self.assertEqual(m.layers[1].weight.shape, (4, 3))
+
     def test_parameter_deletion(self):
         m = nn.Linear(32, 32)
         del m.weight
@@ -373,6 +411,28 @@ class TestLayers(mlx_tests.MLXTestCase):
         outputs = layer(inputs1, inputs2)
         self.assertEqual(outputs.shape, (10, 6))
 
+    def test_norm_eps_validation(self):
+        # eps is added under a square root. A negative one makes rsqrt take the
+        # root of a negative number, so the layer emits NaN for whichever
+        # elements have a small enough variance, which is only a partial NaN and
+        # easy to miss. Zero is rejected too: it leaves rsqrt(0) for any input
+        # whose variance is zero, which is a whole NaN row. This matches the eps
+        # guards the optimizers already carry.
+        builders = (
+            ("LayerNorm", lambda eps: nn.LayerNorm(16, eps=eps)),
+            ("RMSNorm", lambda eps: nn.RMSNorm(16, eps=eps)),
+            ("GroupNorm", lambda eps: nn.GroupNorm(4, 16, eps=eps)),
+            ("InstanceNorm", lambda eps: nn.InstanceNorm(16, eps=eps)),
+            ("BatchNorm", lambda eps: nn.BatchNorm(16, eps=eps)),
+        )
+        for name, build in builders:
+            for eps in (-1.0, -1e-30, 0.0):
+                with self.assertRaisesRegex(ValueError, "must be positive"):
+                    build(eps)
+            # Anything positive still constructs, including a very small eps.
+            for eps in (1e-30, 1e-5, 1.0):
+                build(eps)
+
     def test_group_norm(self):
         x = mx.arange(100, dtype=mx.float32)
         x = x.reshape(1, 10, 10, 1)
@@ -408,6 +468,16 @@ class TestLayers(mlx_tests.MLXTestCase):
         var = y.reshape(2, -1, 2, 4).var(axis=(1, -1))
         self.assertTrue(np.allclose(means, 3 * np.ones_like(means), atol=1e-6))
         self.assertTrue(np.allclose(var, 4 * np.ones_like(var), atol=1e-6))
+
+        # Raise for invalid num_groups / dims
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=4, dims=6)
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=0, dims=8)
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=-1, dims=8)
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=4, dims=0)
 
     def test_instance_norm(self):
         # Test InstanceNorm1d
@@ -624,8 +694,26 @@ class TestLayers(mlx_tests.MLXTestCase):
         ]
         self.assertTrue(x.shape == y.shape)
         self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
+        # Reduced-precision statistics must not overflow for finite feature maps.
+        checkerboard = np.indices((4, 4, 4)).sum(axis=0) % 2
+        x = mx.array(
+            np.stack(
+                [
+                    np.where(checkerboard, -512, 512),
+                    np.where(checkerboard, -256, 256),
+                ],
+                axis=-1,
+            ).astype(np.float16)
+        )[None]
+        y = nn.InstanceNorm(dims=2)(x)
+        self.assertEqual(y.dtype, mx.float16)
+        self.assertTrue(mx.allclose(y.min(), mx.array(-1.0, dtype=mx.float16)))
+        self.assertTrue(mx.allclose(y.max(), mx.array(1.0, dtype=mx.float16)))
         # Test repr
         self.assertTrue(str(inorm) == "InstanceNorm(3, eps=1e-05, affine=False)")
+        # Raise for inputs without spatial dimensions
+        with self.assertRaises(ValueError):
+            nn.InstanceNorm(dims=8)(mx.zeros((4, 8)))
 
     def test_batch_norm(self):
         mx.random.seed(42)
@@ -646,7 +734,7 @@ class TestLayers(mlx_tests.MLXTestCase):
             ],
         )
         expected_mean = mx.array([0.008929, 0.005680, -0.016092, 0.027778])
-        expected_var = mx.array([0.928435, 1.00455, 1.04117, 0.94258])
+        expected_var = mx.array([0.935544, 1.030691, 1.076463, 0.953224])
         self.assertTrue(x.shape == y.shape)
         self.assertTrue(mx.allclose(y, expected_y, atol=1e-5))
         self.assertTrue(mx.allclose(bn.running_mean, expected_mean, atol=1e-5))
@@ -657,11 +745,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         y = bn(x)
         expected_y = mx.array(
             [
-                [-0.15984, 1.73159, -1.25456, 1.57891],
-                [-0.872193, -1.4281, -0.414439, -0.228678],
-                [0.602743, -0.30566, -0.554687, 0.139639],
-                [0.252199, 0.29066, -0.599572, -0.0512532],
-                [0.594096, -0.0334829, 2.11359, -0.151081],
+                [-0.159232, 1.70949, -1.23382, 1.57007],
+                [-0.868873, -1.40987, -0.407588, -0.227397],
+                [0.600449, -0.301759, -0.545518, 0.138857],
+                [0.251239, 0.286951, -0.589661, -0.0509662],
+                [0.591834, -0.0330556, 2.07865, -0.150235],
             ]
         )
 
@@ -714,9 +802,9 @@ class TestLayers(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.allclose(y, expected_y, atol=1e-5))
         expected_mean = mx.array(
-            [[[0.00207845, -5.3259e-05, 0.04755, -0.0697296, 0.0236228]]]
+            [0.00207845, -5.3259e-05, 0.04755, -0.0697296, 0.0236228]
         )
-        expected_var = mx.array([[[0.968415, 1.05322, 0.96913, 0.932305, 0.967224]]])
+        expected_var = mx.array([0.978188, 1.07511, 0.979006, 0.93692, 0.976827])
         self.assertTrue(mx.allclose(bn.running_mean, expected_mean, atol=1e-5))
         self.assertTrue(mx.allclose(bn.running_var, expected_var, atol=1e-5))
 
@@ -744,46 +832,114 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertIn("weight", bn_trainable)
         self.assertIn("bias", bn_trainable)
 
+        # test with 4D input (NHWC)
+        mx.random.seed(42)
+        x = mx.random.normal((2, 3, 3, 6), dtype=mx.float32)
+        bn = nn.BatchNorm(num_features=6, affine=True)
+        y = bn(x)
+        self.assertTrue(x.shape == y.shape)
+        # batch norm over an NHWC input normalizes each channel across N, H, W
+        self.assertTrue(mx.allclose(y.mean(axis=(0, 1, 2)), mx.zeros((6,)), atol=1e-5))
+        self.assertTrue(mx.allclose(y.var(axis=(0, 1, 2)), mx.ones((6,)), atol=1e-2))
+
+    @unittest.skipIf(not has_torch, "requires Torch")
+    def test_batch_norm_matches_torch(self):
+        rng = np.random.default_rng(0)
+        momentum = 0.1
+        eps = 1e-5
+
+        def check_batch_norm(shape, torch_module, to_torch=None, from_torch=None):
+            features = shape[-1]
+            x_np = rng.normal(size=shape).astype(np.float32)
+            weight_np = rng.normal(size=(features,)).astype(np.float32)
+            bias_np = rng.normal(size=(features,)).astype(np.float32)
+
+            mlx_bn = nn.BatchNorm(features, eps=eps, momentum=momentum)
+            mlx_bn.weight = mx.array(weight_np)
+            mlx_bn.bias = mx.array(bias_np)
+            mlx_y = mlx_bn(mx.array(x_np))
+            mx.eval(mlx_y, mlx_bn.running_mean, mlx_bn.running_var)
+
+            torch_bn = torch_module(features, eps=eps, momentum=momentum)
+            with torch.no_grad():
+                torch_bn.weight.copy_(torch.from_numpy(weight_np))
+                torch_bn.bias.copy_(torch.from_numpy(bias_np))
+            x_torch_np = x_np.transpose(to_torch) if to_torch else x_np
+            torch_y = torch_bn(torch.from_numpy(x_torch_np)).detach().numpy()
+            if from_torch:
+                torch_y = torch_y.transpose(from_torch)
+
+            self.assertTrue(mx.allclose(mlx_y, mx.array(torch_y), rtol=1e-4, atol=1e-4))
+            self.assertTrue(
+                mx.allclose(
+                    mlx_bn.running_mean,
+                    mx.array(torch_bn.running_mean.detach().numpy()),
+                    rtol=1e-5,
+                    atol=1e-5,
+                )
+            )
+            self.assertTrue(
+                mx.allclose(
+                    mlx_bn.running_var,
+                    mx.array(torch_bn.running_var.detach().numpy()),
+                    rtol=1e-4,
+                    atol=1e-4,
+                )
+            )
+
+            mlx_bn.eval()
+            torch_bn.eval()
+            mlx_y = mlx_bn(mx.array(x_np))
+            mx.eval(mlx_y)
+            torch_y = torch_bn(torch.from_numpy(x_torch_np)).detach().numpy()
+            if from_torch:
+                torch_y = torch_y.transpose(from_torch)
+            self.assertTrue(mx.allclose(mlx_y, mx.array(torch_y), rtol=1e-4, atol=1e-4))
+
+        check_batch_norm((5, 4), torch.nn.BatchNorm1d)
+        check_batch_norm(
+            (2, 4, 5),
+            torch.nn.BatchNorm1d,
+            to_torch=(0, 2, 1),
+            from_torch=(0, 2, 1),
+        )
+        check_batch_norm(
+            (2, 3, 3, 6),
+            torch.nn.BatchNorm2d,
+            to_torch=(0, 3, 1, 2),
+            from_torch=(0, 2, 3, 1),
+        )
+
     def test_batch_norm_stats(self):
         batch_size = 2
         num_features = 4
         h = 3
         w = 3
-        momentum = 0.1
 
         batch_norm = nn.BatchNorm(num_features)
-
         batch_norm.train()
-        running_mean = batch_norm.running_mean
-        running_var = batch_norm.running_var
-
-        data = mx.random.normal((batch_size, num_features))
-
-        normalized_data = batch_norm(data)
-        means = mx.mean(data, axis=0)
-        variances = mx.var(data, axis=0)
-        running_mean = (1 - momentum) * running_mean + momentum * means
-        running_var = (1 - momentum) * running_var + momentum * variances
-        self.assertTrue(mx.allclose(batch_norm.running_mean, running_mean, atol=1e-5))
-        self.assertTrue(mx.allclose(batch_norm.running_var, running_var, atol=1e-5))
-
-        batch_norm = nn.BatchNorm(num_features)
-
-        batch_norm.train()
-        running_mean = batch_norm.running_mean
-        running_var = batch_norm.running_var
         data = mx.random.normal((batch_size, h, w, num_features))
 
         normalized_data = batch_norm(data)
-        means = mx.mean(data, axis=(0, 1, 2))
-        variances = mx.var(data, axis=(0, 1, 2))
-        running_mean = (1 - momentum) * running_mean + momentum * means
-        running_var = (1 - momentum) * running_var + momentum * variances
-        self.assertTrue(mx.allclose(batch_norm.running_mean, running_mean, atol=1e-5))
-        self.assertTrue(mx.allclose(batch_norm.running_var, running_var, atol=1e-5))
+        self.assertTrue(
+            mx.allclose(
+                mx.mean(normalized_data, axis=(0, 1, 2)), mx.zeros((4,)), atol=1e-5
+            )
+        )
+        self.assertTrue(
+            mx.allclose(
+                mx.var(normalized_data, axis=(0, 1, 2)), mx.ones((4,)), atol=1e-2
+            )
+        )
+        self.assertEqual(batch_norm.running_mean.shape, (num_features,))
+        self.assertEqual(batch_norm.running_var.shape, (num_features,))
 
-        self.assertEqual(batch_norm.running_mean.shape, running_mean.shape)
-        self.assertEqual(batch_norm.running_var.shape, running_var.shape)
+        batch_norm = nn.BatchNorm(num_features)
+        batch_norm.train()
+        data = mx.random.normal((1, num_features))
+
+        with self.assertRaises(ValueError):
+            batch_norm(data)
 
     def test_conv1d(self):
         N = 5
@@ -875,6 +1031,33 @@ class TestLayers(mlx_tests.MLXTestCase):
         y = c(x)
         self.assertEqual(y.shape, (4, 7, 7, 8))
 
+    def test_conv_grouped_init(self):
+        # weights are drawn from U(-s, s) with s = 1 / sqrt(fan_in), where
+        # fan_in only counts the input channels each group sees
+        mx.random.seed(0)
+        for groups in (1, 2, 4):
+            layers = [
+                nn.Conv1d(64, 64, kernel_size=3, groups=groups),
+                nn.Conv2d(64, 64, kernel_size=3, groups=groups),
+            ]
+            for layer in layers:
+                w = layer.weight
+                fan_in = math.prod(w.shape[1:])
+                bound = 1 / math.sqrt(fan_in)
+                w_max = mx.abs(w).max().item()
+                self.assertLessEqual(w_max, bound)
+                self.assertGreater(w_max, 0.95 * bound)
+
+    def test_conv_transpose_extra_repr(self):
+        self.assertIn(
+            "kernel_size=(3, 5)",
+            str(nn.ConvTranspose2d(4, 8, kernel_size=(3, 5))),
+        )
+        self.assertIn(
+            "kernel_size=(2, 3, 4)",
+            str(nn.ConvTranspose3d(4, 8, kernel_size=(2, 3, 4))),
+        )
+
     def test_sequential(self):
         x = mx.ones((10, 2))
         m = nn.Sequential(nn.Linear(2, 10), nn.ReLU(), nn.Linear(10, 1))
@@ -932,6 +1115,24 @@ class TestLayers(mlx_tests.MLXTestCase):
             mx.abs(similarities[mx.arange(10), mx.arange(10)] - 1).max(), 1e-5
         )
 
+        # dims=2 should be supported (single sin/cos frequency pair)
+        m = nn.SinusoidalPositionalEncoding(2)
+        y = m(x)
+        self.assertEqual(y.shape, (10, 2))
+
+        # Odd and non-positive dimensions are invalid
+        for dims in [0, 1, 3]:
+            with self.subTest(dims=dims):
+                with self.assertRaises(ValueError):
+                    nn.SinusoidalPositionalEncoding(dims)
+
+        # An explicit scale=0.0 must be respected rather than falling back
+        # to the default, since 0.0 is falsy but a valid scale value.
+        m = nn.SinusoidalPositionalEncoding(16, scale=0.0)
+        self.assertEqual(m.scale, 0.0)
+        y = m(x)
+        self.assertTrue(mx.array_equal(y, mx.zeros_like(y)))
+
     def test_sigmoid(self):
         x = mx.array([1.0, 0.0, -1.0])
         y1 = mx.sigmoid(x)
@@ -947,6 +1148,18 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(y, mx.array([1.0, 0.0, 0.0])))
         self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
+
+    def test_step(self):
+        x = mx.array([-1.0, 0.0, 1.0])
+
+        # Default threshold of 0: the boundary value is included
+        y = nn.step(x)
+        self.assertTrue(mx.array_equal(y, mx.array([0, 1, 1])))
+        self.assertEqual(y.shape, (3,))
+
+        # A custom threshold is also inclusive
+        y = nn.Step(threshold=1.0)(x)
+        self.assertTrue(mx.array_equal(y, mx.array([0, 0, 1])))
 
     def test_leaky_relu(self):
         x = mx.array([1.0, -1.0, 0.0])
@@ -1058,6 +1271,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
+        # Equal logits normalize to log(1/n) whatever their magnitude
+        for v in [1e0, 1e4, 1e8, 1e20, 1e36]:
+            y = nn.log_softmax(mx.array([[v, v]]))
+            self.assertTrue(mx.allclose(y, mx.full((1, 2), -0.6931472), atol=1e-5))
+
     def test_log_sigmoid(self):
         x = mx.array([1.0, -1.0, 0.0])
         y = nn.log_sigmoid(x)
@@ -1111,6 +1329,18 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(y.dtype, mx.float32)
 
         y = nn.hard_shrink(x, lambd=0.1)
+        expected_y = mx.array([1.0, -0.5, 0.0, 0.5, -1.5])
+        self.assertTrue(mx.array_equal(y, expected_y))
+        self.assertEqual(y.shape, (5,))
+        self.assertEqual(y.dtype, mx.float32)
+
+        y = nn.HardShrink()(x)
+        expected_y = mx.array([1.0, 0.0, 0.0, 0.0, -1.5])
+        self.assertTrue(mx.array_equal(y, expected_y))
+        self.assertEqual(y.shape, (5,))
+        self.assertEqual(y.dtype, mx.float32)
+
+        y = nn.HardShrink(lambd=0.1)(x)
         expected_y = mx.array([1.0, -0.5, 0.0, 0.5, -1.5])
         self.assertTrue(mx.array_equal(y, expected_y))
         self.assertEqual(y.shape, (5,))
@@ -1411,6 +1641,37 @@ class TestLayers(mlx_tests.MLXTestCase):
             str(nn.Upsample(scale_factor=(2, 3))),
             "Upsample(scale_factor=(2.0, 3.0), mode='nearest', align_corners=False)",
         )
+
+    def test_upsample_align_corners_one_dim(self):
+        x = mx.arange(1, 5).reshape((1, 2, 2, 1))
+
+        up = nn.Upsample(scale_factor=0.5, mode="linear", align_corners=True)
+        out = up(x)
+        self.assertEqual(out.shape, (1, 1, 1, 1))
+        self.assertTrue(np.allclose(out, x[:, :1, :1, :]))
+
+        up = nn.Upsample(scale_factor=(0.5, 2), mode="linear", align_corners=True)
+        out = up(x)
+        expected = mx.array([[[[1.0], [4.0 / 3.0], [5.0 / 3.0], [2.0]]]])
+        self.assertEqual(out.shape, (1, 1, 4, 1))
+        self.assertTrue(np.allclose(out, expected))
+
+        up = nn.Upsample(scale_factor=(2, 0.5), mode="linear", align_corners=True)
+        out = up(x)
+        expected = mx.array([[[[1.0]], [[5.0 / 3.0]], [[7.0 / 3.0]], [[3.0]]]])
+        self.assertEqual(out.shape, (1, 4, 1, 1))
+        self.assertTrue(np.allclose(out, expected))
+
+        up = nn.Upsample(scale_factor=0.5, mode="cubic", align_corners=True)
+        out = up(x)
+        self.assertEqual(out.shape, (1, 1, 1, 1))
+        self.assertTrue(np.allclose(out, x[:, :1, :1, :]))
+
+        x_1d = mx.arange(0, 4).reshape((1, 4, 1)).astype(mx.float32)
+        up = nn.Upsample(scale_factor=0.25, mode="linear", align_corners=True)
+        out = up(x_1d)
+        self.assertEqual(out.shape, (1, 1, 1))
+        self.assertTrue(np.allclose(out, x_1d[:, :1, :]))
 
     def test_pooling(self):
         # Test 1d pooling
@@ -2080,6 +2341,20 @@ class TestLayers(mlx_tests.MLXTestCase):
         tgt = mx.random.normal(shape=(2, 5, 32))
         out = model(src, tgt, src_mask=None, tgt_mask=None, memory_mask=None)
         self.assertEqual(out.shape, tgt.shape)
+
+    def test_transformer_custom_modules(self):
+        # A custom encoder or decoder without any parameters is still a
+        # module and should not be replaced by the default one.
+        model = nn.Transformer(
+            dims=32,
+            num_heads=4,
+            num_encoder_layers=2,
+            num_decoder_layers=2,
+            custom_encoder=nn.Identity(),
+            custom_decoder=nn.Identity(),
+        )
+        self.assertTrue(isinstance(model.encoder, nn.Identity))
+        self.assertTrue(isinstance(model.decoder, nn.Identity))
 
 
 if __name__ == "__main__":

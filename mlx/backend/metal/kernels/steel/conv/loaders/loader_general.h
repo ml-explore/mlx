@@ -67,10 +67,10 @@ struct Conv2DInputBlockLoaderGeneral {
       const short base_wh_,
       const short base_ww_,
       uint simd_group_id [[simdgroup_index_in_threadgroup]],
-      uint simd_lane_id [[thread_index_in_simdgroup]])
+      uint simd_lane_id [[thread_index_in_simdgroup]]) thread
       : thread_idx(simd_group_id * 32 + simd_lane_id),
         bi(thread_idx / TCOLS),
-        bj(vec_size * (thread_idx % TCOLS)),
+        bj(vec_size*(thread_idx % TCOLS)),
         dst(dst_ + bi * dst_ld + bj),
         params(params_),
         jump_params(jump_params_),
@@ -101,7 +101,7 @@ struct Conv2DInputBlockLoaderGeneral {
   }
 
   /* Load from device memory into threadgroup memory - without bound checking */
-  METAL_FUNC void load_unsafe() const {
+  METAL_FUNC void load_unsafe() const thread {
     STEEL_PRAGMA_UNROLL
     for (short i = 0, is = 0; i < n_rows; ++i, is += TROWS) {
       // Find bounds
@@ -137,7 +137,7 @@ struct Conv2DInputBlockLoaderGeneral {
     }
   }
 
-  METAL_FUNC void load_safe(const short remaining_k) const {
+  METAL_FUNC void load_safe(const short remaining_k) const thread {
     STEEL_PRAGMA_UNROLL
     for (short i = 0, is = 0; i < n_rows; ++i, is += TROWS) {
       // Find bounds
@@ -184,7 +184,7 @@ struct Conv2DInputBlockLoaderGeneral {
   }
 
   /* Iteration helper */
-  METAL_FUNC void next() {
+  METAL_FUNC void next() thread {
     weight_w += jump_params->f_wgt_jump_w;
     if (weight_w < params->wS[1]) {
       return;
@@ -263,11 +263,11 @@ struct Conv2DWeightBlockLoaderGeneral {
       const short base_wh_,
       const short base_ww_,
       uint simd_group_id [[simdgroup_index_in_threadgroup]],
-      uint simd_lane_id [[thread_index_in_simdgroup]])
+      uint simd_lane_id [[thread_index_in_simdgroup]]) thread
       : src_ld(params_->wt_strides[0]),
         thread_idx(simd_group_id * 32 + simd_lane_id),
         bi(thread_idx / TCOLS),
-        bj(vec_size * (thread_idx % TCOLS)),
+        bj(vec_size*(thread_idx % TCOLS)),
         dst(dst_ + bi * dst_ld + bj),
         src(src_ + bi * src_ld + bj),
         params(params_),
@@ -279,7 +279,7 @@ struct Conv2DWeightBlockLoaderGeneral {
         start_row(offsets.y + bi) {}
 
   /* Load from device memory into threadgroup memory - without bound checking */
-  METAL_FUNC void load_unsafe() const {
+  METAL_FUNC void load_unsafe() const thread {
     const device T* curr_src = src + weight_h * params->wt_strides[1] +
         weight_w * params->wt_strides[2];
 
@@ -308,7 +308,7 @@ struct Conv2DWeightBlockLoaderGeneral {
     }
   }
 
-  METAL_FUNC void load_safe(const short remaining_k) const {
+  METAL_FUNC void load_safe(const short remaining_k) const thread {
     const device T* curr_src = src + weight_h * params->wt_strides[1] +
         weight_w * params->wt_strides[2];
 
@@ -358,7 +358,7 @@ struct Conv2DWeightBlockLoaderGeneral {
   }
 
   /* Iteration helper */
-  METAL_FUNC void next() {
+  METAL_FUNC void next() thread {
     weight_w += jump_params->f_wgt_jump_w;
     if (weight_w < params->wS[1]) {
       return;

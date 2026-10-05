@@ -11,6 +11,7 @@
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/event.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/utils.h"
@@ -33,9 +34,40 @@ namespace {
 
 constexpr const char* default_mtllib_path = METAL_PATH;
 
+void set_compile_options(
+    MTL::CompileOptions* mtl_options,
+    const CompileOptions& compile_options) {
+  if (__builtin_available(macOS 15, iOS 18, tvOS 18, visionOS 2, *)) {
+    switch (compile_options.math_mode) {
+      case MathMode::Safe:
+        mtl_options->setMathMode(MTL::MathModeSafe);
+        break;
+      case MathMode::Relaxed:
+        mtl_options->setMathMode(MTL::MathModeRelaxed);
+        break;
+      case MathMode::Fast:
+        mtl_options->setMathMode(MTL::MathModeFast);
+        break;
+      default:
+        throw std::invalid_argument("[metal::Device] Invalid math mode.");
+    }
+  } else {
+    if (compile_options.math_mode == MathMode::Relaxed) {
+      throw std::runtime_error(
+          "[metal::Device] Metal math mode `relaxed` requires macOS 15, "
+          "iOS 18, tvOS 18, or visionOS 2.");
+    }
+    mtl_options->setFastMathEnabled(
+        compile_options.math_mode == MathMode::Fast);
+  }
+}
+
 auto get_metal_version() {
   auto get_metal_version_ = []() {
-    if (__builtin_available(macOS 26, iOS 26, tvOS 26, visionOS 26, *)) {
+    if (__builtin_available(macOS 27, iOS 27, tvOS 27, visionOS 27, *)) {
+      // TODO: Use MTL::LanguageVersion4_1 after metal-cpp_27 is released.
+      return static_cast<MTL::LanguageVersion>((4 << 16) + 1);
+    } else if (__builtin_available(macOS 26, iOS 26, tvOS 26, visionOS 26, *)) {
       return MTL::LanguageVersion4_0;
     } else if (__builtin_available(macOS 15, iOS 18, tvOS 18, visionOS 2, *)) {
       return MTL::LanguageVersion3_2;
@@ -161,7 +193,21 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
 }
 
 MTL::Library* load_default_library(MTL::Device* device) {
-  NS::Error* error[5];
+  // Check override path before automatic lookup
+  if (!get_metallib_path().empty()) {
+    auto [lib, error] =
+        load_library_from_path(device, get_metallib_path().c_str());
+    if (!lib) {
+      throw std::runtime_error(
+          fmt::format(
+              "Can not load metallib from specified location \"{}\": {}.",
+              get_metallib_path(),
+              error->localizedDescription()->utf8String()));
+    }
+    return lib;
+  }
+
+  NS::Error* error[6];
   MTL::Library* lib;
   // First try the colocated mlx.metallib
   std::tie(lib, error[0]) = load_colocated_library(device, "mlx");
@@ -173,6 +219,22 @@ MTL::Library* load_default_library(MTL::Device* device) {
   if (lib) {
     return lib;
   }
+
+#ifdef SWIFTPM_BUNDLE
+  // `swift test` with the default Swift Build build system nests resource
+  // bundles inside the .xctest and runs tests via the toolchain's
+  // swiftpm-testing-helper, so the running binary is the toolchain helper:
+  // neither Bundle.main nor Bundle.allBundles names the test bundle, and the
+  // SwiftPM bundle search below cannot reach it. In that layout the metallib
+  // sits at a fixed offset from the binary.
+  std::tie(lib, error[5]) = load_colocated_library(
+      device,
+      std::string("../Resources/") + SWIFTPM_BUNDLE +
+          ".bundle/Contents/Resources/default");
+  if (lib) {
+    return lib;
+  }
+#endif
 
   // Then try default.metallib in a SwiftPM bundle if we have one
   std::tie(lib, error[2]) = load_swiftpm_library(device, "default");
@@ -192,7 +254,7 @@ MTL::Library* load_default_library(MTL::Device* device) {
   if (!lib) {
     std::ostringstream msg;
     msg << "Failed to load the default metallib. ";
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
       if (error[i] != nullptr) {
         msg << error[i]->localizedDescription()->utf8String() << " ";
       }
@@ -263,17 +325,16 @@ MTL::Library* load_library(
 CommandEncoder::CommandEncoder(
     Device& d,
     int index,
-    ResidencySet& residency_set)
-    : device_(d) {
+    ResidencySets& residency_sets)
+    : device_(d), residency_sets_(residency_sets) {
   auto pool = new_scoped_memory_pool();
   queue_ = NS::TransferPtr(device_.mtl_device()->newCommandQueue());
   if (!queue_) {
     throw std::runtime_error(
         "[metal::CommandEncoder] Failed to make new command queue.");
   }
-  if (residency_set.mtl_residency_set()) {
-    queue_->addResidencySet(residency_set.mtl_residency_set());
-  }
+  // Sets created later are attached in commit().
+  residency_sets_.attach_new_sets(queue_.get(), sets_attached_);
   debug_set_stream_queue_label(queue_.get(), index);
   buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
 }
@@ -305,6 +366,7 @@ void CommandEncoder::set_input_array(
     buffer_sizes_ += a.data_size();
   }
   auto r_buf = static_cast<MTL::Resource*>(const_cast<void*>(a.buffer().ptr()));
+  next_inputs_.insert(r_buf);
   needs_barrier_ =
       needs_barrier_ | (prev_outputs_.find(r_buf) != prev_outputs_.end());
   auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
@@ -328,6 +390,8 @@ void CommandEncoder::register_output_array(const array& a) {
     concurrent_outputs_.insert(buf);
   } else {
     next_outputs_.insert(buf);
+    needs_barrier_ =
+        needs_barrier_ | (prev_inputs_.find(buf) != prev_inputs_.end());
   }
 }
 
@@ -346,10 +410,14 @@ void CommandEncoder::maybeInsertBarrier() {
   if (needs_barrier_) {
     get_command_encoder()->memoryBarrier(MTL::BarrierScopeBuffers);
     needs_barrier_ = false;
-    prev_outputs_ = std::move(next_outputs_);
+    // Preserve the hash tables' buckets for reuse across barrier epochs.
+    prev_inputs_.swap(next_inputs_);
+    prev_outputs_.swap(next_outputs_);
   } else {
+    prev_inputs_.insert(next_inputs_.begin(), next_inputs_.end());
     prev_outputs_.insert(next_outputs_.begin(), next_outputs_.end());
   }
+  next_inputs_.clear();
   next_outputs_.clear();
 }
 
@@ -436,10 +504,24 @@ void CommandEncoder::end_encoding() {
   encoder_.reset();
   needs_barrier_ = false;
   concurrent_ = false;
+  prev_inputs_.clear();
+  next_inputs_.clear();
   prev_outputs_.clear();
   next_outputs_.clear();
   concurrent_outputs_.clear();
   all_inputs_.clear();
+}
+
+void CommandEncoder::signal_event(Event event, uint64_t value) {
+  end_encoding();
+  buffer_->encodeSignalEvent(event.cast<EventImpl>().mtl_event(), value);
+  signal_events_.push_back({std::move(event), value});
+}
+
+void CommandEncoder::wait_event(Event event, uint64_t value) {
+  end_encoding();
+  buffer_->encodeWait(event.cast<EventImpl>().mtl_event(), value);
+  wait_events_.push_back(std::move(event));
 }
 
 bool CommandEncoder::needs_commit() const {
@@ -447,7 +529,48 @@ bool CommandEncoder::needs_commit() const {
   return (buffer_ops_ > max_ops) || ((buffer_sizes_ >> 20) > max_mb);
 }
 
-void CommandEncoder::commit() {
+void CommandEncoder::commit(std::function<void()> completion) {
+  // Metal locks a command buffer's residency at commit time, so attach any
+  // sets created since the last commit first.
+  residency_sets_.attach_new_sets(queue_.get(), sets_attached_);
+  buffer_->addCompletedHandler(
+      [&error_ = error_,
+       wait_events = std::move(wait_events_),
+       signal_events = std::move(signal_events_),
+       completion = std::move(completion)](MTL::CommandBuffer* cbuf) mutable {
+        if (completion) {
+          completion();
+        }
+        // If any of the waited event has error in it, poison the encoder.
+        for (auto& event : wait_events) {
+          if (error_.store_if_valid(event.load_error())) {
+            break;
+          }
+        }
+        // Set error only when no error happended before, to preserve the
+        // earliest error.
+        bool has_error = error_.valid();
+        if (!has_error && cbuf->status() == MTL::CommandBufferStatusError) {
+          error_.set_message(
+              std::make_shared<std::string>(fmt::format(
+                  "[METAL] Command buffer execution failed: {}.",
+                  cbuf->error()->localizedDescription()->utf8String())));
+          has_error = true;
+        }
+        // Poison all the signaled events when error happened.
+        if (has_error) {
+          for (auto& [event, value] : signal_events) {
+            event.set_error(error_);
+          }
+        }
+        // Metal won't signal the events for us on error, manually signal them
+        // to avoid infinite waiting.
+        if (cbuf->status() == MTL::CommandBufferStatusError) {
+          for (auto& [event, value] : signal_events) {
+            event.cast<EventImpl>().signal(value);
+          }
+        }
+      });
   buffer_->commit();
   buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
   buffer_ops_ = 0;
@@ -456,22 +579,19 @@ void CommandEncoder::commit() {
 
 void CommandEncoder::synchronize() {
   auto pool = new_scoped_memory_pool();
-  auto cb = NS::RetainPtr(get_command_buffer());
+  auto cbuf = buffer_; // retained
   end_encoding();
   commit();
-  cb->waitUntilCompleted();
+  cbuf->waitUntilCompleted();
+
   if (!exiting_) {
-    if (cb->status() == MTL::CommandBufferStatusError) {
-      throw std::runtime_error(
-          fmt::format(
-              "[METAL] Command buffer execution failed: {}.",
-              cb->error()->localizedDescription()->utf8String()));
-    }
+    error_.check();
   }
 }
 
 MTL::ComputeCommandEncoder* CommandEncoder::get_command_encoder() {
   if (!encoder_) {
+    error_.check();
     encoder_ = NS::RetainPtr(
         buffer_->computeCommandEncoder(MTL::DispatchTypeConcurrent));
     fence_ = NS::TransferPtr(device_.mtl_device()->newFence());
@@ -479,7 +599,7 @@ MTL::ComputeCommandEncoder* CommandEncoder::get_command_encoder() {
   return encoder_.get();
 }
 
-Device::Device() : device_(load_device()), residency_set_(device_.get()) {
+Device::Device() : device_(load_device()), residency_sets_(device_.get()) {
   auto pool = new_scoped_memory_pool();
   default_library_ = NS::TransferPtr(load_default_library(device_.get()));
   arch_ = env::metal_gpu_arch();
@@ -545,7 +665,8 @@ MTL::Library* Device::get_library(
 }
 
 NS::SharedPtr<MTL::Library> Device::build_library_(
-    const std::string& source_string) {
+    const std::string& source_string,
+    const CompileOptions& compile_options) {
   auto pool = new_scoped_memory_pool();
 
   auto ns_code =
@@ -553,7 +674,7 @@ NS::SharedPtr<MTL::Library> Device::build_library_(
 
   NS::Error* error = nullptr;
   auto options = MTL::CompileOptions::alloc()->init()->autorelease();
-  options->setFastMathEnabled(false);
+  set_compile_options(options, compile_options);
   options->setLanguageVersion(get_metal_version());
 #ifndef NDEBUG
   if (options->languageVersion() >= MTL::LanguageVersion3_2) {
@@ -694,6 +815,7 @@ NS::SharedPtr<MTL::ComputePipelineState> Device::get_kernel_(
 
 MTL::Library* Device::get_library(
     const std::string& name,
+    const CompileOptions& compile_options,
     const std::function<std::string(void)>& builder) {
   {
     std::shared_lock rlock(library_mtx_);
@@ -707,7 +829,7 @@ MTL::Library* Device::get_library(
     return it->second.get();
   }
 
-  auto mtl_lib = build_library_(builder());
+  auto mtl_lib = build_library_(builder(), compile_options);
   library_map_.insert({name, mtl_lib});
   return mtl_lib.get();
 }
@@ -777,9 +899,12 @@ MTL::ComputePipelineState* Device::get_kernel(
     std::shared_lock lock(kernel_mtx_);
 
     // Look for cached kernel
-    auto& kernel_map_ = library_kernels_[mtl_lib];
-    if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
-      return it->second.get();
+    auto library_it = library_kernels_.find(mtl_lib);
+    if (library_it != library_kernels_.end()) {
+      auto kernel_it = library_it->second.find(kname);
+      if (kernel_it != library_it->second.end()) {
+        return kernel_it->second.get();
+      }
     }
   }
   return get_kernel_(base_name, mtl_lib, kname, func_consts, linked_functions);
@@ -810,14 +935,29 @@ CommandEncoder& get_command_encoder(Stream s) {
   auto& encoders = get_command_encoders();
   auto it = encoders.find(s.index);
   if (it == encoders.end()) {
-    throw std::runtime_error(
-        fmt::format("There is no Stream(gpu, {}) in current thread.", s.index));
+    auto& global_encoders = get_global_command_encoders();
+    it = global_encoders.find(s.index);
+    if (it == global_encoders.end()) {
+      throw std::runtime_error(
+          fmt::format(
+              "There is no Stream(gpu, {}) in current thread.", s.index));
+    }
   }
   return it->second;
 }
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders() {
-  static thread_local std::unordered_map<int, CommandEncoder> encoders;
+  if (is_main_thread()) {
+    static auto* encoders = new std::unordered_map<int, CommandEncoder>();
+    return *encoders;
+  } else {
+    static thread_local std::unordered_map<int, CommandEncoder> encoders;
+    return encoders;
+  }
+}
+
+std::unordered_map<int, CommandEncoder>& get_global_command_encoders() {
+  static std::unordered_map<int, CommandEncoder> encoders;
   return encoders;
 }
 

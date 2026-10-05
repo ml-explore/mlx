@@ -39,7 +39,7 @@ class Optimizer:
         :meth:`Optimizer.update`.
 
         Args:
-            model (dict): A Python tree of parameters.
+            parameters (dict): A Python tree of parameters.
 
         Example:
             >>> optimizer = optim.SGD(learning_rate=1e-1, momentum=0.9)
@@ -77,7 +77,7 @@ class Optimizer:
         state initialization.
 
         Args:
-            parameter (mx.array): A single parameter that will be optimized.
+            parameter (array): A single parameter that will be optimized.
             state (dict): The optimizer's state.
         """
         raise NotImplementedError()
@@ -112,8 +112,8 @@ class Optimizer:
         """To be extended by derived classes to implement the optimizer's update.
 
         Args:
-            gradient (mx.array): The ``parameter`` gradient.
-            parameter (mx.array): The ``parameter`` to update.
+            gradient (array): The ``parameter`` gradient.
+            parameter (array): The ``parameter`` to update.
             state (dict): The optimizer's state.
         """
         raise NotImplementedError()
@@ -165,7 +165,7 @@ class MultiOptimizer(Optimizer):
 
     Args:
         optimizers (list[Optimizer]): A list of optimizers to delegate to
-        filters (list[Callable[[str, array], bool]): A list of predicates that
+        filters (list[Callable[[str, array], bool]]): A list of predicates that
             should be one less than the provided optimizers.
     """
 
@@ -175,7 +175,7 @@ class MultiOptimizer(Optimizer):
 
         if len(filters) != len(optimizers) - 1:
             raise ValueError(
-                f"Given {len(filters)} filters but {len(optimizers)-1} needed."
+                f"Given {len(filters)} filters but {len(optimizers) - 1} needed."
             )
 
         self.optimizers = optimizers
@@ -193,7 +193,8 @@ class MultiOptimizer(Optimizer):
                     parts[i].append((k, g))
                     break
 
-        return [tree_unflatten(p) for p in parts]
+        # tree_unflatten([]) returns a list so use a dict for empty parts
+        return [tree_unflatten(p) if p else {} for p in parts]
 
     def init(self, parameters: dict):
         for o, p in zip(self.optimizers, self._split_dictionary(parameters)):
@@ -274,7 +275,7 @@ class SGD(Optimizer):
         optimizer state."""
 
         if self.weight_decay != 0:
-            gradient += self.weight_decay * parameter
+            gradient = gradient + self.weight_decay * parameter
 
         if self.momentum <= 0:
             return parameter - self.learning_rate.astype(gradient.dtype) * gradient
@@ -297,7 +298,8 @@ class SGD(Optimizer):
 class RMSprop(Optimizer):
     r"""The RMSprop optimizer [1].
 
-    [1]: Tieleman, T. and Hinton, G. 2012. Lecture 6.5-rmsprop, coursera: Neural networks for machine learning
+    [1]: Tieleman, T. and Hinton, G. 2012. Lecture 6.5-rmsprop, coursera: Neural
+    networks for machine learning
 
     .. math::
 
@@ -328,7 +330,7 @@ class RMSprop(Optimizer):
             raise ValueError(
                 f"RMSprop alpha should be >=0, {self.alpha} was provided instead"
             )
-        if self.eps < 0.0:
+        if self.eps <= 0.0:
             raise ValueError(
                 f"RMSprop epsilon should be >0, {self.eps} was provided instead"
             )
@@ -338,7 +340,9 @@ class RMSprop(Optimizer):
         state["v"] = mx.zeros_like(parameter)
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
-        """Performs the RMSprop parameter update and stores :math:`v` in the optimizer state."""
+        """Performs the RMSprop parameter update and stores :math:`v` in the
+        optimizer state.
+        """
         lr = self.learning_rate.astype(gradient.dtype)
         alpha = self.alpha
         eps = self.eps
@@ -379,7 +383,7 @@ class Adagrad(Optimizer):
         self._maybe_schedule("learning_rate", learning_rate)
         self.eps = eps
 
-        if self.eps < 0.0:
+        if self.eps <= 0.0:
             raise ValueError(
                 f"Adagrad epsilon should be >0, {self.eps} was provided instead"
             )
@@ -405,7 +409,8 @@ class AdaDelta(Optimizer):
 
     Our AdaDelta implementation follows the original paper. In detail,
 
-    [1]: Zeiler, M.D., 2012. ADADELTA: an adaptive learning rate method. arXiv preprint arXiv:1212.5701.
+    [1]: Zeiler, M.D., 2012. ADADELTA: an adaptive learning rate method. arXiv preprint
+    arXiv:1212.5701.
 
     .. math::
 
@@ -418,8 +423,8 @@ class AdaDelta(Optimizer):
         learning_rate (float or callable): The learning rate :math:`\lambda`.
         rho (float, optional): The coefficient :math:`\rho` used for computing a
             running average of squared gradients. Default: ``0.9``
-        eps (float, optional): The term :math:`\epsilon` added to the denominator to improve
-          numerical stability. Default: `1e-8`
+        eps (float, optional): The term :math:`\epsilon` added to the denominator to
+          improve numerical stability. Default: ``1e-6``
     """
 
     def __init__(
@@ -437,7 +442,7 @@ class AdaDelta(Optimizer):
             raise ValueError(
                 f"AdaDelta rho should be >=0, {self.rho} was provided instead"
             )
-        if self.eps < 0.0:
+        if self.eps <= 0.0:
             raise ValueError(
                 f"AdaDelta epsilon should be >0, {self.eps} was provided instead"
             )
@@ -499,6 +504,15 @@ class Adam(Optimizer):
     ):
         super().__init__()
 
+        for i, beta in enumerate(betas):
+            if not 0.0 <= beta < 1.0:
+                raise ValueError(
+                    f"Adam beta{i + 1} should be in [0, 1), {beta} was provided instead"
+                )
+
+        if not 0.0 <= eps:
+            raise ValueError(f"Adam epsilon should be >=0, {eps} was provided instead")
+
         self._maybe_schedule("learning_rate", learning_rate)
         self.betas = betas
         self.eps = eps
@@ -546,7 +560,8 @@ class AdamW(Adam):
 
         m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
         v_{t+1} &= \beta_2 v_t + (1 - \beta_2) g_t^2 \\
-        w_{t+1} &= w_t - \alpha (\frac{m_{t+1}}{\sqrt{v_{t+1}} + \epsilon} + \lambda w_t)
+        w_{t+1} &= w_t - \alpha (\frac{m_{t+1}}{\sqrt{v_{t+1}} + \epsilon} + \lambda
+        w_t)
 
     Args:
         learning_rate (float or callable): The learning rate :math:`\alpha`.
@@ -606,8 +621,9 @@ class Adamax(Adam):
     Args:
         learning_rate (float or callable): The learning rate :math:`\lambda`.
         betas (Tuple[float, float], optional): The coefficients
-          :math:`(\beta_1, \beta_2)` used for computing running averages of the
-          gradient and its square. Default: ``(0.9, 0.999)``
+          :math:`(\beta_1, \beta_2)` used for computing the running average of
+          the gradient and the exponentially weighted infinity norm.
+          Default: ``(0.9, 0.999)``
         eps (float, optional): The term :math:`\epsilon` added to the
           denominator to improve numerical stability. Default: ``1e-8``
     """
@@ -619,10 +635,6 @@ class Adamax(Adam):
         eps: float = 1e-8,
     ):
         super().__init__(learning_rate, betas, eps)
-        if not 0.0 <= eps:
-            raise ValueError(
-                f"Epsilon value should be >=0, {self.eps} was provided instead"
-            )
 
     def init_single(self, parameter: mx.array, state: dict):
         """Initialize optimizer state"""
@@ -671,7 +683,8 @@ class Lion(Optimizer):
         betas (Tuple[float, float], optional): The coefficients
           :math:`(\beta_1, \beta_2)` used for computing the gradient
           momentum and update direction. Default: ``(0.9, 0.99)``
-        weight_decay (float, optional): The weight decay :math:`\lambda`. Default: ``0.0``
+        weight_decay (float, optional): The weight decay :math:`\lambda`. Default:
+            ``0.0``
     """
 
     def __init__(
@@ -681,6 +694,12 @@ class Lion(Optimizer):
         weight_decay: float = 0.0,
     ):
         super().__init__()
+
+        for i, beta in enumerate(betas):
+            if not 0.0 <= beta < 1.0:
+                raise ValueError(
+                    f"Lion beta{i + 1} should be in [0, 1), {beta} was provided instead"
+                )
 
         self._maybe_schedule("learning_rate", learning_rate)
         self.betas = betas
@@ -797,9 +816,7 @@ class Adafactor(Optimizer):
             exp_avg_sq_row / mx.mean(exp_avg_sq_row, axis=-1, keepdims=True)
         )
         c_factor = mx.rsqrt(exp_avg_sq_col)
-        return mx.matmul(
-            mx.expand_dims(r_factor, axis=-1), mx.expand_dims(c_factor, axis=0)
-        )
+        return mx.expand_dims(r_factor, axis=-1) * mx.expand_dims(c_factor, axis=-2)
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adafactor parameter and state update."""
@@ -844,7 +861,7 @@ class Adafactor(Optimizer):
             update = exp_avg
 
         if self.weight_decay != 0:
-            parameter += parameter * (-self.weight_decay * learning_rate)
+            parameter = parameter + parameter * (-self.weight_decay * learning_rate)
         return parameter - update
 
 
@@ -894,9 +911,10 @@ class Muon(Optimizer):
         state["v"] = mx.zeros_like(parameter)
 
     def _zeropower_via_newtonschulz5(self, X, steps: int):
-        assert (
-            X.ndim == 2
-        ), f"Expected a 2D array for Newton-Schulz iteration, got shape {X.shape} instead."
+        assert X.ndim == 2, (
+            f"Expected a 2D array for Newton-Schulz iteration, got shape {X.shape} "
+            f"instead."
+        )
         a, b, c = (3.4445, -4.7750, 2.0315)
         transpose_needed = X.shape[-2] > X.shape[-1]
 
@@ -969,6 +987,9 @@ def clip_grad_norm(grads, max_norm):
         (dict, float): The possibly rescaled gradients and the original
         gradient norm.
     """
+    if max_norm < 0:
+        raise ValueError(f"max_norm should be >=0, {max_norm} was provided instead")
+
     norm_squared = tree_reduce(lambda acc, g: acc + g.square().sum(), grads, 0.0)
     total_norm = mx.sqrt(norm_squared)
     normalizer = mx.minimum(max_norm / (total_norm + 1e-6), 1.0)

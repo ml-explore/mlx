@@ -2,6 +2,7 @@
 
 import os
 import platform
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -64,7 +65,7 @@ class TestLoad(mlx_tests.MLXTestCase):
                         load_arr_mlx_npy = np.load(save_file_mlx)
                         self.assertTrue(np.array_equal(load_arr_mlx_npy, save_arr_npy))
 
-        save_file = os.path.join(self.test_dir, f"mlx_path.npy")
+        save_file = os.path.join(self.test_dir, "mlx_path.npy")
         save_arr = mx.ones((32,))
         mx.save(Path(save_file), save_arr)
 
@@ -86,6 +87,58 @@ class TestLoad(mlx_tests.MLXTestCase):
         np.save(save_file, c)
         with self.assertRaises(Exception):
             out = mx.load(save_file, stream=mx.cpu)
+
+    def test_load_npy_read_error(self):
+        save_file = os.path.join(self.test_dir, "truncated.npy")
+        expected = np.arange(16, dtype=np.float32)
+        np.save(save_file, expected)
+        with open(save_file, "r+b") as f:
+            f.truncate(os.path.getsize(save_file) - expected.nbytes)
+
+        out = mx.load(save_file, stream=mx.cpu)
+        with self.assertRaises(RuntimeError):
+            mx.eval(out)
+
+    def test_async_load_npy_read_error_across_streams(self):
+        save_file = os.path.join(self.test_dir, "truncated_async.npy")
+        expected = np.arange(16, dtype=np.float32)
+        np.save(save_file, expected)
+        with open(save_file, "r+b") as f:
+            f.truncate(os.path.getsize(save_file) - expected.nbytes)
+
+        producer_stream = mx.new_stream(mx.cpu)
+        consumer_stream = mx.new_stream(mx.cpu)
+        out = mx.add(
+            mx.load(save_file, stream=producer_stream),
+            1.0,
+            stream=consumer_stream,
+        )
+        with self.assertRaises(RuntimeError):
+            mx.eval(out)
+        # Depending on backend the error might be caught early before poisoning
+        # the producer_stream, but still sync to clear the errors.
+        try:
+            mx.synchronize(producer_stream)
+        except Exception:
+            pass
+
+    def test_save_over_lazily_loaded_safetensors(self):
+        # The save must eval the lazy input before truncating the file it was
+        # loaded from. Shift the data so stale content cannot pass.
+        save_file = os.path.join(self.test_dir, "resave.safetensors")
+        mx.save_safetensors(save_file, {"a": mx.ones((4, 4))})
+        a = mx.load(save_file, stream=mx.cpu)["a"]
+        mx.save_safetensors(save_file, {"a": a + 1})
+        out = mx.load(save_file, stream=mx.cpu)["a"]
+        self.assertTrue(np.array_equal(np.array(out), 2 * np.ones((4, 4))))
+
+    def test_save_over_lazily_loaded_npy(self):
+        save_file = os.path.join(self.test_dir, "resave.npy")
+        mx.save(save_file, mx.ones((4, 4)))
+        a = mx.load(save_file, stream=mx.cpu)
+        mx.save(save_file, a + 2)
+        out = mx.load(save_file, stream=mx.cpu)
+        self.assertTrue(np.array_equal(np.array(out), 3 * np.ones((4, 4))))
 
     def test_save_and_load_safetensors(self):
         test_file = os.path.join(self.test_dir, "test.safetensors")
@@ -157,12 +210,93 @@ class TestLoad(mlx_tests.MLXTestCase):
                             mx.array_equal(load_dict["test"], save_dict["test"])
                         )
 
-        save_file_mlx = os.path.join(self.test_dir, f"mlx_path_test_fs.gguf")
+        save_file_mlx = os.path.join(self.test_dir, "mlx_path_test_fs.gguf")
         save_dict = {"test": mx.ones(shape)}
         mx.save_gguf(Path(save_file_mlx), save_dict)
         load_dict = mx.load(Path(save_file_mlx))
         self.assertTrue("test" in load_dict)
         self.assertTrue(mx.array_equal(load_dict["test"], save_dict["test"]))
+
+    @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
+    def test_load_gguf_quantized(self):
+        # Write a minimal GGUF v3 file with one quantized tensor and check
+        # that the loaded (weight, scales, biases) triplet dequantizes to the
+        # values prescribed by the GGML block formats.
+        rows, cols = 2, 64
+        n_blocks = rows * cols // 32
+        np.random.seed(7)
+
+        def write_gguf(path, ggml_type_id, blocks):
+            with open(path, "wb") as f:
+                f.write(b"GGUF")
+                # version, tensor count, metadata kv count
+                f.write(struct.pack("<IQQ", 3, 1, 0))
+                name = b"tensor.weight"
+                f.write(struct.pack("<Q", len(name)) + name)
+                # dims are stored in GGML order: ne[0] = cols, ne[1] = rows
+                f.write(struct.pack("<IQQIQ", 2, cols, rows, ggml_type_id, 0))
+                f.write(b"\x00" * (-f.tell() % 32))  # default alignment
+                f.write(blocks.tobytes())
+
+        def packed_nibbles(q):
+            # GGML nibble order: byte j = element j | element j + 16 << 4
+            return (q[:, :16] | (q[:, 16:] << 4)).astype(np.uint8)
+
+        d = np.full((n_blocks, 1), 0.5, dtype=np.float16)
+        m = np.full((n_blocks, 1), -1.25, dtype=np.float16)
+        q4 = np.random.randint(0, 16, size=(n_blocks, 32)).astype(np.uint8)
+        q8 = np.random.randint(-128, 128, size=(n_blocks, 32)).astype(np.int8)
+        d32 = d.astype(np.float32)
+        m32 = m.astype(np.float32)
+
+        # (name, ggml type id, bits, block bytes, expected dequantized values)
+        cases = [
+            (
+                "Q4_0",
+                2,
+                4,
+                np.concatenate([d.view(np.uint8), packed_nibbles(q4)], axis=1),
+                d32 * (q4.astype(np.float32) - 8),
+            ),
+            (
+                "Q4_1",
+                3,
+                4,
+                np.concatenate(
+                    [d.view(np.uint8), m.view(np.uint8), packed_nibbles(q4)],
+                    axis=1,
+                ),
+                d32 * q4.astype(np.float32) + m32,
+            ),
+            (
+                "Q8_0",
+                8,
+                8,
+                np.concatenate([d.view(np.uint8), q8.view(np.uint8)], axis=1),
+                d32 * q8.astype(np.float32),
+            ),
+        ]
+        for name, type_id, bits, blocks, expected in cases:
+            with self.subTest(qtype=name):
+                save_file = os.path.join(self.test_dir, f"quant_{name}.gguf")
+                write_gguf(save_file, type_id, blocks)
+                load_dict = mx.load(save_file)
+                self.assertEqual(load_dict["tensor.weight"].dtype, mx.uint32)
+                self.assertEqual(load_dict["tensor.scales"].shape, (rows, cols // 32))
+                self.assertEqual(load_dict["tensor.biases"].shape, (rows, cols // 32))
+                dequantized = mx.dequantize(
+                    load_dict["tensor.weight"],
+                    load_dict["tensor.scales"],
+                    load_dict["tensor.biases"],
+                    group_size=32,
+                    bits=bits,
+                )
+                self.assertTrue(
+                    np.array_equal(
+                        np.array(dequantized, copy=False).astype(np.float32),
+                        expected.reshape(rows, cols),
+                    )
+                )
 
     def test_load_f8_e4m3(self):
         if not os.path.isdir(self.test_dir):
@@ -181,7 +315,11 @@ class TestLoad(mlx_tests.MLXTestCase):
             -0.0039,
         ]
         expected = mx.array(expected, dtype=mx.bfloat16)
-        contents = b'H\x00\x00\x00\x00\x00\x00\x00{"tensor":{"dtype":"F8_E4M3","shape":[10],"data_offsets":[0,10]}}       \x00~\xfe\xb6.\x83\xba\xba\xbc\x82'
+        contents = (
+            b"H\x00\x00\x00\x00\x00\x00\x00"
+            b'{"tensor":{"dtype":"F8_E4M3","shape":[10],"data_offsets":[0,10]}}  '
+            b"     \x00~\xfe\xb6.\x83\xba\xba\xbc\x82"
+        )
         with tempfile.NamedTemporaryFile(suffix=".safetensors") as f:
             f.write(contents)
             f.seek(0)
@@ -193,7 +331,7 @@ class TestLoad(mlx_tests.MLXTestCase):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
 
-        save_file_mlx = os.path.join(self.test_dir, f"mlx_gguf_with_metadata.gguf")
+        save_file_mlx = os.path.join(self.test_dir, "mlx_gguf_with_metadata.gguf")
         save_dict = {"test": mx.ones((4, 4), dtype=mx.int32)}
         metadata = {}
 
@@ -226,7 +364,7 @@ class TestLoad(mlx_tests.MLXTestCase):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
 
-        save_file_mlx = os.path.join(self.test_dir, f"mlx_gguf_with_metadata.gguf")
+        save_file_mlx = os.path.join(self.test_dir, "mlx_gguf_with_metadata.gguf")
         save_dict = {"test": mx.ones((4, 4), dtype=mx.int32)}
 
         # Test scalars and one dimensional arrays
@@ -262,7 +400,7 @@ class TestLoad(mlx_tests.MLXTestCase):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
 
-        save_file_mlx = os.path.join(self.test_dir, f"mlx_gguf_with_metadata.gguf")
+        save_file_mlx = os.path.join(self.test_dir, "mlx_gguf_with_metadata.gguf")
         save_dict = {"test": mx.ones((4, 4), dtype=mx.int32)}
 
         # Test string and array
@@ -441,6 +579,34 @@ class TestLoad(mlx_tests.MLXTestCase):
         load_with_binary = mx.get_peak_memory()
 
         self.assertEqual(load_only, load_with_binary)
+
+    def test_save_and_load_empty(self):
+        for i, shape in enumerate([(0,), (0, 3), (3, 0), (2, 0, 4)]):
+            with self.subTest(shape=shape):
+                save_arr = mx.zeros(shape)
+
+                npy_file = os.path.join(self.test_dir, f"empty_{i}.npy")
+                mx.save(npy_file, save_arr)
+                self.assertEqual(mx.load(npy_file).shape, shape)
+                # numpy can read what we wrote
+                self.assertEqual(np.load(npy_file).shape, shape)
+
+                st_file = os.path.join(self.test_dir, f"empty_{i}.safetensors")
+                mx.save_safetensors(st_file, {"x": save_arr})
+                self.assertEqual(mx.load(st_file)["x"].shape, shape)
+
+        # An empty array alongside a normal one round trips both
+        npz_file = os.path.join(self.test_dir, "empty.npz")
+        mx.savez(npz_file, x=mx.zeros((0, 3)), y=mx.ones((2, 2)))
+        loaded = mx.load(npz_file)
+        self.assertEqual(loaded["x"].shape, (0, 3))
+        self.assertTrue(mx.array_equal(loaded["y"], mx.ones((2, 2))))
+
+        st_file = os.path.join(self.test_dir, "empty_mixed.safetensors")
+        mx.save_safetensors(st_file, {"x": mx.zeros((0, 3)), "y": mx.ones((2, 2))})
+        loaded = mx.load(st_file)
+        self.assertEqual(loaded["x"].shape, (0, 3))
+        self.assertTrue(mx.array_equal(loaded["y"], mx.ones((2, 2))))
 
 
 if __name__ == "__main__":

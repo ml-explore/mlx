@@ -24,7 +24,8 @@ class RoPE(Module):
             implementation which is slightly less efficient. Default: ``False``.
         base (float, optional): The base used to compute angular frequency for
             each dimension in the positional encodings. Default: ``10000``.
-        scale (float, optional): The scale used to scale the positions. Default: ``1.0``.
+        scale (float, optional): The scale used to scale the positions.
+            Default: ``1.0``.
     """
 
     def __init__(
@@ -85,7 +86,20 @@ class SinusoidalPositionalEncoding(Module):
     ):
         super().__init__()
 
-        one_zero = 1 - mx.arange(0, dims // 2) / (dims // 2 - 1)
+        # Sinusoidal embeddings are constructed from sin/cos pairs, so the
+        # embedding dimension must be positive and even.
+        if dims <= 0 or dims % 2 != 0:
+            raise ValueError(
+                f"[SinusoidalPositionalEncoding] dims must be positive and even but "
+                f"got {dims}."
+            )
+
+        # Avoid division by zero when dims == 2 (one frequency pair).
+        if dims == 2:
+            one_zero = mx.array([1.0])
+        else:
+            one_zero = 1 - mx.arange(0, dims // 2) / (dims // 2 - 1)
+
         min_freq = math.log(min_freq)
         max_freq = math.log(max_freq)
 
@@ -95,7 +109,7 @@ class SinusoidalPositionalEncoding(Module):
             self._sigmas = self._sigmas * (2 * math.pi)
 
         # Save some constants that define the implementation
-        self.scale = scale or (2 / dims) ** 0.5
+        self.scale = scale if scale is not None else (2 / dims) ** 0.5
         self.cos_first = cos_first
 
     def __call__(self, x):
@@ -115,14 +129,36 @@ class SinusoidalPositionalEncoding(Module):
 
 
 class ALiBi(Module):
+    """Implements Attention with Linear Biases (ALiBi).
+
+    ALiBi adds a static, non-learnable bias matrix to attention scores proportional
+    to the distance between query and key tokens.
+
+    For more details see `Train Short, Test Long: Attention with Linear Biases Enables
+    Input Length Extrapolation <https://arxiv.org/abs/2108.12409>`_.
+    """
+
     @staticmethod
     def create_alibi_matrix(
         q_sequence_length: int,
         k_sequence_length: int,
         num_heads: int,
-        offset: int,
-        dtype=mx.float32,
-    ):
+        offset: int = 0,
+        dtype: mx.Dtype = mx.float32,
+    ) -> mx.array:
+        """Create the ALiBi bias matrix.
+
+        Args:
+            q_sequence_length (int): The query sequence length.
+            k_sequence_length (int): The key sequence length.
+            num_heads (int): The number of attention heads.
+            offset (int, optional): The position offset. Default: ``0``.
+            dtype (Dtype, optional): Data type of the output array. Default:
+                ``mx.float32``.
+
+        Returns:
+            array: The ALiBi bias matrix.
+        """
         x1 = mx.arange(offset, q_sequence_length)
         x2 = mx.arange(0, k_sequence_length)
         distance_matrix = -mx.abs(
@@ -133,7 +169,18 @@ class ALiBi(Module):
         return alibi_mask
 
     @staticmethod
-    def create_alibi_slope(num_heads, dtype):
+    def create_alibi_slope(num_heads: int, dtype: mx.Dtype = mx.float32) -> mx.array:
+        """Create the geometric slopes for ALiBi across attention heads.
+
+        Args:
+            num_heads (int): The number of attention heads.
+            dtype (Dtype, optional): Data type of the output array. Default:
+                ``mx.float32``.
+
+        Returns:
+            array: The slopes array expanded for head broadcasting.
+        """
+
         def get_slopes(n: int):
             if math.log2(n).is_integer():
                 start = 2 ** (-(2 ** -(math.log2(n) - 3)))
@@ -149,7 +196,22 @@ class ALiBi(Module):
         out = mx.array(slopes, dtype=dtype)
         return mx.expand_dims(out, axis=(-1, -2))
 
-    def __call__(self, attention_scores, offset=0, mask=None):
+    def __call__(
+        self,
+        attention_scores: mx.array,
+        offset: int = 0,
+        mask: Optional[mx.array] = None,
+    ) -> mx.array:
+        """Apply ALiBi matrix to attention scores.
+
+        Args:
+            attention_scores (array): The input attention scores.
+            offset (int, optional): The position offset. Default: ``0``.
+            mask (array, optional): An optional attention mask. Default: ``None``.
+
+        Returns:
+            array: The updated attention scores with ALiBi bias added.
+        """
         alibi_mask = ALiBi.create_alibi_matrix(
             q_sequence_length=attention_scores.shape[-2] + offset,
             k_sequence_length=attention_scores.shape[-1],

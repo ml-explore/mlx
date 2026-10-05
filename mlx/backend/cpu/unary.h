@@ -5,6 +5,7 @@
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -61,50 +62,9 @@ void unary(const array& a, array& out, Op op, Stream stream) {
   encoder.dispatch([a = array::unsafe_weak_copy(a),
                     out = array::unsafe_weak_copy(out),
                     op = op]() mutable {
-    switch (out.dtype()) {
-      case bool_:
-        unary_op<bool>(a, out, op);
-        break;
-      case uint8:
-        unary_op<uint8_t>(a, out, op);
-        break;
-      case uint16:
-        unary_op<uint16_t>(a, out, op);
-        break;
-      case uint32:
-        unary_op<uint32_t>(a, out, op);
-        break;
-      case uint64:
-        unary_op<uint64_t>(a, out, op);
-        break;
-      case int8:
-        unary_op<int8_t>(a, out, op);
-        break;
-      case int16:
-        unary_op<int16_t>(a, out, op);
-        break;
-      case int32:
-        unary_op<int32_t>(a, out, op);
-        break;
-      case int64:
-        unary_op<int64_t>(a, out, op);
-        break;
-      case float16:
-        unary_op<float16_t>(a, out, op);
-        break;
-      case float32:
-        unary_op<float>(a, out, op);
-        break;
-      case float64:
-        unary_op<double>(a, out, op);
-        break;
-      case bfloat16:
-        unary_op<bfloat16_t>(a, out, op);
-        break;
-      case complex64:
-        unary_op<complex64_t>(a, out, op);
-        break;
-    }
+    dispatch_all_types(out.dtype(), [&](auto type_tag) {
+      unary_op<MLX_GET_TYPE(type_tag)>(a, out, op);
+    });
   });
 }
 
@@ -146,27 +106,9 @@ void unary_fp(const array& a, array& out, Op op, Stream stream) {
   encoder.dispatch([a = array::unsafe_weak_copy(a),
                     out = array::unsafe_weak_copy(out),
                     op = op]() mutable {
-    switch (out.dtype()) {
-      case bfloat16:
-        unary_op<bfloat16_t>(a, out, op);
-        break;
-      case float16:
-        unary_op<float16_t>(a, out, op);
-        break;
-      case float32:
-        unary_op<float>(a, out, op);
-        break;
-      case float64:
-        unary_op<double>(a, out, op);
-        break;
-      case complex64:
-        unary_op<complex64_t>(a, out, op);
-        break;
-      default:
-        std::ostringstream err;
-        err << "[unary_fp] Does not support " << out.dtype();
-        throw std::runtime_error(err.str());
-    }
+    dispatch_inexact_types(out.dtype(), "[unary_fp]", [&](auto type_tag) {
+      unary_op<MLX_GET_TYPE(type_tag)>(a, out, op);
+    });
   });
 }
 

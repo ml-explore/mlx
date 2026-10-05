@@ -494,6 +494,7 @@ void init_fft(nb::module_& parent_module) {
 
         Returns:
             array: The real DFT of the input along the given axes. The output
+            data type will be complex.
       )pbdoc");
   m.def(
       "irfftn",

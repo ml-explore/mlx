@@ -15,6 +15,7 @@ Layers
    AvgPool2d
    AvgPool3d
    BatchNorm
+   Bilinear
    CELU
    Conv1d
    Conv2d
@@ -34,6 +35,7 @@ Layers
    HardShrink
    HardTanh
    Hardswish
+   Identity
    InstanceNorm
    LayerNorm
    LeakyReLU
@@ -47,6 +49,7 @@ Layers
    Mish
    MultiHeadAttention
    PReLU
+   QQLinear
    QuantizedAllToShardedLinear
    QuantizedEmbedding
    QuantizedLinear
@@ -71,4 +74,8 @@ Layers
    Step
    Tanh
    Transformer
+   TransformerDecoder
+   TransformerDecoderLayer
+   TransformerEncoder
+   TransformerEncoderLayer
    Upsample

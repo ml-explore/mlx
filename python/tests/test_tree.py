@@ -1,6 +1,5 @@
 # Copyright © 2023 Apple Inc.
 
-import unittest
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -46,6 +45,40 @@ class TestTreeUtils(mlx_tests.MLXTestCase):
             self.assertEqual(k1, k2)
             self.assertTrue(mx.array_equal(v1, v2))
 
+    def test_empty_subtree_merge(self):
+        # make sure mlx pytrees treat empty dict {} as an empty node
+        self.assertEqual([], mlx.utils.tree_flatten({"a": {}}))
+
+        # empty dict merging
+        self.assertEqual({}, mlx.utils.tree_merge({}, {}))
+        self.assertEqual(
+            [{"a": 1, "b": 2}, {}], mlx.utils.tree_merge([{"a": 1}, {}], [{"b": 2}, {}])
+        )
+        self.assertEqual({"a": {}}, mlx.utils.tree_merge({"a": {}}, {"a": {}}))
+        self.assertEqual(
+            {"a": 1, "b": {}, "c": 2},
+            mlx.utils.tree_merge(
+                {"a": 1, "b": {}, "c": {}}, {"a": {}, "b": {}, "c": 2}
+            ),
+        )
+
+        # empty list merging
+        self.assertEqual({"a": []}, mlx.utils.tree_merge({"a": []}, {"a": []}))
+
+        # empty tuple merging
+        self.assertEqual({"a": ()}, mlx.utils.tree_merge({"a": ()}, {"a": ()}))
+
+        # merging different empty structures
+        with self.assertRaises(ValueError):
+            mlx.utils.tree_merge({}, [])
+
+        def merge_called(a, b):
+            raise AssertionError("merge_fn called on empty subtrees")
+
+        self.assertEqual(
+            {"a": {}}, mlx.utils.tree_merge({"a": {}}, {"a": {}}, merge_called)
+        )
+
     def test_supported_trees(self):
 
         from typing import NamedTuple
@@ -63,7 +96,8 @@ class TestTreeUtils(mlx_tests.MLXTestCase):
         params1 = Params(m=mx.array([0, 1]), b=mx.array(2))
         dict1 = {"m": mx.array([0, 1]), "b": mx.array(2)}
 
-        add_one = lambda x: x + 1
+        def add_one(x):
+            return x + 1
 
         list2 = mlx.utils.tree_map(add_one, list1)
         tuple2 = mlx.utils.tree_map(add_one, tuple1)
@@ -90,6 +124,51 @@ class TestTreeUtils(mlx_tests.MLXTestCase):
         self.assertTrue(isinstance(params2, Params))
         self.assertTrue(mx.array_equal(params2.m, mx.array([1, 2])))
         self.assertTrue(mx.array_equal(params2.b, mx.array(3)))
+
+        paths = []
+        params3 = mlx.utils.tree_map_with_path(
+            lambda path, x: paths.append(path) or x + 1, params1
+        )
+
+        self.assertEqual(paths, ["0", "1"])
+        self.assertTrue(isinstance(params3, Params))
+        self.assertTrue(mx.array_equal(params3.m, mx.array([1, 2])))
+        self.assertTrue(mx.array_equal(params3.b, mx.array(3)))
+
+        paths = []
+        params4 = mlx.utils.tree_map_with_path(
+            lambda path, x, y: paths.append(path) or x + y, params1, params3
+        )
+
+        self.assertEqual(paths, ["0", "1"])
+        self.assertTrue(isinstance(params4, Params))
+        self.assertTrue(mx.array_equal(params4.m, mx.array([1, 3])))
+        self.assertTrue(mx.array_equal(params4.b, mx.array(5)))
+
+        params5 = mlx.utils.tree_merge(params1, params1, lambda a, b: a + b)
+        self.assertTrue(isinstance(params5, Params))
+        self.assertTrue(mx.array_equal(params5.m, mx.array([0, 2])))
+        self.assertTrue(mx.array_equal(params5.b, mx.array(4)))
+
+        vector3 = mlx.utils.tree_merge(vector1, vector1, lambda a, b: a + b)
+        self.assertTrue(isinstance(vector3, Vector))
+        self.assertTrue(mx.array_equal(vector3[0], mx.array([0, 2])))
+        self.assertTrue(mx.array_equal(vector3[1], mx.array(4)))
+
+    def test_tree_unflatten_integer_key_collision(self):
+        # Non-canonical integer-like keys (e.g. "01") must not silently
+        # collide with "1" and shift later values. Fall back to dict tree.
+        tree = mlx.utils.tree_unflatten([("01", "a"), ("1", "b"), ("2", "c")])
+        self.assertIsInstance(tree, dict)
+        self.assertEqual(tree["01"], "a")
+        self.assertEqual(tree["1"], "b")
+        self.assertEqual(tree["2"], "c")
+
+        # Canonical list keys still unflatten as a list
+        self.assertEqual(
+            mlx.utils.tree_unflatten([("0", "a"), ("1", "b"), ("2", "c")]),
+            ["a", "b", "c"],
+        )
 
 
 if __name__ == "__main__":

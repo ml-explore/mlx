@@ -43,3 +43,5 @@ distribution, you can do:
    glorot_uniform
    he_normal
    he_uniform
+   sparse
+   orthogonal

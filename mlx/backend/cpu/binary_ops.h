@@ -25,7 +25,7 @@ using namespace mlx::core::simd;
 
 DEFAULT_BINARY_OP(Add, operator+)
 DEFAULT_BINARY_OP(ArcTan2, atan2)
-DEFAULT_BINARY_OP(Divide, operator/)
+DEFAULT_BINARY_OP(Divide, divide)
 DEFAULT_BINARY_OP(Multiply, operator*)
 DEFAULT_BINARY_OP(Subtract, operator-)
 DEFAULT_BINARY_OP(LogicalAnd, operator&&)

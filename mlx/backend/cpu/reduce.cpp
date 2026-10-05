@@ -69,6 +69,18 @@ const complex64_t Limits<complex64_t>::min =
     -std::numeric_limits<float>::infinity();
 
 template <typename T, typename U, typename Op>
+struct ReductionAccumulator {
+  static constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
+  // Widen to float32 only if the input is float16 (with N=1) or bfloat16 as it
+  // improves performance.
+  static constexpr bool widen_to_float =
+      (std::is_same_v<T, bfloat16_t> ||
+       (N == 1 && std::is_same_v<T, float16_t>));
+
+  using type = std::conditional_t<widen_to_float, float, U>;
+};
+
+template <typename T, typename U, typename Op>
 void strided_reduce(
     const T* x,
     U* accumulator,
@@ -96,7 +108,12 @@ void strided_reduce(
 };
 
 template <typename T, typename U, typename Op>
-void contiguous_reduce(const T* x, U* accumulator, int size, Op op, U init) {
+void contiguous_reduce(
+    const T* x,
+    U* accumulator,
+    int64_t size,
+    Op op,
+    U init) {
   constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
   simd::Simd<U, N> accumulator_v(init);
   while (size >= N) {
@@ -113,11 +130,11 @@ void contiguous_reduce(const T* x, U* accumulator, int size, Op op, U init) {
 
 // Helper for the ndimensional strided loop
 void nd_loop(
-    std::function<void(int)> callback,
+    std::function<void(int64_t)> callback,
     const Shape& shape,
     const Strides& strides) {
-  std::function<void(int, int)> loop_inner;
-  loop_inner = [&](int dim, int offset) {
+  std::function<void(int, int64_t)> loop_inner;
+  loop_inner = [&](int dim, int64_t offset) {
     if (dim < shape.size() - 1) {
       auto size = shape[dim];
       auto stride = strides[dim];
@@ -169,16 +186,16 @@ void reduction_op(
     auto [shape, strides] = shapes_without_reduction_axes(x, axes);
     if (plan.shape.size() == 0) {
       for (int i = 0; i < out.size(); i++, out_ptr++) {
-        int offset = elem_to_loc(i, shape, strides);
+        int64_t offset = elem_to_loc(i, shape, strides);
         *out_ptr = init;
         contiguous_reduce(in_ptr + offset, out_ptr, reduction_size, Op{}, init);
       }
     } else {
       for (int i = 0; i < out.size(); i++, out_ptr++) {
-        int offset = elem_to_loc(i, shape, strides);
+        int64_t offset = elem_to_loc(i, shape, strides);
         *out_ptr = init;
         nd_loop(
-            [&](int extra_offset) {
+            [&](int64_t extra_offset) {
               contiguous_reduce(
                   in_ptr + offset + extra_offset,
                   out_ptr,
@@ -217,7 +234,7 @@ void reduction_op(
 
     if (plan.shape.size() == 0) {
       for (int i = 0; i < out.size(); i += reduction_stride) {
-        int offset = elem_to_loc(i, shape, strides);
+        int64_t offset = elem_to_loc(i, shape, strides);
         std::fill_n(out_ptr, reduction_stride, init);
         strided_reduce(
             in_ptr + offset, out_ptr, reduction_size, reduction_stride, Op{});
@@ -225,10 +242,10 @@ void reduction_op(
       }
     } else {
       for (int i = 0; i < out.size(); i += reduction_stride) {
-        int offset = elem_to_loc(i, shape, strides);
+        int64_t offset = elem_to_loc(i, shape, strides);
         std::fill_n(out_ptr, reduction_stride, init);
         nd_loop(
-            [&](int extra_offset) {
+            [&](int64_t extra_offset) {
               strided_reduce(
                   in_ptr + offset + extra_offset,
                   out_ptr,
@@ -248,10 +265,10 @@ void reduction_op(
     auto [shape, strides] = shapes_without_reduction_axes(x, axes);
 
     for (int i = 0; i < out.size(); i++, out_ptr++) {
-      int offset = elem_to_loc(i, shape, strides);
+      int64_t offset = elem_to_loc(i, shape, strides);
       U val = init;
       nd_loop(
-          [&](int extra_offset) {
+          [&](int64_t extra_offset) {
             val = Op{}(val, *(in_ptr + offset + extra_offset));
           },
           plan.shape,
@@ -261,10 +278,27 @@ void reduction_op(
   }
 }
 
+template <typename T, typename U, typename Op>
+void float_reduction(
+    const array& x,
+    array& out,
+    const std::vector<int>& axes,
+    U init) {
+  using AccT = ReductionAccumulator<T, U, Op>::type;
+  if constexpr (std::is_same_v<AccT, U>) {
+    reduction_op<T, U, Op>(x, out, axes, init);
+  } else {
+    array temp(out.shape(), TypeToDtype<AccT>(), nullptr, {});
+    temp.set_data(allocator::malloc(temp.nbytes()));
+    reduction_op<T, AccT, Op>(x, temp, axes, static_cast<AccT>(init));
+    std::copy_n(temp.data<AccT>(), out.size(), out.data<U>());
+  }
+}
+
 struct AndReduce {
   template <typename T>
   bool operator()(bool x, T y) {
-    return x & (y != 0);
+    return x & static_cast<bool>(y);
   }
 
   bool operator()(bool x, bool y) {
@@ -290,7 +324,7 @@ struct AndReduce {
 struct OrReduce {
   template <typename T>
   bool operator()(bool x, T y) {
-    return x | (y != 0);
+    return x | static_cast<bool>(y);
   }
 
   bool operator()(bool x, bool y) {
@@ -420,13 +454,13 @@ void reduce_dispatch_sum_prod(
     if constexpr (std::is_integral_v<InT> && sizeof(InT) <= 4) {
       reduction_op<InT, int32_t, SumReduce>(in, out, axes, 0);
     } else {
-      reduction_op<InT, InT, SumReduce>(in, out, axes, 0);
+      float_reduction<InT, InT, SumReduce>(in, out, axes, 0);
     }
   } else {
     if constexpr (std::is_integral_v<InT> && sizeof(InT) <= 4) {
       reduction_op<InT, int32_t, ProdReduce>(in, out, axes, 1);
     } else {
-      reduction_op<InT, InT, ProdReduce>(in, out, axes, 1);
+      float_reduction<InT, InT, ProdReduce>(in, out, axes, 1);
     }
   }
 }
@@ -460,6 +494,9 @@ void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {
     switch (reduce_type_) {
       case Reduce::And:
       case Reduce::Or: {
+        // Integers can be reduced as whatever type has the same width, since
+        // only their bits matter. Floats cannot: -0.0 compares equal to zero
+        // but has a bit set, so it has to be tested as a float.
         switch (in.dtype()) {
           case bool_:
           case uint8:
@@ -468,20 +505,30 @@ void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {
             break;
           case int16:
           case uint16:
-          case float16:
-          case bfloat16:
             reduce_dispatch_and_or<int16_t>(in, out, reduce_type_, axes_);
+            break;
+          case float16:
+            reduce_dispatch_and_or<float16_t>(in, out, reduce_type_, axes_);
+            break;
+          case bfloat16:
+            reduce_dispatch_and_or<bfloat16_t>(in, out, reduce_type_, axes_);
             break;
           case uint32:
           case int32:
-          case float32:
             reduce_dispatch_and_or<int32_t>(in, out, reduce_type_, axes_);
+            break;
+          case float32:
+            reduce_dispatch_and_or<float>(in, out, reduce_type_, axes_);
             break;
           case uint64:
           case int64:
-          case float64:
-          case complex64:
             reduce_dispatch_and_or<int64_t>(in, out, reduce_type_, axes_);
+            break;
+          case complex64:
+            reduce_dispatch_and_or<complex64_t>(in, out, reduce_type_, axes_);
+            break;
+          case float64:
+            reduce_dispatch_and_or<double>(in, out, reduce_type_, axes_);
             break;
         }
         break;

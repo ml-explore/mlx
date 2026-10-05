@@ -3,6 +3,11 @@
 #pragma once
 
 #include <exception>
+#include <limits>
+#include <sstream>
+#include <stdexcept>
+#include <string_view>
+#include <thread>
 #include <variant>
 
 #include "mlx/api.h"
@@ -13,14 +18,20 @@
 
 namespace mlx::core {
 
-using StreamOrDevice =
-    std::variant<std::monostate, Stream, ThreadLocalStream, Device>;
+using StreamOrDevice = std::variant<
+    std::monostate,
+    Stream,
+    ThreadLocalStream,
+    Device,
+    Device::DeviceType>;
 MLX_API Stream to_stream(StreamOrDevice s);
 MLX_API Stream to_stream(StreamOrDevice s, Device default_);
 
 struct StreamContext {
  public:
-  StreamContext(StreamOrDevice s) : _stream(default_stream(default_device())) {
+  StreamContext(StreamOrDevice s)
+      : _stream(default_stream(default_device())),
+        _owner(std::this_thread::get_id()) {
     if (std::holds_alternative<std::monostate>(s)) {
       throw std::runtime_error(
           "[StreamContext] Invalid argument, please specify a stream or device.");
@@ -30,13 +41,21 @@ struct StreamContext {
     set_default_stream(_s);
   }
 
-  ~StreamContext() {
+  // noexcept(false) so the thread check below can throw. A destructor that
+  // throws while another exception unwinds this thread calls std::terminate.
+  ~StreamContext() noexcept(false) {
+    if (std::this_thread::get_id() != _owner) {
+      throw std::runtime_error(
+          "[StreamContext] Destroyed in a different thread than it was "
+          "constructed in.");
+    }
     set_default_device(_stream.device);
     set_default_stream(_stream);
   }
 
  private:
   Stream _stream;
+  std::thread::id _owner;
 };
 
 struct MLX_API PrintOptions {
@@ -65,16 +84,18 @@ MLX_API void set_printoptions(PrintOptions options);
 
 MLX_API PrintFormatter& get_global_formatter();
 
-/** Print the exception and then abort. */
-MLX_API void abort_with_exception(const std::exception& error);
+/** Return whether current thread is the first one that called this function. */
+bool is_main_thread();
 
 /** Holds information about floating-point types. */
 struct MLX_API finfo {
   explicit finfo(Dtype dtype);
   Dtype dtype;
+  int bits;
   double min;
   double max;
   double eps;
+  double smallest_normal;
 };
 
 /** Holds information about integral types. */
@@ -95,6 +116,24 @@ inline Dtype result_type(const array& a, const array& b, const array& c) {
 MLX_API Dtype result_type(const std::vector<array>& arrays);
 
 MLX_API Shape broadcast_shapes(const Shape& s1, const Shape& s2);
+
+template <typename T>
+inline ShapeElem safe_cast(T dim, std::string_view op = "") {
+  constexpr int64_t lo = std::numeric_limits<ShapeElem>::min();
+  constexpr int64_t hi = std::numeric_limits<ShapeElem>::max();
+  auto v = static_cast<int64_t>(dim);
+  if (v < lo || v > hi) {
+    std::ostringstream msg;
+    if (!op.empty()) {
+      msg << "[" << op << "] ";
+    }
+    msg << "Shape dimension " << v << " is outside the supported range [" << lo
+        << ", " << hi
+        << "]. MLX currently uses 32-bit integers for shape dimensions.";
+    throw std::overflow_error(msg.str());
+  }
+  return static_cast<ShapeElem>(v);
+}
 
 /**
  * Returns the axis normalized to be in the range [0, ndim).
@@ -161,6 +200,21 @@ inline int max_mb_per_buffer(int default_value) {
   static int max_mb_per_buffer_ =
       get_var("MLX_MAX_MB_PER_BUFFER", default_value);
   return max_mb_per_buffer_;
+}
+
+// Per-set residency-set size, as a percentage of the device's recommended
+// max working-set size. Controls only how wired memory is distributed across
+// residency sets, never how much is wired; see metal::ResidencySets. A value
+// <= 0 or >= 100 puts everything in a single set.
+inline int residency_set_max_pct() {
+  static int residency_set_max_pct_ = get_var("MLX_RESIDENCY_SET_MAX_PCT", 5);
+  return residency_set_max_pct_;
+}
+
+// Log each residency set as it is created.
+inline bool residency_debug() {
+  static bool residency_debug_ = get_var("MLX_RESIDENCY_DEBUG", 0);
+  return residency_debug_;
 }
 
 inline bool metal_fast_synch() {

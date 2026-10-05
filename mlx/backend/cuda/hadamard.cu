@@ -122,7 +122,9 @@ void hadamard_mn_contiguous(
       read_width_n2,
       read_width_m);
 
-  cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
+  auto& encoder = cu::get_command_encoder(s);
+
+  cu::JitModule& mod = cu::get_jit_module(encoder.device(), module_name, [&]() {
     std::vector<std::string> kernel_names = {n2_kernel_name};
     if (n1 > 1) {
       kernel_names.push_back(n1_kernel_name);
@@ -141,8 +143,6 @@ void hadamard_mn_contiguous(
 
     return std::make_tuple(false, std::move(source), std::move(kernel_names));
   });
-
-  auto& encoder = cu::get_command_encoder(s);
 
   if (n1 > 1) {
     const int64_t num_transforms = x.size() / n1;

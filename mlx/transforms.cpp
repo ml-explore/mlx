@@ -63,28 +63,40 @@ class Synchronizer : public Primitive {
 // These are used to implement the in_tracing() function the returns true if we
 // are currently under a function transformation and the retain_graph()
 // function which returns true if we are forced to retain the graph during
-// evaluation.
+// evaluation. They are thread_local since a trace belongs to the thread that
+// runs it, so that concurrent transforms on different threads do not race on
+// shared tracing state.
 std::vector<std::pair<char, char>>& detail::InTracing::trace_stack() {
-  static std::vector<std::pair<char, char>> trace_stack_;
+  static thread_local std::vector<std::pair<char, char>> trace_stack_;
   return trace_stack_;
 }
-int detail::InTracing::grad_counter{0};
-int detail::RetainGraph::tracing_counter{0};
+thread_local int detail::InTracing::grad_counter{0};
+int& detail::InExportTracing::counter() {
+  static thread_local int counter_;
+  return counter_;
+}
+thread_local int detail::RetainGraph::tracing_counter{0};
 
 array eval_impl(std::vector<array> outputs, bool async) {
   std::deque<array> tape;
 
-  // Make an effort to choose a good output stream
-  Stream stream = default_stream(default_device());
-  for (auto& o : outputs) {
-    if (o.status() == array::Status::unscheduled && o.has_primitive()) {
-      stream = o.primitive().stream();
-      break;
+  // Make an effort to choose a good output stream, and only create the default
+  // stream when there is no other choice.
+  Stream stream = [&outputs]() {
+    for (auto& o : outputs) {
+      if (o.status() == array::Status::unscheduled && o.has_primitive()) {
+        return o.primitive().stream();
+      }
     }
-  }
+    return default_stream(default_device());
+  }();
 
-  // Map of array id that needs fence and stream it's computed on
-  std::unordered_map<uintptr_t, std::pair<uint32_t, bool>> needs_fence;
+  struct FenceInfo {
+    int stream_index;
+    bool cross_device;
+    uint32_t value{0};
+  };
+  std::unordered_map<uintptr_t, FenceInfo> needs_fence;
 
   auto synchronizer = array(
       {}, bool_, std::make_shared<Synchronizer>(stream), std::move(outputs));
@@ -140,9 +152,9 @@ array eval_impl(std::vector<array> outputs, bool async) {
                 a.primitive().stream().device != in.primitive().stream().device;
             auto [it, inserted] = needs_fence.emplace(
                 in.id(),
-                std::make_pair(in.primitive().stream().index, device_switch));
+                FenceInfo{in.primitive().stream().index, device_switch});
             if (!inserted) {
-              it->second.second |= device_switch;
+              it->second.cross_device |= device_switch;
             }
           }
         }
@@ -219,85 +231,124 @@ array eval_impl(std::vector<array> outputs, bool async) {
   }
 
   std::set<Stream> open_streams;
-  while (!tape.empty()) {
-    auto arr = std::move(tape.back());
-    tape.pop_back();
+  try {
+    while (!tape.empty()) {
+      auto arr = std::move(tape.back());
+      tape.pop_back();
 
-    auto stream = arr.primitive().stream();
-    open_streams.insert(stream);
+      auto stream = arr.primitive().stream();
+      open_streams.insert(stream);
 
-    if (async) {
-      // Lookup corresponding event
-      auto e = events.find(stream.index);
-      if (e == events.end()) {
-        e = events.emplace(stream.index, Event{stream}).first;
-      }
-      e->second.set_value(1);
-      arr.attach_event(e->second);
-      for (auto& s : arr.siblings()) {
-        s.attach_event(e->second);
-      }
-    }
-
-    for (auto& in : arr.inputs()) {
-      if (auto it = needs_fence.find(in.id()); it != needs_fence.end()) {
-        // Use fence to wait within a single eval
-        // Get the input array's stream fence and wait on the
-        // output arrays stream
-        fences[it->second.first].wait(stream, in);
-      } else if (in.event().valid()) {
-        if (in.event().is_signaled()) {
-          in.detach_event();
-        } else if (in.event().stream() != stream) {
-          // Use event to wait across async eval
-          in.event().wait(stream);
+      if (async) {
+        // Lookup corresponding event
+        auto e = events.find(stream.index);
+        if (e == events.end()) {
+          e = events.emplace(stream.index, Event{stream}).first;
+        }
+        e->second.set_value(1);
+        arr.attach_event(e->second);
+        for (auto& s : arr.siblings()) {
+          s.attach_event(e->second);
         }
       }
-    }
 
-    if (arr.primitive().device() == Device::gpu) {
-      gpu::eval(arr);
-    } else {
-      cpu::eval(arr);
-    }
-
-    if (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS ||
-        (get_active_memory() > get_memory_limit() &&
-         scheduler::n_active_tasks() > 0)) {
-      // Commit any open streams
-      for (auto& s : open_streams) {
-        if (s.device == Device::gpu) {
-          gpu::finalize(s);
+      for (auto& in : arr.inputs()) {
+        if (auto it = needs_fence.find(in.id()); it != needs_fence.end()) {
+          // Use fence to wait within a single eval
+          // Get the input array's stream fence and wait on the
+          // output arrays stream
+          auto& info = it->second;
+          fences.at(info.stream_index).wait(stream, in, info.value);
+        } else if (in.event().valid()) {
+          if (in.event().is_signaled()) {
+            in.detach_event();
+          } else if (in.event().stream() != stream) {
+            // Use event to wait across async eval
+            in.event().wait(stream);
+          }
         }
       }
-      scheduler::wait_for_one();
-      while (get_active_memory() > get_memory_limit() &&
-             scheduler::n_active_tasks() > 0) {
+
+      if (arr.primitive().device() == Device::gpu) {
+        gpu::eval(arr);
+      } else {
+        cpu::eval(arr);
+      }
+
+      if (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS ||
+          (get_active_memory() > get_memory_limit() &&
+           scheduler::n_active_tasks() > 0)) {
+        // Commit any open streams
+        for (auto& s : open_streams) {
+          if (s.device == Device::gpu) {
+            gpu::finalize(s);
+          }
+        }
         scheduler::wait_for_one();
-      }
-    }
-
-    auto maybe_update_fence = [&fences, &needs_fence, stream](const array& a) {
-      if (auto nf = needs_fence.find(a.id()); nf != needs_fence.end()) {
-        auto it = fences.find(stream.index);
-        if (it == fences.end()) {
-          it = fences.emplace(stream.index, Fence{stream}).first;
+        while (get_active_memory() > get_memory_limit() &&
+               scheduler::n_active_tasks() > 0) {
+          scheduler::wait_for_one();
         }
-        it->second.update(stream, a, nf->second.second);
       }
-    };
 
-    arr.set_status(array::Status::evaluated);
-    // TODO Maybe always want the fence coherent kernel in the same cbuf
-    // as the other kernels?
-    maybe_update_fence(arr);
-    for (auto& sib : arr.siblings()) {
-      sib.set_status(array::Status::evaluated);
-      maybe_update_fence(sib);
+      auto maybe_update_fence =
+          [&fences, &needs_fence, stream](const array& a) {
+            if (auto nf = needs_fence.find(a.id()); nf != needs_fence.end()) {
+              auto it = fences.find(stream.index);
+              if (it == fences.end()) {
+                it = fences.emplace(stream.index, Fence{stream}).first;
+              }
+              nf->second.value =
+                  it->second.update(stream, a, nf->second.cross_device);
+            }
+          };
+
+      arr.set_status(array::Status::evaluated);
+      // TODO Maybe always want the fence coherent kernel in the same cbuf
+      // as the other kernels?
+      maybe_update_fence(arr);
+      for (auto& sib : arr.siblings()) {
+        sib.set_status(array::Status::evaluated);
+        maybe_update_fence(sib);
+      }
+      if (!arr.is_tracer()) {
+        arr.detach();
+      }
     }
-    if (!arr.is_tracer()) {
-      arr.detach();
+  } catch (...) {
+    // A primitive threw from inside its eval (e.g. argument validation in
+    // eval_gpu, or a JIT compile failure). Arrays evaluated earlier in this
+    // tape are already marked evaluated, but their kernels sit in pending
+    // command buffers that only the epilogue below would commit, and events
+    // attached during this eval would never be signaled. Left that way, a
+    // later read of an affected array returns an unwritten buffer or blocks
+    // forever. Signal the events and flush the touched streams, then let the
+    // exception propagate.
+    for (auto& [idx, e] : events) {
+      try {
+        auto es = e.stream();
+        e.signal(es);
+        open_streams.insert(es);
+      } catch (...) {
+      }
     }
+    // Commit GPU streams before the wait.
+    for (auto& s : open_streams) {
+      if (s.device == Device::gpu) {
+        try {
+          gpu::finalize(s);
+        } catch (...) {
+        }
+      }
+    }
+    for (auto& s : open_streams) {
+      try {
+        synchronize(s);
+      } catch (...) {
+        // Preserve the original exception.
+      }
+    }
+    throw;
   }
 
   // Signal the event in its stream
@@ -634,6 +685,8 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
 
     auto jvps = a.primitive().jvp(a.inputs(), tangents, argnums);
     auto outputs = a.outputs();
+    // A primitive's jvp returns one tangent per output
+    assert(jvps.size() <= outputs.size());
     for (int i = 0; i < jvps.size(); ++i) {
       tan_map.insert({outputs[i].id(), jvps[i]});
     }

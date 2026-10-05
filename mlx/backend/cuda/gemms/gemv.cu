@@ -13,6 +13,14 @@ namespace cg = cooperative_groups;
 
 static constexpr int rows_per_block = 8;
 
+// Split batches across grid.y/z because both dimensions are capped at 65,535.
+inline dim3 get_gemv_grid_dims(uint32_t num_blocks_x, uint32_t batch_size) {
+  constexpr uint32_t max_grid_yz_dim = 65535;
+  uint32_t num_blocks_z = cuda::ceil_div(batch_size, max_grid_yz_dim);
+  uint32_t num_blocks_y = cuda::ceil_div(batch_size, num_blocks_z);
+  return {num_blocks_x, num_blocks_y, num_blocks_z};
+}
+
 // Accumulator type selection per input element type T.
 template <typename T>
 struct GemvAccType {
@@ -88,12 +96,17 @@ __global__ void gemv_batched(
     T* out,
     int rows,
     int cols,
+    uint32_t batch_size,
     const __grid_constant__ Shape batch_shape,
     const __grid_constant__ Strides mat_batch_strides,
     const __grid_constant__ Strides vec_batch_strides,
     int batch_ndim) {
-  auto block = cg::this_thread_block();
-  auto batch_idx = block.group_index().y;
+  auto grid = cg::this_grid();
+  auto batch_idx =
+      grid.block_index().z * grid.dim_blocks().y + grid.block_index().y;
+  if (batch_idx >= batch_size) {
+    return;
+  }
   auto [vec_offset, mat_offset] = elem_to_loc(
       batch_idx,
       batch_shape.data(),
@@ -113,6 +126,7 @@ __global__ void gemv_gather(
     uint32_t* vec_indices,
     int rows,
     int cols,
+    uint32_t batch_size,
     const __grid_constant__ Shape mat_batch_shape,
     const __grid_constant__ Strides mat_batch_strides,
     int mat_batch_ndim,
@@ -123,8 +137,12 @@ __global__ void gemv_gather(
     const __grid_constant__ Strides mat_index_strides,
     const __grid_constant__ Strides vec_index_strides,
     int index_batch_ndim) {
-  auto block = cg::this_thread_block();
-  auto indices_idx = block.group_index().y;
+  auto grid = cg::this_grid();
+  auto indices_idx =
+      grid.block_index().z * grid.dim_blocks().y + grid.block_index().y;
+  if (indices_idx >= batch_size) {
+    return;
+  }
   uint32_t index_mat, index_vec;
   if (index_batch_ndim > 1) {
     auto [mat_idx_offset, vec_idx_offset] = elem_to_loc(
@@ -245,13 +263,14 @@ void gemv(
         auto kernel = gemv_batched<DataType, rows_per_block, n_per_thread()>;
         encoder.add_kernel_node(
             kernel,
-            dim3{num_blocks_x, batch_count},
+            get_gemv_grid_dims(num_blocks_x, batch_count),
             block_dims,
             mat,
             vec,
             gpu_ptr<DataType>(out),
             rows,
             cols,
+            batch_count,
             const_param(batch_shape),
             mat_strides,
             vec_strides,
@@ -298,7 +317,7 @@ void gather_mv(
       auto kernel = gemv_gather<DataType, rows_per_block, n_per_thread()>;
       encoder.add_kernel_node(
           kernel,
-          dim3{num_blocks_x, batch_size},
+          get_gemv_grid_dims(num_blocks_x, batch_size),
           block_dims,
           mat,
           vec,
@@ -307,6 +326,7 @@ void gather_mv(
           gpu_ptr<uint32_t>(vec_indices),
           rows,
           cols,
+          batch_size,
           const_param(mat_.shape()),
           const_param(mat_.strides()),
           mat_.ndim() - 2,

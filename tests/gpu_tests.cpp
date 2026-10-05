@@ -57,6 +57,24 @@ TEST_CASE("test gpu full") {
   }
 }
 
+TEST_CASE("test gpu strided scan grid") {
+  // Regression for #4419 strided_scan writes out of bounds.
+  std::vector<float> values(72, 1.0f);
+  auto x = array(values.data(), {72});
+  x = transpose(reshape(x, {2, 9, 4}, Device::gpu), {0, 2, 1}, Device::gpu);
+  x = cumsum(x, -1, false, true, Device::gpu);
+
+  auto causal = tril(ones({9, 9}, float32, Device::gpu), 0, Device::gpu);
+  auto relative = subtract(
+      expand_dims(x, -1, Device::gpu),
+      expand_dims(x, -2, Device::gpu),
+      Device::gpu);
+  eval(relative, causal);
+
+  auto expected = tri(9, 9, 0, float32, Device::cpu);
+  CHECK(array_equal(causal, expected, Device::cpu).item<bool>());
+}
+
 TEST_CASE("test gpu astype") {
   array x = array({-4, -3, -2, -1, 0, 1, 2, 3});
   // Check all types work
@@ -447,6 +465,59 @@ TEST_CASE("test gpu matmul") {
   }
 }
 
+TEST_CASE("test gpu gather/scatter indices") {
+  // Run with METAL_DEVICE_WRAPPER_TYPE=1 to validate the metadata bindings.
+
+  SUBCASE("scatter scalar indices") {
+    auto x = array({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, {3, 4});
+
+    SUBCASE("non-leading axis") {
+      auto out = take(x, array(2), 1, Device::gpu);
+      CHECK(array_equal(out, array({2, 6, 10}), Device::cpu).item<bool>());
+    }
+
+    SUBCASE("strided source") {
+      auto src = transpose(x, Device::gpu);
+      auto out = take(src, array(-1), 0, Device::gpu);
+      CHECK(array_equal(out, array({3, 7, 11}), Device::cpu).item<bool>());
+    }
+
+    SUBCASE("multiple scalar indices") {
+      auto out = gather(x, {array(1), array(-2)}, {0, 1}, {1, 1}, Device::gpu);
+      CHECK(array_equal(out, array({6}, {1, 1}), Device::cpu).item<bool>());
+    }
+  }
+
+  SUBCASE("gather without indices") {
+    SUBCASE("scalar source") {
+      auto out = gather(array(7), {}, std::vector<int>{}, {}, Device::gpu);
+      CHECK_EQ(out.item<int>(), 7);
+    }
+
+    SUBCASE("matrix source") {
+      auto x = array({0, 1, 2, 3}, {2, 2});
+      auto out = gather(x, {}, std::vector<int>{}, {2, 2}, Device::gpu);
+      CHECK(array_equal(out, x, Device::cpu).item<bool>());
+    }
+  }
+
+  SUBCASE("scatter without indices") {
+    SUBCASE("scalar update") {
+      auto out =
+          scatter_max(array(1), {}, array(2), std::vector<int>{}, Device::gpu);
+      CHECK_EQ(out.item<int>(), 2);
+    }
+
+    SUBCASE("strided update") {
+      auto x = array({0, 1, 2, 3}, {2, 2});
+      auto updates = transpose(array({1, 2, 3, 4}, {2, 2}), Device::gpu);
+      auto out = scatter_add(x, {}, updates, std::vector<int>{}, Device::gpu);
+      CHECK(array_equal(out, array({1, 4, 4, 7}, {2, 2}), Device::cpu)
+                .item<bool>());
+    }
+  }
+}
+
 TEST_CASE("test gpu validation") {
   // Run this test with Metal validation enabled
   // METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 ./tests/tests \
@@ -478,6 +549,64 @@ TEST_CASE("test gpu validation") {
   eval(argmax(x));
 
   eval(scatter_max(array(1), {}, array(2), std::vector<int>{}));
+}
+
+TEST_CASE("test dynamic slice update waits for its start") {
+  // Regression for #3880: a donated array-valued start could be read
+  // stale when a command-buffer boundary lands between its producer
+  // and the dynamic slice. The boundary occurs when the buffer's op
+  // or memory limits split the graph (or with MLX_MAX_OPS_PER_BUFFER
+  // set low); without a split the checks still assert the correct
+  // update position.
+  auto source = ones({2, 1 << 26}, int32);
+  auto target = zeros({4, 4}, int32);
+  auto update = full({1, 1}, 7, int32);
+  eval(source, target, update);
+
+  {
+    auto recycled = zeros({2}, int32);
+    eval(recycled);
+  }
+
+  auto out = [&] {
+    auto start = max(source, 1, false);
+    return slice_update(target, update, start, {0, 1});
+  }();
+
+  CHECK_EQ(slice(out, {1, 1}, {2, 2}).item<int>(), 7);
+  CHECK_EQ(slice(out, {0, 0}, {1, 1}).item<int>(), 0);
+}
+
+TEST_CASE("test gpu int32 shape overflow errors") {
+  // (2^30, 2).flatten() — product 2^31 doesn't fit in ShapeElem.
+  // Issue #2681 reported wrapped shape (-2147483648,) and a
+  // 2^64 - X reported size. The lazy graph is never evaluated.
+  auto a = zeros({1 << 30, 2});
+  CHECK_THROWS_AS(flatten(a), std::overflow_error);
+
+  // conv_general output > 2^31 elements with each per-dim < 2^31.
+  // Total elements 524290 * 64 * 64 = 2,147,491,840.
+  int n = static_cast<int>((int64_t{1} << 31) / (64 * 64) + 2);
+  auto x = ones({n, 8, 8, 1}, float16);
+  auto w = ones({1, 1, 1, 1}, float16);
+  auto y = conv_general(
+      /* input = */ x,
+      /* weight = */ w,
+      /* stride = */ {1, 1},
+      /* padding_lo = */ {0, 0},
+      /* padding_hi = */ {0, 0},
+      /* kernel_dilation = */ {1, 1},
+      /* input_dilation = */ {9, 9},
+      /* groups = */ 1,
+      /* flip = */ false);
+  CHECK_EQ(y.shape(), Shape{n, 64, 64, 1});
+
+  // reshape with inferred dim that won't fit in ShapeElem — issue #3327.
+  CHECK_THROWS_AS(reshape(y, {-1}), std::overflow_error);
+
+  // take(a, idx) routes through an internal flatten — overflows on flatten.
+  auto idx = array({0u}, uint32);
+  CHECK_THROWS_AS(take(y, idx), std::overflow_error);
 }
 
 TEST_CASE("test memory info") {
@@ -602,4 +731,55 @@ TEST_CASE("test gpu depthwise conv2d non-mod-8 spatial") {
         conv2d(in, wt, c.stride, c.padding, {1, 1}, c.C, Device::gpu);
     CHECK(allclose(out_cpu, out_gpu, 1e-4, 1e-4).item<bool>());
   }
+}
+
+TEST_CASE("test layer norm vjp bias grad race") {
+  // Regression test for a write-after-read (WAR) hazard in
+  // LayerNormVJP::eval_gpu (mlx/backend/metal/normalization.cpp).
+  //
+  // The bias-gradient reduction reads the cotangent `g` and is dispatched
+  // before the main vjp kernel. When the cotangent is donatable the kernel
+  // overwrites `g`'s buffer in place (gx / gw_temp alias g), a WAR hazard.
+  // The Metal command encoder uses concurrent dispatch and only auto-inserts
+  // barriers for read-after-write, so without an explicit barrier the reduction
+  // races the kernel and the bias gradient is intermittently wrong (error on
+  // the order of the value magnitude). The gradients for x and w are
+  // unaffected.
+  //
+  // A batched input makes the cotangent donatable, which is required to trigger
+  // the aliasing. It is a race, so we loop; pre-fix this trips within a couple
+  // thousand iterations, post-fix the GPU result matches the CPU reference
+  // exactly on every iteration.
+  auto x = random::normal({2, 4, 8}, float32, 0.0f, 1.0f, random::key(0));
+  auto w = random::normal({8}, float32, 0.0f, 1.0f, random::key(1));
+  auto b = random::normal({8}, float32, 0.0f, 1.0f, random::key(2));
+  eval(x, w, b);
+
+  auto loss = [](const std::vector<array>& p, Device dev) {
+    return mean(fast::layer_norm(p[0], p[1], p[2], 1e-5f, dev), dev);
+  };
+  auto gb_fn = [&](Device dev) {
+    return grad(
+        [&loss, dev](const std::vector<array>& p) { return loss(p, dev); },
+        std::vector<int>{0, 1, 2});
+  };
+
+  // CPU reference for d/db (ground truth). Verify it is deterministic: a
+  // CPU-vs-CPU self-check must be exactly zero before trusting it.
+  auto gb_ref = gb_fn(Device::cpu)({x, w, b})[2];
+  auto gb_ref2 = gb_fn(Device::cpu)({x, w, b})[2];
+  eval(gb_ref, gb_ref2);
+  CHECK_EQ(max(abs(gb_ref - gb_ref2)).item<float>(), 0.0f);
+
+  auto gpu_grad = gb_fn(Device::gpu);
+  float worst = 0.0f;
+  for (int i = 0; i < 3000; ++i) {
+    auto gb_gpu = gpu_grad({x, w, b})[2];
+    float diff = max(abs(gb_gpu - gb_ref), Device::cpu).item<float>();
+    worst = std::max(worst, diff);
+    if (diff > 1e-5) {
+      break; // Fail fast once the race is observed.
+    }
+  }
+  CHECK(worst <= 1e-5);
 }

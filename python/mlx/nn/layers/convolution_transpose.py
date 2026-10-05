@@ -8,7 +8,8 @@ from mlx.nn.layers.base import Module
 
 
 class ConvTranspose1d(Module):
-    """Applies a 1-dimensional transposed convolution over the multi-channel input sequence.
+    """Applies a 1-dimensional transposed convolution over the multi-channel input
+    sequence.
 
     The channels are expected to be last i.e. the input shape should be ``NLC`` where:
 
@@ -25,6 +26,7 @@ class ConvTranspose1d(Module):
         padding (int, optional): How many positions to 0-pad the input with.
             Default: ``0``.
         dilation (int, optional): The dilation of the convolution.
+            Default: ``1``.
         output_padding(int, optional): Additional size added to one side of the
             output shape. Default: ``0``.
         bias (bool, optional): If ``True`` add a learnable bias to the output.
@@ -82,7 +84,8 @@ class ConvTranspose1d(Module):
 
 
 class ConvTranspose2d(Module):
-    """Applies a 2-dimensional transposed convolution over the multi-channel input image.
+    """Applies a 2-dimensional transposed convolution over the multi-channel input
+    image.
 
     The channels are expected to be last i.e. the input shape should be ``NHWC`` where:
 
@@ -100,6 +103,7 @@ class ConvTranspose2d(Module):
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: ``0``.
         dilation (int or tuple, optional): The dilation of the convolution.
+            Default: ``1``.
         output_padding(int or tuple, optional): Additional size added to one
             side of the output shape. Default: ``0``.
         bias (bool, optional): If ``True`` add a learnable bias to the
@@ -140,7 +144,7 @@ class ConvTranspose2d(Module):
     def _extra_repr(self):
         return (
             f"{self.weight.shape[-1]}, {self.weight.shape[0]}, "
-            f"kernel_size={self.weight.shape[1:2]}, stride={self.stride}, "
+            f"kernel_size={self.weight.shape[1:3]}, stride={self.stride}, "
             f"padding={self.padding}, dilation={self.dilation}, "
             f"output_padding={self.output_padding}, "
             f"bias={'bias' in self}"
@@ -161,7 +165,8 @@ class ConvTranspose2d(Module):
 
 
 class ConvTranspose3d(Module):
-    """Applies a 3-dimensional transposed convolution over the multi-channel input image.
+    """Applies a 3-dimensional transposed convolution over the multi-channel input
+    image.
 
     The channels are expected to be last i.e. the input shape should be ``NDHWC`` where:
 
@@ -180,6 +185,7 @@ class ConvTranspose3d(Module):
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: ``0``.
         dilation (int or tuple, optional): The dilation of the convolution.
+            Default: ``1``.
         output_padding(int or tuple, optional): Additional size added to one
             side of the output shape. Default: ``0``.
         bias (bool, optional): If ``True`` add a learnable bias to the
@@ -222,7 +228,7 @@ class ConvTranspose3d(Module):
     def _extra_repr(self):
         return (
             f"{self.weight.shape[-1]}, {self.weight.shape[0]}, "
-            f"kernel_size={self.weight.shape[1:3]}, stride={self.stride}, "
+            f"kernel_size={self.weight.shape[1:4]}, stride={self.stride}, "
             f"padding={self.padding}, dilation={self.dilation}, "
             f"output_padding={self.output_padding}, "
             f"bias={'bias' in self}"

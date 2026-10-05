@@ -1,14 +1,14 @@
 // Copyright © 2023-2024 Apple Inc.
 #pragma once
-#include <numeric>
-#include <optional>
-#include <string>
-#include <variant>
-
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/complex.h>
 #include <nanobind/stl/variant.h>
+
+#include <numeric>
+#include <optional>
+#include <string>
+#include <variant>
 
 #include "mlx/array.h"
 #include "python/src/convert.h"
@@ -24,7 +24,7 @@ using ScalarOrArray = std::variant<
     // Must be above ndarray
     mx::array,
     // Must be above complex
-    nb::ndarray<nb::ro, nb::c_contig>,
+    nb::ndarray<nb::ro>,
     std::complex<float>,
     ArrayLike>;
 

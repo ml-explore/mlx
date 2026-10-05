@@ -6,6 +6,7 @@
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/types/limits.h"
 
@@ -139,32 +140,23 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   auto in = set_output(inputs[0]);
 
-  switch (in.dtype()) {
-    case float32:
-      softmax<float, float>(in, out, stream());
-      break;
-    case float16:
+  dispatch_all_types(in.dtype(), [&](auto type_tag) {
+    using T = MLX_GET_TYPE(type_tag);
+    if constexpr (
+        std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>) {
       if (precise_) {
-        softmax<float16_t, float>(in, out, stream());
+        softmax<T, float>(in, out, stream());
       } else {
-        softmax<float16_t, float16_t>(in, out, stream());
+        softmax<T, T>(in, out, stream());
       }
-      break;
-    case bfloat16:
-      if (precise_) {
-        softmax<bfloat16_t, float>(in, out, stream());
-      } else {
-        softmax<bfloat16_t, bfloat16_t>(in, out, stream());
-      }
-      break;
-    case float64:
-      softmax<double, double>(in, out, stream());
-      break;
-    default:
+    } else if constexpr (
+        std::is_same_v<T, float> || std::is_same_v<T, double>) {
+      softmax<T, T>(in, out, stream());
+    } else {
       throw std::runtime_error(
           "[softmax] Only defined for floating point types.");
-      break;
-  }
+    }
+  });
 }
 
 } // namespace mlx::core

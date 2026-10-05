@@ -19,6 +19,8 @@ instantiate_init_reduce(or, bool_, bool, Or)
 #define instantiate_init_sum_prod(name, op)                 \
   instantiate_init_reduce(name, int32, int32_t, op)         \
   instantiate_init_reduce(name, int64, int64_t, op)         \
+  instantiate_init_reduce(name, uint32, uint32_t, op)       \
+  instantiate_init_reduce(name, uint64, uint64_t, op)       \
   instantiate_init_reduce(name, float16, float16_t, op)     \
   instantiate_init_reduce(name, bfloat16, bfloat16_t, op)   \
   instantiate_init_reduce(name, float32, float, op)         \
@@ -124,11 +126,15 @@ instantiate_init_min_max(max, Max)
   instantiate_row_reduce_general(name##tname, itype, otype, op<otype>) \
   instantiate_col_reduce_general(name##tname, itype, otype, op<otype>)
 
-#define instantiate_and_or(name, op)                           \
-  instantiate_reduce_functions(name, bool_, bool, bool, op)    \
-  instantiate_reduce_functions(name, int16, int16_t, bool, op) \
-  instantiate_reduce_functions(name, int32, int32_t, bool, op) \
-  instantiate_reduce_functions(name, int64, int64_t, bool, op)
+#define instantiate_and_or(name, op)                                 \
+  instantiate_reduce_functions(name, bool_, bool, bool, op)          \
+  instantiate_reduce_functions(name, int16, int16_t, bool, op)       \
+  instantiate_reduce_functions(name, int32, int32_t, bool, op)       \
+  instantiate_reduce_functions(name, int64, int64_t, bool, op)       \
+  instantiate_reduce_functions(name, float16, float16_t, bool, op)   \
+  instantiate_reduce_functions(name, bfloat16, bfloat16_t, bool, op) \
+  instantiate_reduce_functions(name, float32, float, bool, op)       \
+  instantiate_reduce_functions(name, complex64, complex64_t, bool, op)
 
 instantiate_and_or(and, And)
 instantiate_and_or(or, Or)

@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #include "mlx/compile_impl.h"
 #include "mlx/primitives.h"
@@ -12,6 +12,7 @@ namespace detail {
 bool compile_available_for_device(const Device& device) {
   return device == Device::gpu;
 }
+
 } // namespace detail
 
 void Compiled::eval_cpu(

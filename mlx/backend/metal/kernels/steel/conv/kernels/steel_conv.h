@@ -46,7 +46,7 @@ implicit_gemm_conv_2d(
 
   using loader_a_t = typename metal::conditional_t<
       // Check for small channel specialization
-      N_CHANNELS != 0 && N_CHANNELS <= 4,
+      N_CHANNELS != 0 && N_CHANNELS <= 8,
 
       // Go to small channel specialization
       Conv2DInputBlockLoaderSmallChannels<
@@ -84,7 +84,7 @@ implicit_gemm_conv_2d(
   // Weight loader
   using loader_b_t = typename metal::conditional_t<
       // Check for small channel specialization
-      N_CHANNELS != 0 && N_CHANNELS <= 4,
+      N_CHANNELS != 0 && N_CHANNELS <= 8,
 
       // Go to small channel specialization
       Conv2DWeightBlockLoaderSmallChannels<
@@ -135,7 +135,7 @@ implicit_gemm_conv_2d(
   C += tid.z * N;
 
   B += c_col * K;
-  C += c_row * (N * params->groups) + c_col;
+  C += static_cast<size_t>(c_row) * N * params->groups + c_col;
 
   const int2 offsets_a(0, c_row);
   const int2 offsets_b(0, c_col);

@@ -1,21 +1,17 @@
-name: 'Run tests on Windows'
+name: 'Run tests'
+description: 'Run Python and C++ tests on Windows'
 
 runs:
   using: 'composite'
   steps:
     - name: Run Python tests - CPU
       shell: bash
-      run: |
-        echo "::group::Python tests - CPU"
-        python -m unittest discover python/tests -v
-        echo "::endgroup::"
+      env:
+        DEVICE: cpu
+      run: uv run python/tests/run.py -v
 
     - name: Run CPP tests - CPU
       shell: bash
       env:
         DEVICE: cpu
-      run: |
-        echo "::group::CPP tests - CPU"
-        ./build/tests.exe -tce="*gguf*"
-        ./build/test_teardown.exe
-        echo "::endgroup::"
+      run: ./build/cpp/mlx/tests.exe -tce="*gguf*"

@@ -11,7 +11,7 @@ try:
     import torch
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 
@@ -58,6 +58,15 @@ class TestFFT(mlx_tests.MLXTestCase):
 
         x = np.fft.rfft(np.real(a_np))
         self.check_mx_np(mx.fft.irfft, np.fft.irfft, x)
+
+        # Real transforms of size one
+        a_np = np.arange(1, 5, dtype=np.float32).reshape(4, 1)
+        self.check_mx_np(mx.fft.rfft, np.fft.rfft, a_np)
+        x = np.fft.rfft(a_np)
+        self.check_mx_np(mx.fft.irfft, np.fft.irfft, x, n=1)
+        self.check_mx_np(mx.fft.rfft2, np.fft.rfft2, a_np)
+        x = np.fft.rfft2(a_np)
+        self.check_mx_np(mx.fft.irfft2, np.fft.irfft2, x, s=(4, 1))
 
     def test_fftn(self):
         r = np.random.randn(8, 8, 8).astype(np.float32)
@@ -168,6 +177,29 @@ class TestFFT(mlx_tests.MLXTestCase):
                 atol = 1e-4 if num < 1025 else 1e-3
                 self._run_ffts((batch_size, num), atol=atol)
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_batched_bluestein_twiddle_table(self):
+        for batch, n in ((1023, 1031), (1024, 1031), (1024, 1531)):
+            with self.subTest(batch=batch, n=n), mx.stream(mx.gpu):
+                index = mx.arange(n, dtype=mx.float32)
+                base = mx.cos(index * 0.017) + 0.25 * mx.sin(index * 0.031)
+                base = base + 1j * (
+                    mx.sin(index * 0.023) - 0.125 * mx.cos(index * 0.047)
+                )
+                scale_index = mx.arange(batch, dtype=mx.float32)
+                scales = (0.75 + 0.25 * mx.cos(scale_index * 0.013)) * (
+                    mx.cos(scale_index * 0.019) + 1j * mx.sin(scale_index * 0.019)
+                )
+                signal = scales[:, None] * base[None, :]
+
+                for transform, atol in ((mx.fft.fft, 1e-3), (mx.fft.ifft, 1e-4)):
+                    expected = scales[:, None] * transform(base)[None, :]
+                    output = transform(signal)
+                    mx.eval(expected, output)
+                    self.assertTrue(
+                        mx.allclose(output, expected, atol=atol, rtol=1e-4).item()
+                    )
+
     @unittest.skip("Too slow for CI but useful for local testing.")
     def test_fft_exhaustive(self):
         nums = range(2, 4097)
@@ -184,6 +216,21 @@ class TestFFT(mlx_tests.MLXTestCase):
 
         for k in range(17, 20):
             self._run_ffts((3, 2**k), atol=1e-2)
+
+        # Past 2**20 the four step plan has to grow n2 to keep both factors
+        # inside threadgroup memory
+        for k in range(20, 25):
+            self._run_ffts((1, 2**k), atol=1e-2, rtol=1e-3)
+
+    @unittest.skipIf(
+        not mx.metal.is_available(), "the size limit is specific to the Metal FFT plan"
+    )
+    def test_fft_too_large(self):
+        # Larger than the four step plan can decompose, so it has to throw
+        # rather than run a kernel that silently returns the wrong answer.
+        # CUDA hands this to cuFFT instead and has no such limit.
+        with self.assertRaises(RuntimeError):
+            mx.eval(mx.fft.fft(mx.zeros(2**25)))
 
     def test_fft_large_numbers(self):
         numbers = [
@@ -347,9 +394,9 @@ class TestFFT(mlx_tests.MLXTestCase):
     def test_fftshift_errors(self):
         # Test invalid axes
         x = mx.array(np.random.rand(4, 4).astype(np.float32))
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.fft.fftshift(x, axes=[2])
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.fft.fftshift(x, axes=[-3])
 
         # Test empty array
@@ -398,13 +445,56 @@ class TestFFT(mlx_tests.MLXTestCase):
                 x = mx.random.normal(sh)
             else:
                 x = mx.random.normal((*sh, 2)).view(mx.complex64).squeeze()
+            mx.eval(x)
+            x_torch = torch.tensor(x, device="cpu")
             fx = f(x)
-            gx = g(torch.tensor(x))
+            gx = g(x_torch)
             self.assertLess((fx - gx).abs().max() / gx.abs().mean(), 1e-4)
 
             dfdx = mx.grad(f)(x)
-            dgdx = torch.func.grad(g)(torch.tensor(x))
+            dgdx = torch.func.grad(g)(x_torch)
             self.assertLess((dfdx - dgdx).abs().max() / dgdx.abs().mean(), 1e-4)
+
+    def make_ffts(self):
+        mxffts = {
+            (True, True): mx.fft.irfftn,
+            (True, False): mx.fft.rfftn,
+            (False, True): mx.fft.ifftn,
+            (False, False): mx.fft.fftn,
+        }
+        shape = (3, 8, 6)
+        r = np.random.rand(*shape).astype(np.float32)
+        i = np.random.rand(*shape).astype(np.float32)
+        for (real, inverse), fftn in mxffts.items():
+            a_np = r if real and not inverse else r + 1j * i
+            for axes in [(-1,), (0,), (-2, -1), (-1, -2), (0, 1)]:
+                yield fftn, a_np, axes
+
+    def test_fft_vmap(self):
+        for fftn, a_np, axes in self.make_ffts():
+            a = mx.array(a_np)
+
+            def f(x):
+                return fftn(x, axes=axes)
+
+            expected = mx.stack([f(a[i]) for i in range(a.shape[0])])
+            out = mx.vmap(f)(a)
+            self.assertEqual(tuple(out.shape), tuple(expected.shape))
+            np.testing.assert_allclose(out, expected, atol=1e-5, rtol=1e-5)
+
+    def test_fft_jvp(self):
+        # The fft is linear so the jvp is the fft of the tangent
+        for fftn, a_np, axes in self.make_ffts():
+            a = mx.array(a_np)
+            t = mx.array(np.random.rand(*a_np.shape).astype(a_np.dtype))
+
+            def f(x):
+                return fftn(x, axes=axes)
+
+            expected = f(t)
+            out = mx.jvp(f, [a], [t])[1][0]
+            self.assertEqual(tuple(out.shape), tuple(expected.shape))
+            np.testing.assert_allclose(out, expected, atol=1e-5, rtol=1e-5)
 
 
 if __name__ == "__main__":

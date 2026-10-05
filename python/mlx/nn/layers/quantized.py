@@ -15,6 +15,11 @@ def _defaults_for_mode(mode, group_size, bits):
         "nvfp4": (16, 4),
         "mxfp8": (32, 8),
     }
+    if mode not in mode_defaults:
+        raise ValueError(
+            f"Invalid quantization mode '{mode}'. "
+            f"Valid modes are: {', '.join(mode_defaults)}."
+        )
     default_group_size, default_bits = mode_defaults[mode]
     return group_size or default_group_size, bits or default_bits
 
@@ -62,7 +67,9 @@ def quantize(
         Weight and input quantization for all linear layers:
 
         >>> predicate = lambda p, m: isinstance(m, nn.Linear)
-        >>> nn.quantize(model, mode="nvfp4", quantize_input=True, class_predicate=predicate)
+        >>> nn.quantize(
+        ...     model, mode="nvfp4", quantize_input=True, class_predicate=predicate,
+        ... )
     """
     class_predicate = class_predicate or (lambda _, m: hasattr(m, "to_quantized"))
 
@@ -313,7 +320,8 @@ class QQLinear(Module):
          the fly during computation so that gradients with respect to the weights
          can be computed.
 
-    To switch between the two cases, use ``layer.eval()`` and ``layer.train()`` respectively.
+    To switch between the two cases, use ``layer.eval()`` and ``layer.train()``
+    respectively.
 
     Compared to the :class:`mlx.nn.QuantizedLinear` layer, this layer
     quantizes the input as well and includes weights in gradient computations.

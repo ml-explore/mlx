@@ -14,15 +14,24 @@ class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
 
     def test_groups(self):
         world = mx.distributed.init()
-        self.assertEqual(world.size(), 8)
-        self.assertTrue(0 <= world.rank() < 8)
+        self.assertTrue(0 <= world.rank() < world.size())
 
         world2 = mx.distributed.init()
         self.assertEqual(world.size(), world2.size())
         self.assertEqual(world.rank(), world2.rank())
 
         with self.assertRaises(RuntimeError):
-            sub = world.split(world.rank() % 2)
+            world.split(world.rank() % 2)
+
+    def test_strict_init_after_fallback(self):
+        with mlx_tests.scoped_env(
+            JACCL_IBV_DEVICES=None,
+            MLX_IBV_DEVICES=None,
+        ):
+            self.assertEqual(mx.distributed.init(backend="jaccl").size(), 1)
+
+            with self.assertRaises(RuntimeError):
+                mx.distributed.init(backend="jaccl", strict=True)
 
     def test_all_reduce_extra(self):
         world = mx.distributed.init()

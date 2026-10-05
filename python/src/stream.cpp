@@ -1,23 +1,26 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <sstream>
-
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/variant.h>
 
+#include <sstream>
+#include <vector>
+
 #include "mlx/stream.h"
 #include "mlx/utils.h"
+#include "python/src/random.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
-// Create the StreamContext on enter and delete on exit.
+// Create a StreamContext on enter and delete it on exit. The contexts are
+// stacked, so the same object can be entered more than once.
 class PyStreamContext {
  public:
-  PyStreamContext(mx::StreamOrDevice s) : _inner(nullptr) {
+  PyStreamContext(mx::StreamOrDevice s) {
     if (std::holds_alternative<std::monostate>(s)) {
       throw std::runtime_error(
           "[StreamContext] Invalid argument, please specify a stream or device.");
@@ -26,19 +29,33 @@ class PyStreamContext {
   }
 
   void enter() {
-    _inner = new mx::StreamContext(_s);
+    _contexts.push_back(new mx::StreamContext(_s));
   }
 
   void exit() {
-    if (_inner != nullptr) {
-      delete _inner;
-      _inner = nullptr;
+    if (_contexts.empty()) {
+      return;
+    }
+    auto* inner = _contexts.back();
+    _contexts.pop_back();
+    // the destructor can throw, inner is freed regardless.
+    delete inner;
+  }
+
+  // ~StreamContext throws when destroyed on a different thread, which Python
+  // cannot control
+  ~PyStreamContext() {
+    while (!_contexts.empty()) {
+      try {
+        exit();
+      } catch (...) {
+      }
     }
   }
 
  private:
   mx::StreamOrDevice _s;
-  mx::StreamContext* _inner;
+  std::vector<mx::StreamContext*> _contexts;
 };
 
 void init_stream(nb::module_& m) {
@@ -56,10 +73,13 @@ void init_stream(nb::module_& m) {
             os << s;
             return os.str();
           })
-      .def("__eq__", [](const mx::Stream& s, const nb::object& other) {
-        return nb::isinstance<mx::Stream>(other) &&
-            s == nb::cast<mx::Stream>(other);
-      });
+      .def(
+          "__eq__",
+          [](const mx::Stream& s, const nb::object& other) {
+            return nb::isinstance<mx::Stream>(other) &&
+                s == nb::cast<mx::Stream>(other);
+          })
+      .freeze();
 
   nb::class_<mx::ThreadLocalStream>(
       m,
@@ -80,7 +100,8 @@ void init_stream(nb::module_& m) {
           [](const mx::ThreadLocalStream& s, const nb::object& other) {
             return nb::isinstance<mx::ThreadLocalStream>(other) &&
                 s == nb::cast<mx::ThreadLocalStream>(other);
-          });
+          })
+      .freeze();
 
   nb::implicitly_convertible<mx::Device::DeviceType, mx::Device>();
 
@@ -88,6 +109,7 @@ void init_stream(nb::module_& m) {
       "default_stream",
       &mx::default_stream,
       "device"_a,
+      nb::sig("def default_stream(device: Device | DeviceType) -> Stream"),
       R"pbdoc(Get the device's default stream.)pbdoc");
   m.def(
       "set_default_stream",
@@ -106,15 +128,41 @@ void init_stream(nb::module_& m) {
       "new_stream",
       &mx::new_stream,
       "device"_a,
-      R"pbdoc(Make a new stream on the given device.)pbdoc");
+      nb::sig("def new_stream(device: Device | DeviceType) -> Stream"),
+      R"pbdoc(
+        Make a new stream on the given device.
+
+        The stream can only be used on the thread where it was created on, using
+        it in any other thread would result in errors.
+      )pbdoc");
+  m.def(
+      "new_thread_unsafe_stream",
+      &mx::new_thread_unsafe_stream,
+      "device"_a,
+      nb::sig(
+          "def new_thread_unsafe_stream(device: Device | DeviceType) -> Stream"),
+      R"pbdoc(
+        Make a new stream that can be used in any thread.
+
+        Unlike :func:`new_stream` which can only work on the thread of creation,
+        streams created by this API can be passed to and evaluated anywhere, but
+        note that currently all nodes in a graph must be evaluated in sequence
+        and it is user's responsibilty to ensure there is no race condition.
+      )pbdoc");
   m.def(
       "new_thread_local_stream",
       &mx::new_thread_local_stream,
       "device"_a,
+      nb::sig(
+          "def new_thread_local_stream(device: Device | DeviceType) -> ThreadLocalStream"),
       R"pbdoc(Make a new stream that will be unique per thread.)pbdoc");
   m.def(
       "clear_streams",
-      &mx::clear_streams,
+      []() {
+        reset_random_state();
+        nb::gil_scoped_release nogil;
+        mx::clear_streams();
+      },
       R"pbdoc(Destroy all streams created in current thread.)pbdoc");
 
   nb::class_<PyStreamContext>(m, "StreamContext", R"pbdoc(
@@ -135,7 +183,8 @@ void init_stream(nb::module_& m) {
              const std::optional<nb::object>& traceback) { scm.exit(); },
           "exc_type"_a = nb::none(),
           "exc_value"_a = nb::none(),
-          "traceback"_a = nb::none());
+          "traceback"_a = nb::none())
+      .freeze();
   m.def(
       "stream",
       [](mx::StreamOrDevice s) { return PyStreamContext(s); },
@@ -163,6 +212,7 @@ void init_stream(nb::module_& m) {
   m.def(
       "synchronize",
       [](mx::StreamOrDevice s) {
+        nb::gil_scoped_release nogil;
         if (std::holds_alternative<std::monostate>(s)) {
           mx::synchronize();
         } else {

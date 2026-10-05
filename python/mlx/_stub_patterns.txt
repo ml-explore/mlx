@@ -1,39 +1,44 @@
 mlx.core.__prefix__:
-  from typing import Any, Callable, Dict, List, Optional, Protocol, Sequence, Tuple, Union, ParamSpec, TypeVar
-  import sys
-  if sys.version_info >= (3, 10):
-    from typing import TypeAlias
-  else:
-    from typing_extensions import TypeAlias
+  from typing import Any, BinaryIO as file, Literal, ParamSpec, Protocol, TypeAlias, TypeVar
   P = ParamSpec("P")
   R = TypeVar("R")
   class DLPackCompatible(Protocol):
-    __dlpack__: Callable[..., Any]
-    __dlpack_device__: Callable[..., Any]
+    def __dlpack__(self, *args: Any, **kwargs: Any) -> Any: ...
+    def __dlpack_device__(self, *args: Any, **kwargs: Any) -> Any: ...
 
 mlx.core.__suffix__:
-  from typing import Union
-  scalar: TypeAlias = Union[int, float, bool]
-  list_or_scalar: TypeAlias = Union[scalar, list["list_or_scalar"]]
+  scalar: TypeAlias = int | float | bool | complex
+  list_or_scalar: TypeAlias = scalar | list["list_or_scalar"]
+  StreamOrDevice: TypeAlias = Stream | ThreadLocalStream | Device | DeviceType | None
   bool_: Dtype = ...
 
+mlx.core.matrix_norm:
+  matrix_norm = linalg.norm
+
+mlx.core.array.__(eq|ne)__:
+  @overload
+  def __\1__(self, other: bool | int | float | array | Annotated[NDArray, dict(writable=False)] | complex) -> array: ...
+  @overload
+  def __\1__(self, other: ArrayLike) -> array | bool: ...
+  @overload
+  def __\1__(self, other: object) -> Any: ...
+
+mlx.core._PrintOptionsContext:
+  class _PrintOptionsContext:
+    def __init__(self, arg: PrintOptions, /) -> None: ...
+    def __enter__(self) -> _PrintOptionsContext: ...
+    def __exit__(self, *args) -> None: ...
+
 mlx.core.distributed.__prefix__:
-  from mlx.core import array, Dtype, Device, Stream, scalar
-  from mlx.core.distributed import Group
-  from typing import Sequence, Optional, Union
+  from mlx.core import array, Dtype, StreamOrDevice
+  from collections.abc import Callable, Sequence
 
 mlx.core.fast.__prefix__:
-  from mlx.core import array, Dtype, Device, Stream, scalar
-  from typing import Sequence, Optional, Union
+  from mlx.core import array, StreamOrDevice
 
 mlx.core.linalg.__prefix__:
-  from mlx.core import array, Dtype, Device, Stream, scalar
-  from typing import Sequence, Optional, Tuple, Union
-
-mlx.core.metal.__prefix__:
-  from mlx.core import array, Dtype, Device, Stream, scalar
-  from typing import Sequence, Optional, Union
+  from mlx.core import array, StreamOrDevice
 
 mlx.core.random.__prefix__:
-  from mlx.core import array, Dtype, Device, Stream, scalar, float32, int32
-  from typing import Sequence, Optional, Union
+  from mlx.core import array, Dtype, StreamOrDevice, scalar, float32, int32
+  from collections.abc import Sequence

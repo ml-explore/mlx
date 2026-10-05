@@ -43,13 +43,13 @@ template <typename T, typename U, typename Op, typename IdxT, int NDIMS>
     row = in + loop.location();
     if (safe) {
       for (int i = 0; i < n_reads; i++) {
-        totals[i] = op(static_cast<U>(row[i]), totals[i]);
+        totals[i] = op(cast_to<U>(row[i]), totals[i]);
       }
     } else {
       U vals[n_reads];
       for (int i = 0; i < n_reads; i++) {
         vals[i] =
-            (column + i < reduction_stride) ? static_cast<U>(row[i]) : op.init;
+            (column + i < reduction_stride) ? cast_to<U>(row[i]) : op.init;
       }
       for (int i = 0; i < n_reads; i++) {
         totals[i] = op(vals[i], totals[i]);
@@ -117,7 +117,7 @@ template <typename T, typename U, typename Op, typename IdxT, int NDIMS>
 
   IdxT out_idx = gid.x + gsize.x * IdxT(gid.y);
   IdxT in_idx = elem_to_loc<IdxT>(out_idx, shape, strides, ndim);
-  in += in_idx + lid.x;
+  in += in_idx + IdxT(lid.x);
 
   U total = Op::init;
   IdxT total_rows = IdxT(non_col_reductions) * IdxT(reduction_size);
@@ -125,7 +125,7 @@ template <typename T, typename U, typename Op, typename IdxT, int NDIMS>
   for (IdxT r = gid.z * lsize.y + lid.y; r < total_rows;
        r += lsize.y * gsize.z) {
     row = in + loop.location();
-    total = op(static_cast<U>(*row), total);
+    total = op(cast_to<U>(*row), total);
     loop.next(lsize.y * gsize.z, reduce_shape, reduce_strides);
   }
 
@@ -207,13 +207,13 @@ template <
 
     if (safe) {
       for (int i = 0; i < n_reads; i++) {
-        totals[i] = op(static_cast<U>(row[i]), totals[i]);
+        totals[i] = op(cast_to<U>(row[i]), totals[i]);
       }
     } else {
       U vals[n_reads];
       for (int i = 0; i < n_reads; i++) {
         vals[i] =
-            (column + i < reduction_stride) ? static_cast<U>(row[i]) : op.init;
+            (column + i < reduction_stride) ? cast_to<U>(row[i]) : op.init;
       }
       for (int i = 0; i < n_reads; i++) {
         totals[i] = op(vals[i], totals[i]);
@@ -352,13 +352,13 @@ template <
 
     if (safe) {
       for (int i = 0; i < n_reads; i++) {
-        totals[i] = op(static_cast<U>(row[i]), totals[i]);
+        totals[i] = op(cast_to<U>(row[i]), totals[i]);
       }
     } else {
       U vals[n_reads];
       for (int i = 0; i < n_reads; i++) {
         vals[i] =
-            (column + i < reduction_stride) ? static_cast<U>(row[i]) : op.init;
+            (column + i < reduction_stride) ? cast_to<U>(row[i]) : op.init;
       }
       for (int i = 0; i < n_reads; i++) {
         totals[i] = op(vals[i], totals[i]);

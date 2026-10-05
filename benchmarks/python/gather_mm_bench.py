@@ -7,7 +7,7 @@ N = 1024
 D = 1024
 M = 1024
 E = 32
-I = 4
+num_indices = 4
 
 
 def gather_sort(x, indices):
@@ -38,8 +38,8 @@ def time_gather_mm():
     x = mx.random.normal((N, 1, 1, D)) / 1024**0.5
     w1 = mx.random.normal((E, M, D)) / 1024**0.5
     w2 = mx.random.normal((E, D, M)) / 1024**0.5
-    indices = (mx.random.uniform(shape=(N, I)) * E).astype(mx.uint32)
-    sorted_indices = mx.sort(indices.flatten()).reshape(N, I)
+    indices = (mx.random.uniform(shape=(N, num_indices)) * E).astype(mx.uint32)
+    sorted_indices = mx.sort(indices.flatten()).reshape(N, num_indices)
     mx.eval(x, w1, w2, indices, sorted_indices)
 
     def gather_mm(x, w1, w2, indices, sort):
@@ -57,7 +57,7 @@ def time_gather_mm():
     time_fn(gather_mm, x, w1, w2, sorted_indices, False)
     time_fn(gather_mm, x, w1, w2, indices, True)
 
-    x = mx.random.normal((N * I, D)) / 1024**0.5
+    x = mx.random.normal((N * num_indices, D)) / 1024**0.5
     w1 = mx.random.normal((M, D)) / 1024**0.5
     w2 = mx.random.normal((D, M)) / 1024**0.5
     mx.eval(x, w1, w2)

@@ -1,7 +1,7 @@
 // Copyright © 2026 Apple Inc.
 
+#include "mlx/backend/cuda/device/cute_dequant.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
-#include "mlx/backend/cuda/quantized/qmm/cute_dequant.cuh"
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
 #include "mlx/dtype_utils.h"
 
@@ -94,6 +94,7 @@ __device__ __forceinline__ void qmv_kernel_impl(
     const Q* w,
     const S* scales,
     const T* biases,
+    const float* global_scale,
     T* out,
     int row,
     int w_batch,
@@ -155,6 +156,14 @@ __device__ __forceinline__ void qmv_kernel_impl(
 
   // Write result for current warp, which maps to rows 1-to-1.
   if (warp.thread_rank() == 0) {
+    if constexpr (
+        cuda::std::is_same_v<Q, cutlass::float_e2m1_t> &&
+        cuda::std::is_same_v<S, cutlass::float_e4m3_t>) {
+      // Only nvfp4 supports global scale.
+      if (global_scale) {
+        sum *= (*global_scale / (F8E4M3_MAX * F4E2M1_MAX));
+      }
+    }
     out[row] = static_cast<T>(sum);
   }
 }
@@ -173,6 +182,7 @@ __global__ void qmv_kernel(
     const Q* w,
     const S* scales,
     const T* biases,
+    const float* global_scale,
     T* out,
     int n,
     int k,
@@ -195,7 +205,7 @@ __global__ void qmv_kernel(
   int w_batch = broadcast_w ? 0 : l;
 
   qmv_kernel_impl<elems_per_thread, group_size, has_bias, has_residue_k>(
-      x, w, scales, biases, out, row, w_batch, n, k);
+      x, w, scales, biases, global_scale, out, row, w_batch, n, k);
 }
 
 template <
@@ -212,6 +222,7 @@ __global__ void gather_qmv_kernel(
     const Q* w,
     const S* scales,
     const T* biases,
+    const float* global_scale,
     T* out,
     const uint32_t* lhs_indices,
     const uint32_t* rhs_indices,
@@ -234,8 +245,12 @@ __global__ void gather_qmv_kernel(
   x += block.group_index().y * k + m * k * x_idx;
   out += block.group_index().y * n + m * n * l;
 
+  // The global scale is per gathered expert.
+  if (global_scale) {
+    global_scale += w_idx;
+  }
   qmv_kernel_impl<elems_per_thread, group_size, has_bias, has_residue_k>(
-      x, w, scales, biases, out, row, w_idx, n, k);
+      x, w, scales, biases, global_scale, out, row, w_idx, n, k);
 }
 
 template <
@@ -250,6 +265,7 @@ void qmv(
     const Q* w,
     const S* scales,
     const T* biases,
+    const float* global_scale,
     T* out,
     int m,
     int n,
@@ -264,7 +280,8 @@ void qmv(
   dim3 num_blocks{
       uint32_t(cuda::ceil_div(n, rows_per_block)), uint32_t(m), uint32_t(l)};
   dim3 block_dims{WARP_SIZE, rows_per_block};
-  void* args[] = {&x, &w, &scales, &biases, &out, &n, &k, &broadcast_w};
+  void* args[] = {
+      &x, &w, &scales, &biases, &global_scale, &out, &n, &k, &broadcast_w};
 
   dispatch_bool(k % (WARP_SIZE * elems_per_thread), [&](auto has_residue_k) {
     auto* kernel = &qmv_kernel<
@@ -293,6 +310,7 @@ void gather_qmv(
     const Q* w,
     const S* scales,
     const T* biases,
+    const float* global_scale,
     T* out,
     const uint32_t* lhs_indices,
     const uint32_t* rhs_indices,
@@ -309,7 +327,16 @@ void gather_qmv(
       uint32_t(cuda::ceil_div(n, rows_per_block)), uint32_t(m), uint32_t(l)};
   dim3 block_dims{WARP_SIZE, rows_per_block};
   void* args[] = {
-      &x, &w, &scales, &biases, &out, &lhs_indices, &rhs_indices, &n, &k};
+      &x,
+      &w,
+      &scales,
+      &biases,
+      &global_scale,
+      &out,
+      &lhs_indices,
+      &rhs_indices,
+      &n,
+      &k};
 
   dispatch_bool(k % (WARP_SIZE * elems_per_thread), [&](auto has_residue_k) {
     auto* kernel = &gather_qmv_kernel<
@@ -396,6 +423,7 @@ void qmv(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& global_scale,
     array& out,
     int bits,
     int group_size,
@@ -421,6 +449,9 @@ void qmv(
           if (biases) {
             encoder.set_input_array(*biases);
           }
+          if (global_scale) {
+            encoder.set_input_array(*global_scale);
+          }
           encoder.set_output_array(out);
           constexpr bool has_bias = !cutlass::has_negative_zero_v<Q>;
           cu::qmv<group_size, has_bias>(
@@ -428,6 +459,7 @@ void qmv(
               gpu_ptr<Q>(w),
               gpu_ptr<S>(scales),
               biases ? gpu_ptr<T>(*biases) : nullptr,
+              global_scale ? gpu_ptr<float>(*global_scale) : nullptr,
               gpu_ptr<T>(out),
               m,
               n,
@@ -447,6 +479,7 @@ void gather_qmv(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& global_scale,
     const array& lhs_indices,
     const array& rhs_indices,
     array& out,
@@ -473,6 +506,9 @@ void gather_qmv(
           if (biases) {
             encoder.set_input_array(*biases);
           }
+          if (global_scale) {
+            encoder.set_input_array(*global_scale);
+          }
           encoder.set_input_array(lhs_indices);
           encoder.set_input_array(rhs_indices);
           encoder.set_output_array(out);
@@ -482,6 +518,7 @@ void gather_qmv(
               gpu_ptr<Q>(w),
               gpu_ptr<S>(scales),
               biases ? gpu_ptr<T>(*biases) : nullptr,
+              global_scale ? gpu_ptr<float>(*global_scale) : nullptr,
               gpu_ptr<T>(out),
               gpu_ptr<uint32_t>(lhs_indices),
               gpu_ptr<uint32_t>(rhs_indices),

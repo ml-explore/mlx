@@ -194,12 +194,13 @@ def glorot_uniform(
 ) -> Callable[[mx.array, float], mx.array]:
     r"""A Glorot uniform initializer.
 
-    This initializer samples from a uniform distribution with a range
-    computed from the number of input (``fan_in``) and output (``fan_out``)
+    This initializer samples from a uniform distribution on the interval
+    :math:`[-\text{limit}, \text{limit}]`, where the bound :math:`\text{limit}`
+    is computed from the number of input (``fan_in``) and output (``fan_out``)
     units according to:
 
     .. math::
-        \sigma = \gamma \sqrt{\frac{6.0}{\text{fan\_in} + \text{fan\_out}}}
+        \text{limit} = \gamma \sqrt{\frac{6.0}{\text{fan\_in} + \text{fan\_out}}}
 
     For more details see the original reference: `Understanding the difficulty
     of training deep feedforward neural networks
@@ -295,13 +296,14 @@ def he_uniform(
 ) -> Callable[[mx.array, Literal["fan_in", "fan_out"], float], mx.array]:
     r"""A He uniform (Kaiming uniform) initializer.
 
-    This initializer samples from a uniform distribution with a range
-    computed from the number of input (``fan_in``) or output (``fan_out``)
+    This initializer samples from a uniform distribution on the interval
+    :math:`[-\text{limit}, \text{limit}]`, where the bound :math:`\text{limit}`
+    is computed from the number of input (``fan_in``) or output (``fan_out``)
     units according to:
 
     .. math::
 
-        \sigma = \gamma \sqrt{\frac{3.0}{\text{fan}}}
+        \text{limit} = \gamma \sqrt{\frac{3.0}{\text{fan}}}
 
     where :math:`\text{fan}` is either the number of input units when the
     ``mode`` is ``"fan_in"`` or output units when the ``mode`` is
@@ -358,9 +360,15 @@ def sparse(
 ) -> Callable[[mx.array], mx.array]:
     r"""An initializer that returns a sparse matrix.
 
+    Sparsity is applied along each row: every row has the same fraction of its
+    entries set to zero. With a weight matrix applied as ``x @ w.T``, this
+    limits each output feature to at most a ``1 - sparsity`` fraction of the
+    input features, following the sparse initialization of Martens, J. (2010),
+    "Deep learning via Hessian-free optimization".
+
     Args:
-        sparsity (float): The fraction of elements in each column to be set to
-        zero.
+        sparsity (float): The fraction of elements in each row to be set to
+          zero.
         mean (float, optional): Mean of the normal distribution. Default:
           ``0.0``.
         std (float, optional): Standard deviation of the normal distribution.
@@ -376,8 +384,8 @@ def sparse(
 
         >>> init_fn = nn.init.sparse(sparsity=0.5)
         >>> init_fn(mx.zeros((2, 2)))
-        array([[-1.91187, -0.117483],
-       [0, 0]], dtype=float32)
+        array([[-1.91187, 0],
+       [0, -0.117483]], dtype=float32)
     """
 
     def initializer(a: mx.array) -> mx.array:
@@ -387,6 +395,10 @@ def sparse(
         rows, cols = a.shape
         num_zeros = int(math.ceil(sparsity * cols))
 
+        # Zero out `num_zeros` random entries in each row, so every row (output
+        # feature) drops the same fraction of its input connections. Sorting a
+        # per-row random key (axis=1) picks the zeroed columns independently for
+        # every row.
         order = mx.argsort(mx.random.uniform(shape=a.shape), axis=1)
         a = mx.random.normal(shape=a.shape, scale=std, loc=mean, dtype=dtype)
 
@@ -415,8 +427,8 @@ def orthogonal(
     def initializer(a: mx.array) -> mx.array:
         if a.ndim != 2:
             raise ValueError(
-                f"Orthogonal initialization requires a 2D array but got"
-                " a {a.ndim}D array."
+                "Orthogonal initialization requires a 2D array but got"
+                f" a {a.ndim}D array."
             )
 
         rows, cols = a.shape

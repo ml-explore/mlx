@@ -121,13 +121,13 @@ Once the development dependencies are installed, you can build faster with:
 
 .. code-block:: shell
 
- python setup.py build_ext --inplace
+  python setup.py build_ext --inplace
 
 Run the tests with:
 
 .. code-block:: shell
 
-  python -m unittest discover python/tests
+  python python/tests/run.py
 
 C++ API
 ^^^^^^^

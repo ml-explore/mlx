@@ -46,11 +46,10 @@ struct MLX_API CommandEncoder {
     auto task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
     if (num_ops_ == 0) {
       scheduler::notify_new_task(stream_);
-      auto task_wrap = [s = stream_, task = std::move(task)]() mutable {
-        task();
-        scheduler::notify_task_completion(s);
-      };
-      scheduler::enqueue(stream_, std::move(task_wrap));
+      scheduler::enqueue(stream_, std::move(task));
+      // Notify completion separately as |task| may throw exception.
+      scheduler::enqueue(
+          stream_, [s = stream_] { scheduler::notify_task_completion(s); });
     } else {
       scheduler::enqueue(stream_, std::move(task));
     }
@@ -62,7 +61,9 @@ struct MLX_API CommandEncoder {
   int num_ops_{0};
 };
 
-MLX_API CommandEncoder& get_command_encoder(Stream stream);
+MLX_API CommandEncoder& get_command_encoder(Stream s);
+
 std::unordered_map<int, CommandEncoder>& get_command_encoders();
+std::unordered_map<int, CommandEncoder>& get_global_command_encoders();
 
 } // namespace mlx::core::cpu

@@ -126,6 +126,27 @@ class TestOps(mlx_tests.MLXTestCase):
             mx.broadcast_to(a, [too_big, 1])
         self.assertIn(str(too_big), str(cm.exception))
 
+        # A concatenation axis that does not fit is computed rather than given,
+        # so it has to be reported instead of wrapping into a bogus dimension.
+        # These stay lazy, so nothing near this size is allocated.
+        big = mx.zeros(2**30)
+        for parts in (3, 4, 5):
+            with self.assertRaises(OverflowError) as cm:
+                mx.concatenate([big] * parts)
+            self.assertIn(str(2**30 * parts), str(cm.exception))
+
+        # repeat and kron multiply a dimension, and used to wrap into a
+        # negative or zero one that only surfaced later as a confusing reshape
+        # error naming a shape the caller never asked for.
+        for parts in (2, 3, 4):
+            with self.assertRaises(OverflowError) as cm:
+                mx.repeat(big, parts)
+            self.assertIn(str(2**30 * parts), str(cm.exception))
+
+        with self.assertRaises(OverflowError) as cm:
+            mx.kron(mx.zeros(2**16), mx.zeros(2**16))
+        self.assertIn(str(2**32), str(cm.exception))
+
         # Negative overflow (< int32 min) is caught too.
         too_negative = -(2**31) - 1
         with self.assertRaises(OverflowError) as cm:
@@ -137,6 +158,20 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.zeros((2, 3)).shape, (2, 3))
         self.assertEqual(mx.ones([2, 3]).shape, (2, 3))
         self.assertEqual(mx.full((2, 3), 1.5).tolist(), [[1.5] * 3] * 2)
+
+    def test_integer_index_protocol(self):
+        a = mx.arange(4)
+
+        index = np.int32(2)
+        self.assertEqual(mx.topk(a, index).shape, (2,))
+        self.assertEqual(mx.reshape(a, [index, 2]).shape, (2, 2))
+
+        for value in (np.float32(2), "2"):
+            with self.subTest(value=value):
+                with self.assertRaises(TypeError):
+                    mx.topk(a, value)
+                with self.assertRaises(TypeError):
+                    mx.reshape(a, [value, 2])
 
     def test_scalar_inputs(self):
         # Check combinations of python types
@@ -343,8 +378,41 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.dtype, mx.int32)
         self.assertEqual(z.item(), 2)
 
+    def test_floor_divide(self):
+        a = [4, 5, -1, -6]
+        b = [-2, 3, 2, -3]
+
+        mx_int_float_dtypes = mx.__array_namespace_info__().dtypes(
+            kind=("signed integer", "real floating")
+        )
+        np_int_float_dtypes = np.__array_namespace_info__().dtypes(
+            kind=("signed integer", "real floating")
+        )
+
+        for kind, dtype in mx_int_float_dtypes.items():
+            with self.subTest(dtype=dtype):
+                result = mx.floor_divide(
+                    mx.array(a, dtype=dtype), mx.array(b, dtype=dtype)
+                )
+                expected = np.floor_divide(
+                    np.array(a, dtype=np_int_float_dtypes[kind]),
+                    np.array(b, dtype=np_int_float_dtypes[kind]),
+                )
+                self.assertEqual(result.tolist(), expected.tolist())
+
+                result = mx.array(a, dtype=dtype) // mx.array(b, dtype=dtype)
+                self.assertEqual(result.tolist(), expected.tolist())
+
     def test_remainder(self):
-        for dt in [mx.int32, mx.float32]:
+        # Complex is not supported and has to say so rather than quietly
+        # computing a componentwise remainder, which no other library defines
+        z = mx.array([7 + 3j], mx.complex64)
+        with self.assertRaises(ValueError):
+            mx.remainder(z, z)
+        with self.assertRaises(ValueError):
+            z % z
+
+        for dt in [mx.int32, mx.float32, mx.float16, mx.bfloat16]:
             x = mx.array(2, dtype=dt)
             y = mx.array(4, dtype=dt)
 
@@ -369,6 +437,20 @@ class TestOps(mlx_tests.MLXTestCase):
             z = -1 % -x
             self.assertEqual(z.dtype, dt)
             self.assertEqual(z.item(), -1)
+
+            # floored remainder takes the sign of the divisor; check both
+            # correction directions (positive and negative divisor).
+            av = [-1.0, -1.0, -1.0, -3.0, 1.0, 1.0, 1.0, 3.0]
+            bv = [3.0, 5.0, 7.0, 8.0, -3.0, -5.0, -7.0, -8.0]
+            got = np.array(
+                mx.remainder(mx.array(av, dtype=dt), mx.array(bv, dtype=dt)).astype(
+                    mx.float32
+                )
+            )
+            expected = np.remainder(
+                np.array(av, dtype=np.float32), np.array(bv, dtype=np.float32)
+            )
+            self.assertTrue(np.allclose(got, expected, atol=1e-2))
 
             x = mx.arange(10).astype(dt) - 5
             y = x % 5
@@ -454,6 +536,26 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.array([0.0, float("inf")]).astype(mx.complex64)
         self.assertEqual(mx.isinf(x).tolist(), [False, True])
 
+        inf = float("inf")
+        x = mx.array(
+            [
+                complex(0.0, inf),
+                complex(inf, 0.0),
+                complex(inf, inf),
+                complex(0.0, -inf),
+                complex(-inf, 0.0),
+                complex(-inf, -inf),
+                complex(3.0, 4.0),
+                complex(0.0, 0.0),
+            ],
+            dtype=mx.complex64,
+        )
+        self.assertEqual(
+            mx.isinf(x).tolist(),
+            [True, True, True, True, True, True, False, False],
+        )
+        np.testing.assert_array_equal(np.isinf(np.array(x, copy=False)), mx.isinf(x))
+
         self.assertEqual(mx.isinf(0 * mx.array(float("inf"))).tolist(), False)
 
         x = mx.array([-2147483648, 0, 2147483647], dtype=mx.int32)
@@ -473,6 +575,16 @@ class TestOps(mlx_tests.MLXTestCase):
 
         x = x.astype(mx.bfloat16)
         self.assertEqual(mx.isfinite(x).tolist(), [True, False, False])
+
+        inf = float("inf")
+        x = mx.array(
+            [complex(0.0, inf), complex(inf, 0.0), complex(3.0, 4.0)],
+            dtype=mx.complex64,
+        )
+        self.assertEqual(mx.isfinite(x).tolist(), [False, False, True])
+        np.testing.assert_array_equal(
+            np.isfinite(np.array(x, copy=False)), mx.isfinite(x)
+        )
 
     def test_tri(self):
         for shape in [[4], [4, 4], [2, 10]]:
@@ -506,6 +618,11 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(math.isnan(mx.minimum(a, b).item()))
         self.assertTrue(math.isnan(mx.minimum(b, a).item()))
 
+        # A NaN in either part of the first argument propagates.
+        a = mx.array([complex(3, float("nan"))])
+        b = mx.array([2 + 0j])
+        self.assertTrue(mx.array_equal(mx.minimum(a, b), a, equal_nan=True))
+
     def test_maximum(self):
         x = mx.array([0.0, -5, 10.0])
         y = mx.array([1.0, -7.0, 3.0])
@@ -517,6 +634,11 @@ class TestOps(mlx_tests.MLXTestCase):
         b = mx.array([0.0])
         self.assertTrue(math.isnan(mx.maximum(a, b).item()))
         self.assertTrue(math.isnan(mx.maximum(b, a).item()))
+
+        # A NaN in either part of the first argument propagates.
+        a = mx.array([complex(1, float("nan"))])
+        b = mx.array([2 + 0j])
+        self.assertTrue(mx.array_equal(mx.maximum(a, b), a, equal_nan=True))
 
     def test_floor(self):
         x = mx.array([-22.03, 19.98, -27, 9, 0.0, -np.inf, np.inf])
@@ -702,6 +824,13 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.array_equal(y_mlx, y_npy))
 
+    def test_count_nonzero(self):
+        c = mx.array([[0, 1, 0], [2, 3, 0]])
+        self.assertEqual(mx.count_nonzero(c).item(), 3)
+        self.assertEqual(mx.count_nonzero(c, axis=0).tolist(), [1, 2, 0])
+        self.assertEqual(mx.count_nonzero(c, axis=1).tolist(), [1, 2])
+        self.assertEqual(mx.count_nonzero(c).dtype, mx.int32)
+
     def test_prod(self):
         x = mx.array(
             [
@@ -716,6 +845,19 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertEqual(mx.prod(x, axis=0).tolist(), [3, 6])
         self.assertEqual(mx.prod(x, axis=1).tolist(), [2, 9])
+
+        # dtype should not depend on the length of the reduced axis
+        for dtype, expected in (
+            (mx.bool_, mx.int32),
+            (mx.int8, mx.int32),
+            (mx.uint8, mx.uint32),
+        ):
+            self.assertEqual(
+                mx.prod(mx.array([2], dtype=dtype), axis=0).dtype, expected
+            )
+            self.assertEqual(
+                mx.prod(mx.array([2, 2], dtype=dtype), axis=0).dtype, expected
+            )
 
     def test_min_and_max(self):
         x = mx.array(
@@ -776,6 +918,9 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertListEqual(list(b_npy.shape), list(b_mlx.shape))
         self.assertTrue(np.array_equal(b_npy, b_mlx))
 
+        with self.assertRaises(ValueError):
+            mx.broadcast_to(a_mlx, (-1, 10, 20))
+
     def test_logsumexp(self):
         def logsumexp(x, axes=None):
             maxs = mx.max(x, axis=axes, keepdims=True)
@@ -806,6 +951,47 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.broadcast_to(mx.random.uniform(shape=(2, 1, 8)), (2, 2, 8))
         self.assertTrue(mx.allclose(mx.logsumexp(x), logsumexp(x)))
 
+    def test_logsumexp_shape(self):
+        # A reduction over all axes with keepdims=False must yield a scalar
+        # array (), consistent with every other reduction (sum, prod, max, ...).
+        # Regression test: logsumexp's fast path used to squeeze only the last
+        # axis, so inputs with size-1 leading dims returned (1,) instead of ().
+        def logsumexp(x, axes=None):
+            maxs = mx.max(x, axis=axes, keepdims=True)
+            return mx.log(mx.sum(mx.exp(x - maxs), axis=axes, keepdims=True)) + maxs
+
+        # Full reduction on size-1-leading-dim inputs -> scalar ().
+        for shape in [(1, 2), (1, 1), (1, 5), (1, 1, 8), (1, 1, 1, 4)]:
+            x = mx.random.uniform(shape=shape)
+            out = mx.logsumexp(x)
+            self.assertEqual(out.shape, (), f"shape {shape}")
+            self.assertEqual(out.ndim, 0, f"shape {shape}")
+            # Same shape as mx.sum and same value as the decomposition.
+            self.assertEqual(out.shape, mx.sum(x).shape)
+            self.assertTrue(mx.allclose(out, logsumexp(x)))
+
+        # keepdims=True keeps every reduced axis as size 1.
+        self.assertEqual(
+            mx.logsumexp(mx.random.uniform(shape=(1, 5)), keepdims=True).shape, (1, 1)
+        )
+        self.assertEqual(
+            mx.logsumexp(mx.random.uniform(shape=(1, 1, 8)), keepdims=True).shape,
+            (1, 1, 1),
+        )
+
+        # Partial reductions over a contiguous suffix of axes with size-1
+        # leading dims must squeeze every reduced axis, not only the last one.
+        x = mx.random.uniform(shape=(5, 1, 8))
+        self.assertEqual(mx.logsumexp(x, axis=[1, 2]).shape, (5,))
+        self.assertEqual(mx.logsumexp(x, axis=[1, 2], keepdims=True).shape, (5, 1, 1))
+        ref = np.logaddexp.reduce(np.array(x), axis=(1, 2))
+        self.assertTrue(np.allclose(np.array(mx.logsumexp(x, axis=[1, 2])), ref))
+
+        self.assertEqual(
+            mx.logsumexp(mx.random.uniform(shape=(1, 1, 1, 8)), axis=[1, 2, 3]).shape,
+            (1,),
+        )
+
     def test_mean(self):
         x = mx.array(
             [
@@ -826,7 +1012,7 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.median(x, axis=0)
         x = mx.array([0, 1, 2, 3, 4])
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.median(x, axis=(0, 1))
         with self.assertRaises(ValueError):
             mx.median(x, axis=(0, 0))
@@ -854,6 +1040,38 @@ class TestOps(mlx_tests.MLXTestCase):
         out_np = np.median(x, axis=(0, 1, 3), keepdims=True)
         self.assertTrue(np.allclose(out, out_np))
 
+    def test_median_nan(self):
+        nan = float("nan")
+
+        # Odd and even lengths, with the NaN in a few different positions.
+        for vals in ([1.0, nan, 0.0], [nan, 1.0, 0.0], [1.0, 2.0, nan, 4.0]):
+            for dtype in (mx.float16, mx.bfloat16, mx.float32):
+                out = mx.median(mx.array(vals, dtype=dtype))
+                self.assertTrue(mx.isnan(out).item(), msg=f"{vals} {dtype}")
+
+        x = mx.array([[1.0, nan, 3.0], [4.0, 5.0, 6.0]])
+        self.assertTrue(
+            np.array_equal(
+                np.array(mx.median(x, axis=1)), np.median(x, axis=1), equal_nan=True
+            )
+        )
+        self.assertTrue(
+            np.array_equal(
+                np.array(mx.median(x, axis=0)), np.median(x, axis=0), equal_nan=True
+            )
+        )
+        self.assertTrue(mx.isnan(mx.median(x)).item())
+        self.assertEqual(mx.median(x, axis=1, keepdims=True).shape, (2, 1))
+
+        # Complex NaN propagates too, matching NumPy.
+        out = mx.median(mx.array([complex(1, 0), complex(nan, 0), complex(0, 0)]))
+        self.assertTrue(mx.isnan(out).item())
+
+        # A NaN-free array is unaffected, and integers are never NaN.
+        x = mx.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        self.assertTrue(np.allclose(mx.median(x, axis=1), np.median(x, axis=1)))
+        self.assertEqual(mx.median(mx.array([0, 1, 2, 3, 4])).item(), 2)
+
     def test_var(self):
         x = mx.array(
             [
@@ -877,10 +1095,20 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.var(x, ddof=3)
         self.assertEqual(out.item(), float("inf"))
 
+        x = mx.array([1 + 2j, -3 - 4j, 0.5 - 0.25j])
+        x_np = np.array(x)
+        self.assertEqual(mx.var(x).dtype, mx.float32)
+        self.assertAlmostEqual(mx.var(x).item(), x_np.var().item(), places=5)
+
     def test_std(self):
         x = mx.random.uniform(shape=(5, 5))
         x_np = np.array(x)
         self.assertAlmostEqual(mx.std(x).item(), x_np.std().item(), places=6)
+
+        x = mx.array([1 + 2j, -3 - 4j, 0.5 - 0.25j])
+        x_np = np.array(x)
+        self.assertEqual(mx.std(x).dtype, mx.float32)
+        self.assertAlmostEqual(mx.std(x).item(), x_np.std().item(), places=5)
 
     def test_abs(self):
         a = mx.array([-1.0, 1.0, -2.0, 3.0])
@@ -938,6 +1166,15 @@ class TestOps(mlx_tests.MLXTestCase):
         # test overloaded operator
         result = a | b
         self.assertTrue(np.array_equal(result, expected))
+
+    def test_logical_xor(self):
+        x = mx.array([True, True, False, False])
+        y = mx.array([True, False, True, False])
+        self.assertEqual(mx.logical_xor(x, y).tolist(), [False, True, True, False])
+
+    def test_trunc(self):
+        a = mx.array([-1.5, -0.5, 0.0, 0.5, 2.7])
+        self.assertEqual(mx.trunc(a).tolist(), [-1.0, 0.0, 0.0, 0.0, 2.0])
 
     def test_square(self):
         a = mx.array([0.1, 0.5, 1.0, 10.0])
@@ -1038,11 +1275,28 @@ class TestOps(mlx_tests.MLXTestCase):
         np.seterr(over=errs["over"])
         self.assertTrue(np.allclose(result, expected, rtol=1e-3, atol=1e-4))
 
+        # Complex is not supported and has to say so rather than quietly
+        # computing on the real part
+        z = mx.array([1 + 2j], mx.complex64)
+        with self.assertRaises(ValueError):
+            mx.expm1(z)
+        with self.assertRaises(ValueError):
+            mx.sigmoid(z)
+        with self.assertRaises(ValueError):
+            mx.arctan2(z, z)
+
     def test_erf(self):
         inputs = [-5, 0.0, 0.5, 1.0, 2.0, 10.0]
         x = mx.array(inputs)
         expected = np.array([math.erf(i) for i in inputs])
         self.assertTrue(np.allclose(mx.erf(x), expected))
+
+        # Complex is not supported and has to say so rather than abort
+        z = mx.array([1 + 2j], mx.complex64)
+        with self.assertRaises(ValueError):
+            mx.erf(z)
+        with self.assertRaises(ValueError):
+            mx.erfinv(z)
 
     def test_erfinv(self):
         inputs = [-5.0, -1.0, 0.5, 0.0, 0.5, 1.0, 5.0]
@@ -1074,6 +1328,13 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = np.sin(a, dtype=np.float32)
 
         self.assertTrue(np.allclose(result, expected))
+
+        # Large arguments still have to land in [-1, 1]
+        big = np.array([1e8, 1e9, 1e10, 1e20, 1e30], dtype=np.float32)
+        for op, npop in [(mx.sin, np.sin), (mx.cos, np.cos)]:
+            out = np.array(op(mx.array(big)))
+            self.assertTrue(np.all(np.abs(out) <= 1.0))
+            self.assertTrue(np.allclose(out, npop(big), atol=1e-6))
 
     def test_cos(self):
         a = mx.array(
@@ -1175,6 +1436,37 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.any(a, axis=0).tolist(), [True, False])
         self.assertEqual(mx.any(a, axis=1).tolist(), [True, False])
 
+    def test_subnormal_bool_cast(self):
+        f32_sub = mx.array(np.array([0x00000001], dtype=np.uint32)).view(mx.float32)
+        f16_sub = mx.array(np.array([0x0001], dtype=np.uint16)).view(mx.float16)
+        bf16_sub = mx.array(np.array([0x0001], dtype=np.uint16)).view(mx.bfloat16)
+
+        self.assertTrue(f32_sub.astype(mx.bool_).item())
+        self.assertTrue(f16_sub.astype(mx.bool_).item())
+        self.assertTrue(bf16_sub.astype(mx.bool_).item())
+        self.assertTrue(mx.any(f32_sub).item())
+        self.assertTrue(mx.any(f16_sub).item())
+        self.assertTrue(mx.any(bf16_sub).item())
+        self.assertTrue(mx.all(f32_sub).item())
+        self.assertTrue(mx.all(f16_sub).item())
+        self.assertTrue(mx.all(bf16_sub).item())
+
+    def test_complex_bool_cast(self):
+        # True if either part is nonzero, as in numpy
+        x_np = np.array(
+            [0j, 1j, 1 + 0j, complex(-0.0, -0.0), complex(np.nan, 0.0)],
+            dtype=np.complex64,
+        )
+        x = mx.array(x_np)
+        self.assertEqual(x.astype(mx.bool_).tolist(), x_np.astype(bool).tolist())
+        self.assertEqual(mx.logical_not(x).tolist(), np.logical_not(x_np).tolist())
+        self.assertTrue(mx.any(mx.array([0j, 1j])).item())
+        self.assertTrue(mx.all(mx.array([1j, 1 + 0j])).item())
+        self.assertFalse(mx.any(mx.array([complex(0.0, -0.0), 0j])).item())
+
+        out = mx.array([True, False]).astype(mx.complex64)
+        self.assertEqual(out.tolist(), [1 + 0j, 0j])
+
     def test_stop_gradient(self):
         def func(x):
             return mx.sum(2 * x + mx.stop_gradient(3 * x))
@@ -1214,15 +1506,15 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_take(self):
         # Shape: 4 x 3 x 2
-        l = [
+        values = [
             [[1, 3], [-2, -2], [-3, -2]],
             [[2, 4], [-3, 2], [-4, -2]],
             [[2, 3], [2, 4], [2, 1]],
             [[1, -5], [3, -1], [2, 3]],
         ]
 
-        a = mx.array(l)
-        a_npy = np.array(l)
+        a = mx.array(values)
+        a_npy = np.array(values)
 
         indices = [0, -1]
         flatten_take = mx.take(a, mx.array(indices)).tolist()
@@ -1303,7 +1595,7 @@ class TestOps(mlx_tests.MLXTestCase):
         idx_mlx = mx.array(idx_np)
 
         for ax in [None, 0, 1, 2]:
-            if ax == None:
+            if ax is None:
                 shape = [-1]
             else:
                 shape = [2] * 3
@@ -1312,12 +1604,38 @@ class TestOps(mlx_tests.MLXTestCase):
             out_mlx = mx.take_along_axis(a_mlx, mx.reshape(idx_mlx, shape), axis=ax)
             self.assertTrue(np.array_equal(out_np, np.array(out_mlx)))
 
+    def test_along_axis_invalid_axis(self):
+        # Negative out of bounds axes used to slip past the bounds check
+        # (unsigned arithmetic made it dead code) and either raise an internal
+        # error or segfault. See also expand_dims in test_expand_dims.
+        a = mx.arange(24).reshape(2, 3, 4)
+        idx = mx.zeros(a.shape, dtype=mx.int32)
+        values = mx.ones(a.shape, dtype=a.dtype)
+
+        for ax in [3, 4, 100, -4, -5, -100]:
+            with self.assertRaises(IndexError):
+                mx.take_along_axis(a, idx, axis=ax)
+            with self.assertRaises(IndexError):
+                mx.put_along_axis(a, idx, values, axis=ax)
+
+        # Valid negative axes still work
+        for ax in [-1, -2, -3]:
+            self.assertEqual(mx.take_along_axis(a, idx, axis=ax).shape, a.shape)
+            self.assertEqual(mx.put_along_axis(a, idx, values, axis=ax).shape, a.shape)
+
+    def test_cross_invalid_axis(self):
+        a = mx.array([1.0, 2.0, 3.0])
+        b = mx.array([4.0, 5.0, 6.0])
+        for ax in [1, 2, -2, -50]:
+            with self.assertRaises(IndexError):
+                mx.linalg.cross(a, b, axis=ax)
+
     def test_put_along_axis(self):
         for ax in [None, 0, 1, 2]:
             a_np = np.arange(16).reshape(2, 2, 4).astype(np.int32)
             a_mlx = mx.array(a_np)
 
-            if ax == None:
+            if ax is None:
                 idx_np = np.random.permutation(a_np.size)
                 values_np = np.random.randint(low=0, high=100, size=(16,))
             else:
@@ -1353,6 +1671,20 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(b.size, 0)
         self.assertEqual(b.shape, a.shape)
 
+        # 64-bit outputs are not supported by the Metal scatter and should
+        # raise a clean error rather than failing the Metal JIT build. The CPU
+        # and CUDA backends handle them fine.
+        idx = mx.array([[0], [1], [2], [3]])
+        for dt in (mx.int64, mx.uint64):
+            x = mx.zeros((4, 8), dtype=dt)
+            upd = mx.ones((4, 1), dtype=dt)
+            if mx.metal.is_available():
+                with self.assertRaises(ValueError):
+                    mx.eval(mx.put_along_axis(x, idx, upd, axis=1, stream=mx.gpu))
+            out = mx.put_along_axis(x, idx, upd, axis=1, stream=mx.cpu)
+            self.assertEqual(out.dtype, dt)
+            mx.eval(out)
+
     def test_split(self):
         a = mx.array([1, 2, 3])
         splits = mx.split(a, 3)
@@ -1365,7 +1697,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(y.tolist(), [[3, 4]])
         self.assertEqual(z.tolist(), [[5, 6]])
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.split(a, 3, axis=2)
 
         a = mx.arange(8)
@@ -1373,6 +1705,47 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(x.tolist(), [0])
         self.assertEqual(y.tolist(), [1, 2, 3, 4])
         self.assertEqual(z.tolist(), [5, 6, 7])
+
+    def test_flip(self):
+        a_np = np.arange(6).reshape(2, 3)
+        a = mx.array(a_np)
+        for axis in [None, 0, 1, -1, (0, 1)]:
+            self.assertTrue(
+                np.array_equal(mx.flip(a, axis=axis), np.flip(a_np, axis=axis)),
+                msg=f"axis={axis}",
+            )
+
+        # 1D
+        b_np = np.array([1, 2, 3, 4])
+        self.assertTrue(np.array_equal(mx.flip(mx.array(b_np)), np.flip(b_np)))
+
+        with self.assertRaises(IndexError):
+            mx.flip(a, axis=2)
+
+    def test_unstack(self):
+        a_np = np.arange(6).reshape(3, 2)
+        a = mx.array(a_np)
+
+        self.assertIsInstance(mx.unstack(a), tuple)
+        self.assertIsInstance(mx.unstack(a, axis=1), tuple)
+        self.assertEqual(mx.unstack(mx.zeros((0, 2)), axis=0), ())
+
+        for axis in [0, 1, -1]:
+            parts = mx.unstack(a, axis=axis)
+            expected = np.unstack(a_np, axis=axis)
+            self.assertEqual(len(parts), len(expected))
+            for p, e in zip(parts, expected):
+                self.assertTrue(np.array_equal(p, e))
+                self.assertEqual(p.shape, e.shape)
+
+        # Default axis is 0.
+        self.assertTrue(np.array_equal(mx.unstack(a)[1], np.unstack(a_np)[1]))
+
+        # stack is the inverse of unstack.
+        self.assertTrue(mx.array_equal(mx.stack(mx.unstack(a, axis=1), axis=1), a))
+
+        with self.assertRaises(IndexError):
+            mx.unstack(a, axis=2)
 
     def test_split_invalid_num_splits(self):
         """Regression: split with num_splits <= 0 should raise, not crash."""
@@ -1406,9 +1779,11 @@ class TestOps(mlx_tests.MLXTestCase):
             a = mx.arange(float("inf"), 1, float("inf"))
         with self.assertRaises(ValueError):
             a = mx.arange(float("inf"), 1, 5)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValueError):
             INT_MAX = 2147483647
             a = mx.arange(0, INT_MAX + 1, 1)
+        with self.assertRaises(ValueError):
+            a = mx.arange(0, 2**40)
 
         a = mx.arange(5)
         expected = [0, 1, 2, 3, 4]
@@ -1422,6 +1797,10 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = [0, -1, -2]
         self.assertListEqual(a.tolist(), expected)
 
+        a = mx.arange(-3, None, -1)
+        expected = [0, -1, -2]
+        self.assertListEqual(a.tolist(), expected)
+
         a = mx.arange(stop=2, step=0.5)
         expected = [0, 0.5, 1.0, 1.5]
         self.assertListEqual(a.tolist(), expected)
@@ -1432,6 +1811,13 @@ class TestOps(mlx_tests.MLXTestCase):
         a = mx.arange(stop=3)
         expected = [0, 1, 2]
         self.assertListEqual(a.tolist(), expected)
+
+        # A zero step has no defined length; it must raise rather than divide by
+        # zero and cast the resulting nan/inf to int (undefined behavior).
+        with self.assertRaises(ValueError):
+            mx.arange(2, 2, 0)
+        with self.assertRaises(ValueError):
+            mx.arange(0, 5, 0)
 
     def test_arange_inferred_dtype(self):
         a = mx.arange(5)
@@ -1460,6 +1846,57 @@ class TestOps(mlx_tests.MLXTestCase):
 
         a = mx.arange(1.0, 3.0, 0.2, dtype=mx.int32)
         self.assertEqual(a.dtype, mx.int32)
+
+        # Integers that do not fit in int32 widen the inferred dtype to int64,
+        # matching the scalar inference of mx.array and numpy.
+        a = mx.arange(2**40, 2**40 + 3)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertListEqual(a.tolist(), [2**40, 2**40 + 1, 2**40 + 2])
+
+        a = mx.arange(-(2**40), -(2**40) + 3)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertListEqual(a.tolist(), [-(2**40), -(2**40) + 1, -(2**40) + 2])
+
+        # int32 boundaries themselves still infer int32.
+        a = mx.arange(2**31 - 3, 2**31 - 1)
+        self.assertEqual(a.dtype, mx.int32)
+        self.assertListEqual(a.tolist(), [2**31 - 3, 2**31 - 2])
+
+        a = mx.arange(-(2**31), -(2**31) + 2)
+        self.assertEqual(a.dtype, mx.int32)
+        self.assertListEqual(a.tolist(), [-(2**31), -(2**31) + 1])
+
+        # The first values that no longer fit widen as well.
+        a = mx.arange(-(2**31) - 1, -(2**31) + 1)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertListEqual(a.tolist(), [-(2**31) - 1, -(2**31)])
+
+        # A large step also widens the inferred dtype.
+        a = mx.arange(2**40, 2**40 + 3, 2**40)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertListEqual(a.tolist(), [2**40])
+
+        a = mx.arange(stop=2, step=2**40)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertListEqual(a.tolist(), [0])
+
+        # A negative step with widened values.
+        a = mx.arange(2**40 + 3, 2**40, -1)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertListEqual(a.tolist(), [2**40 + 3, 2**40 + 2, 2**40 + 1])
+
+        # The stop-only overload widens too, even for an empty result.
+        a = mx.arange(stop=2**40, step=-1)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertEqual(a.shape, (0,))
+
+        # An explicit dtype takes precedence over the widened inference.
+        a = mx.arange(2**40, 2**40 + 3, dtype=mx.int32)
+        self.assertEqual(a.dtype, mx.int32)
+
+        # A float in the mix still infers float32.
+        a = mx.arange(0.5, 2**40, 2**39)
+        self.assertEqual(a.dtype, mx.float32)
 
     def test_arange_corner_cases_cast(self):
         a = mx.arange(0, 3, 0.2, dtype=mx.int32)
@@ -1514,6 +1951,20 @@ class TestOps(mlx_tests.MLXTestCase):
         a = mx.arange(0, -10, float("-inf"))
         expected = [0]
         self.assertListEqual(a.tolist(), expected)
+
+        # The range crossing the int32 limit widens the dtype to int64 instead
+        # of saturating or wrapping.
+        n = mx.iinfo(mx.int32).max
+        result = mx.arange(n - 1, n + 3)
+        self.assertEqual(result.shape, (4,))
+        self.assertEqual(result.dtype, mx.int64)
+        self.assertEqual(result.tolist(), [n - 1, n, n + 1, n + 2])
+
+        # An explicit dtype keeps the previous wrapping behaviour.
+        result = mx.arange(n - 1, n + 3, dtype=mx.int32)
+        self.assertEqual(result.shape, (4,))
+        self.assertEqual(result.dtype, mx.int32)
+        self.assertEqual(result.tolist(), [n - 1, n, -2147483648, -2147483647])
 
     def test_hanning_general(self):
         a = mx.hanning(10)
@@ -1702,8 +2153,12 @@ class TestOps(mlx_tests.MLXTestCase):
                     y_ = mx.array(x_)
                     op_ = op
 
-                    np_vjp = lambda x: np_vjp_funcs[op_](primal_np, x)
-                    mx_vjp = lambda x: mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
+                    def np_vjp(x):
+                        return np_vjp_funcs[op_](primal_np, x)
+
+                    def mx_vjp(x):
+                        return mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
+
                     test_ops(np_vjp, mx_vjp, x_, y_, 1e-5, 1e-5)
 
                 with self.subTest(op="arc" + op):
@@ -1721,8 +2176,12 @@ class TestOps(mlx_tests.MLXTestCase):
                     y_ = mx.array(x_)
                     op_ = "arc" + op
 
-                    np_vjp = lambda x: np_vjp_funcs[op_](primal_np, x)
-                    mx_vjp = lambda x: mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
+                    def np_vjp(x):
+                        return np_vjp_funcs[op_](primal_np, x)
+
+                    def mx_vjp(x):
+                        return mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
+
                     test_ops(np_vjp, mx_vjp, x_, y_, 1e-5, 1e-5)
 
     def test_binary_ops(self):
@@ -1921,6 +2380,11 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.array([1, 2, 3], dtype=mx.int32)
         y = np.array([1, 2, 3], dtype=np.int32)
 
+        # Test return type is a tuple
+        self.assertIsInstance(mx.meshgrid(x), tuple)
+        self.assertIsInstance(mx.meshgrid(x, x), tuple)
+        self.assertIsInstance(mx.meshgrid(x, x, x, sparse=True), tuple)
+
         # Test single input
         a_mlx = mx.meshgrid(x)
         a_np = np.meshgrid(y)
@@ -2018,7 +2482,9 @@ class TestOps(mlx_tests.MLXTestCase):
         # Test grads
         a_fwd = mx.array(np.random.rand(16, 16).astype(np.float32))
         a_bwd = mx.ones((22, 22))
-        f = lambda x: mx.pad(x, ((4, 2), (2, 4)))
+
+        def f(x):
+            return mx.pad(x, ((4, 2), (2, 4)))
 
         _, df = mx.vjp(f, [a_fwd], [a_bwd])
         self.assertTrue(mx.allclose(a_bwd[4:-2, 2:-4], df[0]).item())
@@ -2051,7 +2517,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(out_mx, out_np))
 
         for t in [mx.float32, mx.float16]:
-            a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")])
+            a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")]).astype(t)
             out_mx = mx.nan_to_num(a)
             out_np = np.nan_to_num(a)
             self.assertTrue(np.allclose(out_mx, out_np))
@@ -2060,6 +2526,60 @@ class TestOps(mlx_tests.MLXTestCase):
             out_np = np.nan_to_num(a, nan=0.0, posinf=1000, neginf=-1000)
             out_mx = mx.nan_to_num(a, nan=0.0, posinf=1000, neginf=-1000)
             self.assertTrue(np.allclose(out_mx, out_np))
+
+        # bfloat16 has no numpy analogue; infinities should clamp to the
+        # dtype's largest finite value, not 0
+        a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")]).astype(
+            mx.bfloat16
+        )
+        out_mx = mx.nan_to_num(a)
+        bf_max = mx.finfo(mx.bfloat16).max
+        expected = mx.array([bf_max, 6.9, 0.0, -bf_max]).astype(mx.bfloat16)
+        self.assertTrue(mx.array_equal(out_mx, expected))
+
+    def test_pad_reflect_symmetric(self):
+        # mx.pad reflect/symmetric must match numpy.pad exactly. Covers
+        # in-bounds, multi-reflect (pad larger than the axis, exercising the
+        # tiling loop), asymmetric
+        # per-axis widths, zero-width sides, and degenerate axes (n == 1, n == 2).
+        cases = [
+            ((8,), [(2, 3)]),
+            ((8,), [(0, 4)]),
+            ((8,), [(3, 0)]),
+            ((8,), [(7, 8)]),
+            ((4,), [(10, 7)]),  # multi-reflect
+            ((4,), [(20, 20)]),  # multi-reflect, both sides
+            ((3,), [(9, 1)]),  # multi-reflect
+            ((1,), [(3, 2)]),  # degenerate axis
+            ((2,), [(5, 6)]),  # smallest non-trivial, multi-reflect
+            ((5, 6), [(2, 3), (1, 2)]),
+            ((5, 6), [(9, 9), (11, 0)]),  # both axes multi-reflect
+            ((3, 4, 5), [(1, 1), (0, 0), (2, 2)]),
+            ((3, 4, 5), [(4, 4), (0, 0), (7, 3)]),
+        ]
+        for mode in ("reflect", "symmetric"):
+            for shape, pw in cases:
+                a_npy = np.random.randn(*shape).astype(np.float32)
+                a_mlx = mx.array(a_npy)
+                b_npy = np.pad(a_npy, pw, mode=mode)
+                b_mlx = mx.pad(a_mlx, pw, mode=mode)
+                self.assertEqual(b_mlx.shape, tuple(b_npy.shape))
+                self.assertTrue(
+                    np.array_equal(np.array(b_mlx), b_npy),
+                    msg=f"mismatch mode={mode} shape={shape} pad={pw}",
+                )
+                self.assertEqual(b_mlx.dtype, mx.float32)
+
+        # An empty axis cannot be extended; numpy raises for these too.
+        # Used to hang in an infinite loop rather than raise.
+        for mode in ("reflect", "symmetric"):
+            with self.assertRaises(ValueError):
+                mx.pad(mx.array([]), 2, mode=mode)
+            with self.assertRaises(ValueError):
+                mx.pad(mx.zeros((0, 3)), [(1, 1), (0, 0)], mode=mode)
+            # A zero-width pad on the empty axis stays allowed
+            out = mx.pad(mx.zeros((0, 3)), [(0, 0), (2, 1)], mode=mode)
+            self.assertEqual(out.shape, (0, 6))
 
     def test_as_strided(self):
         x_npy = np.random.randn(128).astype(np.float32)
@@ -2078,6 +2598,9 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.random.uniform(shape=(32,))
         y = mx.as_strided(x, (x.size,), (-1,), x.size - 1)
         self.assertTrue(mx.array_equal(y, x[::-1]))
+
+        with self.assertRaises(ValueError):
+            mx.as_strided(x, (-2, 3), (3, 1), 0)
 
     def test_logcumsumexp(self):
         npop = np.logaddexp.accumulate
@@ -2110,6 +2633,23 @@ class TestOps(mlx_tests.MLXTestCase):
         c_npy = np_cumlogaddexp(a_npy, axis=-1)
         c_mlx = mxop(a_mlx, axis=-1)
         self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
+
+    def test_scan_invalid_axis(self):
+        a = mx.arange(24).reshape(2, 3, 4)
+
+        for op in ["cumsum", "cumprod", "cummax", "cummin", "logcumsumexp"]:
+            mxop = getattr(mx, op)
+            for ax in [3, 4, 100, -4, -5, -100]:
+                with self.assertRaises(IndexError):
+                    mxop(a, axis=ax)
+
+            # Valid negative axes still work and agree with the positive one
+            # logcumsumexp has no integer kernel, so use a float input
+            a_ = a.astype(mx.float32) if op == "logcumsumexp" else a
+            for ax in [-1, -2, -3]:
+                out_neg = mxop(a_, axis=ax)
+                out_pos = mxop(a_, axis=ax + a_.ndim)
+                self.assertTrue(mx.array_equal(out_neg, out_pos))
 
     def test_scans(self):
         a_npy = np.random.randn(32, 32, 32).astype(np.float32)
@@ -2220,6 +2760,99 @@ class TestOps(mlx_tests.MLXTestCase):
         mem4 = mx.get_peak_memory()
         self.assertEqual(mem2, mem4)
 
+        # Scanning an empty axis is a no-op
+        for a in (mx.array([]), mx.zeros((2, 0)), mx.zeros((0, 2))):
+            for op in ("cumsum", "cumprod", "cummax", "cummin", "logcumsumexp"):
+                for axis in range(a.ndim):
+                    out = getattr(mx, op)(a, axis=axis)
+                    mx.eval(out)
+                    self.assertEqual(out.shape, a.shape)
+
+    def test_scan_size_one_axis(self):
+        # A size one axis can carry any stride and still be row contiguous, so
+        # the scan must not take its row count from that stride.
+        for op in ["cumsum", "cumprod", "cummax", "cummin"]:
+            for start in (1, 2, 3):
+                with self.subTest(op=op, start=start):
+                    base = mx.arange(1, 11, dtype=mx.float32).reshape(1, 10)
+                    a = base[:, start:]
+                    mx.eval(a)
+                    # The axis has size one, so an inclusive scan is the identity
+                    expected = np.array(a).copy()
+                    out = getattr(mx, op)(a, axis=0)
+                    self.assertTrue(np.array_equal(np.array(out), expected))
+
+    def test_scan_strided_bool(self):
+        a_np = np.arange(16384) % 3 != 0
+        # Non-contiguous input
+        a = mx.array(a_np)[::2]
+        self.assertTrue(np.array_equal(mx.cumsum(a), np.cumsum(a_np[::2])))
+
+    def test_scans_complex_exclusive(self):
+        a = mx.array([-3 + 1j, -1 + 2j, -4 + 0j, 0 + 5j, 2 - 1j])
+        for op in ("cummax", "cummin", "logcumsumexp"):
+            mxop = getattr(mx, op)
+            for reverse in (False, True):
+                inclusive = mxop(a, axis=0, inclusive=True, reverse=reverse)
+                exclusive = mxop(a, axis=0, inclusive=False, reverse=reverse)
+                if reverse:
+                    got, want = exclusive[:-1], inclusive[1:]
+                else:
+                    got, want = exclusive[1:], inclusive[:-1]
+                self.assertTrue(
+                    mx.allclose(got, want),
+                    msg=f"{op} reverse={reverse}",
+                )
+
+    def test_cummax_cummin_nan(self):
+        nan = float("nan")
+        cases = [
+            [1.0, 3.0, nan, 5.0, 4.0],
+            [nan, 3.0, 2.0, 5.0, 4.0],
+            [1.0, 2.0, 3.0, nan, 4.0],
+            [nan, nan, 1.0],
+            [5.0, 4.0, nan, 1.0, 0.0],
+        ]
+        for op, npop, init in (
+            ("cummax", np.maximum, float("-inf")),
+            ("cummin", np.minimum, float("inf")),
+        ):
+            for arr in cases:
+                a_np = np.array(arr, dtype=np.float32)
+                a_mx = mx.array(a_np)
+                inc_fwd = npop.accumulate(a_np)
+                inc_rev = npop.accumulate(a_np[::-1])[::-1]
+                exc_fwd = np.concatenate([[init], inc_fwd[:-1]])
+                exc_rev = np.concatenate([inc_rev[1:], [init]])
+                refs = {
+                    (False, True): inc_fwd,
+                    (True, True): inc_rev,
+                    (False, False): exc_fwd,
+                    (True, False): exc_rev,
+                }
+                for (reverse, inclusive), expected in refs.items():
+                    got = np.array(
+                        getattr(mx, op)(a_mx, reverse=reverse, inclusive=inclusive)
+                    )
+                    self.assertTrue(
+                        np.array_equal(got, expected, equal_nan=True),
+                        msg=f"{op} reverse={reverse} inclusive={inclusive} "
+                        f"arr={arr}\ngot={got}\nexp={expected}",
+                    )
+
+    def test_diff(self):
+        a = mx.array([1, 2, 4, 7, 0])
+        self.assertEqual(mx.diff(a).tolist(), [1, 2, 3, -7])
+        self.assertEqual(mx.diff(a, n=2).tolist(), [1, 1, -10])
+        self.assertEqual(mx.diff(a, n=0).tolist(), a.tolist())
+
+        m = mx.array([[1, 3, 6], [0, 5, 6]])
+        self.assertEqual(mx.diff(m, axis=0).tolist(), [[-1, 2, 0]])
+        self.assertEqual(mx.diff(m, axis=1).tolist(), [[2, 3], [5, 1]])
+
+        with self.assertRaises(IndexError):
+            mx.diff(a, axis=1)
+
     def test_squeeze_expand(self):
         a = mx.zeros((2, 1, 2, 1))
         self.assertEqual(mx.squeeze(a).shape, (2, 2))
@@ -2235,6 +2868,69 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.expand_dims(a, 0).shape, (1, 2, 2))
         self.assertEqual(mx.expand_dims(a, (0, 1)).shape, (1, 1, 2, 2))
         self.assertEqual(mx.expand_dims(a, [0, -1]).shape, (1, 2, 2, 1))
+        self.assertEqual(mx.expand_dims(a, [-1, -4]).shape, (1, 2, 2, 1))
+
+    def test_squeeze_expand_invalid_axes(self):
+        # Out of bounds negative axes must raise instead of wrapping around
+        a = mx.zeros(())
+        self.assertEqual(mx.expand_dims(a, (-2, -1)).shape, (1, 1))
+        with self.assertRaises(IndexError):
+            mx.expand_dims(a, (-3, -2))
+
+        a = mx.zeros((2, 2))
+        for axes in [(-5, -4), (-6, 0), (0, 5)]:
+            with self.assertRaises(IndexError):
+                mx.expand_dims(a, axes)
+
+        a = mx.zeros((1, 1, 1))
+        for axes in [(-4,), (-5, 0), (0, 4)]:
+            with self.assertRaises(IndexError):
+                mx.squeeze(a, axes)
+
+    def test_out_of_bounds_axis_raises_index_error(self):
+        # An out of bounds axis is an indexing error, not a value error, so
+        # every op agrees on IndexError (numpy raises AxisError, which is a
+        # subclass of both).
+        a = mx.zeros((2, 3))
+        cases = [
+            lambda: mx.sum(a, axis=5),
+            lambda: mx.mean(a, axis=5),
+            lambda: mx.median(a, axis=5),
+            lambda: mx.expand_dims(a, 5),
+            lambda: mx.squeeze(mx.zeros((1, 1)), 5),
+            lambda: mx.moveaxis(a, 5, 0),
+            lambda: mx.swapaxes(a, 5, 0),
+            lambda: mx.transpose(a, (5, 0)),
+            lambda: mx.roll(a, 1, 5),
+            lambda: mx.diagonal(a, 0, 5, 1),
+            lambda: mx.take(a, mx.array([0]), axis=5),
+            lambda: mx.vecdot(a, a, axis=5),
+            lambda: mx.diff(a, axis=5),
+            lambda: mx.take_along_axis(a, mx.zeros((2, 3), mx.int32), axis=5),
+            lambda: mx.cumsum(a, axis=5),
+            lambda: mx.argsort(a, axis=5),
+            lambda: mx.split(a, 2, axis=5),
+            lambda: mx.flip(a, axis=5),
+            lambda: mx.fft.fft(a, axis=5),
+            lambda: mx.fft.fftshift(a, axes=[5]),
+            lambda: mx.random.categorical(a, axis=5),
+            lambda: mx.unflatten(a, 5, (1, -1)),
+            lambda: mx.slice(a, mx.array([0]), [5], (1,)),
+            lambda: mx.slice_update(a, mx.zeros((1, 1)), mx.array([0]), [5]),
+            lambda: mx.vmap(mx.exp, in_axes=5)(a),
+        ]
+        for case in cases:
+            with self.assertRaises(IndexError):
+                case()
+
+        # Duplicate or mismatched axes stay ValueError, they are not a
+        # bounds problem.
+        with self.assertRaises(ValueError):
+            mx.transpose(a, (0, 0))
+        with self.assertRaises(ValueError):
+            mx.transpose(a, (0,))
+        with self.assertRaises(ValueError):
+            mx.sum(a, axis=(0, 0))
 
     def test_sort(self):
         shape = (6, 4, 10)
@@ -2361,6 +3057,37 @@ class TestOps(mlx_tests.MLXTestCase):
         y_np = np.sort(np.array(a), axis=-1)
         self.assertTrue(np.array_equal(y_np, y_mx))
 
+        # Negative stride on an axis that is not sorted, single and multi block
+        np.random.seed(0)
+        for dtype in ("int32", "float32"):
+            for size in (4, 32769):
+                with self.subTest(dtype=dtype, size=size):
+                    a_np = np.random.uniform(0, 100, size=(3, size))
+                    a_np = a_np.astype(getattr(np, dtype))
+                    a_mx = mx.array(a_np)[::-1, :]
+                    a_np = a_np[::-1, :]
+
+                    b_np = np.sort(a_np, axis=-1)
+                    self.assertTrue(np.array_equal(b_np, mx.sort(a_mx, axis=-1)))
+
+                    idx = mx.argsort(a_mx, axis=-1)
+                    self.assertTrue(
+                        np.array_equal(b_np, mx.take_along_axis(a_mx, idx, axis=-1))
+                    )
+
+                    b_mx = mx.partition(a_mx, 1, axis=-1)
+                    self.assertTrue(np.array_equal(b_np[:, 1], np.array(b_mx)[:, 1]))
+
+        # Sorting an empty axis is a no-op
+        for a in (mx.array([]), mx.zeros((2, 0)), mx.zeros((0, 2))):
+            for axis in range(a.ndim):
+                out = mx.sort(a, axis=axis)
+                mx.eval(out)
+                self.assertEqual(out.shape, a.shape)
+                out = mx.argsort(a, axis=axis)
+                mx.eval(out)
+                self.assertEqual(out.shape, a.shape)
+
     def test_partition(self):
         shape = (3, 4, 5)
         for dtype in ("int32", "float32"):
@@ -2403,10 +3130,371 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = mx.array([[0, 0], [1, 1]])
         self.assertTrue(mx.array_equal(out, expected))
 
-    @unittest.skipIf(
-        os.getenv("LOW_MEMORY", None) is not None,
-        "This test requires a lot of memory",
-    )
+    def test_searchsorted(self):
+        def expect(out, want):
+            self.assertTrue(mx.array_equal(out, mx.array(want)), f"got {out}")
+
+        a = mx.array([1, 2, 2, 4], mx.float32)
+        v = mx.array([0, 1, 2, 3, 5], mx.float32)
+        expect(mx.searchsorted(a, v), [0, 0, 1, 3, 4])
+        expect(mx.searchsorted(a, v, side="right"), [0, 1, 3, 3, 4])
+        self.assertEqual(mx.searchsorted(a, v).dtype, mx.uint32)
+
+        # a local generator, so this stays deterministic without shifting the
+        # global numpy stream that later tests draw from
+        rng = np.random.RandomState(0)
+        for n in (1, 2, 7, 8, 9, 33, 1000):
+            for m in (1, 5, 64, 257):
+                for side in ("left", "right"):
+                    a_np = np.sort(rng.randn(n).astype(np.float32))
+                    v_np = (rng.randn(m) * 2).astype(np.float32)
+                    out = mx.searchsorted(mx.array(a_np), mx.array(v_np), side=side)
+                    expected = np.searchsorted(a_np, v_np, side=side)
+                    self.assertTrue(np.array_equal(np.array(out), expected))
+
+        # output takes the shape of the values. Compare values too, since
+        # checking .shape alone never forces an eval, and the 0-d case is the
+        # one both GPU backends special case.
+        a = mx.arange(16, dtype=mx.float32)
+        for shape in [(), (1,), (3, 4), (2, 3, 4)]:
+            v_np = np.asarray(rng.rand(*shape) * 20, dtype=np.float32)
+            out = mx.searchsorted(a, mx.array(v_np))
+            self.assertEqual(out.shape, shape)
+            self.assertTrue(
+                np.array_equal(np.array(out), np.searchsorted(np.array(a), v_np))
+            )
+
+        # non row contiguous values: transposed, sliced and broadcast views all
+        # have to be read in the output's order rather than the buffer's
+        base_np = (rng.rand(4, 6) * 20).astype(np.float32)
+        base = mx.array(base_np)
+        for v_mx, v_np in [
+            (base.T, base_np.T),
+            (base[::2], base_np[::2]),
+            (base[:, ::3], base_np[:, ::3]),
+            (mx.broadcast_to(base[0], (3, 6)), np.broadcast_to(base_np[0], (3, 6))),
+        ]:
+            out = mx.searchsorted(a, v_mx)
+            expected = np.searchsorted(np.array(a), np.ascontiguousarray(v_np))
+            self.assertTrue(np.array_equal(np.array(out), expected))
+
+        # a strided sorted sequence, including a reversed view
+        wide = mx.array(np.repeat(np.arange(8, dtype=np.float32) * 3, 2))
+        v = mx.array([-1.0, 3.0, 7.0, 100.0])
+        for a_mx in [wide[::2], wide[1::2]]:
+            out = mx.searchsorted(a_mx, v)
+            expected = np.searchsorted(np.array(a_mx), np.array(v))
+            self.assertTrue(np.array_equal(np.array(out), expected))
+
+        desc = mx.array(np.arange(8, dtype=np.float32)[::-1].copy())
+        out = mx.searchsorted(desc[::-1], v)
+        self.assertTrue(
+            np.array_equal(np.array(out), np.searchsorted(np.arange(8), np.array(v)))
+        )
+
+        # integer and mixed dtypes
+        ai = mx.array([1, 3, 5, 7], mx.int32)
+        expect(mx.searchsorted(ai, mx.array([0, 4, 8], mx.int32)), [0, 2, 4])
+        # promoted, not truncated: the sequence has a 4, so 4.5 lands after it
+        # at 3 while a truncated 4 would land before it at 2
+        expect(
+            mx.searchsorted(
+                mx.array([1, 3, 4, 7], mx.int32), mx.array([4.5], mx.float32)
+            ),
+            [3],
+        )
+
+        # empty inputs on either side
+        empty = mx.array([], mx.float32)
+        expect(mx.searchsorted(empty, mx.array([1.0, -1.0])), [0, 0])
+        self.assertEqual(mx.searchsorted(mx.arange(4, dtype=mx.float32), empty).size, 0)
+
+        # ordering follows sort, so NaN compares greater than everything
+        nan = mx.array([float("nan")])
+        expect(mx.searchsorted(mx.array([1, 2, 3], mx.float32), nan), [3])
+        a = mx.array([1, 2, float("nan")], mx.float32)
+        expect(mx.searchsorted(a, nan), [2])
+        expect(mx.searchsorted(a, nan, side="right"), [3])
+
+        # vmap over the values, which is the elementwise argument
+        va = mx.arange(8, dtype=mx.float32)
+        vs = mx.random.uniform(0, 10, (3, 5))
+        out = mx.vmap(lambda x: mx.searchsorted(va, x))(vs)
+        self.assertTrue(mx.array_equal(out, mx.searchsorted(va, vs)))
+
+        with self.assertRaises(ValueError):
+            mx.vmap(lambda s: mx.searchsorted(s, mx.array([1.0])))(
+                mx.zeros((3, 4), mx.float32)
+            )
+
+        with self.assertRaises(ValueError):
+            mx.searchsorted(mx.zeros((3, 4)), mx.array([1.0]))
+        with self.assertRaises(ValueError):
+            mx.searchsorted(mx.array(1.0), mx.array([1.0]))
+        with self.assertRaises(ValueError):
+            mx.searchsorted(mx.array([1.0, 2.0]), mx.array([1.0]), side="middle")
+
+    def test_unique(self):
+        def expect(out, want):
+            self.assertTrue(mx.array_equal(out, mx.array(want)), f"got {out}")
+
+        a = mx.array([2, 1, 2, 3, 1])  # three unique values
+        b = mx.array([[3, 1, 3], [2, 1, 4]])  # four unique values when flat
+
+        # size is required and cannot be negative
+        with self.assertRaises(TypeError):
+            mx.unique(a)
+        with self.assertRaises(ValueError):
+            mx.unique(a, -1)
+
+        # size decides whether the output is exact, padded or truncated, and a
+        # truncated output keeps the smallest unique values
+        expect(mx.unique(a, 3), [1, 2, 3])
+        expect(mx.unique(a, 5), [1, 2, 3, 1, 1])
+        expect(mx.unique(a, 2), [1, 2])
+        self.assertEqual(mx.unique(a, 3).dtype, a.dtype)
+
+        # only the requested extras come back, ordered values, inverse, counts
+        self.assertEqual(len(mx.unique(a, 3, return_inverse=True)), 2)
+        self.assertEqual(len(mx.unique(a, 3, return_counts=True)), 2)
+        values, inverse, counts = mx.unique(
+            a, 4, return_inverse=True, return_counts=True, fill_value=0
+        )
+        expect(values, [1, 2, 3, 0])
+        expect(inverse, [1, 0, 1, 2, 0])
+        expect(counts, [2, 2, 1, 0])
+        self.assertEqual(inverse.dtype, mx.uint32)
+        self.assertEqual(counts.dtype, mx.int32)
+
+        # return_index gives the first occurrence of each unique element in the
+        # flattened input, and pads with the index of the smallest one
+        expect(mx.unique(a, 3, return_index=True)[1], [1, 0, 3])
+        expect(mx.unique(a, 5, return_index=True)[1], [1, 0, 3, 1, 1])
+        expect(mx.unique(a, 2, return_index=True)[1], [1, 0])
+        # the fill value applies to the values, never to the indices
+        expect(mx.unique(a, 5, return_index=True, fill_value=99)[1], [1, 0, 3, 1, 1])
+        # the sort is stable, so a leading duplicate wins
+        expect(mx.unique(mx.array([5, 1, 5, 1]), 4, return_index=True)[1], [1, 0, 1, 1])
+        # the index refers to the flattened input
+        expect(mx.unique(b, 4, return_index=True)[1], [1, 3, 0, 5])
+
+        # all four outputs at once, in the order values, index, inverse, counts
+        values, index, inverse, counts = mx.unique(
+            a, 4, return_index=True, return_inverse=True, return_counts=True
+        )
+        expect(values, [1, 2, 3, 1])
+        expect(index, [1, 0, 3, 1])
+        expect(inverse, [1, 0, 1, 2, 0])
+        expect(counts, [2, 2, 1, 0])
+        self.assertEqual(index.dtype, mx.uint32)
+        self.assertEqual(len(mx.unique(a, 3, return_index=True)), 2)
+
+        # the fill value defaults to the smallest unique element, and any one
+        # element array works whatever its rank
+        expect(mx.unique(a, 5, fill_value=None), [1, 2, 3, 1, 1])
+        expect(mx.unique(a, 7, fill_value=-1), [1, 2, 3, -1, -1, -1, -1])
+        for fv in (7, mx.array(7), mx.array([7]), mx.array([[7]])):
+            expect(mx.unique(a, 4, fill_value=fv), [1, 2, 3, 7])
+        with self.assertRaises(ValueError):
+            mx.unique(a, 3, fill_value=mx.array([1, 2]))
+
+        # floats, including negatives and a repeated zero, and a fill value
+        # cast to the input dtype
+        f = mx.array([0.0, -1.5, 2.25, -1.5, 0.0], mx.float32)
+        expect(mx.unique(f, 3), [-1.5, 0.0, 2.25])
+        self.assertEqual(mx.unique(f, 4, fill_value=1).dtype, mx.float32)
+
+        # padding counts are zero, so counts sum to a.size unless the output
+        # was truncated, and their non zero entries count the unique values
+        for size in (3, 4, 5, 7):
+            self.assertEqual(
+                mx.sum(mx.unique(a, size, return_counts=True)[1]).item(), a.size
+            )
+        for size in (1, 2):
+            self.assertLess(
+                mx.sum(mx.unique(a, size, return_counts=True)[1]).item(), a.size
+            )
+        self.assertEqual(
+            mx.sum(mx.unique(a, a.size, return_counts=True)[1] > 0).item(), 3
+        )
+        expect(mx.unique(a, 2, return_counts=True)[1], [2, 2])
+
+        # the inverse has the shape of the input and indexes into the output,
+        # so values[inverse] rebuilds the input when nothing was truncated
+        values, inverse = mx.unique(b, 4, return_inverse=True)
+        expect(values, [1, 2, 3, 4])
+        self.assertEqual(inverse.shape, b.shape)
+        expect(values[inverse], [[3, 1, 3], [2, 1, 4]])
+
+        # truncation clamps the inverse to keep it in range, so a dropped value
+        # comes back as the largest kept one instead of reading past the output
+        values, inverse = mx.unique(a, 2, return_inverse=True)
+        self.assertTrue(bool(mx.all(inverse < values.size)))
+        expect(values[inverse], [2, 1, 2, 2, 1])
+
+        # a size of zero leaves no index to clamp to, the only case where the
+        # reconstruction is not a valid array
+        for x in (a, mx.zeros((2, 3), mx.int32), mx.array(5)):
+            values, inverse = mx.unique(x, 0, return_inverse=True)
+            self.assertEqual(values.size, 0)
+            self.assertTrue(mx.array_equal(inverse, mx.zeros(x.shape, mx.uint32)))
+            with self.assertRaises(ValueError):
+                mx.eval(values[inverse])
+
+        # a 0-d input is flattened like any other
+        values, inverse = mx.unique(mx.array(5), 1, return_inverse=True)
+        expect(values, [5])
+        self.assertEqual(inverse.shape, ())
+
+        # an empty input needs a fill value if size > 0
+        e = mx.array([], mx.float32)
+        values, inverse, counts = mx.unique(
+            e, 0, return_inverse=True, return_counts=True
+        )
+        self.assertEqual(values.dtype, mx.float32)
+        self.assertEqual((values.shape, inverse.shape, counts.shape), ((0,),) * 3)
+        with self.assertRaises(ValueError):
+            mx.unique(e, 3)
+        # the reconstruction stays valid even with size 0
+        for size, want in ((0, []), (3, [7.0, 7.0, 7.0])):
+            values, inverse = mx.unique(e, size, return_inverse=True, fill_value=7)
+            expect(values, want)
+            rebuilt = values[inverse]
+            mx.eval(rebuilt)
+            self.assertEqual(rebuilt.shape, (0,))
+
+        # every element identical, and every element distinct
+        values, counts = mx.unique(mx.full((7,), 4, mx.int32), 7, return_counts=True)
+        expect(values, [4] * 7)
+        expect(counts, [7] + [0] * 6)
+        expect(mx.unique(mx.arange(6), 6), [0, 1, 2, 3, 4, 5])
+
+        # check 64 bit types work
+        for dtype in (mx.int64, mx.uint64, mx.complex64):
+            with self.subTest(dtype=dtype):
+                values, inverse, counts = mx.unique(
+                    mx.array([3, 1, 2, 1], dtype),
+                    4,
+                    return_inverse=True,
+                    return_counts=True,
+                )
+                self.assertEqual(values.dtype, dtype)
+                self.assertTrue(mx.array_equal(values, mx.array([1, 2, 3, 1], dtype)))
+                expect(inverse, [2, 0, 1, 0])
+                expect(counts, [2, 1, 1, 0])
+        # in particular the int64 numpy hands over by default
+        expect(mx.unique(mx.array(np.arange(5)), 5), [0, 1, 2, 3, 4])
+
+        # bool only works on the cpu stream, the metal sort has no bool kernel
+        values, inverse, counts = mx.unique(
+            mx.array([True, False, True]),
+            2,
+            return_inverse=True,
+            return_counts=True,
+            stream=mx.cpu,
+        )
+        expect(values, [False, True])
+        expect(inverse, [1, 0, 1])
+        expect(counts, [1, 2])
+
+        # NaN sorts last and never equals itself, so each one is kept, and none
+        # is ever picked as the default fill even though mx.min would return it
+        nan = float("nan")
+        values = mx.unique(mx.array([1.0, nan, 2.0, nan], mx.float32), 4)
+        expect(values[:2], [1.0, 2.0])
+        self.assertTrue(bool(mx.all(mx.isnan(values[2:]))))
+        values = mx.unique(mx.array([3.0, 1.0, nan, 2.0], mx.float32), 6)
+        expect(values[:3], [1.0, 2.0, 3.0])
+        self.assertTrue(bool(mx.isnan(values[3])))
+        expect(values[4:], [1.0, 1.0])
+        # with nothing but NaN there is no other element to fall back on, so
+        # the default fill is NaN as well
+        values = mx.unique(mx.array([nan, nan], mx.float32), 5)
+        self.assertTrue(bool(mx.all(mx.isnan(values))))
+
+        # the gradient credits the first occurrence of each unique value, and
+        # padding routes to that same element
+        for size, data, want in (
+            (3, [3.0, 1.0, 2.0, 1.0], [1.0, 1.0, 1.0, 0.0]),
+            (4, [3.0, 1.0, 2.0, 1.0], [1.0, 2.0, 1.0, 0.0]),
+            (2, [1.0, 1.0, 2.0], [1.0, 0.0, 1.0]),
+        ):
+            with self.subTest(size=size, data=data):
+                grad = mx.grad(lambda x: mx.sum(mx.unique(x, size)))(mx.array(data))
+                expect(grad, want)
+
+        # the output shape does not depend on the values, so this composes with
+        # the function transforms
+        self.assertTrue(
+            mx.array_equal(mx.compile(lambda x: mx.unique(x, 3))(a), mx.unique(a, 3))
+        )
+
+        # every optional output and a fill value have to survive compilation too
+        def all_outputs(x):
+            return mx.unique(
+                x,
+                5,
+                return_index=True,
+                return_inverse=True,
+                return_counts=True,
+                fill_value=-1,
+            )
+
+        for got, want in zip(mx.compile(all_outputs)(a), all_outputs(a)):
+            self.assertTrue(mx.array_equal(got, want))
+            self.assertEqual(got.dtype, want.dtype)
+        # the batch rows must have different unique sets, otherwise broadcasting
+        # one row over the batch would pass
+        rows = mx.array([[2, 1, 2, 3, 1], [7, 7, 5, 5, 9]])
+        values, inverse, counts = mx.vmap(
+            lambda x: mx.unique(x, 3, return_inverse=True, return_counts=True)
+        )(rows)
+        expect(values, [[1, 2, 3], [5, 7, 9]])
+        expect(inverse, [[1, 0, 1, 2, 0], [1, 1, 0, 0, 2]])
+        expect(counts, [[2, 2, 1], [2, 2, 1]])
+
+        # compare against numpy on random inputs
+        rng = np.random.RandomState(0)
+        for n in (1, 2, 17, 1000, 5000):
+            with self.subTest(n=n):
+                a_np = rng.randint(-20, 20, size=n).astype(np.int32)
+                a_mx = mx.array(a_np)
+                v_np, i_np, c_np = np.unique(
+                    a_np, return_inverse=True, return_counts=True
+                )
+                values, inverse, counts = mx.unique(
+                    a_mx, len(v_np), return_inverse=True, return_counts=True
+                )
+                self.assertTrue(np.array_equal(np.array(values), v_np))
+                self.assertTrue(
+                    np.array_equal(np.array(inverse).reshape(-1), i_np.reshape(-1))
+                )
+                self.assertTrue(np.array_equal(np.array(counts), c_np))
+                self.assertTrue(mx.array_equal(values[inverse], a_mx))
+                # a padded output holds the same values up front
+                padded, pad_counts = mx.unique(a_mx, n, return_counts=True)
+                self.assertEqual(padded.shape, (n,))
+                self.assertTrue(np.array_equal(np.array(padded)[: len(v_np)], v_np))
+                self.assertEqual(mx.sum(pad_counts > 0).item(), len(v_np))
+
+        # non contiguous inputs are flattened over their logical elements,
+        # broadcast multiplicity included, not over their backing memory
+        base_np = rng.randint(0, 5, size=(4, 6)).astype(np.int32)
+        base = mx.array(base_np)
+        for v_mx, v_np in (
+            (base.T, base_np.T),
+            (base[::2], base_np[::2]),
+            (base[::-1], base_np[::-1]),
+            (base[:, ::-1], base_np[:, ::-1]),
+            (mx.broadcast_to(base[0], (3, 6)), np.broadcast_to(base_np[0], (3, 6))),
+        ):
+            want = np.unique(v_np)
+            values, inverse = mx.unique(v_mx, len(want), return_inverse=True)
+            self.assertTrue(np.array_equal(np.array(values), want))
+            # the inverse follows the shape of the view, not of its backing array
+            self.assertEqual(inverse.shape, v_mx.shape)
+            self.assertTrue(np.array_equal(np.array(values[inverse]), v_np))
+
     def test_large_binary(self):
         a = mx.ones([1000, 2147484], mx.int8)
         b = mx.ones([2147484], mx.int8)
@@ -2414,8 +3502,12 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_eye(self):
         self.assertCmpNumpy([3], mx.eye, np.eye)
+        # Test for zero rows and columns
+        self.assertCmpNumpy([0], mx.eye, np.eye)
         # Test for non-square matrix
         self.assertCmpNumpy([3, 4], mx.eye, np.eye)
+        # Test for zero rows
+        self.assertCmpNumpy([0, 4], mx.eye, np.eye)
         # Test with positive k parameter
         self.assertCmpNumpy([3, 4], mx.eye, np.eye, k=1)
         # Test with negative k parameter
@@ -2460,6 +3552,14 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(x.flatten().shape, (2 * 3 * 4,))
         self.assertEqual(x.flatten(start_axis=1).shape, (2, 3 * 4))
         self.assertEqual(x.flatten(end_axis=1).shape, (2 * 3, 4))
+
+    def test_reshape_col_contiguous(self):
+        # Reshape without a copy
+        a = mx.arange(12).reshape(3, 4).T.reshape(2, 2, 3)
+        b = mx.arange(12).reshape(3, 2, 2).T
+        a_np = np.arange(12).reshape(3, 4).T.reshape(2, 2, 3)
+        b_np = np.arange(12).reshape(3, 2, 2).T
+        self.assertTrue(np.array_equal(a + b, a_np + b_np))
 
     def test_clip(self):
         a = np.array([1, 4, 3, 8, 5], np.int32)
@@ -2512,7 +3612,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqualArray(a, expected)
 
         # Test int64 dtype
-        b = mx.linspace(0, 10, 5, mx.int64)
+        b = mx.linspace(0, 10, 5, dtype=mx.int64)
         expected = mx.array(np.linspace(0, 10, 5, dtype=int))
         self.assertEqualArray(b, expected)
 
@@ -2539,11 +3639,65 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertEqual(d[0], a)
             self.assertEqual(d[-1], b)
 
+    def test_linspace_endpoint(self):
+        # endpoint=True is the default and matches the old behaviour
+        a = mx.linspace(0, 1, 5, endpoint=True)
+        self.assertEqualArray(a, mx.array(np.linspace(0, 1, 5, endpoint=True)))
+        self.assertEqualArray(a, mx.linspace(0, 1, 5))
+
+        # endpoint=False drops the stop value and uses a step of
+        # (stop - start) / num instead of (stop - start) / (num - 1)
+        for num in [0, 1, 2, 5, 50]:
+            b = mx.linspace(0, 10, num, endpoint=False)
+            expected = mx.array(np.linspace(0, 10, num, endpoint=False))
+            self.assertEqualArray(b, expected)
+
+        c = mx.linspace(-2.7, -0.7, 7, endpoint=False)
+        self.assertEqualArray(c, mx.array(np.linspace(-2.7, -0.7, 7, endpoint=False)))
+
+        # endpoint is the fourth positional argument, before dtype, as in numpy
+        self.assertEqualArray(
+            mx.linspace(0, 10, 5, False), mx.array(np.linspace(0, 10, 5, False))
+        )
+
+        # dtype still applies
+        d = mx.linspace(0, 10, 5, False, mx.int64)
+        self.assertEqual(d.dtype, mx.int64)
+        self.assertEqualArray(
+            d, mx.array(np.linspace(0, 10, 5, endpoint=False, dtype=int))
+        )
+
+        # the start is kept and the stop is excluded
+        e = mx.linspace(3.0, 4.0, 4, endpoint=False).tolist()
+        self.assertEqual(e[0], 3.0)
+        self.assertNotIn(4.0, e)
+
+        # decreasing ranges drop the stop value too
+        f = mx.linspace(10, 0, 5, endpoint=False)
+        self.assertEqualArray(f, mx.array(np.linspace(10, 0, 5, endpoint=False)))
+
+        # start == stop keeps every sample at that value
+        g = mx.linspace(5, 5, 4, endpoint=False)
+        self.assertEqualArray(g, mx.array(np.linspace(5, 5, 4, endpoint=False)))
+
+        # integer dtype truncates fractional steps, as in numpy
+        h = mx.linspace(0, 10, 3, endpoint=False, dtype=mx.int32)
+        self.assertEqualArray(
+            h, mx.array(np.linspace(0, 10, 3, endpoint=False, dtype=np.int32))
+        )
+
+        # num must still be non-negative
+        with self.assertRaises(ValueError):
+            mx.linspace(0, 1, -1, endpoint=False)
+
     def test_repeat(self):
         # Setup data for the tests
         data = mx.array([[[13, 3], [16, 6]], [[14, 4], [15, 5]], [[11, 1], [12, 2]]])
         # Test repeat 0 times
         self.assertCmpNumpy([data, 0], mx.repeat, np.repeat)
+        # Test repeat 0 times along an axis preserves the unrepeated dimensions
+        self.assertCmpNumpy([data, 0], mx.repeat, np.repeat, axis=0)
+        self.assertCmpNumpy([data, 0], mx.repeat, np.repeat, axis=1)
         # Test repeat along axis 0
         self.assertCmpNumpy([data, 2], mx.repeat, np.repeat, axis=0)
         # Test repeat along axis 1
@@ -2595,6 +3749,27 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertCmpNumpy([(1, 1, 2), (3, 2)], mx.inner, np.inner)
         self.assertCmpNumpy([(2, 3, 4), (4,)], mx.inner, np.inner)
 
+    def test_vecdot(self):
+        a = mx.array([[1, 2, 3], [4, 5, 6]])
+        b = mx.array([[7, 8, 9], [10, 11, 12]])
+        self.assertEqual(mx.vecdot(a, b).tolist(), [50, 167])
+        self.assertEqual(mx.vecdot(a, b, axis=0).tolist(), [47, 71, 99])
+
+        a = mx.array([1 + 2j, 3 + 4j])
+        b = mx.array([5 + 6j, 7 + 8j])
+        expected = np.vdot(np.array([1 + 2j, 3 + 4j]), np.array([5 + 6j, 7 + 8j]))
+        self.assertTrue(np.allclose(mx.vecdot(a, b), expected))
+
+        xp = mx.array(1.0).__array_namespace__()
+        self.assertEqual(xp.vecdot(mx.array([1, 2]), mx.array([3, 4])).item(), 11)
+
+        with self.assertRaises(ValueError):
+            mx.vecdot(mx.array(1), mx.array([1]))
+        with self.assertRaises(IndexError):
+            mx.vecdot(mx.array([1, 2]), mx.array([1, 2]), axis=1)
+        with self.assertRaises(ValueError):
+            mx.vecdot(mx.array([1, 2]), mx.array([1]))
+
     def test_outer(self):
         self.assertCmpNumpy([(3,), (3,)], mx.outer, np.outer)
         self.assertCmpNumpy(
@@ -2639,6 +3814,22 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertTrue(
                     np.allclose(np_out[0], mx_out[0]), msg=f"Shapes {s1} {s2}, Type {t}"
                 )
+
+        # Mixed signs floor, matching python's divmod and numpy, so
+        # q * b + r == a holds
+        av = [-7, 7, -7, 7, -1, 1, -5, 5, 6, -6]
+        bv = [2, 2, -2, -2, 3, -3, 3, -3, 3, 3]
+        a, b = mx.array(av), mx.array(bv)
+        q, r = mx.divmod(a, b)
+        self.assertEqual(q.tolist(), [x // y for x, y in zip(av, bv)])
+        self.assertEqual(r.tolist(), [x % y for x, y in zip(av, bv)])
+        self.assertTrue(mx.array_equal(q * b + r, a))
+
+        af = mx.array([-7.0, 7.0, -7.5, 7.5])
+        bf = mx.array([2.0, -2.0, 2.0, -2.0])
+        q, r = mx.divmod(af, bf)
+        self.assertTrue(mx.array_equal(q, mx.array([-4.0, -4.0, -4.0, -4.0])))
+        self.assertTrue(mx.array_equal(q * bf + r, af))
 
     def test_tile(self):
         self.assertCmpNumpy([(2,), [2]], mx.tile, np.tile)
@@ -2722,6 +3913,27 @@ class TestOps(mlx_tests.MLXTestCase):
         result = mx.diag(x, k=-1)
         expected = mx.array(np.diag(x, k=-1))
         self.assertTrue(mx.array_equal(result, expected))
+
+    def test_diag_zero_size(self):
+        # A zero-size 1-D input builds a |k| x |k| matrix of zeros. k = 0 makes
+        # that 0 x 0, which used to fail while every other k worked.
+        for k in (-2, -1, 0, 1, 2):
+            for dtype, nptype in (
+                (mx.float32, np.float32),
+                (mx.int32, np.int32),
+                (mx.complex64, np.complex64),
+            ):
+                result = mx.diag(mx.zeros((0,), dtype=dtype), k=k)
+                expected = np.diag(np.zeros((0,), dtype=nptype), k=k)
+                self.assertEqual(result.shape, expected.shape, msg=f"k={k} {dtype}")
+                self.assertEqual(result.dtype, dtype)
+                self.assertTrue(np.array_equal(np.array(result), expected))
+
+        # A zero-size 2-D input already worked; keep it covered.
+        for shape in ((0, 0), (0, 3), (3, 0)):
+            result = mx.diag(mx.zeros(shape))
+            expected = np.diag(np.zeros(shape, dtype=np.float32))
+            self.assertEqual(result.shape, expected.shape, msg=f"{shape}")
 
     def test_trace(self):
         a_mx = mx.arange(9, dtype=mx.int64).reshape((3, 3))
@@ -2972,6 +4184,26 @@ class TestOps(mlx_tests.MLXTestCase):
             a_out = out.view(mx.int32)
             self.assertTrue(mx.array_equal(a_out, a, equal_nan=True))
 
+        # Size one last axis
+        a = mx.arange(4, dtype=mx.int32).reshape(1, 4).T
+        expected = np.arange(4, dtype=np.int32).reshape(4, 1).view(np.int16)
+        self.assertTrue(np.array_equal(a.view(mx.int16), expected))
+
+        # Byte offsets that are not a multiple of the new item size
+        a = mx.arange(64, dtype=mx.uint8)
+        a_np = np.arange(64, dtype=np.uint8)
+        for start in range(8):
+            out = a[start : start + 16].view(mx.int32)
+            expected = a_np[start : start + 16].view(np.int32)
+            self.assertTrue(np.array_equal(out + 0, expected))  # read in a kernel
+
+        # View of an (n, 1) array
+        a = mx.arange(4, dtype=mx.int32).reshape(4, 1).view(mx.int16)
+        b = mx.arange(8, dtype=mx.int16).reshape(2, 4).T
+        expected = np.arange(4, dtype=np.int32).reshape(4, 1).view(np.int16)
+        expected = expected + np.arange(8, dtype=np.int16).reshape(2, 4).T
+        self.assertTrue(np.array_equal(a + b, expected))
+
     def _hadamard(self, N):
         # Matches scipy.linalg.hadamard
         H = np.array([[1]], dtype=np.int64)
@@ -3075,6 +4307,33 @@ class TestOps(mlx_tests.MLXTestCase):
                         y_bf16.astype(mx.float16), y, atol=atol * 2
                     )
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal only")
+    def test_hadamard_m_only(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("requires GPU")
+
+        # n = m * 2^0, so only the m stage runs. test_hadamard sweeps k from 1.
+        tests = product(
+            (12, 20, 28),  # m
+            (None, 0.25),  # scale
+        )
+        for m, scale in tests:
+            for shape in ((m,), (4, m), (3, 5, m)):
+                with self.subTest(m=m, shape=shape, scale=scale):
+                    x = mx.array(
+                        np.random.RandomState(3).normal(size=shape).astype(np.float32)
+                    )
+                    kwargs = {} if scale is None else {"scale": scale}
+                    y_cpu = mx.hadamard_transform(x, stream=mx.cpu, **kwargs)
+                    y_gpu = mx.hadamard_transform(x, stream=mx.gpu, **kwargs)
+                    mx.eval(y_cpu, y_gpu)
+                    self.assertEqual(y_gpu.shape, x.shape)
+                    self.assertLess(mx.abs(y_cpu - y_gpu).max().item(), 1e-5)
+                    # non-donatable input: the malloc'd-output path
+                    y_nd = mx.hadamard_transform(x + 0.0, stream=mx.gpu, **kwargs)
+                    mx.eval(y_nd)
+                    self.assertLess(mx.abs(y_cpu - y_nd).max().item(), 1e-5)
+
     def test_hadamard_grad_vmap(self):
         np.random.seed(4)
 
@@ -3163,6 +4422,11 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.slice(x, mx.array([1, 2, 3]), (0, 1, 2), (3, 2, 1))
         self.assertTrue(mx.array_equal(expected, out))
 
+        x = mx.arange(5 * 6 * 7 * 8).reshape(5, 6, 7, 8)
+        expected = x[1:3, 2:4, 3:5, 4:6]
+        out = mx.slice(x, mx.array([1, 2, 3, 4]), (0, 1, 2, 3), (2, 2, 2, 2))
+        self.assertTrue(mx.array_equal(expected, out))
+
         x = mx.zeros(shape=(4, 4, 4))
         update = mx.random.randint(0, 100, shape=(3, 2, 1))
         out = mx.slice_update(x, update, mx.array([1, 2, 3]), (0, 1, 2))
@@ -3217,6 +4481,16 @@ class TestOps(mlx_tests.MLXTestCase):
                 mx_op = getattr(mx, op)
                 self.assertTrue(np.allclose(mx_op(x), np_op(x)))
 
+        if mx.metal.is_available() and mx.default_device() == mx.gpu:
+            x = mx.array(
+                [1e20 + 1e20j, 2.5e-20 - 3e-20j, 3e38 + 0j, 1e-19j], mx.complex64
+            )
+            for op in ["abs", "log"]:
+                with self.subTest(op=op):
+                    np_op = getattr(np, op)
+                    mx_op = getattr(mx, op)
+                    self.assertTrue(np.allclose(mx_op(x), np_op(x), rtol=1e-5))
+
         x = mx.array(
             [
                 3.0 + 4.0j,
@@ -3258,8 +4532,21 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.power(2, mx.array([8, 8, 8, 8, 8, 8, 8, 8]))
         self.assertTrue(mx.all(x == 256))
 
-        # Doesn't hang
+        # Doesn't hang.
         x = mx.power(2, -1)
+        self.assertEqual(x.item(), 0)
+
+        for dtype in [mx.int8, mx.int16, mx.int32, mx.int64]:
+            x = mx.power(mx.array([2, -2, 1], dtype), mx.array([-1, -3, -9], dtype))
+            self.assertEqual(x.tolist(), [0, 0, 0])
+
+        # A single negative exponent must only zero its own element, not the
+        # whole SIMD vector. Use enough elements to span a vector lane.
+        with mx.stream(mx.cpu):
+            base = mx.array([2] * 16, mx.int32)
+            exp = mx.array([3] * 3 + [-1] + [3] * 12, mx.int32)
+            expected = [8] * 3 + [0] + [8] * 12
+            self.assertEqual(mx.power(base, exp).tolist(), expected)
 
     def test_depends(self):
         a = mx.array([1.0, 2.0, 3.0])
@@ -3384,6 +4671,11 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = mx.array([0.0 + 1j, 2.0 + 1j, 3.0 + 1j, mx.nan + 2j])
         self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
 
+        # A NaN in the imaginary part also sorts last.
+        x = mx.array([3.0 + 1j, complex(1.0, mx.nan), 2.0 + 1j, 0.0 + 1j])
+        expected = mx.array([0.0 + 1j, 2.0 + 1j, 3.0 + 1j, complex(1.0, mx.nan)])
+        self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
+
     def test_argsort_nan(self):
         for dtype in [mx.float32, mx.float16, mx.bfloat16]:
             with self.subTest(dtype=dtype):
@@ -3393,12 +4685,65 @@ class TestOps(mlx_tests.MLXTestCase):
                 sorted_x = mx.take(x, indices)
                 self.assertTrue(mx.array_equal(sorted_x, expected, equal_nan=True))
 
+        # Also test complex values
+        for nan_val in [mx.nan + 2j, complex(1.0, mx.nan)]:
+            x = mx.array([3.0 + 1j, nan_val, 2.0 + 1j, 0.0 + 1j])
+            expected = mx.array([0.0 + 1j, 2.0 + 1j, 3.0 + 1j, nan_val])
+            sorted_x = mx.take(x, mx.argsort(x))
+            self.assertTrue(mx.array_equal(sorted_x, expected, equal_nan=True))
+
     def test_to_from_fp8(self):
         vals = mx.array(
             [448, 256, 192, 128, 96, 64, 48, 32, 24, 16, 12, 8, 6, 4, 3, 2, 0.015625]
         )
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(vals)), vals))
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
+
+        # 0x7f and 0xff are NaN in E4M3FN. Arithmetic does not keep the sign of
+        # a NaN, so only test for NaN. Use float32, numpy has no bfloat16.
+        nan_encodings = mx.array([0x7F, 0xFF], dtype=mx.uint8)
+        decoded_np = np.array(mx.from_fp8(nan_encodings, mx.float32))
+        self.assertTrue(np.isnan(decoded_np[0]).item())
+        self.assertTrue(np.isnan(decoded_np[1]).item())
+
+        # The carry must not fire one byte early: 0x7e/0xfe stay finite
+        finite = mx.from_fp8(mx.array([0x7E, 0xFE], dtype=mx.uint8), mx.float32)
+        self.assertTrue(mx.array_equal(finite, mx.array([448.0, -448.0])))
+
+    def test_zeros_ones_empty_like_dtype(self):
+        x = mx.array([1, 2, 3], dtype=mx.int32)
+
+        # Default dtype (should match x)
+        z = mx.zeros_like(x)
+        self.assertEqual(z.dtype, mx.int32)
+        o = mx.ones_like(x)
+        self.assertEqual(o.dtype, mx.int32)
+        e = mx.empty_like(x)
+        self.assertEqual(e.dtype, mx.int32)
+
+        # Positional dtype
+        z = mx.zeros_like(x, mx.float16)
+        self.assertEqual(z.dtype, mx.float16)
+        self.assertTrue(mx.array_equal(z, mx.zeros((3,), mx.float16)))
+
+        o = mx.ones_like(x, mx.float16)
+        self.assertEqual(o.dtype, mx.float16)
+        self.assertTrue(mx.array_equal(o, mx.ones((3,), mx.float16)))
+
+        e = mx.empty_like(x, mx.float16)
+        self.assertEqual(e.dtype, mx.float16)
+
+        # Keyword dtype
+        z = mx.zeros_like(x, dtype=mx.float32)
+        self.assertEqual(z.dtype, mx.float32)
+        self.assertTrue(mx.array_equal(z, mx.zeros((3,), mx.float32)))
+
+        o = mx.ones_like(x, dtype=mx.float32)
+        self.assertEqual(o.dtype, mx.float32)
+        self.assertTrue(mx.array_equal(o, mx.ones((3,), mx.float32)))
+
+        e = mx.empty_like(x, dtype=mx.float32)
+        self.assertEqual(e.dtype, mx.float32)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 # Copyright © 2024 Apple Inc.
 
 import gc
+import json
 import os
 import tempfile
 import unittest
@@ -11,7 +12,6 @@ import mlx_tests
 
 
 class TestExportImport(mlx_tests.MLXTestCase):
-
     @classmethod
     def setUpClass(cls):
         cls.test_dir_fid = tempfile.TemporaryDirectory()
@@ -159,7 +159,7 @@ class TestExportImport(mlx_tests.MLXTestCase):
             return out
 
         x = mx.array([1, 2, 3])
-        y = mx.array([1, 1, 0])
+        _y = mx.array([1, 1, 0])
         z = mx.array([2, 2, 2])
 
         mx.export_function(path, fun, (x,), {"z": z})
@@ -312,6 +312,51 @@ class TestExportImport(mlx_tests.MLXTestCase):
         expected = fun(x, y, z)
         out = imported_fun(x, y, z)[0]
         self.assertTrue(mx.array_equal(expected, out))
+
+    def test_export_searchsorted(self):
+        path = os.path.join(self.test_dir, "fn.mlxfn")
+
+        # both sides, since the side is the primitive's only state and a lost
+        # state would still round trip for the default
+        for side in ("left", "right"):
+
+            def fun(a, v):
+                return mx.searchsorted(a, v, side=side)
+
+            x = mx.sort(mx.random.uniform(shape=(32,)))
+            y = mx.random.uniform(shape=(3, 5))
+            mx.export_function(path, fun, (x, y))
+            imported_fun = mx.import_function(path)
+            expected = fun(x, y)
+            out = imported_fun(x, y)[0]
+            self.assertTrue(mx.array_equal(expected, out))
+
+    def test_export_unique(self):
+        path = os.path.join(self.test_dir, "fn.mlxfn")
+
+        # the fixed output size is what makes this exportable. The input is
+        # fixed so that the padded, exact and truncated cases are all covered
+        # rather than left to chance.
+        x = mx.array([3, 1, 2, 1, 3, 2, 1, 0, 2, 1])  # four unique values
+        for size, fill_value in ((10, None), (6, -1), (4, None), (2, None)):
+
+            def fun(a):
+                return mx.unique(
+                    a,
+                    size,
+                    return_index=True,
+                    return_inverse=True,
+                    return_counts=True,
+                    fill_value=fill_value,
+                )
+
+            mx.export_function(path, fun, x)
+            imported_fun = mx.import_function(path)
+            expected = fun(x)
+            out = imported_fun(x)
+            self.assertEqual(len(out), len(expected))
+            for e, o in zip(expected, out):
+                self.assertTrue(mx.array_equal(e, o))
 
     def test_export_conv(self):
         path = os.path.join(self.test_dir, "fn.mlxfn")
@@ -581,6 +626,95 @@ class TestExportImport(mlx_tests.MLXTestCase):
         out = imported(a)[0]
         self.assertTrue(mx.allclose(expected, out))
 
+    def test_export_custom_metal_kernel_without_evaluation(self):
+        source = """
+            uint elem = thread_position_in_grid.x;
+            out[elem] = a[elem];
+        """
+        kernel = mx.fast.metal_kernel(
+            name="export_only",
+            input_names=["a"],
+            output_names=["out"],
+            source=source,
+        )
+
+        def call(a):
+            return kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(min(a.size, 256), 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.gpu,
+            )[0]
+
+        a = mx.zeros((2, 2))
+        for shapeless in (False, True):
+            path = os.path.join(
+                self.test_dir,
+                f"metal_kernel_export_only_{shapeless}.mlxfn",
+            )
+            mx.export_function(path, call, a, shapeless=shapeless)
+            self.assertTrue(os.path.exists(path))
+
+            # A shapeless import can't be called since CustomKernel does
+            # not support shape inference
+            if mx.metal.is_available() and not shapeless:
+                imported = mx.import_function(path)
+                self.assertTrue(mx.array_equal(imported(a)[0], call(a)))
+
+        def call_cpu(a):
+            return kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(min(a.size, 256), 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.cpu,
+            )[0]
+
+        path = os.path.join(self.test_dir, "metal_kernel_export_cpu.mlxfn")
+        with self.assertRaisesRegex(ValueError, "Only supports the GPU"):
+            mx.export_function(path, call_cpu, a)
+
+        if not mx.metal.is_available():
+            with self.assertRaisesRegex(RuntimeError, "No Metal back-end"):
+                call(a)
+            with self.assertRaisesRegex(RuntimeError, "No Metal back-end"):
+                mx.eval(mx.compile(call)(a))
+
+    def test_export_custom_metal_kernel_with_math_mode(self):
+        source = """
+            uint elem = thread_position_in_grid.x;
+            out[elem] = metal::exp(a[elem]);
+        """
+        kernel = mx.fast.metal_kernel(
+            name="math_mode_export",
+            input_names=["a"],
+            output_names=["out"],
+            source=source,
+            compile_options={"math_mode": "safe"},
+        )
+
+        def call(a):
+            return kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(min(a.size, 256), 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.gpu,
+            )[0]
+
+        a = mx.array([-float("inf"), 0.0])
+        path = os.path.join(self.test_dir, "metal_kernel_math_mode.mlxfn")
+        mx.export_function(path, call, a)
+        self.assertTrue(os.path.exists(path))
+
+        if mx.metal.is_available():
+            imported = mx.import_function(path)
+            self.assertTrue(mx.array_equal(imported(a)[0], call(a)))
+
     def test_export_import_multi_with_constants(self):
 
         path = os.path.join(self.test_dir, "fn.mlxfn")
@@ -614,6 +748,86 @@ class TestExportImport(mlx_tests.MLXTestCase):
 
         imported = mx.import_function(path)
         self.assertTrue(mx.array_equal(imported(x, y, z)[0], fun(x, y, z)))
+
+    def test_export_matmul_shapeless_mid_dim(self):
+        path = os.path.join(self.test_dir, "matmul_shapeless.mlxfn")
+
+        E, H = 64, 17
+        arr = mx.arange(E * H, dtype=mx.float32).reshape((E, H)) * (1.0 / (E * H))
+
+        def fn(x):
+            return mx.matmul(x, arr)
+
+        sample = mx.zeros((1, 40, E), dtype=mx.float32)
+        mx.export_function(path, fn, sample, shapeless=True)
+        imported = mx.import_function(path)
+
+        for seq_len in (40, 248, 623):
+            with self.subTest(seq_len=seq_len):
+                x = mx.arange(seq_len * E, dtype=mx.float32).reshape((1, seq_len, E))
+                expected = fn(x)
+                (y,) = imported(x)
+                self.assertEqual(y.shape, (1, seq_len, H))
+                self.assertTrue(mx.allclose(y, expected))
+
+    def test_export_matmul_shapeless_batch_and_mid_dim(self):
+        path = os.path.join(self.test_dir, "matmul_shapeless_batch.mlxfn")
+
+        B, E, H = 2, 32, 8
+        arr = mx.arange(E * H, dtype=mx.float32).reshape((E, H)) * (1.0 / (E * H))
+
+        def fn(x):
+            return mx.matmul(x, arr)
+
+        sample = mx.zeros((B, 10, E), dtype=mx.float32)
+        mx.export_function(path, fn, sample, shapeless=True)
+        imported = mx.import_function(path)
+
+        for seq_len in (10, 50, 100):
+            with self.subTest(seq_len=seq_len):
+                x = mx.arange(B * seq_len * E, dtype=mx.float32).reshape(
+                    (B, seq_len, E)
+                )
+                expected = fn(x)
+                (y,) = imported(x)
+                self.assertEqual(y.shape, (B, seq_len, H))
+                self.assertTrue(mx.allclose(y, expected))
+
+    def test_export_import_metadata(self):
+        path = os.path.join(self.test_dir, "fn.mlxfn")
+
+        def fun(x):
+            return mx.abs(x)
+
+        x = mx.array([1.0, -2.0, 3.0])
+        metadata = json.dumps({"name": "model", "params": 7_000_000_000, "lr": 0.1})
+
+        mx.export_function(path, fun, x, metadata=metadata)
+
+        imported = mx.import_function(path)
+        self.assertTrue(mx.array_equal(imported(x)[0], fun(x)))
+
+        imported, imported_metadata = mx.import_function(path, return_metadata=True)
+        self.assertEqual(imported_metadata, metadata)
+        self.assertEqual(json.loads(imported_metadata)["params"], 7_000_000_000)
+        self.assertTrue(mx.array_equal(imported(x)[0], fun(x)))
+
+        mx.export_function(path, fun, x)
+        _, imported_metadata = mx.import_function(path, return_metadata=True)
+        self.assertEqual(imported_metadata, "")
+
+        # Metadata survives the per-trace header rewrite of a multi-trace export
+        with mx.exporter(path, fun, metadata=metadata) as exporter:
+            exporter(mx.array([1.0]))
+            exporter(mx.array([1.0, 2.0]))
+        _, imported_metadata = mx.import_function(path, return_metadata=True)
+        self.assertEqual(imported_metadata, metadata)
+
+        with self.assertRaises(TypeError):
+            mx.export_function(path, fun, x, metadata={"name": "model"})
+
+        with self.assertRaises(ValueError):
+            mx.export_function(lambda x: None, fun, x, metadata=metadata)
 
 
 if __name__ == "__main__":

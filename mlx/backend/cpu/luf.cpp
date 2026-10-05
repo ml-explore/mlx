@@ -69,8 +69,8 @@ void luf_impl(
 
           if (info < 0) {
             std::stringstream ss;
-            ss << "[LUF::eval_cpu] sgetrf_ failed with code " << info
-               << " because argument had an illegal value";
+            ss << "[LUF::eval_cpu] LU factorization failed with error code "
+               << info << " because argument had an illegal value";
             throw std::runtime_error(ss.str());
           }
 

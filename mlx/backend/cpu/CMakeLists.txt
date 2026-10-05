@@ -3,6 +3,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CLANG TRUE)
 else()
   set(COMPILER ${CMAKE_CXX_COMPILER})
+  set(CLANG FALSE)
 endif()
 
 set(COMPILE_DEPS
@@ -17,7 +18,7 @@ set(COMPILE_DEPS
     unary_ops.h
     binary_ops.h)
 
-if(MSVC)
+if(WIN32)
   set(SHELL_EXT ps1)
   set(SHELL_CMD powershell -ExecutionPolicy Bypass -File)
 else()
@@ -31,6 +32,7 @@ add_custom_command(
     ${SHELL_CMD} ${CMAKE_CURRENT_SOURCE_DIR}/make_compiled_preamble.${SHELL_EXT}
     ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp ${COMPILER}
     ${PROJECT_SOURCE_DIR} ${CLANG} ${CMAKE_SYSTEM_PROCESSOR}
+    "${PREAMBLE_SIMD_FLAGS}"
   DEPENDS make_compiled_preamble.${SHELL_EXT} compiled_preamble.h
           ${COMPILE_DEPS})
 

@@ -2,8 +2,6 @@
 
 # -*- coding: utf-8 -*-
 
-import os
-import subprocess
 
 import mlx.core as mx
 
@@ -28,7 +26,10 @@ extensions = [
 
 python_use_unqualified_type_names = True
 autosummary_generate = True
-autosummary_filename_map = {"mlx.core.Stream": "stream_class"}
+autosummary_filename_map = {
+    "mlx.core.Stream": "stream_class",
+    "mlx.core.PrintOptions": "printoptions_class",
+}
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),

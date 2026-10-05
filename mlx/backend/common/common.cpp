@@ -2,7 +2,9 @@
 #include <cassert>
 
 #include "mlx/backend/common/broadcasting.h"
+#include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
@@ -19,25 +21,33 @@ void AsStrided::eval(const std::vector<array>& inputs, array& out) {
         "AsStrided must be used with row contiguous arrays only.");
   }
 
-  auto [no_bsx_size, row_contiguous, col_contiguous] =
-      check_contiguity(shape_, strides_);
+  auto [_, row_contiguous, col_contiguous] = check_contiguity(shape_, strides_);
 
   int64_t l = 0, h = 0;
-  bool has_negative_stride = false;
+  std::vector<std::pair<int64_t, int>> dims;
   for (int i = 0; i < strides_.size(); i++) {
     auto delta = strides_[i] * (shape_[i] - 1);
     if (strides_[i] >= 0) {
       h += delta;
     } else {
       l += delta;
-      has_negative_stride |= shape_[i] > 1;
+    }
+    if (shape_[i] > 1 && strides_[i] != 0) {
+      dims.emplace_back(strides_[i], shape_[i]);
     }
   }
   size_t data_size = out.size() == 0 ? 0 : (h - l) + 1;
 
+  std::sort(dims.begin(), dims.end());
+  int64_t expected_stride = 1;
+  bool dense = true;
+  for (auto [stride, size] : dims) {
+    dense &= stride == expected_stride;
+    expected_stride *= size;
+  }
+
   auto flags = in.flags();
-  flags.contiguous =
-      out.size() == 0 || (!has_negative_stride && no_bsx_size == data_size);
+  flags.contiguous = out.size() == 0 || dense;
   flags.row_contiguous = row_contiguous;
   flags.col_contiguous = col_contiguous;
 
@@ -99,50 +109,10 @@ void NumberOfElements::eval(const std::vector<array>& inputs, array& out) {
     numel = 1.0 / numel;
   }
 
-  switch (out.dtype()) {
-    case bool_:
-      *out.data<bool>() = static_cast<bool>(numel);
-      break;
-    case uint8:
-      *out.data<uint8_t>() = static_cast<uint8_t>(numel);
-      break;
-    case uint16:
-      *out.data<uint16_t>() = static_cast<uint16_t>(numel);
-      break;
-    case uint32:
-      *out.data<uint32_t>() = static_cast<uint32_t>(numel);
-      break;
-    case uint64:
-      *out.data<uint64_t>() = static_cast<uint64_t>(numel);
-      break;
-    case int8:
-      *out.data<int8_t>() = static_cast<int8_t>(numel);
-      break;
-    case int16:
-      *out.data<int16_t>() = static_cast<int16_t>(numel);
-      break;
-    case int32:
-      *out.data<int32_t>() = static_cast<int32_t>(numel);
-      break;
-    case int64:
-      *out.data<int64_t>() = static_cast<int64_t>(numel);
-      break;
-    case float16:
-      *out.data<float16_t>() = static_cast<float16_t>(numel);
-      break;
-    case float32:
-      *out.data<float>() = static_cast<float>(numel);
-      break;
-    case bfloat16:
-      *out.data<bfloat16_t>() = static_cast<bfloat16_t>(numel);
-      break;
-    case float64:
-      *out.data<double>() = static_cast<double>(numel);
-      break;
-    case complex64:
-      *out.data<complex64_t>() = static_cast<complex64_t>(numel);
-      break;
-  }
+  dispatch_all_types(out.dtype(), [&](auto type_tag) {
+    using T = MLX_GET_TYPE(type_tag);
+    *out.data<T>() = static_cast<T>(numel);
+  });
 }
 
 std::pair<bool, Strides> prepare_reshape(const array& in, const array& out) {
@@ -194,6 +164,12 @@ void shared_buffer_reshape(
     //    becomes col contiguous again.
     auto max_dim = std::max_element(out.shape().begin(), out.shape().end());
     flags.col_contiguous = out.size() <= 1 || out.size() == *max_dim;
+  } else {
+    // New shape can change contiguity
+    auto [_, row_contiguous, col_contiguous] =
+        check_contiguity(out.shape(), out_strides);
+    flags.row_contiguous = row_contiguous;
+    flags.col_contiguous = col_contiguous;
   }
   out.copy_shared_buffer(in, out_strides, flags, in.data_size());
 }
@@ -205,48 +181,29 @@ void Split::eval(
 
   auto& in = inputs[0];
 
-  auto compute_new_flags = [](const auto& shape,
-                              const auto& strides,
-                              size_t in_data_size,
-                              auto flags) {
-    size_t data_size = 1;
-    size_t f_stride = 1;
-    size_t b_stride = 1;
-    flags.row_contiguous = true;
-    flags.col_contiguous = true;
-    for (int i = 0, ri = shape.size() - 1; ri >= 0; i++, ri--) {
-      flags.col_contiguous &= strides[i] == f_stride || shape[i] == 1;
-      flags.row_contiguous &= strides[ri] == b_stride || shape[ri] == 1;
-      f_stride *= shape[i];
-      b_stride *= shape[ri];
-      if (strides[i] > 0) {
-        data_size *= shape[i];
+  for (int i = 0; i < outputs.size(); i++) {
+    if (outputs[i].size() == 0) {
+      outputs[i].set_data(allocator::malloc(0));
+      continue;
+    }
+
+    int64_t start = i == 0 ? 0 : indices_[i - 1];
+    int64_t offset = start * in.strides()[axis_];
+
+    // compute the span
+    int64_t low_idx = 0;
+    int64_t high_idx = 0;
+    for (int j = 0; j < in.ndim(); j++) {
+      auto delta = in.strides()[j] * (outputs[i].shape()[j] - 1);
+      if (in.strides()[j] > 0) {
+        high_idx += delta;
+      } else {
+        low_idx += delta;
       }
     }
 
-    if (data_size == 1) {
-      // Broadcasted scalar array is contiguous.
-      flags.contiguous = true;
-    } else if (data_size == in_data_size) {
-      // Means we sliced a broadcasted dimension so leave the "no holes" flag
-      // alone.
-    } else {
-      // We sliced something. So either we are row or col contiguous or we
-      // punched a hole.
-      flags.contiguous &= flags.row_contiguous || flags.col_contiguous;
-    }
-
-    return std::pair<decltype(flags), size_t>{flags, data_size};
-  };
-
-  std::vector<int> indices(1, 0);
-  indices.insert(indices.end(), indices_.begin(), indices_.end());
-  for (int i = 0; i < indices.size(); i++) {
-    size_t offset = indices[i] * in.strides()[axis_];
-    auto [new_flags, data_size] = compute_new_flags(
-        outputs[i].shape(), in.strides(), in.data_size(), in.flags());
-    outputs[i].copy_shared_buffer(
-        in, in.strides(), new_flags, data_size, offset);
+    shared_buffer_slice(
+        in, in.strides(), offset, (high_idx - low_idx) + 1, outputs[i]);
   }
 }
 

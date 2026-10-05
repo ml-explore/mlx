@@ -115,7 +115,7 @@ class Module(dict):
             self.pop(key, None)
 
     def __delattr__(self, name):
-        if (val := self.get(name, None)) is not None:
+        if self.get(name, None) is not None:
             del self[name]
         else:
             super().__delattr__(name)
@@ -129,7 +129,7 @@ class Module(dict):
         Update the model's weights from a ``.npz``, a ``.safetensors`` file, or a list.
 
         Args:
-            file_or_weights (str or list(tuple(str, mx.array))): The path to
+            file_or_weights (str or list(tuple(str, array))): The path to
                 the weights ``.npz`` file (``.npz`` or ``.safetensors``) or a list
                 of pairs of parameter names and arrays.
             strict (bool, optional): If ``True`` then checks that the provided
@@ -208,7 +208,8 @@ class Module(dict):
 
     def save_weights(self, file: str):
         """
-        Save the model's weights to a file. The saving method is determined by the file extension:
+        Save the model's weights to a file. The saving method is determined by the file
+        extension:
         - ``.npz`` will use :func:`mx.savez`
         - ``.safetensors`` will use :func:`mx.save_safetensors`
         """
@@ -255,13 +256,13 @@ class Module(dict):
         but it can also be used to extract any subset of the module's parameters.
 
         Args:
-            filter_fn (Callable): Given a value, the key in which it is found
-                and the containing module, decide whether to keep the value or
+            filter_fn (Callable): Given the containing module, the key in which
+                it is found and the value, decide whether to keep the value or
                 drop it.
             map_fn (Callable, optional): Optionally transform the value before
                 returning it.
-            is_leaf_fn (Callable, optional): Given a value, the key in which it
-                is found and the containing module decide if it is a leaf.
+            is_leaf_fn (Callable, optional): Given the containing module, the
+                key in which it is found and the value decide if it is a leaf.
 
         Returns:
             A dictionary containing the contents of the module recursively filtered
@@ -306,8 +307,8 @@ class Module(dict):
         dict of dicts and lists.
 
         Commonly used by the optimizer to change the model to the updated
-        (optimized) parameters. Also used by the :meth:`mlx.nn.value_and_grad` to set the
-        tracers in the model in order to compute gradients.
+        (optimized) parameters. Also used by the :meth:`mlx.nn.value_and_grad` to set
+        the tracers in the model in order to compute gradients.
 
         The passed in parameters dictionary need not be a full dictionary
         similar to :meth:`parameters`. Only the provided locations will be
@@ -331,7 +332,8 @@ class Module(dict):
                         if isinstance(current_value, mx.array):
                             if strict and not isinstance(new_value, mx.array):
                                 raise ValueError(
-                                    f"Received invalid type: {type(new_value).__name__}."
+                                    f"Received invalid type: "
+                                    f"{type(new_value).__name__}."
                                 )
                             dst[k] = new_value
                         else:
@@ -461,6 +463,16 @@ class Module(dict):
                     raise KeyError(f"Module doesn't contain member {k}.")
         return keys
 
+    def _validate_keys_recursive(self, keys):
+        # A key such as "bias" is expected to be present somewhere in the model
+        # but not necessarily in every single submodule, so validate against the
+        # whole model rather than each module in isolation.
+        keys = keys if isinstance(keys, list) else [keys]
+        modules = self.modules()
+        for k in keys:
+            if not any(k in m for m in modules):
+                raise KeyError(f"Module doesn't contain member {k}.")
+
     def freeze(
         self,
         *,
@@ -468,8 +480,8 @@ class Module(dict):
         keys: Optional[Union[str, List[str]]] = None,
         strict: bool = False,
     ) -> Module:
-        """Freeze the Module's parameters or some of them. Freezing a parameter means not
-        computing gradients for it.
+        """Freeze the Module's parameters or some of them. Freezing a parameter means
+        not computing gradients for it.
 
         This function is idempotent i.e. freezing a frozen model is a no-op.
 
@@ -480,7 +492,9 @@ class Module(dict):
 
                 model = nn.Transformer()
                 model.freeze()
-                model.apply_to_modules(lambda k, v: v.unfreeze() if k.endswith("attention") else None)
+                model.apply_to_modules(
+                    lambda k, v: v.unfreeze() if k.endswith("attention") else None
+                )
 
         Args:
             recurse (bool, optional): If True then freeze the parameters of the
@@ -489,8 +503,8 @@ class Module(dict):
                 parameters will be frozen otherwise all the parameters of a
                 module. For instance freeze all biases by calling
                 ``module.freeze(keys="bias")``.
-            strict (bool, optional): If set to ``True`` validate that the passed keys exist.
-                Default: ``False``.
+            strict (bool, optional): If set to ``True`` validate that the passed keys
+                exist. Default: ``False``.
 
         Returns:
             The module instance after freezing the parameters.
@@ -501,8 +515,10 @@ class Module(dict):
             if local_keys is None:
                 local_keys = tree_flatten(
                     m.filter_and_map(
-                        lambda m, k, v: (not isinstance(v, Module))
-                        and m.valid_parameter_filter(m, k, v)
+                        lambda m, k, v: (
+                            (not isinstance(v, Module))
+                            and m.valid_parameter_filter(m, k, v)
+                        )
                     )
                 )
                 local_keys = [k for (k, v) in local_keys]
@@ -511,6 +527,9 @@ class Module(dict):
             m._no_grad.update(local_keys)
 
         if recurse:
+            if strict and keys is not None:
+                self._validate_keys_recursive(keys)
+                strict = False
             self.apply_to_modules(_freeze_impl)
         else:
             _freeze_impl("", self)
@@ -545,8 +564,8 @@ class Module(dict):
                 parameters will be unfrozen otherwise all the parameters of a
                 module. For instance unfreeze all biases by calling
                 ``module.unfreeze(keys="bias")``.
-            strict (bool, optional): If set to ``True`` validate that the passed keys exist.
-                Default: ``False``.
+            strict (bool, optional): If set to ``True`` validate that the passed keys
+                exist. Default: ``False``.
 
         Returns:
             The module instance after unfreezing the parameters.
@@ -561,6 +580,9 @@ class Module(dict):
                 m._no_grad.difference_update(local_keys)
 
         if recurse:
+            if strict and keys is not None:
+                self._validate_keys_recursive(keys)
+                strict = False
             self.apply_to_modules(_unfreeze_impl)
         else:
             _unfreeze_impl("", self)
@@ -611,7 +633,9 @@ class Module(dict):
               parameters to the new dtype.
         """
         if predicate is None:
-            predicate = lambda _: True
+
+            def predicate(_):
+                return True
 
         self.apply(lambda x: x.astype(dtype) if predicate(x.dtype) else x)
 
@@ -634,6 +658,13 @@ def _update_modules(dst, modules, strict):
                 raise ValueError(f'Module does not have sub-module named "{k}".')
     elif isinstance(modules, list):
         for i in range(len(modules)):
+            if i >= len(dst):
+                if strict:
+                    raise ValueError(
+                        f"List index {i} is out of bounds for "
+                        f"destination of length {len(dst)}."
+                    )
+                continue
             current_value = dst[i]
             new_value = modules[i]
             if Module.is_module(current_value) and Module.is_module(new_value):

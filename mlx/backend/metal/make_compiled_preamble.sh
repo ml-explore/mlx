@@ -50,11 +50,16 @@ if [ -n "$HDRS" ]; then
   fi
 fi
 
-# Remove any included system frameworks (for MetalPerformancePrimitive headers)
-HDRS=$(echo "$HDRS" | grep -v "Xcode")
+# Remove any included system frameworks (for MetalPerformancePrimitive headers).
+# Match "Xcode.app" rather than bare "Xcode" so project checkouts that live under
+# a directory named Xcode/ are not filtered out along with the SDK headers.
+HDRS=$(echo "$HDRS" | grep -v "Xcode.app")
 
 # Use the header depth to sort the files in order of inclusion
-declare -a HDRS_LIST=($HDRS)
+declare -a HDRS_LIST=()
+while read -r dots path; do
+  [ -n "$dots" ] && HDRS_LIST+=("$dots" "$path")
+done <<< "$HDRS"
 declare -a HDRS_STACK=()
 declare -a HDRS_SORTED=()
 

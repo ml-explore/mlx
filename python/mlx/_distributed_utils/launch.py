@@ -1,9 +1,9 @@
 # Copyright © 2025 Apple Inc.
 
 import argparse
-import base64
 import json
 import os
+import platform
 import shlex
 import shutil
 import sys
@@ -47,9 +47,11 @@ class CommandProcess:
 class RemoteProcess(CommandProcess):
     def __init__(self, rank, host, python, cwd, files, env, command):
         is_local = host == "127.0.0.1"
-        cmd = RemoteProcess.make_launch_script(rank, cwd, files, env, command, is_local)
+        cmd = RemoteProcess.make_launch_script(
+            rank, python, cwd, files, env, command, is_local
+        )
         if not is_local:
-            cmd = f"ssh -tt -o LogLevel=QUIET {host} {shlex.quote(cmd)}"
+            cmd = f"ssh -tt -o LogLevel=QUIET {shlex.quote(host)} {shlex.quote(cmd)}"
 
         self._host = host
         self._pidfile = None
@@ -91,7 +93,7 @@ class RemoteProcess(CommandProcess):
         # Kill the remote program if possible
         cmd = RemoteProcess.make_kill_script(self._pidfile)
         if not self._is_local:
-            cmd = f"ssh {self._host} {shlex.quote(cmd)}"
+            cmd = f"ssh {shlex.quote(self._host)} {shlex.quote(cmd)}"
         c = run(
             cmd,
             check=True,
@@ -104,7 +106,7 @@ class RemoteProcess(CommandProcess):
         self._killed = c.stdout.strip() == "1"
 
     @staticmethod
-    def make_launch_script(rank, cwd, files, env, command, is_local):
+    def make_launch_script(rank, python, cwd, files, env, command, is_local):
         script = ""
 
         # Disable echo
@@ -119,11 +121,12 @@ class RemoteProcess(CommandProcess):
         # Change the working directory if one was requested. Otherwise attempt to
         # change to the current one but don't fail if it wasn't possible.
         d = cwd or os.getcwd()
-        script += f"if [[ -d {repr(d)} ]]; then "
-        script += f"  cd {repr(d)}; "
+        qd = shlex.quote(d)
+        script += f"if [[ -d {qd} ]]; then "
+        script += f"  cd {qd}; "
         if cwd is not None:
             script += "else "
-            script += f" echo 'Failed to change directory to' {repr(d)} >2; "
+            script += f" echo 'Failed to change directory to' {qd} >&2; "
         script += "fi; "
 
         # Add the environment variables that were requested
@@ -145,6 +148,10 @@ class RemoteProcess(CommandProcess):
 
         # Finally add the rank
         script += f"export MLX_RANK={rank}; "
+
+        # Run the command with the explicitly requested python interpreter
+        if python is not None:
+            command = [python, *command]
 
         # Replace the process with the script
         script += f"cmd=({' '.join(map(shlex.quote, command))}); "
@@ -326,7 +333,7 @@ def launch_ring(parser, hosts, args, command):
 
 def launch_nccl(parser, hosts, args, command):
     if not hosts[0].ips:
-        raise ValueError("Rank 0 should have an IP reachable from all other ranks")
+        parser.error("Rank 0 should have an IP reachable from all other ranks")
 
     master_host = hosts[0].ips[0]
     master_port = args.nccl_port
@@ -365,13 +372,35 @@ def launch_nccl(parser, hosts, args, command):
 
 def launch_jaccl(parser, hosts, args, command):
     if not hosts[0].ips:
-        raise ValueError("Rank 0 should have an IP reachable from all other ranks")
+        parser.error("Rank 0 should have an IP reachable from all other ranks")
 
     jaccl_ring = args.backend == "jaccl-ring"
     have_rdmas = all(len(h.rdma) == len(hosts) for h in hosts)
+    if not have_rdmas:
+        parser.error(
+            "The hostfile is malformed: number of RDMA devices does not match hosts"
+        )
     have_nulls = all(h.rdma[i] is None for i, h in enumerate(hosts))
-    if not have_rdmas or not have_nulls:
-        raise ValueError("Malformed hostfile for jaccl backend")
+    if not have_nulls:
+        parser.error("The hostfile is malformed: RDMA device of self should be null")
+
+    # Find pairs that miss rmda in hostfile.
+    n = len(hosts)
+    missing_rdma = [
+        (i, j)
+        for i, h in enumerate(hosts)
+        for j in (((i - 1) % n, (i + 1) % n) if jaccl_ring else range(n))
+        if i != j and h.rdma[j] is None
+    ]
+
+    if missing_rdma:
+        pairs = ", ".join(
+            f"{hosts[i].ssh_hostname} to {hosts[j].ssh_hostname}"
+            for i, j in missing_rdma[:3]
+        )
+        if len(missing_rdma) > 3:
+            pairs += f" and {len(missing_rdma) - 3} more"
+        parser.error(f"The hostfile is malformed: no RDMA device is listed for {pairs}")
 
     coordinator = hosts[0].ips[0]
     env = args.env
@@ -411,7 +440,7 @@ def get_mpi_libname():
             filter(lambda line: "libmpi" in line, otool_output.splitlines())
         )
         return libmpi_line.strip().split()[0].removeprefix("@rpath/")
-    except:
+    except BaseException:
         return None
 
 
@@ -514,13 +543,15 @@ def main():
         help="The port to use for the NCCL communication (only for nccl backend)",
     )
     parser.add_argument(
-        "--python", default=sys.executable, help="Use this python on the remote hosts"
+        "--python",
+        default=None,
+        help="Launch the command with this python interpreter on the remote hosts",
     )
 
     args, rest = parser.parse_known_args()
 
     if args.print_python:
-        print(args.python)
+        print(args.python or sys.executable)
         return
 
     if len(rest) == 0:
@@ -529,10 +560,13 @@ def main():
         rest.pop(0)
 
     # Try to extract a list of hosts and corresponding ips
-    if args.hostfile is not None:
-        hostfile = Hostfile.from_file(args.hostfile)
-    else:
-        hostfile = Hostfile.from_list(args.hosts, args.repeat_hosts)
+    try:
+        if args.hostfile is not None:
+            hostfile = Hostfile.from_file(args.hostfile)
+        else:
+            hostfile = Hostfile.from_list(args.hosts, args.repeat_hosts)
+    except ValueError as e:
+        parser.error(str(e))
 
     # Extract extra arguments from the hostfile
     if hostfile.backend != "" and args.backend is None:
@@ -540,6 +574,12 @@ def main():
     if args.backend is None:
         args.backend = "nccl" if mx.cuda.is_available() else "ring"
     args.env = hostfile.envs + args.env
+
+    # Add terminal size
+    cols, lines = shutil.get_terminal_size((0, 0))
+    if cols > 0 and not any(e.startswith("COLUMNS=") for e in args.env):
+        args.env.append(f"COLUMNS={cols}")
+        args.env.append(f"LINES={lines}")
 
     # Launch
     if args.backend == "ring":
@@ -552,5 +592,6 @@ def main():
         launch_jaccl(parser, hostfile.hosts, args, rest)
     else:
         parser.error(
-            "The backend should be one of {'ring', 'mpi', 'nccl', 'jaccl', 'jaccl-ring'}"
+            "The backend should be one of "
+            "{'ring', 'mpi', 'nccl', 'jaccl', 'jaccl-ring'}"
         )

@@ -50,6 +50,10 @@ Stream default_stream(Device d) {
   return s.value();
 }
 
+std::optional<Stream> peek_default_stream(Device d) {
+  return default_stream_storage(d);
+}
+
 void set_default_stream(Stream s) {
   if (!gpu::is_available() && s.device == Device::gpu) {
     throw std::invalid_argument(
@@ -73,6 +77,19 @@ Stream new_stream(Device d) {
     gpu::new_stream(s);
   } else {
     cpu::new_stream(s);
+  }
+  return s;
+}
+
+Stream new_thread_unsafe_stream(Device d) {
+  auto& [streams, mtx] = all_streams();
+  std::unique_lock lock(mtx);
+  int index = streams.size();
+  auto& s = streams.emplace_back(index, d);
+  if (d == Device::gpu) {
+    gpu::new_thread_unsafe_stream(s);
+  } else {
+    cpu::new_thread_unsafe_stream(s);
   }
   return s;
 }

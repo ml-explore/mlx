@@ -543,6 +543,7 @@ class GatherMM : public UnaryPrimitive {
 
   DEFINE_NAME(GatherMM)
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
     return std::make_pair(left_sorted_, right_sorted_);
   }
@@ -974,9 +975,9 @@ class Equal : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
 
+  bool is_equivalent(const Primitive& other) const override;
   const char* name() const override {
     if (equal_nan_) {
       return "NaNEqual";
@@ -1324,9 +1325,9 @@ class Log : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
 
+  bool is_equivalent(const Primitive& other) const override;
   Base state() const {
     return base_;
   };
@@ -1700,6 +1701,7 @@ class GatherQMM : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_NAME(GatherQMM)
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
     return std::make_tuple(
         group_size_, bits_, mode_, transpose_, left_sorted_, right_sorted_);
@@ -1710,6 +1712,41 @@ class GatherQMM : public UnaryPrimitive {
   int bits_;
   QuantizationMode mode_;
   bool transpose_;
+  bool left_sorted_;
+  bool right_sorted_;
+};
+
+class GatherQQMM : public UnaryPrimitive {
+ public:
+  explicit GatherQQMM(
+      Stream stream,
+      int group_size,
+      int bits,
+      QuantizationMode mode,
+      bool left_sorted = false,
+      bool right_sorted = false)
+      : UnaryPrimitive(stream),
+        group_size_(group_size),
+        bits_(bits),
+        mode_(mode),
+        left_sorted_(left_sorted),
+        right_sorted_(right_sorted) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_NAME(GatherQQMM)
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  auto state() const {
+    return std::make_tuple(
+        group_size_, bits_, mode_, left_sorted_, right_sorted_);
+  }
+
+ private:
+  int group_size_;
+  int bits_;
+  QuantizationMode mode_;
   bool left_sorted_;
   bool right_sorted_;
 };
@@ -1851,6 +1888,7 @@ class Scan : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS();
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
   const char* name() const override {
     switch (reduce_type_) {
@@ -2172,6 +2210,27 @@ class Softmax : public UnaryPrimitive {
 
  private:
   bool precise_;
+};
+
+class SearchSorted : public UnaryPrimitive {
+ public:
+  explicit SearchSorted(Stream stream, bool right)
+      : UnaryPrimitive(stream), right_(right) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_NAME(SearchSorted)
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  auto state() const {
+    return right_;
+  }
+
+ private:
+  bool right_;
 };
 
 class Sort : public UnaryPrimitive {

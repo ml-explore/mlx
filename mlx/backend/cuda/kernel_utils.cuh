@@ -146,4 +146,7 @@ inline std::tuple<dim3, uint32_t> get_launch_args(
       max_block_dim);
 }
 
+std::pair<dim3, dim3>
+get_launch_args_general(int dim0, size_t rest, int work_per_thread = 1);
+
 } // namespace mlx::core

@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #include "mlx/primitives.h"
 #include "mlx/distributed/primitives.h"
@@ -30,8 +30,21 @@ bool fast::ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    bool has_sinks,
     bool is_training,
     bool output_logsumexp,
+    bool force_fused,
+    Stream s) {
+  if (force_fused) {
+    throw std::invalid_argument(
+        "[scaled_dot_product_attention] force_fused=True but no fused "
+        "kernel is available in CPU backend.");
+  }
+  return true;
+}
+
+bool fast::ScaledDotProductAttentionVJP::use_fallback(
+    const array& q,
     Stream s) {
   return true;
 }
@@ -40,8 +53,21 @@ bool fast::ScaledDotProductAttention::supports_bool_mask() {
   return false;
 }
 
-bool fast::ScaledDotProductAttentionVJP::use_fallback(
-    const array& q,
+bool fast::GatedDeltaUpdate::use_fallback(
+    const int Hk,
+    const int Dk,
+    const int Hv,
+    const int Dv,
+    const bool has_mask,
+    Stream s) {
+  return true;
+}
+
+bool fast::GatedDeltaUpdateVJP::use_fallback(
+    const int Hk,
+    const int Dk,
+    const int Hv,
+    const int Dv,
     Stream s) {
   return true;
 }
@@ -98,6 +124,7 @@ NO_GPU(Gather)
 NO_GPU(GatherAxis)
 NO_GPU(GatherMM)
 NO_GPU(GatherQMM)
+NO_GPU(GatherQQMM)
 NO_GPU(Greater)
 NO_GPU(GreaterEqual)
 NO_GPU(Hadamard)
@@ -133,6 +160,7 @@ NO_GPU(Round)
 NO_GPU(Scan)
 NO_GPU(Scatter)
 NO_GPU(ScatterAxis)
+NO_GPU(SearchSorted)
 NO_GPU(Select)
 NO_GPU(SegmentedMM)
 NO_GPU(Sigmoid)
@@ -162,6 +190,8 @@ NO_GPU(View)
 NO_GPU(MaskedScatter)
 
 namespace fast {
+NO_GPU_USE_FALLBACK(CrossEntropy)
+NO_GPU_MULTI(CrossEntropyVJP)
 NO_GPU_USE_FALLBACK(LayerNorm)
 NO_GPU_MULTI(LayerNormVJP)
 NO_GPU_USE_FALLBACK(RMSNorm)
@@ -169,6 +199,8 @@ NO_GPU_MULTI(RMSNormVJP)
 NO_GPU_USE_FALLBACK(RoPE)
 NO_GPU_MULTI(ScaledDotProductAttention)
 NO_GPU_MULTI(ScaledDotProductAttentionVJP)
+NO_GPU_MULTI(GatedDeltaUpdate)
+NO_GPU_MULTI(GatedDeltaUpdateVJP)
 NO_GPU_MULTI(ConvertFP8)
 NO_GPU_MULTI(Quantize)
 NO_GPU_MULTI(CustomKernel)

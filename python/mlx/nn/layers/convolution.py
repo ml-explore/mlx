@@ -25,6 +25,7 @@ class Conv1d(Module):
         padding (int, optional): How many positions to 0-pad the input with.
             Default: ``0``.
         dilation (int, optional): The dilation of the convolution.
+            Default: ``1``.
         groups (int, optional): The number of groups for the convolution.
             Default: ``1``.
         bias (bool, optional): If ``True`` add a learnable bias to the output.
@@ -50,7 +51,7 @@ class Conv1d(Module):
                 f"divisible by the number of groups ({groups})"
             )
 
-        scale = math.sqrt(1 / (in_channels * kernel_size))
+        scale = math.sqrt(1 / (in_channels // groups * kernel_size))
         self.weight = mx.random.uniform(
             low=-scale,
             high=scale,
@@ -101,6 +102,7 @@ class Conv2d(Module):
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: ``0``.
         dilation (int or tuple, optional): The dilation of the convolution.
+            Default: ``1``.
         groups (int, optional): The number of groups for the convolution.
             Default: ``1``.
         bias (bool, optional): If ``True`` add a learnable bias to the
@@ -130,7 +132,7 @@ class Conv2d(Module):
             lambda x: (x, x) if isinstance(x, int) else x,
             (kernel_size, stride, padding),
         )
-        scale = math.sqrt(1 / (in_channels * kernel_size[0] * kernel_size[1]))
+        scale = math.sqrt(1 / (in_channels // groups * kernel_size[0] * kernel_size[1]))
         self.weight = mx.random.uniform(
             low=-scale,
             high=scale,
@@ -179,9 +181,10 @@ class Conv3d(Module):
         kernel_size (int or tuple): The size of the convolution filters.
         stride (int or tuple, optional): The size of the stride when
             applying the filter. Default: ``1``.
-        dilation (int or tuple, optional): The dilation of the convolution.
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: ``0``.
+        dilation (int or tuple, optional): The dilation of the convolution.
+            Default: ``1``.
         bias (bool, optional): If ``True`` add a learnable bias to the
             output. Default: ``True``
     """
@@ -219,7 +222,7 @@ class Conv3d(Module):
 
     def _extra_repr(self):
         return (
-            f"{self.weight.shape[-1] * self.groups}, {self.weight.shape[0]}, "
+            f"{self.weight.shape[-1]}, {self.weight.shape[0]}, "
             f"kernel_size={self.weight.shape[1:4]}, stride={self.stride}, "
             f"padding={self.padding}, dilation={self.dilation}, "
             f"bias={'bias' in self}"
