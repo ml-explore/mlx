@@ -241,21 +241,20 @@ class MLX_API array {
   struct Data {
     allocator::Buffer buffer;
     Deleter d;
-    bool owned;
-    explicit Data(allocator::Buffer buffer)
-        : buffer(buffer), d(allocator::free), owned(true) {}
-    Data(allocator::Buffer buffer, Deleter d)
-        : buffer(buffer), d(std::move(d)), owned(false) {}
+    // A null deleter means the allocator owns the buffer
+    Data(allocator::Buffer buffer, Deleter d = nullptr)
+        : buffer(buffer), d(std::move(d)) {}
     // Not copyable
     Data(const Data& d) = delete;
     Data& operator=(const Data& d) = delete;
     Data(Data&& o) noexcept
         : buffer(std::exchange(o.buffer, allocator::Buffer(nullptr))),
-          d(std::exchange(o.d, nullptr)),
-          owned(std::exchange(o.owned, false)) {}
+          d(std::exchange(o.d, nullptr)) {}
     ~Data() {
       if (d) {
         d(buffer);
+      } else {
+        allocator::free(buffer);
       }
     }
   };
@@ -308,7 +307,7 @@ class MLX_API array {
   /** True indicates the arrays buffer is safe to reuse */
   bool is_donatable() const {
     return array_desc_.use_count() == 1 &&
-        (array_desc_->data.use_count() == 1) && array_desc_->data->owned;
+        (array_desc_->data.use_count() == 1) && !array_desc_->data->d;
   }
 
   /** The array's siblings. */
@@ -453,7 +452,6 @@ class MLX_API array {
   // Check if the array is a tracer array
   bool is_tracer() const;
 
-  // A null deleter means MLX allocated the buffer
   void set_data(allocator::Buffer buffer, Deleter d = nullptr);
 
   void set_data(
