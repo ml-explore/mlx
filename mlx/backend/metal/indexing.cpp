@@ -205,29 +205,13 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_output_array(out, 1);
 
   // Set source info
-  if (ndim == 0) {
-    compute_encoder.set_bytes(0, 2);
-    compute_encoder.set_bytes(int64_t{0}, 3);
-    compute_encoder.set_bytes(0, 5);
-  } else {
-    compute_encoder.set_vector_bytes(src.shape(), 2);
-    compute_encoder.set_vector_bytes(src.strides(), 3);
-    compute_encoder.set_vector_bytes(slice_sizes_, 5);
-  }
+  compute_encoder.set_vector_bytes(src.shape(), 2);
+  compute_encoder.set_vector_bytes(src.strides(), 3);
   compute_encoder.set_bytes(ndim, 4);
-  if (nidx == 0) {
-    compute_encoder.set_bytes(0, 6);
-  } else {
-    compute_encoder.set_vector_bytes(axes_, 6);
-  }
+  compute_encoder.set_vector_bytes(slice_sizes_, 5);
+  compute_encoder.set_vector_bytes(axes_, 6);
 
   // Set index info
-  if (idx_ndim == 0) {
-    // Bind unused scalar metadata for Metal validation.
-    idx_shapes.push_back(0);
-    idx_strides.push_back(0);
-    idx_contigs.push_back(false);
-  }
   compute_encoder.set_vector_bytes(idx_shapes, 7);
   compute_encoder.set_vector_bytes(idx_strides, 8);
   compute_encoder.set_vector_bytes(idx_contigs, 9);
@@ -392,46 +376,19 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     idx_contigs.push_back(inputs[i + 1].flags().row_contiguous);
   }
 
-  if (upd_ndim == 0) {
-    // Need placeholders so Metal doesn't complain
-    int shape_ = 0;
-    int64_t stride_ = 0;
-    compute_encoder.set_bytes(shape_, 3);
-    compute_encoder.set_bytes(stride_, 4);
-  } else {
-    compute_encoder.set_vector_bytes(upd.shape(), 3);
-    compute_encoder.set_vector_bytes(upd.strides(), 4);
-  }
+  compute_encoder.set_vector_bytes(upd.shape(), 3);
+  compute_encoder.set_vector_bytes(upd.strides(), 4);
   compute_encoder.set_bytes(upd_ndim, 5);
   compute_encoder.set_bytes(upd_size, 6);
 
   // Set output info
   size_t out_ndim = out.ndim();
-  if (out_ndim == 0) {
-    // Need placeholders so Metal doesn't complain
-    int shape_ = 0;
-    int64_t stride_ = 0;
-    compute_encoder.set_bytes(shape_, 7);
-    compute_encoder.set_bytes(stride_, 8);
-  } else {
-    compute_encoder.set_vector_bytes(out.shape(), 7);
-    compute_encoder.set_vector_bytes(out.strides(), 8);
-  }
+  compute_encoder.set_vector_bytes(out.shape(), 7);
+  compute_encoder.set_vector_bytes(out.strides(), 8);
   compute_encoder.set_bytes(out_ndim, 9);
-  if (nidx == 0) {
-    compute_encoder.set_bytes(0, 10);
-  } else {
-    compute_encoder.set_vector_bytes(axes_, 10);
-  }
 
   // Set index info
-  if (idx_ndim == 0) {
-    // Add a 0 in idx_shapes and strides to avoid the missing buffer binding
-    // error in the metal API.
-    idx_shapes.push_back(0);
-    idx_strides.push_back(0);
-    idx_contigs.push_back(false);
-  }
+  compute_encoder.set_vector_bytes(axes_, 10);
   compute_encoder.set_vector_bytes(idx_shapes, 11);
   compute_encoder.set_vector_bytes(idx_strides, 12);
   compute_encoder.set_vector_bytes(idx_contigs, 13);
