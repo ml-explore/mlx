@@ -59,22 +59,20 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
 
     // Update workspace size
     lwork = optimal_work;
-    {
-      auto work = allocator::malloc(sizeof(T) * lwork);
+    auto work = allocator::malloc(sizeof(T) * lwork);
 
-      // Loop over matrices
-      for (int i = 0; i < num_matrices; ++i) {
-        // Solve
-        geqrf<T>(
-            &M,
-            &N,
-            in_ptr + M * N * i,
-            &lda,
-            static_cast<T*>(tau.buffer().raw_ptr()) + num_reflectors * i,
-            static_cast<T*>(work.buffer().raw_ptr()),
-            &lwork,
-            &info);
-      }
+    // Loop over matrices
+    for (int i = 0; i < num_matrices; ++i) {
+      // Solve
+      geqrf<T>(
+          &M,
+          &N,
+          in_ptr + M * N * i,
+          &lda,
+          static_cast<T*>(tau.buffer().raw_ptr()) + num_reflectors * i,
+          static_cast<T*>(work.buffer().raw_ptr()),
+          &lwork,
+          &info);
     }
 
     for (int i = 0; i < num_matrices; ++i) {
@@ -103,7 +101,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
         &lwork,
         &info);
     lwork = optimal_work;
-    auto work = allocator::malloc(sizeof(T) * lwork);
+    auto orgqr_work = allocator::malloc(sizeof(T) * lwork);
 
     // Loop over matrices
     for (int i = 0; i < num_matrices; ++i) {
@@ -115,7 +113,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
           in_ptr + M * N * i,
           &lda,
           static_cast<T*>(tau.buffer().raw_ptr()) + num_reflectors * i,
-          static_cast<T*>(work.buffer().raw_ptr()),
+          static_cast<T*>(orgqr_work.buffer().raw_ptr()),
           &lwork,
           &info);
     }
