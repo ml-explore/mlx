@@ -3,8 +3,14 @@
 #pragma once
 
 #include <cstdlib>
+#include <functional>
+#include <utility>
 
 #include "mlx/api.h"
+
+namespace mlx::core::cu {
+class CudaAllocator;
+} // namespace mlx::core::cu
 
 namespace mlx::core::allocator {
 
@@ -51,12 +57,37 @@ class MLX_API Allocator {
 
 MLX_API Allocator& allocator();
 
-inline Buffer malloc(size_t size) {
-  return allocator().malloc(size);
-}
+using Deleter = std::function<void(Buffer)>;
 
-inline void free(Buffer buffer) {
-  allocator().free(buffer);
+// A null deleter means the allocator owns the buffer
+class Data {
+ public:
+  Buffer buffer;
+  Deleter d;
+
+  Data(Buffer buffer, Deleter d)
+      : buffer(buffer), d(d ? std::move(d) : Deleter([](Buffer) {})) {}
+  Data(const Data& other) = delete;
+  Data& operator=(const Data& other) = delete;
+  Data(Data&& other) noexcept
+      : buffer(std::exchange(other.buffer, Buffer(nullptr))),
+        d(std::exchange(other.d, nullptr)) {}
+  ~Data() {
+    if (d) {
+      d(buffer);
+    } else {
+      allocator().free(buffer);
+    }
+  }
+
+ private:
+  explicit Data(Buffer buffer) : buffer(buffer) {}
+  friend Data malloc(size_t size);
+  friend class cu::CudaAllocator;
+};
+
+inline Data malloc(size_t size) {
+  return Data(allocator().malloc(size));
 }
 
 // Make a Buffer from a raw pointer of the given size without a copy.  If a

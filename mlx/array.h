@@ -19,7 +19,7 @@ namespace mlx::core {
 // Forward declaration
 class Primitive;
 
-using Deleter = std::function<void(allocator::Buffer)>;
+using Deleter = allocator::Deleter;
 using ShapeElem = int32_t;
 using Shape = SmallVector<ShapeElem>;
 using Strides = SmallVector<int64_t>;
@@ -69,12 +69,15 @@ class MLX_API array {
       Dtype dtype,
       const std::function<void(void*)>& deleter);
 
+  /* Build an array from data */
+  explicit array(allocator::Data data, Shape shape, Dtype dtype);
+
   /* Build an array from a buffer */
   explicit array(
       allocator::Buffer data,
       Shape shape,
       Dtype dtype,
-      Deleter deleter = nullptr);
+      Deleter deleter);
 
   /** Assignment to rvalue does not compile. */
   array& operator=(const array& other) && = delete;
@@ -238,26 +241,7 @@ class MLX_API array {
     return reinterpret_cast<std::uintptr_t>(array_desc_->primitive.get());
   }
 
-  struct Data {
-    allocator::Buffer buffer;
-    Deleter d;
-    // A null deleter means the allocator owns the buffer
-    Data(allocator::Buffer buffer, Deleter d = nullptr)
-        : buffer(buffer), d(std::move(d)) {}
-    // Not copyable
-    Data(const Data& d) = delete;
-    Data& operator=(const Data& d) = delete;
-    Data(Data&& o) noexcept
-        : buffer(std::exchange(o.buffer, allocator::Buffer(nullptr))),
-          d(std::exchange(o.d, nullptr)) {}
-    ~Data() {
-      if (d) {
-        d(buffer);
-      } else {
-        allocator::free(buffer);
-      }
-    }
-  };
+  using Data = allocator::Data;
 
   struct Flags {
     // True iff there are no gaps in the underlying data. Each item
@@ -452,7 +436,9 @@ class MLX_API array {
   // Check if the array is a tracer array
   bool is_tracer() const;
 
-  void set_data(allocator::Buffer buffer, Deleter d = nullptr);
+  void set_data(allocator::Data data);
+
+  void set_data(allocator::Buffer buffer, Deleter d);
 
   void set_data(
       allocator::Buffer buffer,
@@ -464,12 +450,19 @@ class MLX_API array {
   }
 
   void set_data(
+      allocator::Data data,
+      size_t data_size,
+      Strides strides,
+      Flags flags,
+      int64_t offset = 0);
+
+  void set_data(
       allocator::Buffer buffer,
       size_t data_size,
       Strides strides,
       Flags flags,
-      int64_t offset = 0,
-      Deleter d = nullptr);
+      int64_t offset,
+      Deleter d);
 
   void copy_shared_buffer(
       const array& other,

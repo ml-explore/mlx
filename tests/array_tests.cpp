@@ -581,7 +581,8 @@ TEST_CASE("test array shared buffer") {
   Shape shape = {2, 2};
   auto n_elem = shape[0] * shape[1];
 
-  allocator::Buffer buf_b = allocator::malloc(n_elem * sizeof(float));
+  allocator::Buffer buf_b =
+      allocator::allocator().malloc(n_elem * sizeof(float));
   void* buf_b_ptr = buf_b.raw_ptr();
   float* float_buf_b = (float*)buf_b_ptr;
 
@@ -594,7 +595,7 @@ TEST_CASE("test array shared buffer") {
   auto deleter = [float_buf_b](allocator::Buffer buf) {
     CHECK_EQ(float_buf_b, (float*)buf.raw_ptr());
     CHECK_EQ(float_buf_b[0], ((float*)buf.raw_ptr())[0]);
-    allocator::free(buf);
+    allocator::allocator().free(buf);
   };
 
   array a = ones(shape, float32);

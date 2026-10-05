@@ -258,6 +258,13 @@ Buffer CudaAllocator::malloc(size_t size) {
   return malloc_async(size, -1, nullptr);
 }
 
+allocator::Data CudaAllocator::malloc_data(
+    size_t size,
+    CommandEncoder& encoder) {
+  return allocator::Data(
+      malloc_async(size, encoder.device().cuda_device(), encoder.stream()));
+}
+
 void CudaAllocator::free(Buffer buffer) {
   auto* buf = static_cast<CudaBuffer*>(buffer.ptr());
   if (!buf) {
@@ -396,9 +403,8 @@ CudaAllocator& allocator() {
   return *allocator_;
 }
 
-Buffer malloc_async(size_t size, CommandEncoder& encoder) {
-  return allocator().malloc_async(
-      size, encoder.device().cuda_device(), encoder.stream());
+allocator::Data malloc_async(size_t size, CommandEncoder& encoder) {
+  return allocator().malloc_data(size, encoder);
 }
 
 } // namespace cu

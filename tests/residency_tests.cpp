@@ -66,11 +66,11 @@ TEST_CASE("test residency set wires nothing when the wired limit is zero") {
 
   std::vector<allocator::Buffer> bufs;
   for (int i = 0; i < 4; ++i) {
-    bufs.push_back(allocator::malloc(4 * MB));
+    bufs.push_back(allocator::allocator().malloc(4 * MB));
     CHECK_EQ(residency().wired_size(), 0);
   }
   for (auto buf : bufs) {
-    allocator::free(buf);
+    allocator::allocator().free(buf);
   }
   CHECK_EQ(residency().wired_size(), 0);
 }
@@ -89,14 +89,14 @@ TEST_CASE("test residency set never wires more than the wired limit") {
 
   std::vector<allocator::Buffer> bufs;
   for (int i = 0; i < 8; ++i) { // asks for 32 MB against an 8 MB budget
-    bufs.push_back(allocator::malloc(4 * MB));
+    bufs.push_back(allocator::allocator().malloc(4 * MB));
     CHECK_LE(residency().wired_size(), limit);
   }
   // Over budget overall, but the budget itself is still used.
   CHECK_GE(residency().wired_size(), baseline + 4 * MB);
 
   for (auto buf : bufs) {
-    allocator::free(buf);
+    allocator::allocator().free(buf);
   }
   // Everything of ours is unwired again, exactly.
   CHECK_EQ(residency().wired_size(), baseline);
@@ -108,13 +108,13 @@ TEST_CASE("test raising the wired limit wires already-allocated buffers") {
   }
   LimitGuard guard(0, 0);
 
-  auto buf = allocator::malloc(8 * MB);
+  auto buf = allocator::allocator().malloc(8 * MB);
   CHECK_EQ(residency().wired_size(), 0);
 
   set_wired_limit(64 * MB);
   CHECK_GE(residency().wired_size(), 8 * MB);
 
-  allocator::free(buf);
+  allocator::allocator().free(buf);
 }
 
 TEST_CASE("test lowering the wired limit unwires buffers") {
@@ -124,7 +124,7 @@ TEST_CASE("test lowering the wired limit unwires buffers") {
   LimitGuard guard(64 * MB, 0);
   const size_t baseline_with_budget = residency().wired_size();
 
-  auto buf = allocator::malloc(8 * MB);
+  auto buf = allocator::allocator().malloc(8 * MB);
   CHECK_GE(residency().wired_size(), baseline_with_budget + 8 * MB);
 
   set_wired_limit(0);
@@ -134,7 +134,7 @@ TEST_CASE("test lowering the wired limit unwires buffers") {
   set_wired_limit(64 * MB);
   CHECK_GE(residency().wired_size(), baseline_with_budget + 8 * MB);
 
-  allocator::free(buf);
+  allocator::allocator().free(buf);
 }
 
 TEST_CASE("test residency accounting is exact across free/realloc cycles") {
@@ -147,9 +147,9 @@ TEST_CASE("test residency accounting is exact across free/realloc cycles") {
   const size_t baseline = residency().wired_size();
 
   for (int i = 0; i < 32; ++i) {
-    auto buf = allocator::malloc(8 * MB);
+    auto buf = allocator::allocator().malloc(8 * MB);
     CHECK_GE(residency().wired_size(), baseline + 8 * MB);
-    allocator::free(buf);
+    allocator::allocator().free(buf);
     // Exact: erase subtracts the bytes recorded at insert, so repeated
     // cycles must not drift the running total.
     CHECK_EQ(residency().wired_size(), baseline);
@@ -170,7 +170,7 @@ TEST_CASE("test wired allocations are spread across size-capped sets") {
   // Each buffer is over half the cap, so no two share a set.
   std::vector<allocator::Buffer> bufs;
   for (int i = 0; i < 8; ++i) {
-    bufs.push_back(allocator::malloc(5 * MB));
+    bufs.push_back(allocator::allocator().malloc(5 * MB));
   }
   CHECK_EQ(residency().wired_size(), baseline + 8 * 5 * MB);
   CHECK_GT(residency().num_sets(), baseline_sets);
@@ -183,7 +183,7 @@ TEST_CASE("test wired allocations are spread across size-capped sets") {
 
   const size_t sets_before = residency().num_sets();
   for (auto buf : bufs) {
-    allocator::free(buf);
+    allocator::allocator().free(buf);
   }
   CHECK_EQ(residency().wired_size(), baseline);
 
@@ -192,11 +192,11 @@ TEST_CASE("test wired allocations are spread across size-capped sets") {
   for (int cycle = 0; cycle < 4; ++cycle) {
     std::vector<allocator::Buffer> again;
     for (int i = 0; i < 8; ++i) {
-      again.push_back(allocator::malloc(5 * MB));
+      again.push_back(allocator::allocator().malloc(5 * MB));
     }
     CHECK_EQ(residency().num_sets(), sets_before);
     for (auto buf : again) {
-      allocator::free(buf);
+      allocator::allocator().free(buf);
     }
   }
   CHECK_EQ(residency().wired_size(), baseline);
@@ -215,7 +215,7 @@ TEST_CASE("test the set count stays within the command queue limit") {
 
   std::vector<allocator::Buffer> bufs;
   for (int i = 0; i < 64; ++i) {
-    bufs.push_back(allocator::malloc(2 * MB));
+    bufs.push_back(allocator::allocator().malloc(2 * MB));
   }
   CHECK_LE(residency().num_sets(), 32);
   CHECK_EQ(residency().wired_size(), baseline + 64 * 2 * MB);
@@ -224,7 +224,7 @@ TEST_CASE("test the set count stays within the command queue limit") {
   check_gpu_work();
 
   for (auto buf : bufs) {
-    allocator::free(buf);
+    allocator::allocator().free(buf);
   }
   CHECK_EQ(residency().wired_size(), baseline);
 }
@@ -238,11 +238,11 @@ TEST_CASE("test an allocation larger than the set cap is still wired") {
   set_wired_limit(128 * MB);
   const size_t baseline = residency().wired_size();
 
-  auto big = allocator::malloc(32 * MB);
+  auto big = allocator::allocator().malloc(32 * MB);
   CHECK_EQ(residency().wired_size(), baseline + 32 * MB);
   check_gpu_work();
 
-  allocator::free(big);
+  allocator::allocator().free(big);
   CHECK_EQ(residency().wired_size(), baseline);
 }
 
@@ -258,13 +258,13 @@ TEST_CASE("test a set cap of zero keeps everything in one set") {
 
   std::vector<allocator::Buffer> bufs;
   for (int i = 0; i < 16; ++i) {
-    bufs.push_back(allocator::malloc(4 * MB));
+    bufs.push_back(allocator::allocator().malloc(4 * MB));
   }
   CHECK_EQ(residency().num_sets(), baseline_sets);
   CHECK_EQ(residency().wired_size(), baseline + 16 * 4 * MB);
 
   for (auto buf : bufs) {
-    allocator::free(buf);
+    allocator::allocator().free(buf);
   }
   CHECK_EQ(residency().wired_size(), baseline);
 }
@@ -280,17 +280,17 @@ TEST_CASE("test the wired limit is used up to its boundary") {
   const size_t baseline = residency().wired_size();
   set_wired_limit(baseline + 4 * MB);
 
-  auto first = allocator::malloc(4 * MB);
+  auto first = allocator::allocator().malloc(4 * MB);
   CHECK_EQ(residency().wired_size(), baseline + 4 * MB);
 
   // The budget is exactly full: the next allocation is tracked but not wired.
-  auto second = allocator::malloc(4 * MB);
+  auto second = allocator::allocator().malloc(4 * MB);
   CHECK_EQ(residency().wired_size(), baseline + 4 * MB);
 
   // Freeing the wired one does not promote the pending one.
-  allocator::free(first);
+  allocator::allocator().free(first);
   CHECK_EQ(residency().wired_size(), baseline);
 
-  allocator::free(second);
+  allocator::allocator().free(second);
   CHECK_EQ(residency().wired_size(), baseline);
 }

@@ -108,10 +108,15 @@ array::array(
   }
 }
 
+array::array(allocator::Data data, Shape shape, Dtype dtype)
+    : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
+  set_data(std::move(data));
+}
+
 /* Build an array from a shared buffer */
 array::array(allocator::Buffer data, Shape shape, Dtype dtype, Deleter deleter)
     : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
-  set_data(data, deleter);
+  set_data(data, std::move(deleter));
 }
 
 void array::detach() {
@@ -166,14 +171,31 @@ bool array::is_tracer() const {
       detail::retain_graph();
 }
 
-void array::set_data(allocator::Buffer buffer, Deleter d) {
-  array_desc_->data = std::make_shared<Data>(buffer, d);
+void array::set_data(allocator::Data data) {
+  array_desc_->data = std::make_shared<Data>(std::move(data));
   array_desc_->offset = 0;
   array_desc_->data_size = size();
   array_desc_->flags.contiguous = true;
   array_desc_->flags.row_contiguous = true;
   auto max_dim = std::max_element(shape().begin(), shape().end());
   array_desc_->flags.col_contiguous = size() <= 1 || size() == *max_dim;
+}
+
+void array::set_data(allocator::Buffer buffer, Deleter d) {
+  set_data(Data(buffer, std::move(d)));
+}
+
+void array::set_data(
+    allocator::Data data,
+    size_t data_size,
+    Strides strides,
+    Flags flags,
+    int64_t offset) {
+  array_desc_->data = std::make_shared<Data>(std::move(data));
+  array_desc_->offset = offset;
+  array_desc_->data_size = data_size;
+  array_desc_->strides = std::move(strides);
+  array_desc_->flags = flags;
 }
 
 void array::set_data(
@@ -183,11 +205,8 @@ void array::set_data(
     Flags flags,
     int64_t offset,
     Deleter d) {
-  array_desc_->data = std::make_shared<Data>(buffer, d);
-  array_desc_->offset = offset;
-  array_desc_->data_size = data_size;
-  array_desc_->strides = std::move(strides);
-  array_desc_->flags = flags;
+  set_data(
+      Data(buffer, std::move(d)), data_size, std::move(strides), flags, offset);
 }
 
 void array::copy_shared_buffer(
