@@ -121,7 +121,7 @@ inline int get_qmv_batch_limit(int D, int O, metal::Device& d) {
         } else if (D <= 4096 && O <= 4096) {
           return 10;
         } else {
-          return 6;
+          return (arch_gen == 13 && arch_size == 's') ? 7 : 6;
         }
     }
   } else {
