@@ -86,7 +86,7 @@ class Data {
   }
   Buffer buffer() const&& = delete;
 
-  bool owned() const {
+  bool is_owned() const {
     return !deleter_;
   }
 
