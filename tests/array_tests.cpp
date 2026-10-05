@@ -599,7 +599,7 @@ TEST_CASE("test array shared buffer") {
   };
 
   array a = ones(shape, float32);
-  array b = array(buf_b, shape, float32, deleter);
+  array b = array(allocator::Data(buf_b, deleter), shape, float32);
 
   eval(a + b);
 }
@@ -658,7 +658,7 @@ TEST_CASE("test user buffer is not donated") {
 
 TEST_CASE("test null deleter throws") {
   CHECK_THROWS_AS(
-      array(allocator::Buffer(nullptr), Shape{1}, float32, nullptr),
+      allocator::Data(allocator::Buffer(nullptr), nullptr),
       std::invalid_argument);
 }
 

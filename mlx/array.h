@@ -19,7 +19,6 @@ namespace mlx::core {
 // Forward declaration
 class Primitive;
 
-using Deleter = allocator::Deleter;
 using ShapeElem = int32_t;
 using Shape = SmallVector<ShapeElem>;
 using Strides = SmallVector<int64_t>;
@@ -71,13 +70,6 @@ class MLX_API array {
 
   /* Build an array from data */
   explicit array(allocator::Data data, Shape shape, Dtype dtype);
-
-  /* Build an array from a buffer */
-  explicit array(
-      allocator::Buffer data,
-      Shape shape,
-      Dtype dtype,
-      Deleter deleter);
 
   /** Assignment to rvalue does not compile. */
   array& operator=(const array& other) && = delete;

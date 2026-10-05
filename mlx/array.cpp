@@ -111,10 +111,6 @@ array::array(allocator::Data data, Shape shape, Dtype dtype)
   set_data(std::move(data));
 }
 
-/* Build an array from a shared buffer */
-array::array(allocator::Buffer data, Shape shape, Dtype dtype, Deleter deleter)
-    : array(Data(data, std::move(deleter)), std::move(shape), dtype) {}
-
 void array::detach() {
   array_desc_->primitive = nullptr;
   for (auto& s : array_desc_->siblings) {
