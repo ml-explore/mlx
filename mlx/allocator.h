@@ -60,7 +60,7 @@ MLX_API Allocator& allocator();
 
 using Deleter = std::function<void(Buffer)>;
 
-// A null deleter means the allocator owns the buffer
+// The allocator owns data from malloc
 class Data {
  public:
   Data(Buffer buffer, Deleter d) : buffer_(buffer), deleter_(std::move(d)) {
@@ -81,9 +81,10 @@ class Data {
     }
   }
 
-  Buffer buffer() const {
+  Buffer buffer() const& {
     return buffer_;
   }
+  Buffer buffer() const&& = delete;
 
   bool owned() const {
     return !deleter_;
