@@ -660,11 +660,6 @@ TEST_CASE("test null deleter throws") {
   CHECK_THROWS_AS(
       array(allocator::Buffer(nullptr), Shape{1}, float32, nullptr),
       std::invalid_argument);
-
-  array a(Shape{1}, float32, nullptr, {});
-  CHECK_THROWS_AS(
-      a.set_data(allocator::Buffer(nullptr), 1, {1}, {}, 0),
-      std::invalid_argument);
 }
 
 TEST_CASE("test negative indexing for shape/strides") {

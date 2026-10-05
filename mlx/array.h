@@ -435,31 +435,12 @@ class MLX_API array {
 
   void set_data(allocator::Data data);
 
-  void set_data(allocator::Buffer buffer, Deleter d);
-
-  void set_data(
-      allocator::Buffer buffer,
-      size_t data_size,
-      Strides strides,
-      Flags flags,
-      Deleter d) {
-    set_data(buffer, data_size, std::move(strides), flags, 0, std::move(d));
-  }
-
   void set_data(
       allocator::Data data,
       size_t data_size,
       Strides strides,
       Flags flags,
       int64_t offset = 0);
-
-  void set_data(
-      allocator::Buffer buffer,
-      size_t data_size,
-      Strides strides,
-      Flags flags,
-      int64_t offset,
-      Deleter d);
 
   void copy_shared_buffer(
       const array& other,

@@ -60,13 +60,11 @@ std::vector<array> array::make_arrays(
 array array::unsafe_weak_copy(const array& other) {
   auto cpy = array(other.shape(), other.dtype(), nullptr, {});
   cpy.set_data(
-      other.buffer(),
+      Data(other.buffer(), [](auto) {}),
       other.data_size(),
       other.strides(),
       other.flags(),
-      0,
-      [](auto) {});
-  cpy.array_desc_->offset = other.array_desc_->offset;
+      other.offset());
   return cpy;
 }
 
@@ -104,7 +102,7 @@ array::array(
       allocator::release(buffer);
       return deleter(ptr);
     };
-    set_data(buffer, std::move(wrapped_deleter));
+    set_data(Data(buffer, std::move(wrapped_deleter)));
   }
 }
 
@@ -115,9 +113,7 @@ array::array(allocator::Data data, Shape shape, Dtype dtype)
 
 /* Build an array from a shared buffer */
 array::array(allocator::Buffer data, Shape shape, Dtype dtype, Deleter deleter)
-    : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
-  set_data(data, std::move(deleter));
-}
+    : array(Data(data, std::move(deleter)), std::move(shape), dtype) {}
 
 void array::detach() {
   array_desc_->primitive = nullptr;
@@ -181,10 +177,6 @@ void array::set_data(allocator::Data data) {
   array_desc_->flags.col_contiguous = size() <= 1 || size() == *max_dim;
 }
 
-void array::set_data(allocator::Buffer buffer, Deleter d) {
-  set_data(Data(buffer, std::move(d)));
-}
-
 void array::set_data(
     allocator::Data data,
     size_t data_size,
@@ -196,17 +188,6 @@ void array::set_data(
   array_desc_->data_size = data_size;
   array_desc_->strides = std::move(strides);
   array_desc_->flags = flags;
-}
-
-void array::set_data(
-    allocator::Buffer buffer,
-    size_t data_size,
-    Strides strides,
-    Flags flags,
-    int64_t offset,
-    Deleter d) {
-  set_data(
-      Data(buffer, std::move(d)), data_size, std::move(strides), flags, offset);
 }
 
 void array::copy_shared_buffer(
