@@ -348,11 +348,8 @@ class MLX_API array {
     return array_desc_->data_size;
   }
 
-  allocator::Buffer& buffer() {
-    return array_desc_->data->buffer;
-  }
-  const allocator::Buffer& buffer() const {
-    return array_desc_->data->buffer;
+  allocator::Buffer buffer() const {
+    return array_desc_->data->buffer();
   }
 
   size_t buffer_size() const {

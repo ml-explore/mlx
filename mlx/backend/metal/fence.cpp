@@ -31,7 +31,7 @@ struct FenceImpl {
   std::unique_ptr<Event> event;
 
   MTL::Buffer* buffer() {
-    return static_cast<MTL::Buffer*>(fence->buffer.ptr());
+    return static_cast<MTL::Buffer*>(fence->buffer().ptr());
   }
 
   std::atomic_uint* cpu_value() {

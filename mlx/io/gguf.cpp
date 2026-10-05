@@ -89,7 +89,7 @@ std::tuple<allocator::Data, Dtype> extract_tensor_data(gguf_tensor* tensor) {
     }
     auto out = allocator::malloc(tensor->bsize);
     memcpy(
-        out.buffer.raw_ptr(),
+        out.buffer().raw_ptr(),
         tensor->weights_data,
         tensor->num_weights * equivalent_dtype.value().size());
     return {std::move(out), equivalent_dtype.value()};
@@ -102,7 +102,7 @@ std::tuple<allocator::Data, Dtype> extract_tensor_data(gguf_tensor* tensor) {
   }
   const size_t new_size = tensor->num_weights * sizeof(int16_t);
   auto out = allocator::malloc(new_size);
-  memcpy(out.buffer.raw_ptr(), data, new_size);
+  memcpy(out.buffer().raw_ptr(), data, new_size);
   free(data);
   return {std::move(out), float16};
 }

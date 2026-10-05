@@ -18,7 +18,7 @@ void general_inv(T* inv, int N) {
       /* n = */ &N,
       /* a = */ inv,
       /* lda = */ &N,
-      /* ipiv = */ static_cast<int*>(ipiv.buffer.raw_ptr()),
+      /* ipiv = */ static_cast<int*>(ipiv.buffer().raw_ptr()),
       /* info = */ &info);
 
   if (info != 0) {
@@ -56,8 +56,8 @@ void general_inv(T* inv, int N) {
       /* m = */ &N,
       /* a = */ inv,
       /* lda = */ &N,
-      /* ipiv = */ static_cast<int*>(ipiv.buffer.raw_ptr()),
-      /* work = */ static_cast<T*>(scratch.buffer.raw_ptr()),
+      /* ipiv = */ static_cast<int*>(ipiv.buffer().raw_ptr()),
+      /* work = */ static_cast<T*>(scratch.buffer().raw_ptr()),
       /* lwork = */ &lwork,
       /* info = */ &info);
 

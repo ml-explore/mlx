@@ -70,8 +70,8 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
             &N,
             in_ptr + M * N * i,
             &lda,
-            static_cast<T*>(tau.buffer.raw_ptr()) + num_reflectors * i,
-            static_cast<T*>(work.buffer.raw_ptr()),
+            static_cast<T*>(tau.buffer().raw_ptr()) + num_reflectors * i,
+            static_cast<T*>(work.buffer().raw_ptr()),
             &lwork,
             &info);
       }
@@ -114,8 +114,8 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
           &num_reflectors,
           in_ptr + M * N * i,
           &lda,
-          static_cast<T*>(tau.buffer.raw_ptr()) + num_reflectors * i,
-          static_cast<T*>(work.buffer.raw_ptr()),
+          static_cast<T*>(tau.buffer().raw_ptr()) + num_reflectors * i,
+          static_cast<T*>(work.buffer().raw_ptr()),
           &lwork,
           &info);
     }

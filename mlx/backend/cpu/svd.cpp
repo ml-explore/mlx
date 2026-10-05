@@ -55,7 +55,7 @@ struct SVDWork<
         /* ldvt = */ &ldvt,
         /* work = */ &workspace_dimension,
         /* lwork = */ &lwork_query,
-        /* iwork = */ static_cast<int*>(buffers[0].buffer.raw_ptr()),
+        /* iwork = */ static_cast<int*>(buffers[0].buffer().raw_ptr()),
         /* info = */ &info);
 
     if (info != 0) {
@@ -84,9 +84,9 @@ struct SVDWork<
         // According to the identity above, lapack will write Uᵀ as Vᵀ.
         /* vt = */ vt,
         /* ldvt = */ &ldvt,
-        /* work = */ static_cast<T*>(buffers[1].buffer.raw_ptr()),
+        /* work = */ static_cast<T*>(buffers[1].buffer().raw_ptr()),
         /* lwork = */ &lwork,
-        /* iwork = */ static_cast<int*>(buffers[0].buffer.raw_ptr()),
+        /* iwork = */ static_cast<int*>(buffers[0].buffer().raw_ptr()),
         /* info = */ &info);
 
     if (info != 0) {
@@ -143,8 +143,8 @@ struct SVDWork<std::complex<float>> {
         /* ldvt = */ &ldvt,
         /* work = */ &workspace_dimension,
         /* lwork = */ &lwork_query,
-        /* rwork = */ static_cast<float*>(buffers[1].buffer.raw_ptr()),
-        /* iwork = */ static_cast<int*>(buffers[0].buffer.raw_ptr()),
+        /* rwork = */ static_cast<float*>(buffers[1].buffer().raw_ptr()),
+        /* iwork = */ static_cast<int*>(buffers[0].buffer().raw_ptr()),
         /* info = */ &info);
 
     if (info != 0) {
@@ -173,10 +173,10 @@ struct SVDWork<std::complex<float>> {
         // According to the identity above, lapack will write Uᵀ as Vᵀ.
         /* vt = */ vt,
         /* ldvt = */ &ldvt,
-        /* work = */ static_cast<T*>(buffers[2].buffer.raw_ptr()),
+        /* work = */ static_cast<T*>(buffers[2].buffer().raw_ptr()),
         /* lwork = */ &lwork,
-        /* rwork = */ static_cast<float*>(buffers[1].buffer.raw_ptr()),
-        /* iwork = */ static_cast<int*>(buffers[0].buffer.raw_ptr()),
+        /* rwork = */ static_cast<float*>(buffers[1].buffer().raw_ptr()),
+        /* iwork = */ static_cast<int*>(buffers[0].buffer().raw_ptr()),
         /* info = */ &info);
 
     if (info != 0) {

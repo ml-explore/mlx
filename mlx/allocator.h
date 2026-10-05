@@ -63,34 +63,37 @@ using Deleter = std::function<void(Buffer)>;
 // A null deleter means the allocator owns the buffer
 class Data {
  public:
-  Buffer buffer;
-
-  Data(Buffer buffer, Deleter d) : buffer(buffer), d(std::move(d)) {
-    if (!this->d) {
+  Data(Buffer buffer, Deleter d) : buffer_(buffer), deleter_(std::move(d)) {
+    if (!deleter_) {
       throw std::invalid_argument("[Data] Deleter must not be null.");
     }
   }
   Data(const Data& other) = delete;
   Data& operator=(const Data& other) = delete;
   Data(Data&& other) noexcept
-      : buffer(std::exchange(other.buffer, Buffer(nullptr))),
-        d(std::exchange(other.d, nullptr)) {}
+      : buffer_(std::exchange(other.buffer_, Buffer(nullptr))),
+        deleter_(std::exchange(other.deleter_, nullptr)) {}
   ~Data() {
-    if (d) {
-      d(buffer);
-    } else if (buffer.ptr()) {
-      allocator().free(buffer);
+    if (deleter_) {
+      deleter_(buffer_);
+    } else if (buffer_.ptr()) {
+      allocator().free(buffer_);
     }
   }
 
+  Buffer buffer() const {
+    return buffer_;
+  }
+
   bool owned() const {
-    return !d;
+    return !deleter_;
   }
 
  private:
-  Deleter d;
+  Buffer buffer_;
+  Deleter deleter_;
 
-  explicit Data(Buffer buffer) : buffer(buffer) {}
+  explicit Data(Buffer buffer) : buffer_(buffer) {}
   friend Data malloc(size_t size);
   friend class cu::CudaAllocator;
 };
