@@ -559,6 +559,40 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 )
                 self.assertLess((y_ref - y).abs().max(), 1e-3)
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_splitk_keeps_partials_in_fp32(self):
+        # The split-K kernels accumulate one float32 partial per K-partition.
+        # Storing those partials in the input dtype rounds each of them, so
+        # the error grows with the split factor instead of matching a single
+        # rounding of the exact product (issue #4613).
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        tests = [
+            # M, K, N: K large enough that the split factor exceeds 1
+            (16, 4096, 1024),
+            (33, 4096, 1024),
+            (1, 9728, 2560),  # vector path (qvm_split_k)
+        ]
+        for M, K, N in tests:
+            with self.subTest(M=M, K=K, N=N):
+                x = mx.random.normal((M, K), key=k1).astype(mx.bfloat16)
+                w = (mx.random.normal((N, K), key=k2) * 0.02).astype(mx.bfloat16)
+                wq, scales, biases = mx.quantize(w, group_size=64, bits=4)
+                w_hat = mx.dequantize(
+                    wq, scales, biases, group_size=64, bits=4
+                ).astype(mx.float32)
+                reference = (x.astype(mx.float32) @ w_hat.T).astype(mx.float32)
+                rounding = (
+                    mx.abs(reference.astype(mx.bfloat16).astype(mx.float32) - reference)
+                    .mean()
+                    .item()
+                )
+                y = mx.quantized_matmul(
+                    x, wq, scales, biases, transpose=True, group_size=64, bits=4
+                )
+                error = mx.abs(y.astype(mx.float32) - reference).mean().item()
+                self.assertLess(error / rounding, 1.5)
+
     def test_qmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)

@@ -693,7 +693,9 @@ void qvm_split_k(
     temp_shape.insert(temp_shape.begin(), 1);
   }
   temp_shape.insert(temp_shape.end() - 2, split_k);
-  array intermediate(temp_shape, x.dtype(), nullptr, {});
+  // Keep split-K partials in float32 like steel_matmul_splitk does, so each
+  // partition's accumulator is rounded only once, on the final write to out.
+  array intermediate(temp_shape, float32, nullptr, {});
   intermediate.set_data(allocator::malloc(intermediate.nbytes()));
   compute_encoder.add_temporary(intermediate);
 
@@ -749,8 +751,12 @@ void qvm_split_k(
       ReductionOpType::ContiguousStridedReduce,
       {intermediate.shape(axis)},
       {intermediate.strides(axis)});
+  array result(out.shape(), float32, nullptr, {});
+  result.set_data(allocator::malloc(result.nbytes()));
+  compute_encoder.add_temporary(result);
   strided_reduce_general_dispatch(
-      intermediate, out, "sum", plan, {axis}, compute_encoder, d, s);
+      intermediate, result, "sum", plan, {axis}, compute_encoder, d, s);
+  copy_gpu(result, out, CopyType::Scalar, s);
 }
 
 void qvm(
@@ -1215,7 +1221,9 @@ void qmm_splitk(
     temp_shape.insert(temp_shape.begin(), 1);
   }
   temp_shape.insert(temp_shape.begin(), split_k);
-  array intermediate(temp_shape, x.dtype(), nullptr, {});
+  // Keep split-K partials in float32 like steel_matmul_splitk does, so each
+  // partition's accumulator is rounded only once, on the final write to out.
+  array intermediate(temp_shape, float32, nullptr, {});
   intermediate.set_data(allocator::malloc(intermediate.nbytes()));
   compute_encoder.add_temporary(intermediate);
 
@@ -1262,8 +1270,12 @@ void qmm_splitk(
       ReductionOpType::ContiguousStridedReduce,
       {intermediate.shape(0)},
       {intermediate.strides(0)});
+  array result(out.shape(), float32, nullptr, {});
+  result.set_data(allocator::malloc(result.nbytes()));
+  compute_encoder.add_temporary(result);
   strided_reduce_general_dispatch(
-      intermediate, out, "sum", plan, {0}, compute_encoder, d, s);
+      intermediate, result, "sum", plan, {0}, compute_encoder, d, s);
+  copy_gpu(result, out, CopyType::Scalar, s);
 }
 
 void gather_qmm(

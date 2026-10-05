@@ -695,13 +695,13 @@ METAL_FUNC void fp_qmv_wide_impl(
   }
 }
 
-template <typename T, int group_size, int bits, bool has_global_scale = false>
+template <typename T, int group_size, int bits, bool has_global_scale = false, typename OutT = T>
 METAL_FUNC void fp_qvm_impl(
     const device uint32_t* w,
     const device uint8_t* scales,
     const device float* global_scale,
     const device T* x,
-    device T* y,
+    device OutT* y,
     const int in_vec_size,
     const int out_vec_size,
     const int in_vec_stride,
@@ -797,9 +797,9 @@ METAL_FUNC void fp_qvm_impl(
 #pragma clang loop unroll(full)
     for (int k = 0; k < tn * pack_factor; k++) {
       if constexpr (has_global_scale) {
-        y[k] = static_cast<T>(result[k] * inv_scale_enc);
+        y[k] = static_cast<OutT>(result[k] * inv_scale_enc);
       } else {
-        y[k] = static_cast<T>(result[k]);
+        y[k] = static_cast<OutT>(result[k]);
       }
     }
   }
@@ -813,13 +813,14 @@ template <
     const bool has_global_scale = false,
     const int BM = 32,
     const int BK = 32,
-    const int BN = 32>
+    const int BN = 32,
+    typename OutT = T>
 METAL_FUNC void fp_qmm_t_impl(
     const device uint32_t* w,
     const device uint8_t* scales,
     const device float* global_scale,
     const device T* x,
-    device T* y,
+    device OutT* y,
     threadgroup T* Xs,
     threadgroup T* Ws,
     const constant int& K,
@@ -844,7 +845,7 @@ METAL_FUNC void fp_qmm_t_impl(
 
   // Instantiate the appropriate BlockMMA and Loader
   using mma_t = mlx::steel::
-      BlockMMA<T, T, BM, BN, BK, WM, WN, false, true, BK_padded, BK_padded>;
+      BlockMMA<T, OutT, BM, BN, BK, WM, WN, false, true, BK_padded, BK_padded>;
   using loader_x_t =
       mlx::steel::BlockLoader<T, BM, BK, BK_padded, 1, WM * WN * SIMD_SIZE>;
   using loader_w_t = QuantizedBlockLoader<
@@ -1475,7 +1476,7 @@ template <typename T, const int group_size, int bits, int split_k = 32>
     const device uint32_t* w,
     const device uint8_t* scales,
     const device T* x,
-    device T* y,
+    device float* y,
     const constant int& in_vec_size,
     const constant int& out_vec_size,
     const constant int& x_batch_ndims,
@@ -1512,7 +1513,7 @@ template <typename T, const int group_size, int bits, int split_k = 32>
   // The in_vec_stride is the full K dimension, not the partition size
   int in_vec_stride = (split_k - 1) * in_vec_size + final_block_size;
 
-  fp_qvm_impl<T, group_size, bits, false>(
+  fp_qvm_impl<T, group_size, bits, false, float>(
       w,
       scales,
       nullptr,
@@ -1928,7 +1929,7 @@ template <
     const device uint32_t* w [[buffer(0)]],
     const device uint8_t* scales [[buffer(1)]],
     const device T* x [[buffer(2)]],
-    device T* y [[buffer(3)]],
+    device float* y [[buffer(3)]],
     const constant int& K [[buffer(4)]],
     const constant int& N [[buffer(5)]],
     const constant int& M [[buffer(6)]],
@@ -1953,7 +1954,7 @@ template <
   scales += k_start / group_size;
   y += tid.z * static_cast<int64_t>(split_k_partition_stride);
 
-  fp_qmm_t_impl<T, group_size, bits, aligned_N, false, BM, BK, BN>(
+  fp_qmm_t_impl<T, group_size, bits, aligned_N, false, BM, BK, BN, float>(
       (const device uint32_t*)wl,
       scales,
       nullptr,
