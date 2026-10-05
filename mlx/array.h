@@ -242,13 +242,10 @@ class MLX_API array {
     allocator::Buffer buffer;
     Deleter d;
     bool owned;
-    // A null deleter means MLX allocated the buffer
-    Data(allocator::Buffer buffer, Deleter d = nullptr)
-        : buffer(buffer), d(std::move(d)), owned(!this->d) {
-      if (owned) {
-        this->d = allocator::free;
-      }
-    }
+    explicit Data(allocator::Buffer buffer)
+        : buffer(buffer), d(allocator::free), owned(true) {}
+    Data(allocator::Buffer buffer, Deleter d)
+        : buffer(buffer), d(std::move(d)), owned(false) {}
     // Not copyable
     Data(const Data& d) = delete;
     Data& operator=(const Data& d) = delete;
@@ -456,6 +453,7 @@ class MLX_API array {
   // Check if the array is a tracer array
   bool is_tracer() const;
 
+  // A null deleter means MLX allocated the buffer
   void set_data(allocator::Buffer buffer, Deleter d = nullptr);
 
   void set_data(

@@ -167,7 +167,8 @@ bool array::is_tracer() const {
 }
 
 void array::set_data(allocator::Buffer buffer, Deleter d) {
-  array_desc_->data = std::make_shared<Data>(buffer, d);
+  array_desc_->data = d ? std::make_shared<Data>(buffer, std::move(d))
+                        : std::make_shared<Data>(buffer);
   array_desc_->offset = 0;
   array_desc_->data_size = size();
   array_desc_->flags.contiguous = true;
@@ -183,7 +184,8 @@ void array::set_data(
     Flags flags,
     int64_t offset,
     Deleter d) {
-  array_desc_->data = std::make_shared<Data>(buffer, d);
+  array_desc_->data = d ? std::make_shared<Data>(buffer, std::move(d))
+                        : std::make_shared<Data>(buffer);
   array_desc_->offset = offset;
   array_desc_->data_size = data_size;
   array_desc_->strides = std::move(strides);
