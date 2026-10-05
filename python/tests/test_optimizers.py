@@ -15,10 +15,10 @@ from mlx.utils import tree_flatten, tree_map, tree_unflatten
 
 try:
     import torch
-    import torch.nn.functional as F
+    import torch.nn.functional as F  # noqa: F401
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 
@@ -132,7 +132,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             "first": [mx.zeros((10,)), mx.zeros((1,))],
             "second": mx.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        _grads = tree_map(lambda x: mx.ones_like(x), params)
 
         # Explicit init
         optim = opt.Adagrad(learning_rate=1e-2)
@@ -150,7 +150,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             "first": [mx.zeros((10,)), mx.zeros((1,))],
             "second": mx.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        _grads = tree_map(lambda x: mx.ones_like(x), params)
 
         # Explicit init
         optim = opt.AdaDelta(learning_rate=1e-2)
@@ -263,7 +263,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             "first": [mx.zeros((10,)), mx.zeros((1,))],
             "second": mx.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        _grads = tree_map(lambda x: mx.ones_like(x), params)
 
         # Explicit init
         optim = opt.Lion(learning_rate=1e-2)
@@ -406,7 +406,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         uncompiled_params = model.parameters()
 
         # Pure version
-        def loss(params, x):
+        def loss(params, x):  # noqa: F811
             model.update(params)
             return model(x).sum()
 
@@ -426,7 +426,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(pure_params["bias"], uncompiled_params["bias"]))
 
         # Impure version
-        def loss(model, x):
+        def loss(model, x):  # noqa: F811
             return model(x).sum()
 
         model.update(orig_params)

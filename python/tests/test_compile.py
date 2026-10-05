@@ -91,7 +91,10 @@ class TestCompile(mlx_tests.MLXTestCase):
     def test_compile_float_constant_precision(self):
         x = mx.ones((4,), dtype=mx.float32)
         for constant in (1 / 3, 128**-0.5, 0.7071067811865476):
-            fun = lambda x, constant=constant: (x * x) * constant
+
+            def fun(x, constant=constant):
+                return (x * x) * constant
+
             self.assertTrue(mx.array_equal(mx.compile(fun)(x), fun(x)))
 
     def test_compile_tuple_output_in_thread(self):
@@ -301,7 +304,7 @@ class TestCompile(mlx_tests.MLXTestCase):
             buf = io.StringIO()
             mx.export_to_dot(buf, outputs)
             buf.seek(0)
-            return len([l for l in buf.read().split() if "label" in l])
+            return len([line for line in buf.read().split() if "label" in line])
 
         x = mx.array(1.0)
         cfun = mx.compile(fun)
@@ -902,10 +905,10 @@ class TestCompile(mlx_tests.MLXTestCase):
             return x + y.value
 
         with self.assertRaises(ValueError):
-            out = fun(mx.array(0.0), MyClass())
+            fun(mx.array(0.0), MyClass())
 
         with self.assertRaises(ValueError):
-            out = fun(mx.array(0.0), y=MyClass())
+            fun(mx.array(0.0), y=MyClass())
 
     def test_compile_create_list(self):
         @mx.compile
@@ -933,7 +936,7 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(expected[0], out[0]))
         self.assertTrue(mx.allclose(expected[1], out[1]))
 
-        def fun(w1, w2, x):
+        def fun(w1, w2, x):  # noqa: F811
             x = x @ w1
             y = x @ w2
             x = x + y * y
@@ -1544,7 +1547,7 @@ class TestCompile(mlx_tests.MLXTestCase):
         def transform_vector(t):
             return Vector([t[0] + 10, t[1] * 10])
 
-        x = State(mx.array(1), mx.array(2))
+        _x = State(mx.array(1), mx.array(2))
 
         compiled_transform = mx.compile(transform)
         compiled_transform_tuple = mx.compile(transform_tuple)
@@ -1667,7 +1670,9 @@ class TestCompile(mlx_tests.MLXTestCase):
 
     def test_compile_abs_unsigned(self):
         # abs has to compile for the wider unsigned types too
-        fun = lambda x: mx.abs(x) + 1
+        def fun(x):
+            return mx.abs(x) + 1
+
         for dtype in [mx.uint8, mx.uint16, mx.uint32, mx.uint64]:
             x = mx.array([1, 2, 3], dtype)
             self.assertTrue(mx.array_equal(mx.compile(fun)(x), fun(x)))

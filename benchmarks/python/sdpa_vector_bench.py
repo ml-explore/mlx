@@ -157,8 +157,7 @@ def benchmark_shape(shape, args, architecture):
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Benchmark single-token decode through the Metal "
-            "sdpa_vector_2pass kernels."
+            "Benchmark single-token decode through the Metal sdpa_vector_2pass kernels."
         )
     )
     parser.add_argument(

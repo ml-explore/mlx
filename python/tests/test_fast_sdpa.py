@@ -5,7 +5,6 @@ from itertools import product
 
 import mlx.core as mx
 import mlx_tests
-import numpy as np
 
 
 def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
@@ -27,7 +26,6 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
     scores = q @ mx.swapaxes(k, -1, -2)
     is_causal = mask == "causal"
     if mask is not None:
-
         if is_causal:
             offset = kL - L
             q_indices = mx.arange(L) + offset
@@ -1184,20 +1182,25 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             mask_bool = mx.random.uniform(0, 1, (B, N_q, T, T), dtype=mx.float16) < 0.5
 
             for mask in (None, "causal", mask_additive, mask_bool):
-                sdpa_slow = lambda q, k, v: mlx_ref_attn(
-                    q, k, v, scale=scale, mask=mask
-                )
-                sdpa_fast = lambda q, k, v: mx.fast.scaled_dot_product_attention(
-                    q, k, v, scale=scale, mask=mask
-                )
+
+                def sdpa_slow(q, k, v):
+                    return mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+
+                def sdpa_fast(q, k, v):
+                    return mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, mask=mask
+                    )
+
                 test_vjp(sdpa_slow, sdpa_fast, [q, k, v])
 
-                loss_slow = lambda q, k, v: mlx_ref_attn(
-                    q, k, v, scale=scale, mask=mask
-                ).sum()
-                loss_fast = lambda q, k, v: mx.fast.scaled_dot_product_attention(
-                    q, k, v, scale=scale, mask=mask
-                ).sum()
+                def loss_slow(q, k, v):
+                    return mlx_ref_attn(q, k, v, scale=scale, mask=mask).sum()
+
+                def loss_fast(q, k, v):
+                    return mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, mask=mask
+                    ).sum()
+
                 test_grad(loss_slow, loss_fast, [q, k, v])
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")

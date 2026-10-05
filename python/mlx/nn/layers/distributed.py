@@ -7,7 +7,6 @@ from typing import Callable, Optional, Union
 import mlx.core as mx
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.linear import Linear
-from mlx.nn.layers.quantized import QuantizedLinear
 from mlx.utils import tree_flatten, tree_map_with_path, tree_unflatten
 
 

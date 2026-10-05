@@ -11,7 +11,7 @@ try:
     import torch
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 
@@ -473,7 +473,10 @@ class TestFFT(mlx_tests.MLXTestCase):
     def test_fft_vmap(self):
         for fftn, a_np, axes in self.make_ffts():
             a = mx.array(a_np)
-            f = lambda x: fftn(x, axes=axes)
+
+            def f(x):
+                return fftn(x, axes=axes)
+
             expected = mx.stack([f(a[i]) for i in range(a.shape[0])])
             out = mx.vmap(f)(a)
             self.assertEqual(tuple(out.shape), tuple(expected.shape))
@@ -484,7 +487,10 @@ class TestFFT(mlx_tests.MLXTestCase):
         for fftn, a_np, axes in self.make_ffts():
             a = mx.array(a_np)
             t = mx.array(np.random.rand(*a_np.shape).astype(a_np.dtype))
-            f = lambda x: fftn(x, axes=axes)
+
+            def f(x):
+                return fftn(x, axes=axes)
+
             expected = f(t)
             out = mx.jvp(f, [a], [t])[1][0]
             self.assertEqual(tuple(out.shape), tuple(expected.shape))
