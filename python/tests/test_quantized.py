@@ -1719,6 +1719,19 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 mode=mode,
                 **bf16,
             )
+        for mode in ("nvfp4", "mxfp4", "mxfp8"):
+            for K, tol in ((448, 1e-1), (512, 1e-2), (704, 1e-2)):
+                test_shape(
+                    1,
+                    33,
+                    K,
+                    batch_A=(1,),
+                    batch_B=(3,),
+                    lhs_indices=(0,),
+                    rhs_indices=(2, 1, 0, 2, 1, 0, 2, 1, 0),
+                    mode=mode,
+                    **{**bf16, "rtol": tol, "atol": tol},
+                )
 
     def test_gather_qqmm(self):
         if mx.default_device() == mx.cpu:
