@@ -10,8 +10,13 @@
 
 #include "mlx/api.h"
 
+namespace mlx::core::allocator {
+class Data;
+} // namespace mlx::core::allocator
+
 namespace mlx::core::cu {
-class CudaAllocator;
+class CommandEncoder;
+allocator::Data malloc_async(size_t size, CommandEncoder& encoder);
 } // namespace mlx::core::cu
 
 namespace mlx::core::allocator {
@@ -98,7 +103,7 @@ class Data {
 
   explicit Data(Buffer buffer) : buffer_(buffer) {}
   friend Data malloc(size_t size);
-  friend class cu::CudaAllocator;
+  friend Data cu::malloc_async(size_t size, cu::CommandEncoder& encoder);
 };
 
 inline Data malloc(size_t size) {

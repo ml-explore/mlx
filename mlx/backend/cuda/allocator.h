@@ -51,7 +51,6 @@ class CudaAllocator : public allocator::Allocator {
  public:
   Buffer malloc(size_t size) override;
   Buffer malloc_async(size_t size, int device, cudaStream_t stream);
-  allocator::Data malloc_data(size_t size, CommandEncoder& encoder);
   void free(Buffer buffer) override;
   size_t size(Buffer buffer) const override;
 
