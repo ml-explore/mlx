@@ -647,6 +647,14 @@ TEST_CASE("test make array from user buffer") {
   CHECK_EQ(count, 1);
 }
 
+TEST_CASE("test user buffer is not donated") {
+  int size = 4096;
+  std::vector<float> buffer(size, 1.0f);
+  auto out = exp(array(buffer.data(), Shape{size}, float32, [](void*) {}));
+  eval(out);
+  CHECK_EQ(buffer[0], 1.0f);
+}
+
 TEST_CASE("test negative indexing for shape/strides") {
   // 2D array: shape = {2, 3}
   std::vector<float> data(6, 1.0f);

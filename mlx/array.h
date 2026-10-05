@@ -74,7 +74,7 @@ class MLX_API array {
       allocator::Buffer data,
       Shape shape,
       Dtype dtype,
-      Deleter deleter = allocator::free);
+      Deleter deleter = nullptr);
 
   /** Assignment to rvalue does not compile. */
   array& operator=(const array& other) && = delete;
@@ -241,17 +241,25 @@ class MLX_API array {
   struct Data {
     allocator::Buffer buffer;
     Deleter d;
-    Data(allocator::Buffer buffer, Deleter d = allocator::free)
-        : buffer(buffer), d(d) {}
+    bool owned;
+    // A null deleter means MLX allocated the buffer
+    Data(allocator::Buffer buffer, Deleter d = nullptr)
+        : buffer(buffer), d(std::move(d)), owned(!this->d) {
+      if (owned) {
+        this->d = allocator::free;
+      }
+    }
     // Not copyable
     Data(const Data& d) = delete;
     Data& operator=(const Data& d) = delete;
-    Data(Data&& o) : buffer(o.buffer), d(o.d) {
-      o.buffer = allocator::Buffer(nullptr);
-      o.d = [](allocator::Buffer) {};
-    }
+    Data(Data&& o) noexcept
+        : buffer(std::exchange(o.buffer, allocator::Buffer(nullptr))),
+          d(std::exchange(o.d, nullptr)),
+          owned(std::exchange(o.owned, false)) {}
     ~Data() {
-      d(buffer);
+      if (d) {
+        d(buffer);
+      }
     }
   };
 
@@ -302,7 +310,8 @@ class MLX_API array {
 
   /** True indicates the arrays buffer is safe to reuse */
   bool is_donatable() const {
-    return array_desc_.use_count() == 1 && (array_desc_->data.use_count() == 1);
+    return array_desc_.use_count() == 1 &&
+        (array_desc_->data.use_count() == 1) && array_desc_->data->owned;
   }
 
   /** The array's siblings. */
@@ -447,7 +456,7 @@ class MLX_API array {
   // Check if the array is a tracer array
   bool is_tracer() const;
 
-  void set_data(allocator::Buffer buffer, Deleter d = allocator::free);
+  void set_data(allocator::Buffer buffer, Deleter d = nullptr);
 
   void set_data(
       allocator::Buffer buffer,
@@ -464,7 +473,7 @@ class MLX_API array {
       Strides strides,
       Flags flags,
       int64_t offset = 0,
-      Deleter d = allocator::free);
+      Deleter d = nullptr);
 
   void copy_shared_buffer(
       const array& other,
