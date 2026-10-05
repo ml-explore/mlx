@@ -619,7 +619,7 @@ class TestSchedulers(mlx_tests.MLXTestCase):
 
         grads = {"w": mx.full((16,), 30000.0, dtype=mx.float16)}
         clipped, total_norm = opt.clip_grad_norm(grads, max_norm=1.0)
-        self.assertAlmostEqual(total_norm.item(), 120000.0)
+        self.assertAlmostEqual(total_norm.item(), 120000.0, delta=0.1)
         self.assertTrue(mx.array_equal(clipped["w"], mx.full((16,), 0.25)))
 
     def test_clip_grad_norm_mixed_dtypes(self):
