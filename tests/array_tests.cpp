@@ -657,9 +657,9 @@ TEST_CASE("test user buffer is not donated") {
 }
 
 TEST_CASE("test null deleter throws") {
+  allocator::Deleter d;
   CHECK_THROWS_AS(
-      allocator::Data(allocator::Buffer(nullptr), nullptr),
-      std::invalid_argument);
+      allocator::Data(allocator::Buffer(nullptr), d), std::invalid_argument);
 }
 
 TEST_CASE("test negative indexing for shape/strides") {

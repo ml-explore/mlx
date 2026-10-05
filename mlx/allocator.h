@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdlib>
 #include <functional>
 #include <stdexcept>
@@ -68,6 +69,7 @@ class Data {
       throw std::invalid_argument("[Data] Deleter must not be null.");
     }
   }
+  Data(Buffer buffer, std::nullptr_t) = delete;
   Data(const Data& other) = delete;
   Data& operator=(const Data& other) = delete;
   Data(Data&& other) noexcept
