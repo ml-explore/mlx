@@ -10,8 +10,6 @@ from dataclasses import dataclass
 from subprocess import DEVNULL, run
 from typing import Optional
 
-import mlx.core as mx
-
 from .common import (
     Host,
     Hostfile,
@@ -112,7 +110,8 @@ def can_auto_setup(hosts, sshinfo, auto_setup=False):
     has_sudo = all(info.has_sudo for info in sshinfo)
     if not has_sudo and auto_setup:
         log_warning(
-            "Automatic setup requested but the following hosts do not have passwordless sudo"
+            "Automatic setup requested but the following hosts do not have "
+            "passwordless sudo"
         )
         for h, i in zip(hosts, sshinfo):
             if not i.has_sudo:
@@ -188,11 +187,11 @@ class IPConfigurator:
 def parse_hardware_ports(ports_string):
     ports = {}
     port_name = None
-    for l in ports_string.decode("utf-8").split("\n"):
-        if l.startswith("Hardware Port:"):
-            port_name = l.strip()[15:]
-        elif l.startswith("Device:"):
-            ports[port_name] = l.strip()[8:]
+    for line in ports_string.decode("utf-8").split("\n"):
+        if line.startswith("Hardware Port:"):
+            port_name = line.strip()[15:]
+        elif line.startswith("Device:"):
+            ports[port_name] = line.strip()[8:]
             port_name = None
     return ports
 
@@ -343,7 +342,8 @@ def check_valid_mesh(hosts, connectivity, strict=True):
             if connectivity[i][j] <= 0:
                 if strict:
                     log_error(
-                        f"Incomplete mesh, {hosts[i].ssh_hostname} is not connected to {hosts[j].ssh_hostname}"
+                        f"Incomplete mesh, {hosts[i].ssh_hostname} is not connected to "
+                        f"{hosts[j].ssh_hostname}"
                     )
                     log_error()
                     log_error("Try passing --dot to visualize the connectivity")
@@ -432,7 +432,7 @@ def check_ssh_connections(hosts, ignore_unreachable=False):
 
 
 def prepare_ethernet_hostfile(args, hosts):
-    log(args.verbose, f"Preparing an ethernet hostfile")
+    log(args.verbose, "Preparing an ethernet hostfile")
     add_ips(hosts, args.verbose)
 
     hostfile = Hostfile(
@@ -518,7 +518,7 @@ def configure_jaccl_ring(args, hosts, ips, ring, sshinfo):
 
 
 def prepare_tb_hostfile(args, hosts, sshinfo):
-    log(args.verbose, f"Preparing for communication over thunderbolt")
+    log(args.verbose, "Preparing for communication over thunderbolt")
     tb_hosts, uuid_reverse_index = extract_connectivity(hosts, args.verbose)
 
     if args.dot:

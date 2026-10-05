@@ -20,13 +20,12 @@ class MLP(nn.Module):
         ]
 
     def __call__(self, x):
-        for l in self.layers[:-1]:
-            x = nn.relu(l(x))
+        for layer in self.layers[:-1]:
+            x = nn.relu(layer(x))
         return self.layers[-1](x)
 
 
 if __name__ == "__main__":
-
     batch_size = 8
     input_dim = 32
     output_dim = 10

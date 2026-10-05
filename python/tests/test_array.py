@@ -1,7 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import operator
-import os
 import pickle
 import platform
 import sys
@@ -649,7 +648,8 @@ class TestArray(mlx_tests.MLXTestCase):
             expected = mx.stack([x, y], axis=0)
             self.assertEqualArray(z, expected)
 
-            # check heterogeneous construction with mlx arrays and python primitive types
+            # check heterogeneous construction with mlx arrays and python primitive
+            # types
             x, y = mx.array([True], x_t), mx.array([False], y_t)
             z = mx.array([[x, [2.0]], [[3.0], y]])
             expected = mx.array([[[x.item()], [2.0]], [[3.0], [y.item()]]], z.dtype)
@@ -1258,7 +1258,7 @@ class TestArray(mlx_tests.MLXTestCase):
             idx_mlx = [
                 mx.array(idx) if isinstance(idx, np.ndarray) else idx for idx in idx_np
             ]
-            slice_mlx = arr_mlx[tuple(idx_mlx)]
+            _slice_mlx = arr_mlx[tuple(idx_mlx)]
             self.assertTrue(
                 np.array_equal(arr_np[tuple(idx_np)], arr_mlx[tuple(idx_mlx)])
             )
@@ -2080,7 +2080,8 @@ class TestArray(mlx_tests.MLXTestCase):
                 self.assertEqual(mv_mx.shape, mv_np.shape, f"{mlx_dtype}{np_dtype}")
                 # correct buffer format for 8 byte (unsigned) 'long long' is Q/q, see
                 # https://docs.python.org/3.10/library/struct.html#format-characters
-                # numpy returns L/l, as 'long' is equivalent to 'long long' on 64bit machines, so q and l are equivalent
+                # numpy returns L/l, as 'long' is equivalent to 'long long' on 64bit
+                # machines, so q and l are equivalent
                 # see https://github.com/pybind/pybind11/issues/1908
                 if np_dtype == np.uint64:
                     self.assertEqual(mv_mx.format, "Q", f"{mlx_dtype}{np_dtype}")
@@ -2141,7 +2142,7 @@ class TestArray(mlx_tests.MLXTestCase):
         mv = memoryview(a)
         a = None
         self.assertIsNotNone(wr())
-        mv = None
+        del mv
         self.assertIsNone(wr())
 
     def test_buffer_protocol_eval_error(self):
@@ -2157,7 +2158,7 @@ class TestArray(mlx_tests.MLXTestCase):
         a_np = np.array(a, copy=False)
         a = None
         self.assertIsNotNone(wr())
-        a_np = None
+        del a_np
         self.assertIsNone(wr())
 
     def test_create_from_buffer(self):
@@ -2955,7 +2956,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(f"{b:.1f}", "0.4")
 
         with self.assertRaises(TypeError):
-            s = f"{a:.2f}"
+            f"{a:.2f}"
 
         a = mx.array([1, 2, 3])
         self.assertEqual(f"{a}", "array([1, 2, 3], dtype=int32)")
