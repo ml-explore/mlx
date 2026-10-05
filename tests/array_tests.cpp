@@ -656,6 +656,17 @@ TEST_CASE("test user buffer is not donated") {
   CHECK_EQ(buffer[0], 1.0f);
 }
 
+TEST_CASE("test null deleter throws") {
+  CHECK_THROWS_AS(
+      array(allocator::Buffer(nullptr), Shape{1}, float32, nullptr),
+      std::invalid_argument);
+
+  array a(Shape{1}, float32, nullptr, {});
+  CHECK_THROWS_AS(
+      a.set_data(allocator::Buffer(nullptr), 1, {1}, {}, 0),
+      std::invalid_argument);
+}
+
 TEST_CASE("test negative indexing for shape/strides") {
   // 2D array: shape = {2, 3}
   std::vector<float> data(6, 1.0f);

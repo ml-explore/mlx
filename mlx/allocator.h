@@ -4,6 +4,7 @@
 
 #include <cstdlib>
 #include <functional>
+#include <stdexcept>
 #include <utility>
 
 #include "mlx/api.h"
@@ -65,8 +66,11 @@ class Data {
   Buffer buffer;
   Deleter d;
 
-  Data(Buffer buffer, Deleter d)
-      : buffer(buffer), d(d ? std::move(d) : Deleter([](Buffer) {})) {}
+  Data(Buffer buffer, Deleter d) : buffer(buffer), d(std::move(d)) {
+    if (!this->d) {
+      throw std::invalid_argument("[Data] Deleter must not be null.");
+    }
+  }
   Data(const Data& other) = delete;
   Data& operator=(const Data& other) = delete;
   Data(Data&& other) noexcept
