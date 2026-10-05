@@ -75,7 +75,7 @@ class Data {
   ~Data() {
     if (d) {
       d(buffer);
-    } else {
+    } else if (buffer.ptr()) {
       allocator().free(buffer);
     }
   }
