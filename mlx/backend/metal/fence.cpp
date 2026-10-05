@@ -1,8 +1,9 @@
 // Copyright © 2024 Apple Inc.
+#include "mlx/fence.h"
+
 #include <optional>
 
 #include "mlx/backend/metal/device.h"
-#include "mlx/fence.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
 
