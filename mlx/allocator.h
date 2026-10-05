@@ -64,7 +64,6 @@ using Deleter = std::function<void(Buffer)>;
 class Data {
  public:
   Buffer buffer;
-  Deleter d;
 
   Data(Buffer buffer, Deleter d) : buffer(buffer), d(std::move(d)) {
     if (!this->d) {
@@ -84,7 +83,13 @@ class Data {
     }
   }
 
+  bool owned() const {
+    return !d;
+  }
+
  private:
+  Deleter d;
+
   explicit Data(Buffer buffer) : buffer(buffer) {}
   friend Data malloc(size_t size);
   friend class cu::CudaAllocator;
