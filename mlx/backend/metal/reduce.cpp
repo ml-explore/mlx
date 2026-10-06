@@ -275,9 +275,7 @@ std::pair<Dtype, Dtype> remap_reduce_types(
   } else if (op_name == "and" || op_name == "or") {
     // Integers can be tested as whatever type has the same width, since only
     // their bits matter. Floats cannot: -0.0 compares equal to zero but has a
-    // bit set, so it has to be tested as a float. complex64 stays on the
-    // integer path, since testing it as a complex would only look at the real
-    // part and miss 1j.
+    // bit set, so it has to be tested as a float.
     switch (in.dtype()) {
       case float16:
         return {float16, bool_};
@@ -285,6 +283,8 @@ std::pair<Dtype, Dtype> remap_reduce_types(
         return {bfloat16, bool_};
       case float32:
         return {float32, bool_};
+      case complex64:
+        return {complex64, bool_};
       default:
         break;
     }
@@ -421,7 +421,7 @@ void row_reduce_small(
   auto [in_type, out_type] = remap_reduce_types(in, op_name);
   const std::string func_name = "row_reduce_small";
   std::string kname = func_name;
-  bool large = in.size() > INT32_MAX;
+  bool large = in.size() > INT32_MAX || in.data_size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }
@@ -518,7 +518,7 @@ void row_reduce_looped(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   const std::string func_name = "row_reduce_looped";
   std::string kname = func_name;
-  bool large = in.size() > INT32_MAX;
+  bool large = in.size() > INT32_MAX || in.data_size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }
@@ -602,7 +602,7 @@ void strided_reduce_small(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   const std::string func_name = "col_reduce_small";
   std::string kname = func_name;
-  bool large = in.size() > INT32_MAX;
+  bool large = in.size() > INT32_MAX || in.data_size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }
@@ -693,7 +693,7 @@ void strided_reduce_longcolumn(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   std::string func_name = "col_reduce_longcolumn";
   std::string kname = func_name;
-  bool large = in.size() > INT32_MAX;
+  bool large = in.size() > INT32_MAX || in.data_size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }
@@ -788,7 +788,7 @@ void strided_reduce_looped(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   std::string func_name = "col_reduce_looped";
   std::string kname = func_name;
-  bool large = in.size() > INT32_MAX;
+  bool large = in.size() > INT32_MAX || in.data_size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }
@@ -865,7 +865,7 @@ void strided_reduce_2pass(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   std::string func_name = "col_reduce_2pass";
   std::string kname = func_name;
-  bool large = in.size() > INT32_MAX;
+  bool large = in.size() > INT32_MAX || in.data_size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }

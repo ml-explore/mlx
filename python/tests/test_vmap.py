@@ -1,7 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import gc
-import unittest
 
 import mlx.core as mx
 import mlx_tests
@@ -360,11 +359,11 @@ class TestVmap(mlx_tests.MLXTestCase):
         b = mx.ones((1, 1, 1, 5))
 
         with self.assertRaises(ValueError):
-            out = mx.vmap(lambda x, y: x + y)(a, b)
+            mx.vmap(lambda x, y: x + y)(a, b)
 
         b = mx.ones((10, 5))
         with self.assertRaises(ValueError):
-            out = mx.vmap(lambda x, y: x + y, in_axes=(0, 1))(a, b)
+            mx.vmap(lambda x, y: x + y, in_axes=(0, 1))(a, b)
 
     def test_vmap_matmul(self):
         a = mx.random.uniform(shape=(2, 3, 4))
@@ -408,10 +407,14 @@ class TestVmap(mlx_tests.MLXTestCase):
     def test_vmap_svd(self):
         a = mx.random.uniform(shape=(3, 4, 2))
 
-        cpu_svd_full = lambda x: mx.linalg.svd(x, compute_uv=True, stream=mx.cpu)
-        cpu_svd_singular = lambda x: mx.linalg.svd(x, compute_uv=False, stream=mx.cpu)
+        def cpu_svd_full(x):
+            return mx.linalg.svd(x, compute_uv=True, stream=mx.cpu)
 
-        # Vmap over the first axis (this is already supported natively by the primitive).
+        def cpu_svd_singular(x):
+            return mx.linalg.svd(x, compute_uv=False, stream=mx.cpu)
+
+        # Vmap over the first axis (this is already supported natively by the
+        # primitive).
         Us, Ss, Vts = mx.vmap(cpu_svd_full, in_axes=(0,))(a)
         self.assertEqual(Us.shape, (a.shape[0], a.shape[1], a.shape[1]))
         self.assertEqual(Ss.shape, (a.shape[0], a.shape[2]))
@@ -463,9 +466,11 @@ class TestVmap(mlx_tests.MLXTestCase):
         mx.random.seed(42)
         a = mx.random.uniform(shape=(3, 4, 4))
 
-        cpu_inv = lambda x: mx.linalg.inv(x, stream=mx.cpu)
+        def cpu_inv(x):
+            return mx.linalg.inv(x, stream=mx.cpu)
 
-        # Vmap over the first axis (this is already supported natively by the primitive).
+        # Vmap over the first axis (this is already supported natively by the
+        # primitive).
         invs = mx.vmap(cpu_inv, in_axes=(0,))(a)
 
         for i in range(a.shape[0]):
@@ -559,6 +564,41 @@ class TestVmap(mlx_tests.MLXTestCase):
         out = mx.vmap(scatter_add, in_axes=(1,), out_axes=1)(a)
         expected = mx.array([[2.0, 3.0, 4.0], [2.0, 3.0, 4.0]])
         self.assertTrue(mx.allclose(out, expected))
+
+    def test_vmap_scatter_higher_rank(self):
+        # The vmap axis becomes an extra scattered source axis, so the
+        # singleton added to the updates has to land at that axis rather than
+        # at the front of the source dims. Only shows up for a vmap axis >= 2,
+        # where the misplaced singleton actually reorders a non-unit dim.
+        def unstack(x, axis):
+            return [s.squeeze(axis) for s in mx.split(x, x.shape[axis], axis=axis)]
+
+        for shape in [(2, 3), (2, 3, 4), (2, 3, 4, 5)]:
+            n = 1
+            for d in shape:
+                n *= d
+            a = mx.arange(n, dtype=mx.float32).reshape(shape)
+
+            fns = {
+                "add_derived": lambda x: x.at[mx.array([0])].add(x[:1]),
+                "add_const": lambda x: x.at[mx.array([0])].add(
+                    mx.ones((1,) + tuple(x.shape[1:]), dtype=x.dtype)
+                ),
+                "add_dup": lambda x: x.at[mx.array([0, 0])].add(
+                    mx.ones((2,) + tuple(x.shape[1:]), dtype=x.dtype)
+                ),
+                "maximum": lambda x: x.at[mx.array([0])].maximum(x[:1] + 1.0),
+            }
+            for name, fn in fns.items():
+                for ax in range(len(shape)):
+                    out = mx.vmap(fn, in_axes=ax, out_axes=ax)(a)
+                    expected = mx.stack([fn(s) for s in unstack(a, ax)], axis=ax)
+                    self.assertEqual(
+                        out.shape, expected.shape, f"{name} ax{ax} {shape}"
+                    )
+                    self.assertTrue(
+                        mx.array_equal(out, expected), f"{name} ax{ax} {shape}"
+                    )
 
         # Multiple indices
         def scatter(a):
@@ -879,7 +919,7 @@ class TestVmap(mlx_tests.MLXTestCase):
         def transform_vector(t):
             return Vector([t[0] + 10, t[1] * 10])
 
-        x = State(mx.array(1), mx.array(2))
+        _x = State(mx.array(1), mx.array(2))
 
         vmap_transform = mx.vmap(transform)
         vmap_transform_tuple = mx.vmap(transform_tuple)

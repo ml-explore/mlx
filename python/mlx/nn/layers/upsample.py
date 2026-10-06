@@ -435,7 +435,8 @@ class Upsample(Module):
             raise ValueError(f"[Upsample] Got unsupported upsampling algorithm: {mode}")
         if antialias and mode == "nearest":
             raise ValueError(
-                "[Upsample] Antialiasing is not supported for nearest neighbor upsampling"
+                "[Upsample] Antialiasing is not supported for nearest neighbor "
+                "upsampling"
             )
         if isinstance(scale_factor, (list, tuple)):
             scale_factor = tuple(map(float, scale_factor))

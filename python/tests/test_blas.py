@@ -1,8 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
-import unittest
-from itertools import permutations
 
 import mlx.core as mx
 import mlx_tests
@@ -449,14 +447,26 @@ class TestBlas(mlx_tests.MLXTestCase):
                     shape_values = (B, ksl, Dk)
 
                     # Prepare numpy arrays
-                    q_np = np.random.uniform(-scale, scale, size=shape_queries).astype(np_dtype)
-                    k_np = np.random.uniform(-scale, scale, size=shape_keys).astype(np_dtype)
-                    v_np = np.random.uniform(-scale, scale, size=shape_values).astype(np_dtype)
+                    q_np = np.random.uniform(-scale, scale, size=shape_queries).astype(
+                        np_dtype
+                    )
+                    k_np = np.random.uniform(-scale, scale, size=shape_keys).astype(
+                        np_dtype
+                    )
+                    v_np = np.random.uniform(-scale, scale, size=shape_values).astype(
+                        np_dtype
+                    )
 
                     # Rearrange to move heads up
-                    q_np_reshape = q_np.reshape(B, qsl, n_kv_heads, factor, -1).transpose(0, 2, 3, 1, 4)
-                    k_np_reshape = k_np.reshape(B, ksl, n_kv_heads, 1, -1).transpose(0, 2, 3, 4, 1)
-                    v_np_reshape = v_np.reshape(B, ksl, n_kv_heads, 1, -1).transpose(0, 2, 3, 1, 4)
+                    q_np_reshape = q_np.reshape(
+                        B, qsl, n_kv_heads, factor, -1
+                    ).transpose(0, 2, 3, 1, 4)
+                    k_np_reshape = k_np.reshape(B, ksl, n_kv_heads, 1, -1).transpose(
+                        0, 2, 3, 4, 1
+                    )
+                    v_np_reshape = v_np.reshape(B, ksl, n_kv_heads, 1, -1).transpose(
+                        0, 2, 3, 1, 4
+                    )
 
                     # Do attn style matmul
                     s_np = q_np_reshape @ k_np_reshape
@@ -469,9 +479,15 @@ class TestBlas(mlx_tests.MLXTestCase):
                     v_mx = mx.array(v_np)
 
                     # Rearrange to move heads up
-                    q_mx_reshape = q_mx.reshape(B, qsl, n_kv_heads, factor, -1).transpose(0, 2, 3, 1, 4)
-                    k_mx_reshape = k_mx.reshape(B, ksl, n_kv_heads, 1, -1).transpose(0, 2, 3, 4, 1)
-                    v_mx_reshape = v_mx.reshape(B, ksl, n_kv_heads, 1, -1).transpose(0, 2, 3, 1, 4)
+                    q_mx_reshape = q_mx.reshape(
+                        B, qsl, n_kv_heads, factor, -1
+                    ).transpose(0, 2, 3, 1, 4)
+                    k_mx_reshape = k_mx.reshape(B, ksl, n_kv_heads, 1, -1).transpose(
+                        0, 2, 3, 4, 1
+                    )
+                    v_mx_reshape = v_mx.reshape(B, ksl, n_kv_heads, 1, -1).transpose(
+                        0, 2, 3, 1, 4
+                    )
 
                     # Do attn style matmul
                     s_mx = q_mx_reshape @ k_mx_reshape
@@ -598,8 +614,11 @@ class TestBlas(mlx_tests.MLXTestCase):
                 self.assertListEqual(list(out_np.shape), list(out_mx.shape))
                 self.assertTrue(np.allclose(out_mx, out_np, atol=0.05 * scale))
 
-        nt_np = lambda b: b.swapaxes(-1, -2)
-        nt_mx = lambda b: mx.swapaxes(b, -1, -2)
+        def nt_np(b):
+            return b.swapaxes(-1, -2)
+
+        def nt_mx(b):
+            return mx.swapaxes(b, -1, -2)
 
         for dtype in (mx.float32, mx.float16, mx.bfloat16):
             for M in (1, 2, 3, 5, 8, 11, 16):

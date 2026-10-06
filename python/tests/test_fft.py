@@ -11,7 +11,7 @@ try:
     import torch
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 
@@ -58,6 +58,15 @@ class TestFFT(mlx_tests.MLXTestCase):
 
         x = np.fft.rfft(np.real(a_np))
         self.check_mx_np(mx.fft.irfft, np.fft.irfft, x)
+
+        # Real transforms of size one
+        a_np = np.arange(1, 5, dtype=np.float32).reshape(4, 1)
+        self.check_mx_np(mx.fft.rfft, np.fft.rfft, a_np)
+        x = np.fft.rfft(a_np)
+        self.check_mx_np(mx.fft.irfft, np.fft.irfft, x, n=1)
+        self.check_mx_np(mx.fft.rfft2, np.fft.rfft2, a_np)
+        x = np.fft.rfft2(a_np)
+        self.check_mx_np(mx.fft.irfft2, np.fft.irfft2, x, s=(4, 1))
 
     def test_fftn(self):
         r = np.random.randn(8, 8, 8).astype(np.float32)
@@ -464,7 +473,10 @@ class TestFFT(mlx_tests.MLXTestCase):
     def test_fft_vmap(self):
         for fftn, a_np, axes in self.make_ffts():
             a = mx.array(a_np)
-            f = lambda x: fftn(x, axes=axes)
+
+            def f(x):
+                return fftn(x, axes=axes)
+
             expected = mx.stack([f(a[i]) for i in range(a.shape[0])])
             out = mx.vmap(f)(a)
             self.assertEqual(tuple(out.shape), tuple(expected.shape))
@@ -475,7 +487,10 @@ class TestFFT(mlx_tests.MLXTestCase):
         for fftn, a_np, axes in self.make_ffts():
             a = mx.array(a_np)
             t = mx.array(np.random.rand(*a_np.shape).astype(a_np.dtype))
-            f = lambda x: fftn(x, axes=axes)
+
+            def f(x):
+                return fftn(x, axes=axes)
+
             expected = f(t)
             out = mx.jvp(f, [a], [t])[1][0]
             self.assertEqual(tuple(out.shape), tuple(expected.shape))

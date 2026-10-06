@@ -55,6 +55,15 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
         with self.assertRaises(Exception):
             mx.asarray(a, dtype=mx.float32, copy=False)
 
+    def test_misaligned_source_copies(self):
+        # Pointer not aligned to the item size
+        raw = np.arange(64, dtype=np.uint8)
+        a = raw[6:22].view(np.int32)
+        x = mx.asarray(a)
+        self.assertTrue(np.array_equal(x + 1, a + 1))
+        with self.assertRaises(ValueError):
+            mx.asarray(a, copy=False)
+
     def test_ops_do_not_write_to_source(self):
         a = np.ones(4096, np.float32)
         mx.eval(mx.exp(a))

@@ -15,10 +15,10 @@ from mlx.utils import tree_flatten, tree_map, tree_unflatten
 
 try:
     import torch
-    import torch.nn.functional as F
+    import torch.nn.functional as F  # noqa: F401
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 
@@ -132,7 +132,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             "first": [mx.zeros((10,)), mx.zeros((1,))],
             "second": mx.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        _grads = tree_map(lambda x: mx.ones_like(x), params)
 
         # Explicit init
         optim = opt.Adagrad(learning_rate=1e-2)
@@ -150,7 +150,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             "first": [mx.zeros((10,)), mx.zeros((1,))],
             "second": mx.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        _grads = tree_map(lambda x: mx.ones_like(x), params)
 
         # Explicit init
         optim = opt.AdaDelta(learning_rate=1e-2)
@@ -263,7 +263,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             "first": [mx.zeros((10,)), mx.zeros((1,))],
             "second": mx.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        _grads = tree_map(lambda x: mx.ones_like(x), params)
 
         # Explicit init
         optim = opt.Lion(learning_rate=1e-2)
@@ -406,7 +406,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         uncompiled_params = model.parameters()
 
         # Pure version
-        def loss(params, x):
+        def loss(params, x):  # noqa: F811
             model.update(params)
             return model(x).sum()
 
@@ -426,7 +426,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(pure_params["bias"], uncompiled_params["bias"]))
 
         # Impure version
-        def loss(model, x):
+        def loss(model, x):  # noqa: F811
             return model(x).sum()
 
         model.update(orig_params)
@@ -656,6 +656,33 @@ class TestSchedulers(mlx_tests.MLXTestCase):
         mx.eval(model.parameters())
         self.assertFalse(mx.array_equal(w, model.layers[0].weight))
         self.assertFalse(mx.array_equal(b, model.layers[0].bias))
+
+    def test_multi_optimizer_with_empty_group(self):
+        mx.random.seed(0)
+        # no biases so all the weights are 2D
+        model = nn.Sequential(
+            nn.Linear(4, 4, bias=False), nn.ReLU(), nn.Linear(4, 4, bias=False)
+        )
+        mx.eval(model.parameters())
+
+        loss_and_grad = nn.value_and_grad(model, lambda m, x: m(x).sum())
+        _, grads = loss_and_grad(model, mx.ones((1, 4)))
+        expected = opt.Adam(learning_rate=0.01).apply_gradients(grads, model)
+
+        # SGD gets no weights, first as the fallback and then as the first optimizer
+        optimizers = [
+            opt.MultiOptimizer(
+                [opt.Adam(learning_rate=0.01), opt.SGD(learning_rate=0.01)],
+                [lambda _, w: w.ndim >= 2],
+            ),
+            opt.MultiOptimizer(
+                [opt.SGD(learning_rate=0.01), opt.Adam(learning_rate=0.01)],
+                [lambda _, w: w.ndim < 2],
+            ),
+        ]
+        for optimizer in optimizers:
+            new_params = optimizer.apply_gradients(grads, model)
+            self.assertTrue(tree_equal(mx.array_equal, expected, new_params))
 
 
 if __name__ == "__main__":

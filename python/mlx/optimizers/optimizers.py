@@ -175,7 +175,7 @@ class MultiOptimizer(Optimizer):
 
         if len(filters) != len(optimizers) - 1:
             raise ValueError(
-                f"Given {len(filters)} filters but {len(optimizers)-1} needed."
+                f"Given {len(filters)} filters but {len(optimizers) - 1} needed."
             )
 
         self.optimizers = optimizers
@@ -193,7 +193,8 @@ class MultiOptimizer(Optimizer):
                     parts[i].append((k, g))
                     break
 
-        return [tree_unflatten(p) for p in parts]
+        # tree_unflatten([]) returns a list so use a dict for empty parts
+        return [tree_unflatten(p) if p else {} for p in parts]
 
     def init(self, parameters: dict):
         for o, p in zip(self.optimizers, self._split_dictionary(parameters)):
@@ -297,7 +298,8 @@ class SGD(Optimizer):
 class RMSprop(Optimizer):
     r"""The RMSprop optimizer [1].
 
-    [1]: Tieleman, T. and Hinton, G. 2012. Lecture 6.5-rmsprop, coursera: Neural networks for machine learning
+    [1]: Tieleman, T. and Hinton, G. 2012. Lecture 6.5-rmsprop, coursera: Neural
+    networks for machine learning
 
     .. math::
 
@@ -338,7 +340,9 @@ class RMSprop(Optimizer):
         state["v"] = mx.zeros_like(parameter)
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
-        """Performs the RMSprop parameter update and stores :math:`v` in the optimizer state."""
+        """Performs the RMSprop parameter update and stores :math:`v` in the
+        optimizer state.
+        """
         lr = self.learning_rate.astype(gradient.dtype)
         alpha = self.alpha
         eps = self.eps
@@ -405,7 +409,8 @@ class AdaDelta(Optimizer):
 
     Our AdaDelta implementation follows the original paper. In detail,
 
-    [1]: Zeiler, M.D., 2012. ADADELTA: an adaptive learning rate method. arXiv preprint arXiv:1212.5701.
+    [1]: Zeiler, M.D., 2012. ADADELTA: an adaptive learning rate method. arXiv preprint
+    arXiv:1212.5701.
 
     .. math::
 
@@ -418,8 +423,8 @@ class AdaDelta(Optimizer):
         learning_rate (float or callable): The learning rate :math:`\lambda`.
         rho (float, optional): The coefficient :math:`\rho` used for computing a
             running average of squared gradients. Default: ``0.9``
-        eps (float, optional): The term :math:`\epsilon` added to the denominator to improve
-          numerical stability. Default: ``1e-6``
+        eps (float, optional): The term :math:`\epsilon` added to the denominator to
+          improve numerical stability. Default: ``1e-6``
     """
 
     def __init__(
@@ -502,8 +507,7 @@ class Adam(Optimizer):
         for i, beta in enumerate(betas):
             if not 0.0 <= beta < 1.0:
                 raise ValueError(
-                    f"Adam beta{i + 1} should be in [0, 1), {beta} was provided "
-                    "instead"
+                    f"Adam beta{i + 1} should be in [0, 1), {beta} was provided instead"
                 )
 
         if not 0.0 <= eps:
@@ -556,7 +560,8 @@ class AdamW(Adam):
 
         m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
         v_{t+1} &= \beta_2 v_t + (1 - \beta_2) g_t^2 \\
-        w_{t+1} &= w_t - \alpha (\frac{m_{t+1}}{\sqrt{v_{t+1}} + \epsilon} + \lambda w_t)
+        w_{t+1} &= w_t - \alpha (\frac{m_{t+1}}{\sqrt{v_{t+1}} + \epsilon} + \lambda
+        w_t)
 
     Args:
         learning_rate (float or callable): The learning rate :math:`\alpha`.
@@ -678,7 +683,8 @@ class Lion(Optimizer):
         betas (Tuple[float, float], optional): The coefficients
           :math:`(\beta_1, \beta_2)` used for computing the gradient
           momentum and update direction. Default: ``(0.9, 0.99)``
-        weight_decay (float, optional): The weight decay :math:`\lambda`. Default: ``0.0``
+        weight_decay (float, optional): The weight decay :math:`\lambda`. Default:
+            ``0.0``
     """
 
     def __init__(
@@ -692,8 +698,7 @@ class Lion(Optimizer):
         for i, beta in enumerate(betas):
             if not 0.0 <= beta < 1.0:
                 raise ValueError(
-                    f"Lion beta{i + 1} should be in [0, 1), {beta} was provided "
-                    "instead"
+                    f"Lion beta{i + 1} should be in [0, 1), {beta} was provided instead"
                 )
 
         self._maybe_schedule("learning_rate", learning_rate)
@@ -906,9 +911,10 @@ class Muon(Optimizer):
         state["v"] = mx.zeros_like(parameter)
 
     def _zeropower_via_newtonschulz5(self, X, steps: int):
-        assert (
-            X.ndim == 2
-        ), f"Expected a 2D array for Newton-Schulz iteration, got shape {X.shape} instead."
+        assert X.ndim == 2, (
+            f"Expected a 2D array for Newton-Schulz iteration, got shape {X.shape} "
+            f"instead."
+        )
         a, b, c = (3.4445, -4.7750, 2.0315)
         transpose_needed = X.shape[-2] > X.shape[-1]
 

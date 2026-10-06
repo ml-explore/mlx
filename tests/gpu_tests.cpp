@@ -465,6 +465,59 @@ TEST_CASE("test gpu matmul") {
   }
 }
 
+TEST_CASE("test gpu gather/scatter indices") {
+  // Run with METAL_DEVICE_WRAPPER_TYPE=1 to validate the metadata bindings.
+
+  SUBCASE("scatter scalar indices") {
+    auto x = array({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, {3, 4});
+
+    SUBCASE("non-leading axis") {
+      auto out = take(x, array(2), 1, Device::gpu);
+      CHECK(array_equal(out, array({2, 6, 10}), Device::cpu).item<bool>());
+    }
+
+    SUBCASE("strided source") {
+      auto src = transpose(x, Device::gpu);
+      auto out = take(src, array(-1), 0, Device::gpu);
+      CHECK(array_equal(out, array({3, 7, 11}), Device::cpu).item<bool>());
+    }
+
+    SUBCASE("multiple scalar indices") {
+      auto out = gather(x, {array(1), array(-2)}, {0, 1}, {1, 1}, Device::gpu);
+      CHECK(array_equal(out, array({6}, {1, 1}), Device::cpu).item<bool>());
+    }
+  }
+
+  SUBCASE("gather without indices") {
+    SUBCASE("scalar source") {
+      auto out = gather(array(7), {}, std::vector<int>{}, {}, Device::gpu);
+      CHECK_EQ(out.item<int>(), 7);
+    }
+
+    SUBCASE("matrix source") {
+      auto x = array({0, 1, 2, 3}, {2, 2});
+      auto out = gather(x, {}, std::vector<int>{}, {2, 2}, Device::gpu);
+      CHECK(array_equal(out, x, Device::cpu).item<bool>());
+    }
+  }
+
+  SUBCASE("scatter without indices") {
+    SUBCASE("scalar update") {
+      auto out =
+          scatter_max(array(1), {}, array(2), std::vector<int>{}, Device::gpu);
+      CHECK_EQ(out.item<int>(), 2);
+    }
+
+    SUBCASE("strided update") {
+      auto x = array({0, 1, 2, 3}, {2, 2});
+      auto updates = transpose(array({1, 2, 3, 4}, {2, 2}), Device::gpu);
+      auto out = scatter_add(x, {}, updates, std::vector<int>{}, Device::gpu);
+      CHECK(array_equal(out, array({1, 4, 4, 7}, {2, 2}), Device::cpu)
+                .item<bool>());
+    }
+  }
+}
+
 TEST_CASE("test gpu validation") {
   // Run this test with Metal validation enabled
   // METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 ./tests/tests \

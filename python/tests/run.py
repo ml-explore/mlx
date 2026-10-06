@@ -9,7 +9,7 @@ os.environ["MLX_ENABLE_CACHE_THRASHING_CHECK"] = "0"
 
 __unittest = True
 
-import mlx_tests
+import mlx_tests  # noqa: E402
 
 if __name__ == "__main__":
     # Run all tests by default.

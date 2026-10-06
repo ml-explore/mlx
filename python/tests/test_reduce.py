@@ -187,6 +187,35 @@ class TestReduce(mlx_tests.MLXTestCase):
                 with self.assertRaises(ValueError):
                     getattr(mx, op)(a_mx, axis=axis)
 
+        # sum and prod have identities, so an empty reduction returns them for
+        # every dtype. The unsigned outputs (uint32, uint64) had no init kernel
+        # on Metal and aborted the process instead.
+        dtypes = [
+            mx.bool_,
+            mx.uint8,
+            mx.uint16,
+            mx.uint32,
+            mx.uint64,
+            mx.int8,
+            mx.int16,
+            mx.int32,
+            mx.int64,
+            mx.float16,
+            mx.float32,
+        ]
+        for dtype in dtypes:
+            a = mx.zeros((0,), dtype=dtype)
+            for op, identity in [("sum", 0), ("prod", 1)]:
+                out = getattr(mx, op)(a)
+                mx.eval(out)
+                self.assertEqual(out.item(), identity, f"{op} of empty {dtype}")
+            # empty because of another axis, reduced over a non-empty one
+            b = mx.zeros((0, 3), dtype=dtype)
+            for op in ["sum", "prod"]:
+                out = getattr(mx, op)(b, axis=-1)
+                mx.eval(out)
+                self.assertEqual(out.shape, (0,))
+
     def test_sum_bool(self):
         x = np.random.uniform(0, 1, size=(10, 10, 10)) > 0.5
         y = mx.array(x)
@@ -284,7 +313,7 @@ class TestReduce(mlx_tests.MLXTestCase):
     def test_and_or_negative_zero(self):
         # -0.0 equals zero but has its sign bit set, so it must not be treated
         # as truthy just because its bit pattern is nonzero
-        for dtype in ["float32", "float16", "float64"]:
+        for dtype in ["float32", "float16", "float64", "complex64"]:
             with self.subTest(dtype=dtype):
                 for values in [
                     [0.0, -0.0],
@@ -309,6 +338,27 @@ class TestReduce(mlx_tests.MLXTestCase):
                 getattr(mx, op)(x_mx, axis=1).tolist(),
                 getattr(np, op)(x_np, axis=1).tolist(),
             )
+
+    def test_large_offsets(self):
+        # Row r holds r % 251 and row 2**15 starts at offset 2**31, so any
+        # reduction that narrows offsets or sizes to 32 bits reads the wrong
+        # rows. The views below have fewer than 2**31 elements themselves.
+        rows, cols = 2**15 + 1, 2**16
+        row_max = (mx.arange(rows) % 251).astype(mx.uint8)
+        x = mx.contiguous(mx.broadcast_to(row_max[:, None], (rows, cols)))
+
+        self.assertTrue(mx.array_equal(x[:, 7:].max(axis=-1), row_max))
+        self.assertTrue(mx.array_equal(x[:, 7:].min(axis=-1), row_max))
+        y = x.reshape(rows, 256, 256)[:, 1:, 1:]
+        self.assertTrue(mx.array_equal(y.max(axis=(1, 2)), row_max))
+        y = x.reshape(rows, 16, 16, 256)[:, 1:, :, 1:]
+        expected = mx.broadcast_to(row_max[:, None], (rows, 16))
+        self.assertTrue(mx.array_equal(y.max(axis=(1, 3)), expected))
+
+        # Reducing all 2**31 + 2**16 elements at once
+        self.assertEqual(x.max().item(), 250)
+        self.assertTrue(x.any().item())
+        self.assertFalse(x.all().item())
 
 
 if __name__ == "__main__":
