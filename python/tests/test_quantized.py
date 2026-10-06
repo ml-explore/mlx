@@ -559,6 +559,32 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 )
                 self.assertLess((y_ref - y).abs().max(), 1e-3)
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_splitk_precision(self):
+        # Split-K sums the partitions in float32 and rounds the result to the
+        # input type once. Rounding each partition first gives two to three
+        # times the error of a single rounding at these shapes.
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        K, N = 2560, 1024
+        for mode, dtype, M in product(
+            ["affine", "mxfp4"], [mx.bfloat16, mx.float16], [16, 33, 65]
+        ):
+            with self.subTest(mode=mode, dtype=dtype, M=M):
+                k1, k2 = mx.random.split(mx.random.key(0))
+                x = mx.random.normal((M, K), key=k1).astype(dtype)
+                w = (0.02 * mx.random.normal((N, K), key=k2)).astype(dtype)
+                group_size, bits = (64, 4) if mode == "affine" else (None, None)
+                wq = mx.quantize(w, group_size=group_size, bits=bits, mode=mode)
+                w_hat = mx.dequantize(*wq, group_size=group_size, bits=bits, mode=mode)
+                y_ref = x.astype(mx.float32) @ w_hat.astype(mx.float32).T
+                y = mx.quantized_matmul(
+                    x, *wq, transpose=True, group_size=group_size, bits=bits, mode=mode
+                )
+                error = (y.astype(mx.float32) - y_ref).abs().mean()
+                rounding = (y_ref.astype(dtype).astype(mx.float32) - y_ref).abs().mean()
+                self.assertLess(error.item(), 1.1 * rounding.item())
+
     def test_qmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
