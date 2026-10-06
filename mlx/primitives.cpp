@@ -2224,7 +2224,7 @@ std::vector<Shape> Flatten::output_shapes(const std::vector<array>& inputs) {
 bool FFT::is_equivalent(const Primitive& other) const {
   const FFT& r_other = static_cast<const FFT&>(other);
   return axes_ == r_other.axes_ && inverse_ == r_other.inverse_ &&
-      real_ == r_other.real_;
+      real_ == r_other.real_ && odd_out_ == r_other.odd_out_;
 }
 
 std::vector<array> Unflatten::vjp(
@@ -2292,13 +2292,13 @@ std::pair<std::vector<array>, std::vector<int>> FFT::vmap(
   // Only the last transformed axis changes size in a real transform
   if (real_) {
     auto n = out_shape[fft_axes.back()];
-    out_shape[fft_axes.back()] = inverse_ ? 2 * (n - 1) : n / 2 + 1;
+    out_shape[fft_axes.back()] = inverse_ ? 2 * (n - 1) + odd_out_ : n / 2 + 1;
   }
   return {
       {array(
           out_shape,
           real_ && inverse_ ? float32 : complex64,
-          std::make_shared<FFT>(stream(), fft_axes, inverse_, real_),
+          std::make_shared<FFT>(stream(), fft_axes, inverse_, real_, odd_out_),
           {in})},
       {ax}};
 }
