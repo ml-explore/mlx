@@ -782,37 +782,24 @@ void single_block_sort(
   int64_t in_stride_sorted_axis = in.strides()[axis];
   int64_t out_stride_sorted_axis = out.strides()[axis];
 
-  bool contiguous = in.flags().contiguous;
-  auto check_strides = [](const array& x, int64_t sort_stride) {
-    int64_t min_stride =
-        *std::min_element(x.strides().begin(), x.strides().end());
-    int64_t max_stride =
-        *std::max_element(x.strides().begin(), x.strides().end());
-    return sort_stride == min_stride || sort_stride == max_stride;
-  };
-  contiguous &= check_strides(in, in_stride_sorted_axis);
-  contiguous &= check_strides(out, out_stride_sorted_axis);
   // The contiguous kernel walks the rows with a single stride, so the axes
-  // that are not sorted have to collapse to a single run. The contiguous
-  // flag above also keeps out the negative strides that the unsigned row
-  // index cannot address.
-  auto single_run =
-      [](const Shape& shape, const Strides& strides, int64_t& stride) {
-        auto [cshape, cstrides] = collapse_contiguous_dims(shape, strides);
-        int runs = 0;
-        stride = 0;
-        for (int i = 0; i < cshape.size(); i++) {
-          if (cshape[i] != 1) {
-            runs++;
-            stride = cstrides[i];
-          }
+  // that are not sorted have to collapse to a single dim.
+  auto single_dim =
+      [](const Shape& nc_shape, const Strides& nc_str, int64_t& stride) {
+        auto [shape, strides] = collapse_contiguous_dims(nc_shape, nc_str);
+        if (shape.size() > 1) {
+          return false;
         }
-        return runs <= 1;
+        if (shape.size() > 0) {
+          stride = strides[0];
+        }
+        return true;
       };
-  int64_t in_seg = 0;
-  int64_t out_seg = 0;
-  contiguous &= single_run(nc_shape, in_nc_str, in_seg);
-  contiguous &= single_run(nc_shape, out_nc_str, out_seg);
+  int64_t in_stride_segment_axis = 0;
+  int64_t out_stride_segment_axis = 0;
+  bool contiguous = in.flags().contiguous;
+  contiguous &= single_dim(nc_shape, in_nc_str, in_stride_segment_axis);
+  contiguous &= single_dim(nc_shape, out_nc_str, out_stride_segment_axis);
 
   auto& encoder = cu::get_command_encoder(s);
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
@@ -839,11 +826,10 @@ void single_block_sort(
                 ARG_SORT,
                 BLOCK_THREADS,
                 N_PER_THREAD>;
-            if (in_seg > INT32_MAX || out_seg > INT32_MAX) {
+            if (in_stride_segment_axis > INT32_MAX ||
+                out_stride_segment_axis > INT32_MAX) {
               throw std::runtime_error("[Sort::eval_gpu] Stride too large.");
             }
-            int64_t in_stride_segment_axis = in_seg;
-            int64_t out_stride_segment_axis = out_seg;
             encoder.add_kernel_node(
                 kernel,
                 grid,
