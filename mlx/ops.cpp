@@ -899,13 +899,12 @@ array slice(
     }
   }
   auto out_shape = slice_size;
-  // The offset kernels read start contiguously
   return array(
       std::move(out_shape),
       a.dtype(),
       std::make_shared<DynamicSlice>(
           to_stream(s), std::move(axes), std::move(slice_size)),
-      {a, contiguous(start, false, s)});
+      {a, start});
 }
 
 /** Update a slice from the source array */
@@ -982,12 +981,11 @@ array slice_update(
     }
   }
   auto upd = broadcast_to(astype(update, src.dtype(), s), up_shape, s);
-  // The offset kernels read start contiguously
   return array(
       src.shape(),
       src.dtype(),
       std::make_shared<DynamicSliceUpdate>(to_stream(s), std::move(axes)),
-      {src, upd, contiguous(start, false, s)});
+      {src, upd, start});
 }
 
 array slice_update(
