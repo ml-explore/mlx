@@ -82,6 +82,7 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
             mx.eval(y)
             self.assertTrue(np.allclose(np.array(y), np.exp(1.0)))
             self.assertTrue(np.array_equal(np.load(path), np.ones(1 << 16)))
+            del a, y
 
     def test_source_lifetime(self):
         if not mx.metal.is_available():
