@@ -4440,8 +4440,6 @@ array logcumsumexp(
     bool inclusive /* = true*/,
     StreamOrDevice s /* = {}*/) {
   axis = normalize_axis_index(axis, a.ndim(), "[logcumsumexp] ");
-  // The scan accumulates with logaddexp, which has no integer form, so
-  // promote the same way logaddexp itself does.
   auto out_type = at_least_float(a.dtype());
   return array(
       a.shape(),
