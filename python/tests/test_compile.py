@@ -4,7 +4,12 @@ import gc
 import inspect
 import io
 import math
+import os
+import subprocess
+import sys
+import tempfile
 import threading
+import unittest
 from functools import partial, wraps
 from io import StringIO
 from itertools import product
@@ -1709,6 +1714,32 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         x = mx.array([1.0, float("nan"), 3.0])
         self.assertTrue(mx.array_equal(mx.compile(fun)(x), mx.array([False, True])))
+
+    @unittest.skipIf(sys.platform == "win32", "Needs a POSIX shell")
+    def test_compile_cpu_partial_library(self):
+        # A build that stops after it creates the library file must not break
+        # the build in later processes.
+        code = (
+            "import mlx.core as mx\n"
+            "mx.set_default_device(mx.cpu)\n"
+            "mx.eval(mx.compile(lambda x: mx.exp(x) * 2.0)(mx.ones((4,))))\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            gxx = os.path.join(tmp_dir, "g++")
+            with open(gxx, "w") as f:
+                f.write(
+                    "#!/bin/sh\n"
+                    'for a; do [ "$p" = -o ] && : > "$a" && exit 1; p=$a; done\n'
+                )
+            os.chmod(gxx, 0o755)
+            env = dict(os.environ, TMPDIR=tmp_dir)
+            env.pop("MLX_DISABLE_COMPILE", None)
+            cmd = [sys.executable, "-c", code]
+            path = tmp_dir + os.pathsep + env["PATH"]
+            bad = subprocess.run(cmd, env=dict(env, PATH=path), capture_output=True)
+            self.assertNotEqual(bad.returncode, 0)
+            good = subprocess.run(cmd, env=env, capture_output=True)
+            self.assertEqual(good.returncode, 0, good.stderr.decode())
 
 
 if __name__ == "__main__":
