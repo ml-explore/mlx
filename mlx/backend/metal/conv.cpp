@@ -1450,7 +1450,7 @@ void dispatch_conv_2D_gpu(
   if (!conv_params.flip && is_stride_one && is_kdil_one && is_idil_one &&
       conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
       conv_params.C % 32 == 0 && conv_params.O % 32 == 0 && inp_large &&
-      channels_large) {
+      channels_large && env::get_var("MLX_CONV_WINOGRAD", 1)) {
     // Only use winograd conv when having enough memory.
     if (int n_step = winograd_batch_step(d, in, conv_params); n_step > 0) {
       return winograd_conv_2D_gpu(

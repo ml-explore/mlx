@@ -102,6 +102,12 @@ Metal
    Enable the faster Metal CPU/GPU synchronization path. The default is ``0``.
    This requires Metal 3.2 or later (macOS 15 or later, or iOS 18 or later).
 
+.. envvar:: MLX_CONV_WINOGRAD
+
+   Allow the Winograd algorithm for 3x3 ``conv2d``. The default is ``1``. Set
+   it to ``0`` to use the GEMM convolution for all inputs. See
+   :doc:`precision`.
+
 Advanced tuning
 ---------------
 

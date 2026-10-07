@@ -1481,6 +1481,25 @@ class TestConv(mlx_tests.MLXTestCase):
                 self.assertFalse(np.array_equal(untiled, capped))
                 self.assertTrue(np.allclose(capped, cpu_ref, atol=1e-3))
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_conv2d_winograd_disable(self):
+        # N * iH * iW >= 4096 selects Winograd only from a batch of 3.
+        np.random.seed(0)
+        x = mx.array(np.random.normal(size=(1, 40, 40, 128)).astype(np.float32))
+        w = mx.array(
+            (np.random.normal(size=(128, 3, 3, 128)) * 0.05).astype(np.float32)
+        )
+        xb = mx.repeat(x, 3, axis=0)
+
+        single = np.array(mx.conv2d(x, w, padding=1))
+        winograd = np.array(mx.conv2d(xb, w, padding=1))
+        self.assertFalse(np.array_equal(winograd[0], single[0]))
+
+        with mlx_tests.scoped_env(MLX_CONV_WINOGRAD="0"):
+            gemm = np.array(mx.conv2d(xb, w, padding=1))
+        for i in range(3):
+            self.assertTrue(np.array_equal(gemm[i], single[0]))
+
     def test_conv2d_large_filter_small_channels(self):
         x = mx.random.normal(shape=(1, 181, 181, 1))
         w = mx.random.normal(shape=(1, 182, 182, 1))
