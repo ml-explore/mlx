@@ -4,7 +4,6 @@
 
 #include <cstdlib>
 #include <functional>
-#include <stdexcept>
 #include <utility>
 
 #include "mlx/api.h"
@@ -68,21 +67,18 @@ using Deleter = std::function<void(Buffer)>;
 // The allocator owns data from malloc
 class Data {
  public:
-  Data(Buffer buffer, Deleter d) : buffer_(buffer), deleter_(std::move(d)) {
-    if (!deleter_) {
-      throw std::invalid_argument("[Data] Deleter must not be null.");
-    }
-  }
+  Data(Buffer buffer, Deleter d) : buffer_(buffer), deleter_(std::move(d)) {}
   Data(const Data& other) = delete;
   Data& operator=(const Data& other) = delete;
   Data(Data&& other) noexcept
       : buffer_(std::exchange(other.buffer_, Buffer(nullptr))),
-        deleter_(std::exchange(other.deleter_, nullptr)) {}
+        deleter_(std::exchange(other.deleter_, nullptr)),
+        owned_(std::exchange(other.owned_, false)) {}
   ~Data() {
-    if (deleter_) {
-      deleter_(buffer_);
-    } else if (buffer_.ptr()) {
+    if (owned_) {
       allocator().free(buffer_);
+    } else if (deleter_) {
+      deleter_(buffer_);
     }
   }
 
@@ -92,14 +88,15 @@ class Data {
   Buffer buffer() const&& = delete;
 
   bool is_owned() const {
-    return !deleter_;
+    return owned_;
   }
 
  private:
   Buffer buffer_;
   Deleter deleter_;
+  bool owned_{false};
 
-  explicit Data(Buffer buffer) : buffer_(buffer) {}
+  explicit Data(Buffer buffer) : buffer_(buffer), owned_(true) {}
   friend Data malloc(size_t size);
   friend Data cu::malloc_async(size_t size, cu::CommandEncoder& encoder);
 };

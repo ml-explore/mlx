@@ -60,7 +60,7 @@ std::vector<array> array::make_arrays(
 array array::unsafe_weak_copy(const array& other) {
   auto cpy = array(other.shape(), other.dtype(), nullptr, {});
   cpy.set_data(
-      Data(other.buffer(), [](auto) {}),
+      Data(other.buffer(), nullptr),
       other.data_size(),
       other.strides(),
       other.flags(),
