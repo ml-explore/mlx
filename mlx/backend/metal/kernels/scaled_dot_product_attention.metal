@@ -79,4 +79,16 @@ instantiate_kernel(
 instantiate_sdpa_vector_heads(float)
 instantiate_sdpa_vector_heads(bfloat16_t)
 instantiate_sdpa_vector_heads(float16_t)
+#define instantiate_sdpa_vector_tk1(type, dim)                     \
+  instantiate_kernel(                                              \
+      "sdpa_vector_2pass_1_" #type "_" #dim "_" #dim "_tk1",      \
+      sdpa_vector_2pass_1,                                         \
+      type,                                                        \
+      dim,                                                         \
+      dim,                                                         \
+      1)
+
+instantiate_sdpa_vector_tk1(bfloat16_t, 256)
+instantiate_sdpa_vector_tk1(float, 192)
+instantiate_sdpa_vector_tk1(float, 256)
     // clang-format on

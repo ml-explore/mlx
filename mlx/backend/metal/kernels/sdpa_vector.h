@@ -176,7 +176,7 @@ template <typename T, int D, int V = D>
   }
 }
 
-template <typename T, int D, int V = D>
+template <typename T, int D, int V = D, int TK = 4>
 [[kernel]] void sdpa_vector_2pass_1(
     const device T* queries [[buffer(0)]],
     const device T* keys [[buffer(1)]],
@@ -264,13 +264,9 @@ template <typename T, int D, int V = D>
   const int stride_mask_tok =
       (bool_mask || float_mask) ? blocks * mask_kv_seq_stride : 0;
 
-  // TK=4 is chosen to keep register pressure low.
-  // TODO: For some hardwares TK=1 would run faster for certain shapes.
-  constexpr int TK = 4;
-
   // For each key
   int i = block_idx;
-  for (; i + (TK - 1) * blocks < N; i += blocks * TK) {
+  for (; TK > 1 && i + (TK - 1) * blocks < N; i += blocks * TK) {
     // Prefetch: issue all TK K/V loads first so the HW can overlap them.
     T k_reg[TK][qk_per_thread];
     T v_reg[TK][v_per_thread];

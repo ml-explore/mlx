@@ -859,6 +859,17 @@ void sdpa_vector_2pass(
 
   // Get the kernel
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
+  bool has_tk1_variant =
+      (q.dtype() == bfloat16 && q.shape(-1) == 256 && v.shape(-1) == 256) ||
+      (q.dtype() == float32 && q.shape(-1) == v.shape(-1) &&
+       (q.shape(-1) == 192 || q.shape(-1) == 256));
+  if (has_tk1_variant &&
+      group_dims.width * group_dims.height * group_dims.depth >
+          kernel->maxTotalThreadsPerThreadgroup()) {
+    kname += "_tk1";
+    hash_name += "_tk1";
+    kernel = d.get_kernel(kname, hash_name, func_consts);
+  }
   check_kernel_threadgroup_size(kernel, group_dims, hash_name);
 
   compute_encoder.set_compute_pipeline_state(kernel);
