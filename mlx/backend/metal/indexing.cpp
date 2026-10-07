@@ -642,7 +642,7 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  array mask_flat = mask.ndim() == 1
+  array mask_flat = (mask.ndim() == 1)
       ? reshape_in_eval(mask, {mask.shape(0), 1}, s)
       : flatten_in_eval(mask, 1, -1, s);
   if (mask_flat.data<void>() != mask.data<void>()) {
