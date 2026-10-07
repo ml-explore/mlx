@@ -35,6 +35,14 @@ static std::pair<array, bool> compute_dynamic_offset(
     const Strides& strides,
     const std::vector<int>& axes,
     Stream stream) {
+  auto& encoder = cpu::get_command_encoder(stream);
+  // The kernel reads the indices contiguously
+  if (!indices.flags().row_contiguous) {
+    auto copy = contiguous_copy_cpu(indices, stream);
+    encoder.add_temporary(copy);
+    return compute_dynamic_offset(copy, strides, axes, stream);
+  }
+
   array offset({1}, int64, nullptr, {});
   bool donate = indices.is_donatable() &&
       (indices.data_size() * indices.itemsize()) >= offset.itemsize();
@@ -44,7 +52,6 @@ static std::pair<array, bool> compute_dynamic_offset(
     offset.set_data(allocator::malloc(offset.itemsize()));
   }
 
-  auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_input_array(indices);
   encoder.set_output_array(offset);
   auto compute_offset =
