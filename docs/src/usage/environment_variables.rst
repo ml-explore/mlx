@@ -87,6 +87,16 @@ handled by the CUDA runtime.
 Metal
 -----
 
+.. envvar:: MLX_METAL_RESIDENCY_REFRESH_INTERVAL_MS
+
+   Re-request residency for existing wired allocations at this interval in
+   milliseconds. This works around macOS releasing residency while the GPU is
+   idle. The default is ``0`` (disabled); nonpositive values disable renewal.
+   For example, ``1000`` renews once per second. This does not change the wired
+   limit set by :func:`mlx.core.set_wired_limit` or submit GPU work. Renewal
+   continues while the Metal device exists and can keep memory wired during
+   long idle periods. Requires a Metal 3 GPU on macOS 15 or iOS 18 or later.
+
 .. envvar:: MLX_METAL_FAST_SYNCH
 
    Enable the faster Metal CPU/GPU synchronization path. The default is ``0``.

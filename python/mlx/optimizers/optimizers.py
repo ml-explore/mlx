@@ -990,8 +990,20 @@ def clip_grad_norm(grads, max_norm):
     if max_norm < 0:
         raise ValueError(f"max_norm should be >=0, {max_norm} was provided instead")
 
-    norm_squared = tree_reduce(lambda acc, g: acc + g.square().sum(), grads, 0.0)
+    def squared_norm(g):
+        # Sum float16 squares in float32 so they do not overflow
+        if g.dtype == mx.float16:
+            g = g.astype(mx.float32)
+        return g.square().sum()
+
+    def scale(g):
+        # Cast after scaling so small normalizers do not underflow in float16
+        if mx.issubdtype(g.dtype, mx.floating):
+            return (g * normalizer).astype(g.dtype)
+        return g * normalizer
+
+    norm_squared = tree_reduce(lambda acc, g: acc + squared_norm(g), grads, 0.0)
     total_norm = mx.sqrt(norm_squared)
     normalizer = mx.minimum(max_norm / (total_norm + 1e-6), 1.0)
-    clipped_grads = tree_map(lambda g: g * normalizer, grads)
+    clipped_grads = tree_map(scale, grads)
     return clipped_grads, total_norm
