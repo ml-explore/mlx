@@ -1,11 +1,13 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2024-2026 Apple Inc.
 
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -119,6 +121,9 @@ class ResidencySets {
   // taking the lock.
   std::atomic<uint64_t> num_sets_{0};
   mutable std::mutex mtx_;
+  std::condition_variable refresh_cv_;
+  bool stop_refresh_{false};
+  std::thread refresh_thread_;
 };
 
 } // namespace mlx::core::metal

@@ -1,7 +1,8 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2024-2026 Apple Inc.
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cstdio>
 #include <sstream>
 #include <stdexcept>
@@ -43,10 +44,38 @@ ResidencySets::ResidencySets(MTL::Device* d) {
       }
       throw std::runtime_error(msg.str());
     }
+    if (int interval =
+            env::get_var("MLX_METAL_RESIDENCY_REFRESH_INTERVAL_MS", 0);
+        interval > 0) {
+      refresh_thread_ = std::thread([this, interval] {
+        std::unique_lock<std::mutex> lock(mtx_);
+        while (!refresh_cv_.wait_for(
+            lock, std::chrono::milliseconds(interval), [this] {
+              return stop_refresh_;
+            })) {
+          auto pool = new_scoped_memory_pool();
+          // macOS can drop residency after GPU idle despite a standing request.
+          for (auto& s : sets_) {
+            if (s.size != 0) {
+              s.set->requestResidency();
+            }
+          }
+        }
+      });
+    }
   }
 }
 
-ResidencySets::~ResidencySets() = default;
+ResidencySets::~ResidencySets() {
+  if (refresh_thread_.joinable()) {
+    {
+      std::lock_guard<std::mutex> lock(mtx_);
+      stop_refresh_ = true;
+    }
+    refresh_cv_.notify_one();
+    refresh_thread_.join();
+  }
+}
 
 bool ResidencySets::add_set_locked(std::string* error_out) {
   NS::SharedPtr<MTL::ResidencySet> set;

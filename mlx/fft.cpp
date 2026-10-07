@@ -114,7 +114,12 @@ array fft_impl(
   auto out = array(
       out_shape,
       out_type,
-      std::make_shared<FFT>(to_stream(s), valid_axes, inverse, real),
+      std::make_shared<FFT>(
+          to_stream(s),
+          valid_axes,
+          inverse,
+          real,
+          real && inverse && (n.back() % 2 != 0)),
       {astype(in, in_type, s)});
   auto scale = fft_scale_factor(n, norm, inverse);
   if (scale != 1.0) {
