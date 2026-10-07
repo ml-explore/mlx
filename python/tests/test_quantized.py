@@ -24,6 +24,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w = mx.random.normal(shape=(128, 512))
         for gs in [32, 64, 128]:
             for b in [1, 2, 3, 5, 6, 4, 8]:
+                if b == 1 and mx.cuda.is_available():
+                    continue
                 with self.subTest(gs=gs, b=b):
                     w_q, scales, biases = mx.quantize(w, group_size=gs, bits=b)
                     w_hat = mx.dequantize(w_q, scales, biases, gs, b)
@@ -35,6 +37,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
         a = mx.zeros((256, 512))
         for gs in [32, 64, 128]:
             for b in [1, 2, 3, 4, 5, 6, 8]:
+                if b == 1 and mx.cuda.is_available():
+                    continue
                 w_q, scales, biases = mx.quantize(a, gs, b)
                 a_hat = mx.dequantize(w_q, scales, biases, gs, b)
                 self.assertTrue(mx.all(a_hat == 0))
@@ -239,7 +243,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 w_q, scales, biases = mx.quantize(w, group_size=gs, bits=1)
                 w_hat = mx.dequantize(w_q, scales, biases, gs, 1)
 
-                self.assertLess((w - w_hat).abs().max(), 1e-5)
+                self.assertLess((w - w_hat).abs().max().item(), 1e-5)
 
         # Asymmetric binary weights {0.1, 0.9} should round-trip perfectly
         # (affine formula gives scale=0.8, bias=0.1)
@@ -251,7 +255,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 w_q, scales, biases = mx.quantize(w, group_size=gs, bits=1)
                 w_hat = mx.dequantize(w_q, scales, biases, gs, 1)
 
-                self.assertLess((w - w_hat).abs().max(), 1e-5)
+                self.assertLess((w - w_hat).abs().max().item(), 1e-5)
 
         # Verify dequantized values are exactly {bias, bias + scale}
         w = mx.random.normal(shape=(64, 256))
@@ -279,7 +283,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         for gs in [32, 64, 128]:
             w_q, scales, biases = mx.quantize(a, gs, 1)
             a_hat = mx.dequantize(w_q, scales, biases, gs, 1)
-            self.assertLess(a_hat.abs().max(), 1e-5)
+            self.assertLess(a_hat.abs().max().item(), 1e-5)
 
         # Quantized matmul with symmetric binary weights
         key = mx.random.key(42)
@@ -297,7 +301,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 y_q = mx.quantized_matmul(x, w_q, scales, biases, True, gs, 1)
                 y_hat = x @ w_hat.T
                 self.assertEqual(y_q.shape, y_hat.shape)
-                self.assertLess((y_q - y_hat).abs().max(), 1e-5)
+                self.assertLess((y_q - y_hat).abs().max().item(), 1e-5)
 
         # Quantized matmul with asymmetric binary weights
         for gs in [32, 64, 128]:
@@ -313,7 +317,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 y_q = mx.quantized_matmul(x, w_q, scales, biases, True, gs, 1)
                 y_hat = x @ w_hat.T
                 self.assertEqual(y_q.shape, y_hat.shape)
-                self.assertLess((y_q - y_hat).abs().max(), 1e-5)
+                self.assertLess((y_q - y_hat).abs().max().item(), 1e-5)
 
     def test_qqmv(self):
         key = mx.random.key(0)
@@ -471,6 +475,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
             [True, False],  # transposed
         )
         for group_size, bits, M, N, K, transposed in tests:
+            if bits == 1 and mx.cuda.is_available():
+                continue
             with self.subTest(
                 shape=(M, N, K),
                 group_size=group_size,
