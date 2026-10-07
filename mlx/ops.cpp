@@ -3313,14 +3313,11 @@ array floor_divide(
 
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
-  auto quotient = array(
-      shape, dtype, std::make_shared<Divide>(to_stream(s)), std::move(inputs));
-  auto rem = remainder(a, b, s);
-  auto zero = array(0, dtype);
-  auto step = logical_and(
-      not_equal(rem, zero, s),
-      not_equal(less(a, zero, s), less(b, zero, s), s));
-  return subtract(quotient, astype(step, dtype, s), s);
+  return array(
+      shape,
+      dtype,
+      std::make_shared<FloorDivide>(to_stream(s)),
+      std::move(inputs));
 }
 
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {

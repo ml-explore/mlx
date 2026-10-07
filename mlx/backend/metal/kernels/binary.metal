@@ -73,6 +73,8 @@
 
 instantiate_binary_types(Add)
 instantiate_binary_types(Divide)
+instantiate_binary_integer(FloorDivide)
+instantiate_binary_all(FloorDivide, bool_, bool, bool)
 instantiate_binary_types_bool(Equal)
 instantiate_binary_types_bool(Greater)
 instantiate_binary_types_bool(GreaterEqual)

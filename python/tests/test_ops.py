@@ -399,9 +399,33 @@ class TestOps(mlx_tests.MLXTestCase):
                     np.array(b, dtype=np_int_float_dtypes[kind]),
                 )
                 self.assertEqual(result.tolist(), expected.tolist())
+                self.assertEqual(result.dtype, dtype)
 
                 result = mx.array(a, dtype=dtype) // mx.array(b, dtype=dtype)
                 self.assertEqual(result.tolist(), expected.tolist())
+
+        # Unsigned integers use the plain quotient.
+        ua = [7, 0, 5]
+        ub = [2, 2, 3]
+
+        mx_uint_dtypes = mx.__array_namespace_info__().dtypes(
+            kind=("unsigned integer",)
+        )
+        np_uint_dtypes = np.__array_namespace_info__().dtypes(
+            kind=("unsigned integer",)
+        )
+
+        for kind, dtype in mx_uint_dtypes.items():
+            with self.subTest(dtype=dtype):
+                result = mx.floor_divide(
+                    mx.array(ua, dtype=dtype), mx.array(ub, dtype=dtype)
+                )
+                expected = np.floor_divide(
+                    np.array(ua, dtype=np_uint_dtypes[kind]),
+                    np.array(ub, dtype=np_uint_dtypes[kind]),
+                )
+                self.assertEqual(result.tolist(), expected.tolist())
+                self.assertEqual(result.dtype, dtype)
 
     def test_remainder(self):
         # Complex is not supported and has to say so rather than quietly

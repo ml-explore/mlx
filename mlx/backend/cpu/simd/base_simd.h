@@ -240,6 +240,29 @@ Simd<T, 1> remainder(Simd<T, 1> a_, Simd<T, 1> b_) {
 }
 
 template <typename T>
+Simd<T, 1> floor_divide(Simd<T, 1> a_, Simd<T, 1> b_) {
+  T a = a_.value;
+  T b = b_.value;
+  if constexpr (std::is_integral_v<T>) {
+    // Integer division by zero gives 0. See divide above.
+    if (b == 0) {
+      return T(0);
+    }
+    T q = a / b;
+    if constexpr (is_signed_v<T>) {
+      if (a % b != 0 && (a < 0 != b < 0)) {
+        q -= 1;
+      }
+    }
+    return q;
+  } else if constexpr (is_complex<T>) {
+    return a / b;
+  } else {
+    return floor(divide(a_, b_));
+  }
+}
+
+template <typename T>
 Simd<T, 1> maximum(Simd<T, 1> a_, Simd<T, 1> b_) {
   T a = a_.value;
   T b = b_.value;
