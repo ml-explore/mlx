@@ -926,6 +926,32 @@ class TestBlas(mlx_tests.MLXTestCase):
                 out = mx.addmm(c, a, mx.swapaxes(b, -1, -2), 0.125, 0.0)
                 self.assertTrue(np.allclose(out.astype(mx.float32), 12800.0))
 
+    def test_thin_matmul(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("requires GPU")
+
+        # few output columns or few rows with a transposed b takes the thin NAX
+        # kernel on Metal.
+        np.random.seed(0)
+        shapes = [(2048, 64, 2048), (2049, 48, 300), (4100, 16, 1), (1025, 24, 63)]
+        shapes += [(20, 300, 1), (33, 1000, 999), (64, 2560, 128)]
+        for M, N, K in shapes:
+            scale = K**-0.5
+            a_np = np.random.normal(0.0, scale, (M, K)).astype(np.float32)
+            b_np = np.random.normal(0.0, scale, (N, K)).astype(np.float32)
+            c_np = np.random.normal(0.0, scale, (N,)).astype(np.float32)
+            for dtype in (mx.float16, mx.bfloat16):
+                a, b, c = (mx.array(x).astype(dtype) for x in (a_np, b_np, c_np))
+                a_r, b_r, c_r = (np.array(x.astype(mx.float32)) for x in (a, b, c))
+                ref = a_r @ b_r.T
+                for layout, b_mx in (("nt", b.T), ("nn", mx.contiguous(b.T))):
+                    with self.subTest(shape=(M, N, K), dtype=str(dtype), layout=layout):
+                        out = (a @ b_mx).astype(mx.float32)
+                        self.assertTrue(np.allclose(out, ref, 1e-2, 0.05 * scale))
+                        out = mx.addmm(c, a, b_mx, 0.5, 2.0).astype(mx.float32)
+                        ref_c = 0.5 * ref + 2.0 * c_r
+                        self.assertTrue(np.allclose(out, ref_c, 1e-2, 0.125 * scale))
+
     def test_addmm_grad(self):
         def make_ref_addmm(alpha, beta):
             return lambda c, a, b: alpha * (a @ b) + beta * c

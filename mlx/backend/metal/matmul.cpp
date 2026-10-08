@@ -991,9 +991,10 @@ void steel_matmul_axpby(
         /* float beta = */ beta);
   }
 
-  // Case 2: Few output columns, rows stay in registers and B is read once
-  if (use_nax && batch_size_out == 1 && !transpose_a && N <= 64 &&
-      out.dtype() != float32 && (transpose_b || int64_t(K) * ldb <= INT_MAX)) {
+  // Case 2: Few output rows or columns, small tiles with A in registers
+  if (use_nax && batch_size_out == 1 && !transpose_a &&
+      (N <= 64 || (M <= 64 && transpose_b)) && out.dtype() != float32 &&
+      (transpose_b || int64_t(K) * ldb <= INT_MAX)) {
     int sn = M < 2048 ? 1 : 2, ks = 4 / sn;
     std::ostringstream kname;
     kname << "steel_gemm_thin_nax_n" << (transpose_b ? 't' : 'n') << "_"
