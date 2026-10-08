@@ -4116,7 +4116,6 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(c.shape, (3, 2, 5))
         self.assertTrue(mx.array_equal(c, mx.ones((3, 2, 5), dtype=mx.bool_)))
 
-        # The output can reuse an input buffer
         x = mx.array([1, -1, 1, -1])
         y = mx.array([1, 1, -1, -1])
         out = (x > 0) ^ (y > 0)
