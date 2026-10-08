@@ -4440,12 +4440,13 @@ array logcumsumexp(
     bool inclusive /* = true*/,
     StreamOrDevice s /* = {}*/) {
   axis = normalize_axis_index(axis, a.ndim(), "[logcumsumexp] ");
+  auto out_type = at_least_float(a.dtype());
   return array(
       a.shape(),
-      a.dtype(),
+      out_type,
       std::make_shared<Scan>(
           to_stream(s), Scan::ReduceType::LogAddExp, axis, reverse, inclusive),
-      {a});
+      {astype(a, out_type, s)});
 }
 
 array logcumsumexp(

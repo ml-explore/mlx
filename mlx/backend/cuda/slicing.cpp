@@ -50,6 +50,14 @@ array compute_dynamic_offset(
     const Strides& strides,
     const std::vector<int>& axes,
     const Stream& s) {
+  auto& encoder = cu::get_command_encoder(s);
+  // The kernel reads the indices contiguously
+  if (!indices.flags().row_contiguous) {
+    auto copy = contiguous_copy_gpu(indices, s);
+    encoder.add_temporary(copy);
+    return compute_dynamic_offset(copy, strides, axes, s);
+  }
+
   Dtype dtype = indices.dtype();
   int nidx = axes.size();
 
@@ -59,8 +67,6 @@ array compute_dynamic_offset(
       "mlx::core::cu::compute_dynamic_offset<{}, {}>",
       dtype_to_cuda_type(dtype),
       nidx);
-
-  auto& encoder = cu::get_command_encoder(s);
 
   cu::JitModule& mod = cu::get_jit_module(encoder.device(), module_name, [&]() {
     std::string source = R"(

@@ -3,8 +3,19 @@
 #pragma once
 
 #include <cstdlib>
+#include <functional>
+#include <utility>
 
 #include "mlx/api.h"
+
+namespace mlx::core::allocator {
+class Data;
+} // namespace mlx::core::allocator
+
+namespace mlx::core::cu {
+class CommandEncoder;
+allocator::Data malloc_async(size_t size, CommandEncoder& encoder);
+} // namespace mlx::core::cu
 
 namespace mlx::core::allocator {
 
@@ -51,12 +62,47 @@ class MLX_API Allocator {
 
 MLX_API Allocator& allocator();
 
-inline Buffer malloc(size_t size) {
-  return allocator().malloc(size);
-}
+using Deleter = std::function<void(Buffer)>;
 
-inline void free(Buffer buffer) {
-  allocator().free(buffer);
+// The allocator owns data from malloc
+class Data {
+ public:
+  Data(Buffer buffer, Deleter d) : buffer_(buffer), deleter_(std::move(d)) {}
+  Data(const Data& other) = delete;
+  Data& operator=(const Data& other) = delete;
+  Data(Data&& other) noexcept
+      : buffer_(std::exchange(other.buffer_, Buffer(nullptr))),
+        deleter_(std::exchange(other.deleter_, nullptr)),
+        owned_(std::exchange(other.owned_, false)) {}
+  ~Data() {
+    if (owned_) {
+      allocator().free(buffer_);
+    } else if (deleter_) {
+      deleter_(buffer_);
+    }
+  }
+
+  Buffer buffer() const& {
+    return buffer_;
+  }
+  Buffer buffer() const&& = delete;
+
+  bool is_owned() const {
+    return owned_;
+  }
+
+ private:
+  Buffer buffer_;
+  Deleter deleter_;
+  bool owned_{false};
+
+  explicit Data(Buffer buffer) : buffer_(buffer), owned_(true) {}
+  friend Data malloc(size_t size);
+  friend Data cu::malloc_async(size_t size, cu::CommandEncoder& encoder);
+};
+
+inline Data malloc(size_t size) {
+  return Data(allocator().malloc(size));
 }
 
 // Make a Buffer from a raw pointer of the given size without a copy.  If a

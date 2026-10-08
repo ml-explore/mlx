@@ -166,7 +166,7 @@ class TestFast(mlx_tests.MLXTestCase):
         dims, _, base, scale, offset, traditional = defaults
         x = (mx.random.uniform(shape=(2, T, dims)) * 10).astype(mx.int32)
         with self.assertRaises(ValueError):
-            y = mx.fast.rope(
+            mx.fast.rope(
                 x, dims, traditional=traditional, base=base, scale=scale, offset=offset
             )
 
@@ -284,19 +284,22 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
 
         # Test grad with freqs
-        f1 = lambda x, y: (rope_orig(x, dims, False, None, 1.0, 0, freqs) * y).sum()
-        f2 = lambda x, y: (
-            mx.fast.rope(
-                x,
-                dims,
-                traditional=False,
-                base=None,
-                scale=1.0,
-                offset=0,
-                freqs=freqs,
-            )
-            * y
-        ).sum()
+        def f1(x, y):
+            return (rope_orig(x, dims, False, None, 1.0, 0, freqs) * y).sum()
+
+        def f2(x, y):
+            return (
+                mx.fast.rope(
+                    x,
+                    dims,
+                    traditional=False,
+                    base=None,
+                    scale=1.0,
+                    offset=0,
+                    freqs=freqs,
+                )
+                * y
+            ).sum()
 
         x = mx.random.uniform(shape=(2, 4, dims))
         y = mx.random.uniform(shape=(2, 4, dims))
@@ -310,20 +313,24 @@ class TestFast(mlx_tests.MLXTestCase):
         for dims in (D, D // 2):
             for traditional in (True, False):
                 _, base, scale, offset, _ = defaults
-                f1 = lambda x, y: (
-                    rope_orig(x, dims, traditional, base, scale, offset) * y
-                ).sum()
-                f2 = lambda x, y: (
-                    mx.fast.rope(
-                        x,
-                        dims,
-                        traditional=traditional,
-                        base=base,
-                        scale=scale,
-                        offset=offset,
-                    )
-                    * y
-                ).sum()
+
+                def f1(x, y):
+                    return (
+                        rope_orig(x, dims, traditional, base, scale, offset) * y
+                    ).sum()
+
+                def f2(x, y):
+                    return (
+                        mx.fast.rope(
+                            x,
+                            dims,
+                            traditional=traditional,
+                            base=base,
+                            scale=scale,
+                            offset=offset,
+                        )
+                        * y
+                    ).sum()
 
                 x = mx.random.uniform(shape=(2, 100, D))
                 y = mx.random.uniform(shape=(2, 100, D))
@@ -373,7 +380,7 @@ class TestFast(mlx_tests.MLXTestCase):
         rx_fast = mx.fast.rope(
             x, dims, traditional=traditional, scale=scale, base=base, offset=offset
         )
-        rx_fast_single = mx.fast.rope(
+        _rx_fast_single = mx.fast.rope(
             x[0:1], dims, traditional=traditional, scale=scale, base=base, offset=offset
         )
 
@@ -484,10 +491,18 @@ class TestFast(mlx_tests.MLXTestCase):
 
     def test_rms_norm_grad(self):
         eps = 1e-5
-        f1 = lambda x, w, y: (rms_norm(x, w, eps) * y).sum()
-        f2 = lambda x, w, y: (mx.fast.rms_norm(x, w, eps) * y).sum()
-        f3 = lambda x, y: (rms_norm(x, mx.ones((x.shape[-1],)), eps) * y).sum()
-        f4 = lambda x, y: (mx.fast.rms_norm(x, None, eps) * y).sum()
+
+        def f1(x, w, y):
+            return (rms_norm(x, w, eps) * y).sum()
+
+        def f2(x, w, y):
+            return (mx.fast.rms_norm(x, w, eps) * y).sum()
+
+        def f3(x, y):
+            return (rms_norm(x, mx.ones((x.shape[-1],)), eps) * y).sum()
+
+        def f4(x, y):
+            return (mx.fast.rms_norm(x, None, eps) * y).sum()
 
         for D in [32, 256]:
             x = mx.random.uniform(shape=(8, 100, D))
@@ -568,8 +583,11 @@ class TestFast(mlx_tests.MLXTestCase):
             )
             return mx.logsumexp(logits, axis=-1) - score
 
-        f1 = lambda x, y: ref(x, y).mean()
-        f2 = lambda x, y: mx.fast.cross_entropy(x, y).mean()
+        def f1(x, y):
+            return ref(x, y).mean()
+
+        def f2(x, y):
+            return mx.fast.cross_entropy(x, y).mean()
 
         for V in [7, 128, 1000, 4096]:
             logits = mx.random.normal(shape=(4, 7, V), scale=2.0)
@@ -580,8 +598,13 @@ class TestFast(mlx_tests.MLXTestCase):
             self.assertLess(mx.abs(g1 - g2).max().item(), 1e-6)
 
         w = mx.random.uniform(shape=(4, 7))
-        f3 = lambda x, y: (ref(x, y) * w).sum()
-        f4 = lambda x, y: (mx.fast.cross_entropy(x, y) * w).sum()
+
+        def f3(x, y):
+            return (ref(x, y) * w).sum()
+
+        def f4(x, y):
+            return (mx.fast.cross_entropy(x, y) * w).sum()
+
         logits = mx.random.normal(shape=(4, 7, 512), scale=2.0)
         targets = mx.random.randint(0, 512, shape=(4, 7))
         g1 = mx.grad(f3, argnums=0)(logits, targets)
@@ -687,7 +710,6 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
 
     def test_slice_into_layer_norm(self):
-        dim = 128
         eps = 1e-5
         x = mx.random.uniform(shape=(8, 100, 128))[:, 99:]
         rx_fast = mx.fast.layer_norm(x, weight=None, bias=None, eps=eps)
@@ -697,8 +719,12 @@ class TestFast(mlx_tests.MLXTestCase):
     def test_layer_norm_grad(self):
         D = 32
         eps = 1e-5
-        f1 = lambda x, w, b, y: (layer_norm(x, w, b, eps) * y).sum()
-        f2 = lambda x, w, b, y: (mx.fast.layer_norm(x, w, b, eps) * y).sum()
+
+        def f1(x, w, b, y):
+            return (layer_norm(x, w, b, eps) * y).sum()
+
+        def f2(x, w, b, y):
+            return (mx.fast.layer_norm(x, w, b, eps) * y).sum()
 
         x = mx.random.uniform(shape=(8, 100, D))
         w = mx.random.uniform(shape=(D,))
@@ -749,8 +775,11 @@ class TestFast(mlx_tests.MLXTestCase):
         y = mx.random.uniform(shape=(2, 4, D))
         mx.eval(x, w, y)
 
-        f_ref = lambda x, w, y: (layer_norm(x, w, None, eps) * y).sum()
-        f_fast = lambda x, w, y: (mx.fast.layer_norm(x, w, None, eps) * y).sum()
+        def f_ref(x, w, y):
+            return (layer_norm(x, w, None, eps) * y).sum()
+
+        def f_fast(x, w, y):
+            return (mx.fast.layer_norm(x, w, None, eps) * y).sum()
 
         # First order should match reference
         gx1, gw1 = mx.grad(f_ref, argnums=(0, 1))(x, w, y)
@@ -775,8 +804,13 @@ class TestFast(mlx_tests.MLXTestCase):
 
     def test_layer_norm_grad_no_params(self):
         eps = 1e-5
-        f1 = lambda x: layer_norm(x, None, None, eps).sum()
-        f2 = lambda x: mx.fast.layer_norm(x, None, None, eps).sum()
+
+        def f1(x):
+            return layer_norm(x, None, None, eps).sum()
+
+        def f2(x):
+            return mx.fast.layer_norm(x, None, None, eps).sum()
+
         x = mx.random.normal(shape=(2, 2, 8))
         mx.eval(x)
 
@@ -786,8 +820,12 @@ class TestFast(mlx_tests.MLXTestCase):
 
     def test_layer_norm_grad_params(self):
         eps = 1e-5
-        f1 = lambda params, x: (layer_norm(x, params[0], params[1], eps)).sum()
-        f2 = lambda params, x: (mx.fast.layer_norm(x, params[0], params[1], eps)).sum()
+
+        def f1(params, x):
+            return (layer_norm(x, params[0], params[1], eps)).sum()
+
+        def f2(params, x):
+            return (mx.fast.layer_norm(x, params[0], params[1], eps)).sum()
 
         w = mx.ones((8,))
         b = mx.zeros((8,))
@@ -947,7 +985,8 @@ class TestFast(mlx_tests.MLXTestCase):
         elif mx.cuda.is_available():
             source = """
                 auto elem = cooperative_groups::this_grid().thread_rank();
-                auto loc = elem_to_loc(elem, inp_shape.data(), inp_strides.data(), inp_ndim);
+                auto loc = elem_to_loc(
+                    elem, inp_shape.data(), inp_strides.data(), inp_ndim);
                 T tmp = inp[loc];
                 out[elem] = exp(tmp) * WARP_SIZE;
             """
@@ -1241,6 +1280,28 @@ class TestFast(mlx_tests.MLXTestCase):
         b = mx.full((32,), 2.5, dtype=mx.float32)
         out = call_kernel(a).astype(mx.float32) + call_kernel(b)
         self.assertTrue(mx.allclose(out, mx.full((32,), 8.0)))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_metal_kernel_negative_template_int(self):
+        # Negative int template values used to produce a '-' in the generated
+        # kernel name (via make_template_hash), which fails Metal compilation
+        # (#4579).
+        kernel = mx.fast.metal_kernel(
+            name="negtmpl",
+            input_names=["inp"],
+            output_names=["out"],
+            source="out[thread_position_in_grid.x] = T(V);",
+        )
+        (out,) = kernel(
+            inputs=[mx.zeros((4,), dtype=mx.int32)],
+            template=[("T", mx.int32), ("V", -1)],
+            grid=(4, 1, 1),
+            threadgroup=(4, 1, 1),
+            output_shapes=[(4,)],
+            output_dtypes=[mx.int32],
+        )
+        mx.eval(out)
+        self.assertEqual(out.tolist(), [-1, -1, -1, -1])
 
 
 if __name__ == "__main__":

@@ -180,14 +180,25 @@ bool Config::is_valid() const {
       (is_valid_mesh() || is_valid_ring());
 }
 
-std::vector<std::string> Config::get_mesh_connectivity() const {
+std::vector<std::vector<std::string>> Config::get_mesh_connectivity() const {
   if (!is_valid_mesh()) {
     throw std::runtime_error("[jaccl] The devices do not form a valid mesh.");
   }
-  std::vector<std::string> devices(size_);
-  for (int dst = 0; dst < size_; dst++) {
-    if (dst != rank_) {
-      devices[dst] = devices_[rank_][dst][0];
+  size_t n_wires = devices_[0][1].size();
+  for (int src = 0; src < size_; src++) {
+    for (int dst = 0; dst < size_; dst++) {
+      if (src != dst) {
+        n_wires = std::min(n_wires, devices_[src][dst].size());
+      }
+    }
+  }
+  std::vector<std::vector<std::string>> devices(
+      n_wires, std::vector<std::string>(size_));
+  for (int w = 0; w < devices.size(); w++) {
+    for (int dst = 0; dst < size_; dst++) {
+      if (dst != rank_) {
+        devices[w][dst] = devices_[rank_][dst][w];
+      }
     }
   }
   return devices;

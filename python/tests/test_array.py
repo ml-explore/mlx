@@ -1,7 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import operator
-import os
 import pickle
 import platform
 import sys
@@ -649,7 +648,8 @@ class TestArray(mlx_tests.MLXTestCase):
             expected = mx.stack([x, y], axis=0)
             self.assertEqualArray(z, expected)
 
-            # check heterogeneous construction with mlx arrays and python primitive types
+            # check heterogeneous construction with mlx arrays and python primitive
+            # types
             x, y = mx.array([True], x_t), mx.array([False], y_t)
             z = mx.array([[x, [2.0]], [[3.0], y]])
             expected = mx.array([[[x.item()], [2.0]], [[3.0], [y.item()]]], z.dtype)
@@ -1262,7 +1262,7 @@ class TestArray(mlx_tests.MLXTestCase):
             idx_mlx = [
                 mx.array(idx) if isinstance(idx, np.ndarray) else idx for idx in idx_np
             ]
-            slice_mlx = arr_mlx[tuple(idx_mlx)]
+            _slice_mlx = arr_mlx[tuple(idx_mlx)]
             self.assertTrue(
                 np.array_equal(arr_np[tuple(idx_np)], arr_mlx[tuple(idx_mlx)])
             )
@@ -1373,7 +1373,7 @@ class TestArray(mlx_tests.MLXTestCase):
         a[0:2] = 3
         self.assertEqual(a.tolist(), [3, 3, 1])
 
-        # Assigning through a bare Ellipsis, like a[:] and a[None]
+        # Assigning through a bare Ellipsis, like a[:] and a[(...,)]
         e = mx.zeros((2, 3), mx.int32)
         e[...] = 5
         self.assertEqual(e.tolist(), [[5, 5, 5], [5, 5, 5]])
@@ -1385,15 +1385,43 @@ class TestArray(mlx_tests.MLXTestCase):
         e[...] = mx.zeros((2, 3), mx.int32)
         self.assertEqual(e.tolist(), [[0, 0, 0], [0, 0, 0]])
 
+        # Leading singleton dimensions of the update are squeezed
+        e[...] = mx.array([[[1, 2, 3], [4, 5, 6]]])
+        self.assertEqual(e.tolist(), [[1, 2, 3], [4, 5, 6]])
+
+        # The target keeps its leading dimension of size 1
+        h = mx.zeros((1, 3), mx.int32)
+        h[...] = mx.array([[[1, 2, 3]]])
+        self.assertEqual(h.tolist(), [[1, 2, 3]])
+
+        # a[...] assigns the same values as a[(...,)]
+        f = mx.zeros((3,), mx.int32)
+        g = mx.zeros((3,), mx.int32)
+        f[...] = mx.array([[1, 2, 3]])
+        g[(...,)] = mx.array([[1, 2, 3]])
+        self.assertEqual(f.tolist(), [1, 2, 3])
+        self.assertEqual(f.tolist(), g.tolist())
+
         # Scalar array
         e = mx.array(0)
         e[...] = 7
         self.assertEqual(e.item(), 7)
 
+        e[...] = mx.array([[9]])
+        self.assertEqual(e.tolist(), 9)
+
         # Shapes that cannot broadcast are still rejected
         e = mx.zeros((2, 3), mx.int32)
         with self.assertRaises(ValueError):
             e[...] = mx.array([1, 2])
+
+        # The squeeze stops at the first dimension that is not 1
+        with self.assertRaises(ValueError):
+            e[...] = mx.zeros((2, 1, 3), mx.int32)
+
+        # A squeezed update that still does not broadcast is rejected
+        with self.assertRaises(ValueError):
+            e[...] = mx.zeros((1, 4), mx.int32)
 
         a[0:3] = 4
         self.assertEqual(a.tolist(), [4, 4, 4])
@@ -1910,6 +1938,33 @@ class TestArray(mlx_tests.MLXTestCase):
         b_mx = a_mx[::-1, ::-3, ::-2]
         self.assertTrue(np.array_equal(b_np, b_mx))
 
+    def test_slice_bounds_with_array_index(self):
+        # Out-of-range slice bounds must be clamped the same way NumPy clamps
+        # them when the slice is combined with an array index.
+        a_np = np.arange(20, dtype=np.int32).reshape(4, 5)
+        a_mx = mx.array(a_np)
+        idx_np = np.array([0, 1])
+        idx_mx = mx.array([0, 1], dtype=mx.uint32)
+
+        bounds = [None, -100, -6, -4, -1, 0, 1, 3, 4, 6, 100]
+        steps = [None, 1, 2, 3, -1, -2, -3]
+
+        for start in bounds:
+            for stop in bounds:
+                for step in steps:
+                    s = slice(start, stop, step)
+                    with self.subTest(start=start, stop=stop, step=step):
+                        self.assertTrue(
+                            np.array_equal(a_np[s, idx_np], a_mx[s, idx_mx])
+                        )
+
+                        # Same clamping applies when assigning through the slice
+                        u_np = a_np.copy()
+                        u_mx = mx.array(a_np)
+                        u_np[s, idx_np] = 0
+                        u_mx[s, idx_mx] = 0
+                        self.assertTrue(np.array_equal(u_np, u_mx))
+
     def test_api(self):
         x = mx.array(np.random.rand(10, 10, 10))
         ops = [
@@ -2029,7 +2084,8 @@ class TestArray(mlx_tests.MLXTestCase):
                 self.assertEqual(mv_mx.shape, mv_np.shape, f"{mlx_dtype}{np_dtype}")
                 # correct buffer format for 8 byte (unsigned) 'long long' is Q/q, see
                 # https://docs.python.org/3.10/library/struct.html#format-characters
-                # numpy returns L/l, as 'long' is equivalent to 'long long' on 64bit machines, so q and l are equivalent
+                # numpy returns L/l, as 'long' is equivalent to 'long long' on 64bit
+                # machines, so q and l are equivalent
                 # see https://github.com/pybind/pybind11/issues/1908
                 if np_dtype == np.uint64:
                     self.assertEqual(mv_mx.format, "Q", f"{mlx_dtype}{np_dtype}")
@@ -2090,7 +2146,7 @@ class TestArray(mlx_tests.MLXTestCase):
         mv = memoryview(a)
         a = None
         self.assertIsNotNone(wr())
-        mv = None
+        del mv
         self.assertIsNone(wr())
 
     def test_buffer_protocol_eval_error(self):
@@ -2106,7 +2162,7 @@ class TestArray(mlx_tests.MLXTestCase):
         a_np = np.array(a, copy=False)
         a = None
         self.assertIsNotNone(wr())
-        a_np = None
+        del a_np
         self.assertIsNone(wr())
 
     def test_create_from_buffer(self):
@@ -2482,7 +2538,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(y.tolist(), [0.0, 1.0, 2.0])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_torch_mps_dlpack_zero_copy_shares_updates(self):
+    def test_torch_mps_dlpack_zero_copy_one_way_updates(self):
         assert torch is not None
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
         torch.mps.synchronize()
@@ -2494,7 +2550,8 @@ class TestArray(mlx_tests.MLXTestCase):
 
         y += 10
         mx.eval(y)
-        self.assertEqual(x.cpu().numpy().tolist(), y.tolist())
+        self.assertEqual(y.tolist(), [[10.0] * 4] * 3)
+        self.assertEqual(x.cpu().numpy().tolist(), [[0.0] * 4] * 3)
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_matching_dtype_argument_shares_updates(self):
@@ -2659,7 +2716,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.tolist(), [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 6.0, 7.0])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_from_dlpack_torch_mps_copy_none_shares_updates(self):
+    def test_from_dlpack_torch_mps_copy_none_one_way_updates(self):
         assert torch is not None
         x = torch.arange(3, device="mps", dtype=torch.float32)
         torch.mps.synchronize()
@@ -2671,7 +2728,8 @@ class TestArray(mlx_tests.MLXTestCase):
 
         y += 10
         mx.eval(y)
-        self.assertEqual(x.cpu().numpy().tolist(), [10.0, 10.0, 10.0])
+        self.assertEqual(y.tolist(), [10.0, 10.0, 10.0])
+        self.assertEqual(x.cpu().numpy().tolist(), [0.0, 0.0, 0.0])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_from_dlpack_torch_mps_copy_false_shares_updates(self):
@@ -2779,6 +2837,13 @@ class TestArray(mlx_tests.MLXTestCase):
         expected = mx.array([5.0, 5.0, 5.0])
         a[mask] = 5.0
         self.assertTrue(mx.array_equal(a, expected))
+
+        # Scalar target and scalar mask
+        for selected in (False, True):
+            a = mx.array(False)
+            a[mx.array(selected)] = True
+            self.assertEqual(a.shape, ())
+            self.assertEqual(a.item(), selected)
 
         mask_np = np.zeros((1, 10, 10), dtype=bool)
         with self.assertRaises(ValueError):
@@ -2904,7 +2969,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(f"{b:.1f}", "0.4")
 
         with self.assertRaises(TypeError):
-            s = f"{a:.2f}"
+            f"{a:.2f}"
 
         a = mx.array([1, 2, 3])
         self.assertEqual(f"{a}", "array([1, 2, 3], dtype=int32)")

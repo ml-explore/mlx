@@ -124,8 +124,9 @@ TEST_CASE("test reshape") {
   CHECK(x.flags().col_contiguous);
   y = reshape(x, {2, 5, 10});
   eval(y);
+  // Strides (5, 1, 10) are neither row nor col major
   CHECK(!y.flags().row_contiguous);
-  CHECK(y.flags().col_contiguous);
+  CHECK(!y.flags().col_contiguous);
   y = reshape(x, {2, 50});
   eval(y);
   CHECK(y.flags().row_contiguous);
@@ -358,6 +359,22 @@ TEST_CASE("test slice") {
   out = slice(x, {3, 0}, {-5, 2}, {-1, 1});
   eval(out);
   CHECK_EQ(out.data_size(), 8);
+
+  x = as_strided(square(arange(16, float32)), {3, 2, 2}, {1, 1, 5}, 0);
+  out = slice(x, {0, 0, 0}, {2, 2, 2});
+  eval(out);
+  CHECK_EQ(out.data_size(), 8);
+  CHECK_FALSE(out.flags().contiguous);
+  CHECK_EQ(sum(out).item<float>(), 152.0f);
+
+  x = reshape(arange(6), {2, 3});
+  x = slice(x, {1, 0}, {-3, 3}, {-1, 1});
+  out = slice(x, {1, 0}, {-3, 3}, {-1, 1});
+  eval(out);
+  CHECK(out.flags().contiguous);
+  CHECK(out.flags().row_contiguous);
+  CHECK(array_equal(reshape(transpose(out), {-1}), array({0, 3, 1, 4, 2, 5}))
+            .item<bool>());
 }
 
 TEST_CASE("test slice update") {
@@ -958,6 +975,29 @@ TEST_CASE("test comparison ops") {
     expected = array({true, false, true, true}, {2, 2});
     z = less_equal(x, y);
     CHECK(array_equal(z, expected).item<bool>());
+  }
+}
+
+TEST_CASE("test float16 sigmoid mixed lanes") {
+  const float values[] = {-12, -4, -1, 0, 1, 4, 12, -2};
+  for (int size : {1, 7, 8, 9, 15, 16, 17}) {
+    for (int offset = 0; offset < 8; ++offset) {
+      std::vector<float> input(size);
+      for (int i = 0; i < size; ++i) {
+        input[i] = values[(i + offset) % 8];
+      }
+      auto result = sigmoid(array(input.begin(), {size}, float16), Device::cpu);
+      result.eval();
+      for (int i = 0; i < size; ++i) {
+        CAPTURE(size);
+        CAPTURE(offset);
+        CAPTURE(i);
+        auto expected = 1.0 / (1.0 + std::exp(-double(input[i])));
+        CHECK_EQ(
+            static_cast<float>(result.data<float16_t>()[i]),
+            doctest::Approx(expected).epsilon(0.002));
+      }
+    }
   }
 }
 
@@ -2957,6 +2997,13 @@ TEST_CASE("test as_strided op") {
   CHECK(array_equal(y, expected).item<bool>());
   CHECK_EQ(y.data_size(), 10);
   CHECK_FALSE(y.flags().contiguous);
+
+  auto xf = square(arange(16, float32));
+  y = as_strided(xf, {2, 2, 2}, {1, 1, 5}, 0);
+  eval(y);
+  CHECK_EQ(y.data_size(), 8);
+  CHECK_FALSE(y.flags().contiguous);
+  CHECK_EQ(sum(y).item<float>(), 152.0f);
 
   x = reshape(x, {2, 5}); // 0 1 2 3 ...
   x = transpose(x, {1, 0}); // 0 5 1 6 2 7 ...

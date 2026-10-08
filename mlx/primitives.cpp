@@ -390,7 +390,10 @@ std::vector<array> ArcCos::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> ArcCos::jvp(
@@ -418,7 +421,10 @@ std::vector<array> ArcCosh::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> ArcCosh::jvp(
@@ -428,6 +434,14 @@ std::vector<array> ArcCosh::jvp(
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
   array one = array(1., primals[0].dtype());
+  if (issubdtype(primals[0].dtype(), complexfloating)) {
+    // rsqrt(x^2 - 1) has the wrong sign for complex x with Re(x) < 0.
+    array d = multiply(
+        rsqrt(subtract(primals[0], one, stream()), stream()),
+        rsqrt(add(primals[0], one, stream()), stream()),
+        stream());
+    return {multiply(tangents[0], d, stream())};
+  }
   array t = subtract(square(primals[0], stream()), one, stream());
   return {multiply(tangents[0], rsqrt(t, stream()), stream())};
 }
@@ -445,7 +459,10 @@ std::vector<array> ArcSin::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> ArcSin::jvp(
@@ -472,7 +489,10 @@ std::vector<array> ArcSinh::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> ArcSinh::jvp(
@@ -499,7 +519,10 @@ std::vector<array> ArcTan::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> ArcTan::jvp(
@@ -587,7 +610,10 @@ std::vector<array> ArcTanh::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> ArcTanh::jvp(
@@ -1693,7 +1719,10 @@ std::vector<array> Cos::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return {jvp(primals, cotangents, argnums)};
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Cos::jvp(
@@ -2195,7 +2224,7 @@ std::vector<Shape> Flatten::output_shapes(const std::vector<array>& inputs) {
 bool FFT::is_equivalent(const Primitive& other) const {
   const FFT& r_other = static_cast<const FFT&>(other);
   return axes_ == r_other.axes_ && inverse_ == r_other.inverse_ &&
-      real_ == r_other.real_;
+      real_ == r_other.real_ && odd_out_ == r_other.odd_out_;
 }
 
 std::vector<array> Unflatten::vjp(
@@ -2263,13 +2292,13 @@ std::pair<std::vector<array>, std::vector<int>> FFT::vmap(
   // Only the last transformed axis changes size in a real transform
   if (real_) {
     auto n = out_shape[fft_axes.back()];
-    out_shape[fft_axes.back()] = inverse_ ? 2 * (n - 1) : n / 2 + 1;
+    out_shape[fft_axes.back()] = inverse_ ? 2 * (n - 1) + odd_out_ : n / 2 + 1;
   }
   return {
       {array(
           out_shape,
           real_ && inverse_ ? float32 : complex64,
-          std::make_shared<FFT>(stream(), fft_axes, inverse_, real_),
+          std::make_shared<FFT>(stream(), fft_axes, inverse_, real_, odd_out_),
           {in})},
       {ax}};
 }
@@ -4443,6 +4472,49 @@ std::vector<array> Scan::jvp(
 
   if (reduce_type_ == Scan::Sum) {
     return {cumsum(tangents[0], axis_, reverse_, inclusive_, stream())};
+  } else if (reduce_type_ == Scan::LogAddExp) {
+    if (issubdtype(tangents[0].dtype(), complexfloating)) {
+      throw std::invalid_argument(
+          "[logcumsumexp] JVP is not supported for complex inputs.");
+    }
+    auto x = primals[0];
+    auto t = tangents[0];
+    auto y = logcumsumexp(x, axis_, reverse_, inclusive_, stream());
+
+    auto zero = zeros({1}, t.dtype(), stream());
+    auto t_min = array(finfo(t.dtype()).min, t.dtype());
+    auto log_abs_t = log(abs(t, stream()), stream());
+    auto log_t_positive =
+        where(greater(t, zero, stream()), log_abs_t, t_min, stream());
+    auto log_t_negative =
+        where(less(t, zero, stream()), log_abs_t, t_min, stream());
+
+    auto out_pos = exp(subtract(
+        logcumsumexp(
+            add(log_t_positive, x, stream()),
+            axis_,
+            reverse_,
+            inclusive_,
+            stream()),
+        y,
+        stream()));
+
+    auto out_neg = exp(subtract(
+        logcumsumexp(
+            add(log_t_negative, x, stream()),
+            axis_,
+            reverse_,
+            inclusive_,
+            stream()),
+        y,
+        stream()));
+
+    return {where(
+        isneginf(y, stream()),
+        zeros_like(y, stream()),
+        subtract(out_pos, out_neg, stream()),
+        stream())};
+
   } else {
     throw std::runtime_error(
         "JVP is not implemented for cumulative prod/min/max");
@@ -4610,14 +4682,19 @@ std::pair<std::vector<array>, std::vector<int>> Scatter::vmap(
     // Clone updates along the vmap dimension so they can be applied to each
     // source tensor in the vmap.
     auto& updates = inputs.back();
+    int idx_ndim = static_cast<int>(inputs[1].ndim());
+    int upd_src_ax = idx_ndim + src_ax;
     if (vmap_axes.back() < 0) {
-      updates = expand_dims(
-          updates, {0, static_cast<int>(inputs[1].ndim())}, stream());
+      updates = expand_dims(updates, {0, upd_src_ax}, stream());
       updates = repeat(updates, vmap_size, 0, stream());
     } else {
-      updates =
-          expand_dims(updates, static_cast<int>(inputs[1].ndim()), stream());
-      updates = moveaxis(updates, vmap_axes.back(), 0, stream());
+      int upd_vmap_ax = vmap_axes.back();
+      // expand_dims shifts any axis at or after the insertion point
+      if (upd_vmap_ax >= upd_src_ax) {
+        upd_vmap_ax++;
+      }
+      updates = expand_dims(updates, upd_src_ax, stream());
+      updates = moveaxis(updates, upd_vmap_ax, 0, stream());
     }
   }
 
@@ -5601,16 +5678,17 @@ std::vector<array> Sqrt::vjp(
   assert(primals.size() == 1);
   assert(cotangents.size() == 1);
   auto dtype = primals[0].dtype();
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
   if (recip_) {
     auto one_over_x_root_x = divide(outputs[0], primals[0], stream());
     return {multiply(
         multiply(array(-0.5, dtype), cotangents[0], stream()),
-        one_over_x_root_x,
+        conjugate(one_over_x_root_x, stream()),
         stream())};
   } else {
     return {divide(
         multiply(array(0.5, dtype), cotangents[0], stream()),
-        outputs[0],
+        conjugate(outputs[0], stream()),
         stream())};
   }
 }
@@ -5619,10 +5697,21 @@ std::vector<array> Sqrt::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(tangents.size() == 1);
+  auto dtype = primals[0].dtype();
   if (recip_) {
-    return vjp(primals, tangents, argnums, {rsqrt(primals[0], stream())});
+    auto one_over_x_root_x =
+        divide(rsqrt(primals[0], stream()), primals[0], stream());
+    return {multiply(
+        multiply(array(-0.5, dtype), tangents[0], stream()),
+        one_over_x_root_x,
+        stream())};
   } else {
-    return vjp(primals, tangents, argnums, {sqrt(primals[0], stream())});
+    return {divide(
+        multiply(array(0.5, dtype), tangents[0], stream()),
+        sqrt(primals[0], stream()),
+        stream())};
   }
 }
 

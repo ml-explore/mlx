@@ -64,7 +64,7 @@ def bench_mlx(steps: int = 20, shape=(10, 32, 32, 32, 3)) -> float:
         mx.eval(state)
         end_time = time.perf_counter()
 
-        print(f"{i:3d}, time={(end_time-start_time) * 1000:7.2f} ms")
+        print(f"{i:3d}, time={(end_time - start_time) * 1000:7.2f} ms")
         total_time += (end_time - start_time) * 1000
 
     return total_time
@@ -119,7 +119,7 @@ def bench_torch(steps: int = 20, shape=(10, 3, 32, 32, 32)) -> float:
 
         end_time = time.perf_counter()
 
-        print(f"{i:3d}, time={(end_time-start_time) * 1000:7.2f} ms")
+        print(f"{i:3d}, time={(end_time - start_time) * 1000:7.2f} ms")
         total_time += (end_time - start_time) * 1000
 
     return total_time
@@ -130,13 +130,13 @@ def main():
     time_mlx = bench_mlx(steps)
     time_torch = bench_torch(steps)
 
-    print(f"average time of MLX:     {time_mlx/steps:9.2f} ms")
+    print(f"average time of MLX:     {time_mlx / steps:9.2f} ms")
     print(f"total time of MLX:       {time_mlx:9.2f} ms")
-    print(f"average time of PyTorch: {time_torch/steps:9.2f} ms")
+    print(f"average time of PyTorch: {time_torch / steps:9.2f} ms")
     print(f"total time of PyTorch:   {time_torch:9.2f} ms")
 
     diff = time_torch / time_mlx - 1.0
-    print(f"torch/mlx diff: {100. * diff:+5.2f}%")
+    print(f"torch/mlx diff: {100.0 * diff:+5.2f}%")
 
 
 if __name__ == "__main__":

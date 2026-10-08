@@ -350,6 +350,11 @@ void implicit_gemm_conv_2D_gpu(
     wn = 1;
   }
 
+  // The 8 channel loader reads one row per thread, so it needs bm = 64
+  if (C_per_group == 8) {
+    bm = 64;
+  }
+
   int tn = (implicit_N + bn - 1) / bn;
   int tm = (implicit_M + bm - 1) / bm;
   int swizzle_log = 0;
@@ -365,6 +370,9 @@ void implicit_gemm_conv_2D_gpu(
   } else if (C_per_group <= 4) {
     gemm_k_iters = ((conv_params.wS[0] * conv_params.wS[1] * 4) + bk - 1) / bk;
     n_channel_specialization = C_per_group;
+  } else if (C_per_group == 8) {
+    gemm_k_iters = ((conv_params.wS[0] * conv_params.wS[1] * 8) + bk - 1) / bk;
+    n_channel_specialization = 8;
   }
 
   bool small_filter = (!n_channel_specialization) &&
@@ -1421,11 +1429,11 @@ void dispatch_conv_2D_gpu(
         conv_params.wS[0] <= 7 && conv_params.wS[1] <= 7 &&
         conv_params.str[0] <= 2 && conv_params.str[1] <= 2 &&
         conv_params.wt_strides[1] == conv_params.wS[1] &&
-        conv_params.C % 16 == 0 && conv_params.C == conv_params.O) {
+        conv_params.C % 8 == 0 && conv_params.C == conv_params.O) {
       return depthwise_conv_2D_gpu(s, d, in, wt, out, conv_params);
     }
 
-    if ((C_per_group <= 4 || C_per_group % 16 == 0) &&
+    if ((C_per_group <= 4 || C_per_group == 8 || C_per_group % 16 == 0) &&
         (O_per_group <= 16 || O_per_group % 16 == 0)) {
       return implicit_gemm_conv_2D_gpu(s, d, in, wt, out, conv_params);
     } else {
@@ -1442,7 +1450,7 @@ void dispatch_conv_2D_gpu(
   if (!conv_params.flip && is_stride_one && is_kdil_one && is_idil_one &&
       conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
       conv_params.C % 32 == 0 && conv_params.O % 32 == 0 && inp_large &&
-      channels_large) {
+      channels_large && env::get_var("MLX_CONV_WINOGRAD", 1)) {
     // Only use winograd conv when having enough memory.
     if (int n_step = winograd_batch_step(d, in, conv_params); n_step > 0) {
       return winograd_conv_2D_gpu(
@@ -1558,7 +1566,8 @@ void conv_1D_gpu(
   const int O_per_group = O / groups;
 
   // Direct to implicit gemm conv
-  if (is_idil_one && (C_per_group <= 4 || C_per_group % 16 == 0) &&
+  if (is_idil_one &&
+      (C_per_group <= 4 || C_per_group == 8 || C_per_group % 16 == 0) &&
       (O_per_group <= 16 || O_per_group % 16 == 0)) {
     MLXConvParams<2> conv_params{
         /* const int  N = */ static_cast<int>(in.shape(0)),

@@ -1,10 +1,13 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2024-2026 Apple Inc.
 
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <mutex>
+#include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -96,7 +99,7 @@ class ResidencySets {
   // gave us a set; the new set is the last one. add_to_set_locked returns the
   // set it used. Neither it nor remove_from_set_locked commits, so a bulk
   // resize costs one commit per set instead of one per allocation.
-  bool add_set_locked(NS::Error** error = nullptr);
+  bool add_set_locked(std::string* error = nullptr);
   uint32_t choose_set_locked(size_t bytes);
   uint32_t add_to_set_locked(const MTL::Allocation* buf, Placement& at);
   void remove_from_set_locked(const MTL::Allocation* buf, Placement& at);
@@ -118,6 +121,9 @@ class ResidencySets {
   // taking the lock.
   std::atomic<uint64_t> num_sets_{0};
   mutable std::mutex mtx_;
+  std::condition_variable refresh_cv_;
+  bool stop_refresh_{false};
+  std::thread refresh_thread_;
 };
 
 } // namespace mlx::core::metal

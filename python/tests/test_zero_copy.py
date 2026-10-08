@@ -2,6 +2,8 @@
 
 import faulthandler
 import gc
+import os
+import tempfile
 import threading
 import unittest
 
@@ -52,6 +54,35 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
         a = np.arange(16, dtype=np.float64)
         with self.assertRaises(Exception):
             mx.asarray(a, dtype=mx.float32, copy=False)
+
+    def test_misaligned_source_copies(self):
+        # Pointer not aligned to the item size
+        raw = np.arange(64, dtype=np.uint8)
+        a = raw[6:22].view(np.int32)
+        x = mx.asarray(a)
+        self.assertTrue(np.array_equal(x + 1, a + 1))
+        with self.assertRaises(ValueError):
+            mx.asarray(a, copy=False)
+
+    def test_ops_do_not_write_to_source(self):
+        a = np.ones(4096, np.float32)
+        mx.eval(mx.exp(a))
+        self.assertTrue(np.array_equal(a, np.ones(4096, np.float32)))
+
+        b = np.ones(4096, np.float32).tobytes()
+        mx.eval(mx.exp(mx.asarray(np.frombuffer(b, dtype=np.float32))))
+        self.assertEqual(b, np.ones(4096, np.float32).tobytes())
+
+    def test_ops_on_read_only_memmap(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "a.npy")
+            np.save(path, np.ones(1 << 16, np.float32))
+            a = np.load(path, mmap_mode="r")
+            y = mx.exp(mx.asarray(a))
+            mx.eval(y)
+            self.assertTrue(np.allclose(np.array(y), np.exp(1.0)))
+            self.assertTrue(np.array_equal(np.load(path), np.ones(1 << 16)))
+            del a, y
 
     def test_source_lifetime(self):
         if not mx.metal.is_available():

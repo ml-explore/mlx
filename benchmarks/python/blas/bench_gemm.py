@@ -2,7 +2,6 @@
 
 import argparse
 import math
-import os
 import subprocess
 import time
 
@@ -148,7 +147,8 @@ def bench_shape(B, M, N, K, np_dtype, transpose="nn"):
 
     if not np.allclose(c_mlx, c_npy.astype(np_dtype), atol=atol):
         print(
-            f"Failed at {(B, M, N, K)} [transpose = {transpose}] with max(|a - b|) = {np.max(np.abs(c_npy - c_mlx))}"
+            f"Failed at {(B, M, N, K)} [transpose = {transpose}] with max(|a - b|) = "
+            f"{np.max(np.abs(c_npy - c_mlx))}"
         )
 
     return time_mlx, time_torch
@@ -185,7 +185,8 @@ if __name__ == "__main__":
                 diff = gflops_mx / gflops_pt - 1.0
 
                 print(
-                    f"{B:3d}, {M:4d}, {N:4d}, {K:4d}, {dtype}, {transpose}, {gflops_pt:05.3f}, {gflops_mx:05.3f}, {100.0 * diff:+5.2f}%"
+                    f"{B:3d}, {M:4d}, {N:4d}, {K:4d}, {dtype}, {transpose}, "
+                    f"{gflops_pt:05.3f}, {gflops_mx:05.3f}, {100.0 * diff:+5.2f}%"
                 )
                 if gflops_pt >= 2.0 * gflops_mx:
                     print("ATTENTION ^^^^^^^")

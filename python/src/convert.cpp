@@ -185,14 +185,17 @@ mx::array cpu_nd_array_to_mlx(
 // array.
 //
 // Returns std::nullopt when the buffer cannot be adopted (no Metal backend,
-// dtype width mismatch, or a pointer the platform will not wrap), so the caller
-// can fall back to a copy or raise.
+// dtype width mismatch, a pointer not aligned to the item size, or a pointer
+// the platform will not wrap), so the caller can fall back to a copy or raise.
 std::optional<mx::array> cpu_nd_array_to_mlx_no_copy(
     nb::ndarray<nb::ro> nd_array,
     const mx::Shape& shape,
     mx::Dtype dst_dtype) {
+  // GPU kernels need aligned data
+  auto ptr = reinterpret_cast<uintptr_t>(nd_array.data());
   if (!mx::metal::is_available() ||
-      nd_array.itemsize() != mx::size_of(dst_dtype)) {
+      nd_array.itemsize() != mx::size_of(dst_dtype) ||
+      ptr % nd_array.itemsize() != 0) {
     return std::nullopt;
   }
 
@@ -206,19 +209,21 @@ std::optional<mx::array> cpu_nd_array_to_mlx_no_copy(
     return std::nullopt;
   }
 
+  auto byte_offset = nd_array.byte_offset();
   mx::array out(shape, dst_dtype, nullptr, {});
   out.set_data(
-      buf,
-      storage_size,
-      std::move(strides),
-      flags,
-      nd_array.byte_offset(),
       // The buffer wraps caller-owned memory, so release the wrapper rather
       // than returning it to the allocator's reuse pool, which must only
       // recycle buffers it allocated itself.
-      [owner = std::move(nd_array)](mx::allocator::Buffer b) {
-        mx::allocator::release(b);
-      });
+      mx::allocator::Data(
+          buf,
+          [owner = std::move(nd_array)](mx::allocator::Buffer b) {
+            mx::allocator::release(b);
+          }),
+      storage_size,
+      std::move(strides),
+      flags,
+      byte_offset);
   out.set_status(mx::array::Status::available);
   return out;
 }
@@ -238,14 +243,16 @@ mx::array metal_nd_array_to_mlx(
   }
   auto [storage_size, strides, flags] = get_strided_layout(nd_array, shape);
   auto data_handle = nd_array.data_handle();
+  auto byte_offset = nd_array.byte_offset();
   mx::array out(shape, src_dtype, nullptr, {});
   out.set_data(
-      mx::allocator::Buffer(data_handle),
+      mx::allocator::Data(
+          mx::allocator::Buffer(data_handle),
+          [owner = std::move(nd_array)](mx::allocator::Buffer) {}),
       storage_size,
       std::move(strides),
       flags,
-      nd_array.byte_offset(),
-      [owner = std::move(nd_array)](mx::allocator::Buffer) {});
+      byte_offset);
   out.set_status(mx::array::Status::available);
 
   if (copy) {

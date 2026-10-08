@@ -8,7 +8,8 @@ from mlx.nn.layers.base import Module
 
 
 class ConvTranspose1d(Module):
-    """Applies a 1-dimensional transposed convolution over the multi-channel input sequence.
+    """Applies a 1-dimensional transposed convolution over the multi-channel input
+    sequence.
 
     The channels are expected to be last i.e. the input shape should be ``NLC`` where:
 
@@ -83,7 +84,8 @@ class ConvTranspose1d(Module):
 
 
 class ConvTranspose2d(Module):
-    """Applies a 2-dimensional transposed convolution over the multi-channel input image.
+    """Applies a 2-dimensional transposed convolution over the multi-channel input
+    image.
 
     The channels are expected to be last i.e. the input shape should be ``NHWC`` where:
 
@@ -163,7 +165,8 @@ class ConvTranspose2d(Module):
 
 
 class ConvTranspose3d(Module):
-    """Applies a 3-dimensional transposed convolution over the multi-channel input image.
+    """Applies a 3-dimensional transposed convolution over the multi-channel input
+    image.
 
     The channels are expected to be last i.e. the input shape should be ``NDHWC`` where:
 

@@ -36,7 +36,7 @@ def scatter_unsort(x, inv_order, shape=None):
     return x
 
 
-def time_gather_qmm(name, D, M, E, I, mode):
+def time_gather_qmm(name, D, M, E, num_indices, mode):
     w1 = mx.random.normal((E, M, D), dtype=mx.bfloat16, scale=D**-0.5)
     w2 = mx.random.normal((E, M, D), dtype=mx.bfloat16, scale=D**-0.5)
     w3 = mx.random.normal((E, D, M), dtype=mx.bfloat16, scale=M**-0.5)
@@ -59,7 +59,9 @@ def time_gather_qmm(name, D, M, E, I, mode):
     for N in SEQ_LENS:
         x = mx.random.normal((N, 1, 1, D), dtype=mx.bfloat16)
         scores = mx.random.uniform(shape=(N, E))
-        indices = mx.argpartition(scores, E - I, axis=-1)[:, -I:].astype(mx.uint32)
+        indices = mx.argpartition(scores, E - num_indices, axis=-1)[
+            :, -num_indices:
+        ].astype(mx.uint32)
         mx.eval(x, indices)
 
         label = f"{name} {mode} N={N}"

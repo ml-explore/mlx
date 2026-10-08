@@ -69,12 +69,11 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
           &N,
           in_ptr + M * N * i,
           &lda,
-          static_cast<T*>(tau.raw_ptr()) + num_reflectors * i,
-          static_cast<T*>(work.raw_ptr()),
+          static_cast<T*>(tau.buffer().raw_ptr()) + num_reflectors * i,
+          static_cast<T*>(work.buffer().raw_ptr()),
           &lwork,
           &info);
     }
-    allocator::free(work);
 
     for (int i = 0; i < num_matrices; ++i) {
       /// num_reflectors x N
@@ -102,7 +101,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
         &lwork,
         &info);
     lwork = optimal_work;
-    work = allocator::malloc(sizeof(T) * lwork);
+    auto orgqr_work = allocator::malloc(sizeof(T) * lwork);
 
     // Loop over matrices
     for (int i = 0; i < num_matrices; ++i) {
@@ -113,8 +112,8 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
           &num_reflectors,
           in_ptr + M * N * i,
           &lda,
-          static_cast<T*>(tau.raw_ptr()) + num_reflectors * i,
-          static_cast<T*>(work.raw_ptr()),
+          static_cast<T*>(tau.buffer().raw_ptr()) + num_reflectors * i,
+          static_cast<T*>(orgqr_work.buffer().raw_ptr()),
           &lwork,
           &info);
     }
@@ -128,10 +127,6 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
         }
       }
     }
-
-    // Cleanup
-    allocator::free(work);
-    allocator::free(tau);
   });
   encoder.add_temporary(in);
 }

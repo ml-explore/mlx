@@ -30,7 +30,8 @@ void shared_buffer_slice(
   auto flags = in.flags();
   flags.row_contiguous = is_row_contiguous;
   flags.col_contiguous = is_col_contiguous;
-  flags.contiguous = (no_bsx_size == data_size);
+  flags.contiguous = is_row_contiguous || is_col_contiguous ||
+      (flags.contiguous && no_bsx_size == data_size);
 
   out.copy_shared_buffer(in, out_strides, flags, data_size, data_offset);
 }
