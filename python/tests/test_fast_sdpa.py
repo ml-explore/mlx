@@ -895,11 +895,17 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
     @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
     def test_sdpa_vector_2pass_threadgroup_limit(self):
         for dtype, D, q_heads, kv_heads, q_len in (
+            (mx.float16, 192, 32, 8, 8),
+            (mx.float16, 256, 24, 4, 5),
+            (mx.float16, 256, 32, 4, 4),
             (mx.bfloat16, 256, 24, 4, 5),
+            (mx.bfloat16, 256, 32, 4, 4),
             (mx.float32, 192, 32, 8, 8),
-            (mx.float32, 256, 24, 4, 4),
+            (mx.float32, 256, 24, 4, 5),
+            (mx.float32, 256, 32, 4, 4),
         ):
             with self.subTest(dtype=dtype, D=D, q_len=q_len):
+                self.assertGreater(32 * q_heads // kv_heads * q_len, 896)
                 q = mx.random.normal(shape=(1, q_heads, q_len, D), dtype=dtype)
                 k = mx.random.normal(shape=(1, kv_heads, 1029, D), dtype=dtype)
                 v = mx.random.normal(shape=(1, kv_heads, 1029, D), dtype=dtype)
@@ -915,7 +921,9 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     scale=scale,
                     mask="causal",
                 )
-                atol = 2e-2 if dtype == mx.bfloat16 else 1e-4
+                atol = 1e-4 if dtype == mx.float32 else 2e-3
+                if dtype == mx.bfloat16:
+                    atol = 2e-2
                 self.assertTrue(mx.allclose(out.astype(mx.float32), ref, atol=atol))
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")

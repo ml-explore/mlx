@@ -266,7 +266,7 @@ template <typename T, int D, int V = D, int TK = 4>
 
   // For each key
   int i = block_idx;
-  for (; TK > 1 && i + (TK - 1) * blocks < N; i += blocks * TK) {
+  for (; i + (TK - 1) * blocks < N; i += blocks * TK) {
     // Prefetch: issue all TK K/V loads first so the HW can overlap them.
     T k_reg[TK][qk_per_thread];
     T v_reg[TK][v_per_thread];
