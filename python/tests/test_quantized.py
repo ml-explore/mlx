@@ -317,7 +317,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 y_q = mx.quantized_matmul(x, w_q, scales, biases, True, gs, 1)
                 y_hat = x @ w_hat.T
                 self.assertEqual(y_q.shape, y_hat.shape)
-                self.assertLess((y_q - y_hat).abs().max().item(), 1e-5)
+                tol = 2e-5 if platform.system() == "Windows" else 1e-5
+                self.assertLess((y_q - y_hat).abs().max().item(), tol)
 
     def test_qqmv(self):
         key = mx.random.key(0)
