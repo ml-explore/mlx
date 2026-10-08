@@ -211,6 +211,8 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
     grid_dims = MTL::Size(nthreads, 1, 1);
   }
   compute_encoder.dispatch_threads(grid_dims, group_dims);
+  compute_encoder.get_command_buffer()->addCompletedHandler(
+      [data = val.data_shared_ptr()](MTL::CommandBuffer*) {});
 }
 
 void reshape_gpu(const array& in, array& out, Stream s) {
