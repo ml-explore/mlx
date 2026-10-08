@@ -396,9 +396,10 @@ CudaAllocator& allocator() {
   return *allocator_;
 }
 
-Buffer malloc_async(size_t size, CommandEncoder& encoder) {
-  return allocator().malloc_async(
-      size, encoder.device().cuda_device(), encoder.stream());
+allocator::Data malloc_async(size_t size, CommandEncoder& encoder) {
+  return allocator::Data(
+      allocator().malloc_async(
+          size, encoder.device().cuda_device(), encoder.stream()));
 }
 
 } // namespace cu

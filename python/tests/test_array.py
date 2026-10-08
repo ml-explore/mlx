@@ -2534,7 +2534,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(y.tolist(), [0.0, 1.0, 2.0])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_torch_mps_dlpack_zero_copy_shares_updates(self):
+    def test_torch_mps_dlpack_zero_copy_one_way_updates(self):
         assert torch is not None
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
         torch.mps.synchronize()
@@ -2546,7 +2546,8 @@ class TestArray(mlx_tests.MLXTestCase):
 
         y += 10
         mx.eval(y)
-        self.assertEqual(x.cpu().numpy().tolist(), y.tolist())
+        self.assertEqual(y.tolist(), [[10.0] * 4] * 3)
+        self.assertEqual(x.cpu().numpy().tolist(), [[0.0] * 4] * 3)
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_matching_dtype_argument_shares_updates(self):
@@ -2711,7 +2712,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.tolist(), [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 6.0, 7.0])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_from_dlpack_torch_mps_copy_none_shares_updates(self):
+    def test_from_dlpack_torch_mps_copy_none_one_way_updates(self):
         assert torch is not None
         x = torch.arange(3, device="mps", dtype=torch.float32)
         torch.mps.synchronize()
@@ -2723,7 +2724,8 @@ class TestArray(mlx_tests.MLXTestCase):
 
         y += 10
         mx.eval(y)
-        self.assertEqual(x.cpu().numpy().tolist(), [10.0, 10.0, 10.0])
+        self.assertEqual(y.tolist(), [10.0, 10.0, 10.0])
+        self.assertEqual(x.cpu().numpy().tolist(), [0.0, 0.0, 0.0])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_from_dlpack_torch_mps_copy_false_shares_updates(self):

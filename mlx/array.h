@@ -19,7 +19,6 @@ namespace mlx::core {
 // Forward declaration
 class Primitive;
 
-using Deleter = std::function<void(allocator::Buffer)>;
 using ShapeElem = int32_t;
 using Shape = SmallVector<ShapeElem>;
 using Strides = SmallVector<int64_t>;
@@ -69,12 +68,8 @@ class MLX_API array {
       Dtype dtype,
       const std::function<void(void*)>& deleter);
 
-  /* Build an array from a buffer */
-  explicit array(
-      allocator::Buffer data,
-      Shape shape,
-      Dtype dtype,
-      Deleter deleter = allocator::free);
+  /* Build an array from data */
+  explicit array(allocator::Data data, Shape shape, Dtype dtype);
 
   /** Assignment to rvalue does not compile. */
   array& operator=(const array& other) && = delete;
@@ -238,22 +233,7 @@ class MLX_API array {
     return reinterpret_cast<std::uintptr_t>(array_desc_->primitive.get());
   }
 
-  struct Data {
-    allocator::Buffer buffer;
-    Deleter d;
-    Data(allocator::Buffer buffer, Deleter d = allocator::free)
-        : buffer(buffer), d(d) {}
-    // Not copyable
-    Data(const Data& d) = delete;
-    Data& operator=(const Data& d) = delete;
-    Data(Data&& o) : buffer(o.buffer), d(o.d) {
-      o.buffer = allocator::Buffer(nullptr);
-      o.d = [](allocator::Buffer) {};
-    }
-    ~Data() {
-      d(buffer);
-    }
-  };
+  using Data = allocator::Data;
 
   struct Flags {
     // True iff there are no gaps in the underlying data. Each item
@@ -302,7 +282,8 @@ class MLX_API array {
 
   /** True indicates the arrays buffer is safe to reuse */
   bool is_donatable() const {
-    return array_desc_.use_count() == 1 && (array_desc_->data.use_count() == 1);
+    return array_desc_.use_count() == 1 &&
+        (array_desc_->data.use_count() == 1) && array_desc_->data->is_owned();
   }
 
   /** The array's siblings. */
@@ -359,11 +340,8 @@ class MLX_API array {
     return array_desc_->data_size;
   }
 
-  allocator::Buffer& buffer() {
-    return array_desc_->data->buffer;
-  }
-  const allocator::Buffer& buffer() const {
-    return array_desc_->data->buffer;
+  allocator::Buffer buffer() const {
+    return array_desc_->data->buffer();
   }
 
   size_t buffer_size() const {
@@ -447,24 +425,14 @@ class MLX_API array {
   // Check if the array is a tracer array
   bool is_tracer() const;
 
-  void set_data(allocator::Buffer buffer, Deleter d = allocator::free);
+  void set_data(allocator::Data data);
 
   void set_data(
-      allocator::Buffer buffer,
+      allocator::Data data,
       size_t data_size,
       Strides strides,
       Flags flags,
-      Deleter d) {
-    set_data(buffer, data_size, std::move(strides), flags, 0, std::move(d));
-  }
-
-  void set_data(
-      allocator::Buffer buffer,
-      size_t data_size,
-      Strides strides,
-      Flags flags,
-      int64_t offset = 0,
-      Deleter d = allocator::free);
+      int64_t offset = 0);
 
   void copy_shared_buffer(
       const array& other,
