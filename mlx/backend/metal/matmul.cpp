@@ -991,7 +991,7 @@ void steel_matmul_axpby(
         /* float beta = */ beta);
   }
 
-  // Few output columns: rows stay in registers and B is read once
+  // Case 2: Few output columns, rows stay in registers and B is read once
   if (use_nax && batch_size_out == 1 && !transpose_a && N <= 64 &&
       out.dtype() != float32 && (transpose_b || int64_t(K) * ldb <= INT_MAX)) {
     int sn = M < 2048 ? 1 : 2, ks = 4 / sn;
@@ -1045,7 +1045,7 @@ void steel_matmul_axpby(
     return;
   }
 
-  // Case 2: Large K with sufficient M, N, and NAX is available, use NAX split-K
+  // Case 3: Large K with sufficient M, N, and NAX is available, use NAX split-K
   if (use_nax && batch_size_out == 1 &&
       (K >= 3 * std::max(M, N) ||
        (std::max(M, N) <= 1024 && K > 2 * std::max(M, N)))) {
