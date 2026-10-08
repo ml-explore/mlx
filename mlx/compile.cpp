@@ -650,11 +650,14 @@ void compile_simplify(
     return pa.is_equivalent(pb);
   };
 
-  // Merge scalars
+  std::unordered_set<uintptr_t> output_ids;
+  for (auto& o : outputs) {
+    output_ids.insert(o.id());
+  }
   std::vector<array> new_tape;
   for (auto& arr : tape) {
-    // Check if we can merge scalars
-    if (is_scalar(arr)) {
+    // Check if we can merge scalars, except outputs
+    if (is_scalar(arr) && output_ids.find(arr.id()) == output_ids.end()) {
       auto scalar = scalars.find(get_scalar_rep(arr));
       if (scalar->second.id() != arr.id()) {
         merge(scalar->second, arr, parents_map);
