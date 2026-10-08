@@ -733,6 +733,47 @@ TEST_CASE("test gpu depthwise conv2d non-mod-8 spatial") {
   }
 }
 
+TEST_CASE("test gpu conv3d channel padding keeps its fill value") {
+  // The 3D conv pads 3 input channels to 16 with a temporary zero scalar.
+  // The fill must not read the scalar after its buffer is used again.
+  auto key = random::key(0);
+  auto in =
+      random::normal({1, 4, 8, 8, 3}, float32, 0.0f, 1.0f, key, Device::cpu);
+  auto wt =
+      random::normal({4, 2, 2, 2, 3}, float32, 0.0f, 1.0f, key, Device::cpu);
+  auto conv = [&](Device d) {
+    return conv3d(in, wt, {1, 1, 1}, {0, 0, 0}, {1, 1, 1}, 1, d);
+  };
+  auto expected = conv(Device::cpu);
+  eval(in, wt, expected);
+
+  // Compile the kernels so that the next conv is encoded quickly.
+  CHECK(allclose(conv(Device::gpu), expected, 1e-4, 1e-4).item<bool>());
+
+  // Keep the GPU busy to hold the conv in the queue.
+  auto a = zeros({2048, 2048});
+  auto busy = a;
+  for (int i = 0; i < 8; ++i) {
+    busy = matmul(busy, a);
+  }
+  eval(a);
+
+  // Empty the cache so that the zero scalar is the next small buffer.
+  synchronize();
+  clear_cache();
+
+  async_eval(busy);
+  auto out = conv(Device::gpu);
+  async_eval(out);
+
+  // Take the buffer of the zero scalar before the GPU reads it.
+  std::vector<array> scalars;
+  for (int i = 0; i < 16; ++i) {
+    scalars.push_back(array(1.0f));
+  }
+  CHECK(allclose(out, expected, 1e-4, 1e-4).item<bool>());
+}
+
 TEST_CASE("test layer norm vjp bias grad race") {
   // Regression test for a write-after-read (WAR) hazard in
   // LayerNormVJP::eval_gpu (mlx/backend/metal/normalization.cpp).
