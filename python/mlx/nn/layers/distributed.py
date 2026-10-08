@@ -104,14 +104,31 @@ def _sharded_to_all(segments):
     return _shard_fn
 
 
-def _check_sharding(sharding):
-    if sharding not in ("all-to-sharded", "sharded-to-all"):
+def _check_sharding(sharding, choices=("all-to-sharded", "sharded-to-all")):
+    if sharding not in choices:
         raise ValueError(
             (
                 f"Sharding type {sharding=} not supported, "
-                "choose one of 'all-to-sharded' or 'sharded-to-all'"
+                f"choose one of {', '.join(map(repr, choices))}"
             )
         )
+
+
+def _check_no_segments(segments):
+    # The gather joins the shards in rank order, which breaks segments.
+    if segments != 1:
+        raise ValueError(
+            f"Gathered sharding does not support segments, got {segments=}"
+        )
+
+
+def _gather_last_axis(x: mx.array, group: mx.distributed.Group) -> mx.array:
+    """Gather the last axis of ``x``, which is split across ``group``."""
+    n, size = group.size(), x.shape[-1]
+    parts = mx.distributed.all_gather(x.reshape(-1, size), group=group)
+    # (ranks * rows, size) to (rows, ranks * size), in rank order.
+    parts = parts.reshape(n, -1, size).transpose(1, 0, 2)
+    return parts.reshape(*x.shape[:-1], n * size)
 
 
 def shard_inplace(
@@ -171,18 +188,26 @@ def shard_linear(
 
     Args:
         module (mlx.nn.Module): The linear layer to be sharded.
-        sharding (str): One of "all-to-sharded" and
-            "sharded-to-all" that defines the type of sharding to perform.
-        segments (int or list): The segments to use. Default: ``1``.
+        sharding (str): One of "all-to-sharded", "sharded-to-all" and
+            "all-to-sharded-gather" that defines the type of sharding to
+            perform.
+        segments (int or list): The segments to use. "all-to-sharded-gather"
+            supports only ``1``. Default: ``1``.
         group (mlx.core.distributed.Group): The distributed group to shard
             across. If not set, the global group will be used. Default: ``None``.
     """
-    _check_sharding(sharding)
+    _check_sharding(
+        sharding, ("all-to-sharded", "sharded-to-all", "all-to-sharded-gather")
+    )
     fns = {
         ("all-to-sharded", True): AllToShardedLinear.from_linear,
         ("all-to-sharded", False): QuantizedAllToShardedLinear.from_quantized_linear,
         ("sharded-to-all", True): ShardedToAllLinear.from_linear,
         ("sharded-to-all", False): QuantizedShardedToAllLinear.from_quantized_linear,
+        ("all-to-sharded-gather", True): AllToShardedGatherLinear.from_linear,
+        ("all-to-sharded-gather", False): (
+            QuantizedAllToShardedGatherLinear.from_quantized_linear
+        ),
     }
     return fns[sharding, isinstance(module, Linear)](
         module, segments=segments, group=group
@@ -351,6 +376,37 @@ class ShardedToAllLinear(Module):
         sl.update(_shard(linear_layer.parameters(), _sharded_to_all(segments), group))
 
         return sl
+
+
+class AllToShardedGatherLinear(AllToShardedLinear):
+    """Each member of the group applies part of the affine transformation like
+    :class:`AllToShardedLinear` and then gathers the results.
+
+    All nodes will have the same exact result after this layer.
+
+    Args:
+        input_dims (int): The dimensionality of the input features
+        output_dims (int): The dimensionality of the output features
+        bias (bool, optional): If set to ``False`` the layer will not use a
+            bias. Default is ``True``.
+        group (mx.distributed.Group, optional): The sharding will happen across
+            this group. If not set then the global group is used. Default is
+            ``None``.
+    """
+
+    def __call__(self, x: mx.array) -> mx.array:
+        return _gather_last_axis(super().__call__(x), self.group)
+
+    @classmethod
+    def from_linear(
+        cls,
+        linear_layer: Module,
+        *,
+        segments: Union[int, list] = 1,
+        group: Optional[mx.distributed.Group] = None,
+    ):
+        _check_no_segments(segments)
+        return super().from_linear(linear_layer, segments=segments, group=group)
 
 
 class QuantizedAllToShardedLinear(Module):
@@ -616,6 +672,47 @@ class QuantizedShardedToAllLinear(Module):
         )
 
         return sl
+
+
+class QuantizedAllToShardedGatherLinear(QuantizedAllToShardedLinear):
+    """Each member of the group applies part of the affine transformation with
+    a quantized matrix like :class:`QuantizedAllToShardedLinear` and then
+    gathers the results.
+
+    It is the quantized equivalent of :class:`mlx.nn.AllToShardedGatherLinear`.
+    All nodes will have the same exact result after this layer.
+
+    Args:
+        input_dims (int): The dimensionality of the input features.
+        output_dims (int): The dimensionality of the output features.
+        bias (bool, optional): If set to ``False`` then the layer will not use
+            a bias. Default: ``True``.
+        group_size (int, optional): The group size to use for the quantized
+            weight. See :func:`~mlx.core.quantize`. Default: ``64``.
+        bits (int, optional): The bit width to use for the quantized weight.
+            See :func:`~mlx.core.quantize`. Default: ``4``.
+        mode (str, optional): The quantization method to use (see
+            :func:`~mlx.core.quantize`). Default: ``"affine"``.
+        group (mx.distributed.Group, optional): The sharding will happen across
+            this group. If not set then the global group is used. Default is
+            ``None``.
+    """
+
+    def __call__(self, x: mx.array) -> mx.array:
+        return _gather_last_axis(super().__call__(x), self.group)
+
+    @classmethod
+    def from_quantized_linear(
+        cls,
+        quantized_linear_layer: Module,
+        *,
+        segments: Union[int, list] = 1,
+        group: Optional[mx.distributed.Group] = None,
+    ):
+        _check_no_segments(segments)
+        return super().from_quantized_linear(
+            quantized_linear_layer, segments=segments, group=group
+        )
 
 
 def _make_gather_fn(group, full_shapes, shard_sizes, compute_dtype):

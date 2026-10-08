@@ -63,8 +63,10 @@ from mlx.nn.layers.convolution_transpose import (
     ConvTranspose3d,
 )
 from mlx.nn.layers.distributed import (
+    AllToShardedGatherLinear,
     AllToShardedLinear,
     FullyShardedModule,
+    QuantizedAllToShardedGatherLinear,
     QuantizedAllToShardedLinear,
     QuantizedShardedToAllLinear,
     ShardedToAllLinear,

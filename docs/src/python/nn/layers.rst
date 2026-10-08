@@ -10,6 +10,7 @@ Layers
    :template: nn-module-template.rst
 
    ALiBi
+   AllToShardedGatherLinear
    AllToShardedLinear
    AvgPool1d
    AvgPool2d
@@ -50,6 +51,7 @@ Layers
    MultiHeadAttention
    PReLU
    QQLinear
+   QuantizedAllToShardedGatherLinear
    QuantizedAllToShardedLinear
    QuantizedEmbedding
    QuantizedLinear

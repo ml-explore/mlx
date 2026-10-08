@@ -27,6 +27,8 @@ Layers
 
    AllToShardedLinear
    ShardedToAllLinear
+   AllToShardedGatherLinear
    QuantizedAllToShardedLinear
    QuantizedShardedToAllLinear
+   QuantizedAllToShardedGatherLinear
    FullyShardedModule

@@ -265,6 +265,70 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
             )
         )
 
+    def test_shard_linear_gather(self):
+        # Seed the prng to have the same inputs and weights generated everywhere
+        mx.random.seed(0xF0F0F0F0)
+        world = mx.distributed.init()
+        x = mx.random.normal((2, 4, 1024))
+
+        # Every rank gets the full output
+        lin = nn.Linear(1024, 1024, bias=True)
+        layers = [(lin, nn.AllToShardedGatherLinear)]
+        # QuantizedMatmul is not supported on CUDA
+        if not mx.cuda.is_available():
+            qcls = nn.QuantizedAllToShardedGatherLinear
+            layers.append((lin.to_quantized(), qcls))
+            layers.append((lin.to_quantized(group_size=32, bits=8, mode="mxfp8"), qcls))
+        for layer, cls in layers:
+            slin = shard_linear(layer, "all-to-sharded-gather")
+            self.assertIsInstance(slin, cls)
+            self.assertTrue(
+                mx.allclose(layer(x), slin(x), atol=self.atol, rtol=self.rtol)
+            )
+
+        with self.assertRaises(ValueError):
+            shard_linear(lin, "all-to-sharded-gather", segments=2)
+        with self.assertRaises(ValueError):
+            shard_inplace(lin, "all-to-sharded-gather")
+
+        # The first layer checks that the input gradient is summed across ranks
+        def dummy_loss(model, x, y):
+            return (model(x) * y).sum()
+
+        mod = nn.Sequential(
+            nn.Linear(128, 128),
+            nn.Linear(128, 128),
+            nn.Linear(128, 128),
+        )
+        smod = nn.Sequential(
+            mod.layers[0],
+            shard_linear(mod.layers[1], "all-to-sharded-gather"),
+            mod.layers[2],
+        )
+
+        x = mx.random.normal((4, 128))
+        y = mx.random.normal((4, 128))
+        l1, g1 = nn.value_and_grad(mod, dummy_loss)(mod, x, y)
+        l2, g2 = nn.value_and_grad(smod, dummy_loss)(smod, x, y)
+        mx.eval(l1, g1, l2, g2)
+
+        part = slice(
+            world.rank() * 128 // world.size(), (world.rank() + 1) * 128 // world.size()
+        )
+        self.assertTrue(mx.allclose(l1, l2))
+        for k in ("weight", "bias"):
+            for i in (0, 2):
+                self.assertTrue(
+                    mx.allclose(
+                        g1["layers"][i][k], g2["layers"][i][k], atol=1e-6, rtol=1e-4
+                    )
+                )
+            self.assertTrue(
+                mx.allclose(
+                    g1["layers"][1][k][part], g2["layers"][1][k], atol=1e-6, rtol=1e-4
+                )
+            )
+
     def test_shard_predicate(self):
         mx.random.seed(0xF0F0F0F0)
 
