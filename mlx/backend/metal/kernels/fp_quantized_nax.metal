@@ -115,8 +115,26 @@
   instantiate_quantized_modes(type, mxfp8, 32, 8) \
   instantiate_quantized_modes(type, mxfp4, 32, 4)
 
+#define instantiate_qmv_nax(type, mode, group_size, bits, wk, bn) \
+  instantiate_kernel( \
+      #mode "_qmv_nax_" #type "_gs_" #group_size "_b_" #bits "_wk" #wk "_bn" #bn, \
+      fp_qmv_nax, \
+      type, \
+      group_size, \
+      bits, \
+      wk, \
+      bn)
+
+#define instantiate_qmv_nax_modes(type) \
+  instantiate_qmv_nax(type, nvfp4, 16, 4, 8, 32) \
+  instantiate_qmv_nax(type, mxfp8, 32, 8, 8, 32) \
+  instantiate_qmv_nax(type, mxfp4, 32, 4, 8, 32)
+
 instantiate_quantized_types(float)
 instantiate_quantized_types(bfloat16_t)
 instantiate_quantized_types(float16_t)
 instantiate_quantized_qmm_hgs(bfloat16_t)
+instantiate_qmv_nax_modes(float)
+instantiate_qmv_nax_modes(bfloat16_t)
+instantiate_qmv_nax_modes(float16_t)
     // clang-format on

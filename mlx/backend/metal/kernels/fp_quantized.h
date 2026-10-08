@@ -1512,6 +1512,201 @@ template <
 
 template <
     typename T,
+    const int group_size,
+    const int bits,
+    const int WK = 8,
+    const int BN = 32,
+    const int TM = 1>
+[[kernel]] void fp_qmv_mma(
+    const device uint32_t* w,
+    const device uint8_t* scales,
+    const device T* x,
+    device T* y,
+    const constant int& K,
+    const constant int& N,
+    const constant int& M,
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  static_assert(BN % 8 == 0, "BN should be divisible by 8");
+  static_assert(TM == 1 || TM == 2, "qmv_mma takes at most 16 rows");
+  static_assert(
+      (group_size == 16 && bits == 4) ||
+          (group_size == 32 && (bits == 4 || bits == 8)),
+      "qmv_mma reads nvfp4, mxfp4 and mxfp8");
+
+  using Frag = mlx::steel::BaseMMAFrag<float, 8, 8>;
+  using frag_t = typename Frag::frag_type;
+  using scale_t = metal::conditional_t<group_size == 16, half2, float>;
+  constexpr int BK = 128;
+  constexpr short TN = BN / 8;
+  constexpr int pack_factor = 8 / bits;
+  constexpr short loads = bits / 4;
+
+  const short2 coord = Frag::get_coord(simd_lid);
+  const short fn = coord.x;
+  const short fm = coord.y;
+  const int row_bytes = K / pack_factor;
+  const int row_scales = K / group_size;
+
+  const int y_col = tid.x * BN;
+  auto wl = (const device uint8_t*)w +
+      (y_col + fm) * static_cast<int64_t>(row_bytes) + 16 * fn / pack_factor;
+  scales +=
+      (y_col + fm) * static_cast<int64_t>(row_scales) + 16 * fn / group_size;
+  x += fn * static_cast<int64_t>(K) + 16 * fm;
+
+  bool x_rows[TM][2];
+  frag_t C[TN][TM];
+  STEEL_PRAGMA_UNROLL
+  for (short mt = 0; mt < TM; mt++) {
+    STEEL_PRAGMA_UNROLL
+    for (short j = 0; j < 2; j++) {
+      x_rows[mt][j] = 8 * mt + fn + j < M;
+    }
+    STEEL_PRAGMA_UNROLL
+    for (short t = 0; t < TN; t++) {
+      C[t][mt] = frag_t(0);
+    }
+  }
+
+  for (int k = simd_gid * BK; k < K; k += WK * BK) {
+    vec<T, 8> xs[TM][2][2];
+    STEEL_PRAGMA_UNROLL
+    for (short mt = 0; mt < TM; mt++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < 2; j++) {
+        const device T* xr = x + (8 * mt + j) * static_cast<int64_t>(K) + k;
+        STEEL_PRAGMA_UNROLL
+        for (short h = 0; h < 2; h++) {
+          xs[mt][j][h] = x_rows[mt][j] ? *(const device vec<T, 8>*)(xr + 8 * h)
+                                       : vec<T, 8>(0);
+        }
+      }
+    }
+    uint4 ws[TN][loads];
+    scale_t sc[TN];
+    STEEL_PRAGMA_UNROLL
+    for (short t = 0; t < TN; t++) {
+      const device uint8_t* wt =
+          wl + 8 * t * static_cast<int64_t>(row_bytes) + k / pack_factor;
+      STEEL_PRAGMA_UNROLL
+      for (short l = 0; l < loads; l++) {
+        ws[t][l] = *(const device uint4*)(wt + 16 * l);
+      }
+      const device uint8_t* st =
+          scales + 8 * t * static_cast<int64_t>(row_scales) + k / group_size;
+      if constexpr (group_size == 16) {
+        const ushort s = *(const device ushort*)st;
+        sc[t] = half2(
+            dequantize_scale<half, group_size>(s & 0xff),
+            dequantize_scale<half, group_size>(s >> 8));
+      } else {
+        sc[t] = dequantize_scale<float, group_size>(*st) *
+            (bits == 4 ? 16384.0f : 256.0f);
+      }
+    }
+
+    STEEL_PRAGMA_UNROLL
+    for (short g = 0; g < 4; g++) {
+      frag_t b[4][TM];
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < 4; i++) {
+        const short f = 4 * g + i;
+        STEEL_PRAGMA_UNROLL
+        for (short mt = 0; mt < TM; mt++) {
+          b[i][mt] = frag_t(
+              float(xs[mt][0][f / 8][f % 8]), float(xs[mt][1][f / 8][f % 8]));
+        }
+      }
+      STEEL_PRAGMA_UNROLL
+      for (short t = 0; t < TN; t++) {
+        uint p[4];
+        if constexpr (bits == 4) {
+          const uint lo = ws[t][0][g / 2];
+          const uint hi = ws[t][0][2 + g / 2];
+          const uint q = (g % 2) == 0 ? (lo & 0xffff) | (hi << 16)
+                                      : (lo >> 16) | (hi & 0xffff0000);
+          p[0] = ((q & 0x00070007) << 9) | ((q & 0x00080008) << 12);
+          p[1] = ((q & 0x00700070) << 5) | ((q & 0x00800080) << 8);
+          p[2] = ((q & 0x07000700) << 1) | ((q & 0x08000800) << 4);
+          p[3] = ((q & 0x70007000) >> 3) | (q & 0x80008000);
+        } else {
+          STEEL_PRAGMA_UNROLL
+          for (short i = 0; i < 4; i++) {
+            const uint q = ((ws[t][0][g] >> (8 * i)) & 0xff) |
+                (((ws[t][1][g] >> (8 * i)) & 0xff) << 16);
+            p[i] = ((q & 0x00800080) << 8) | ((q & 0x007f007f) << 7);
+          }
+        }
+        STEEL_PRAGMA_UNROLL
+        for (short i = 0; i < 4; i++) {
+          frag_t a;
+          if constexpr (group_size == 16) {
+            const half2 v = (as_type<half2>(p[i]) * half2(16384.0h)) * sc[t];
+            a = frag_t(float(v.x), float(v.y));
+          } else {
+            const half2 v = as_type<half2>(p[i]);
+            a = frag_t(float(v.x) * sc[t], float(v.y) * sc[t]);
+          }
+          STEEL_PRAGMA_UNROLL
+          for (short mt = 0; mt < TM; mt++) {
+            Frag::mma(C[t][mt], a, b[i][mt], C[t][mt]);
+          }
+        }
+      }
+    }
+  }
+
+  constexpr int tile_elems = TN * TM * 2;
+  threadgroup float Ps[(WK - 1) * tile_elems * 32];
+  if (simd_gid > 0) {
+    threadgroup float* p = Ps + (simd_gid - 1) * tile_elems * 32 + simd_lid;
+    STEEL_PRAGMA_UNROLL
+    for (short t = 0; t < TN; t++) {
+      STEEL_PRAGMA_UNROLL
+      for (short mt = 0; mt < TM; mt++) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < 2; j++) {
+          p[((t * TM + mt) * 2 + j) * 32] = C[t][mt][j];
+        }
+      }
+    }
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (simd_gid == 0) {
+    for (int s = 0; s < WK - 1; s++) {
+      const threadgroup float* p = Ps + s * tile_elems * 32 + simd_lid;
+      STEEL_PRAGMA_UNROLL
+      for (short t = 0; t < TN; t++) {
+        STEEL_PRAGMA_UNROLL
+        for (short mt = 0; mt < TM; mt++) {
+          STEEL_PRAGMA_UNROLL
+          for (short j = 0; j < 2; j++) {
+            C[t][mt][j] += p[((t * TM + mt) * 2 + j) * 32];
+          }
+        }
+      }
+    }
+    STEEL_PRAGMA_UNROLL
+    for (short mt = 0; mt < TM; mt++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < 2; j++) {
+        if (x_rows[mt][j]) {
+          device T* yr =
+              y + (8 * mt + fn + j) * static_cast<int64_t>(N) + y_col + fm;
+          STEEL_PRAGMA_UNROLL
+          for (short t = 0; t < TN; t++) {
+            yr[8 * t] = static_cast<T>(C[t][mt][j]);
+          }
+        }
+      }
+    }
+  }
+}
+
+template <
+    typename T,
     int group_size,
     int bits,
     bool batched,
