@@ -641,6 +641,10 @@ mx::array array_from_list_impl(
         std::vector<uint32_t> vals;
         fill_vector(pl, vals);
         return mx::array(vals.begin(), shape, dtype);
+      } else if (dtype == mx::float64) {
+        std::vector<double> vals;
+        fill_vector(pl, vals);
+        return mx::array(vals.begin(), shape, dtype);
       } else if (mx::issubdtype(dtype, mx::inexact)) {
         std::vector<float> vals;
         fill_vector(pl, vals);
@@ -653,7 +657,7 @@ mx::array array_from_list_impl(
     }
     case pyfloat: {
       auto out_type = specified_type.value_or(mx::float32);
-      if (out_type == mx::float64) {
+      if (out_type == mx::float64 || !mx::issubdtype(out_type, mx::inexact)) {
         std::vector<double> vals;
         fill_vector(pl, vals);
         return mx::array(vals.begin(), shape, out_type);
@@ -748,7 +752,7 @@ mx::array create_array(
     return mx::array(val, t.value_or(default_type));
   } else if (nb::isinstance<nb::float_>(v)) {
     auto out_type = t.value_or(mx::float32);
-    if (out_type == mx::float64) {
+    if (out_type == mx::float64 || !mx::issubdtype(out_type, mx::inexact)) {
       return mx::array(nb::cast<double>(v), out_type);
     } else {
       return mx::array(nb::cast<float>(v), out_type);

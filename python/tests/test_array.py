@@ -598,6 +598,18 @@ class TestArray(mlx_tests.MLXTestCase):
         out = mx.array([x], dtype=mx.float64).item()
         self.assertEqual(out, x)
 
+        # Integer and bool targets
+        v = 2**24 + 1
+        self.assertEqual(mx.array(float(v), dtype=mx.int32).item(), v)
+        self.assertEqual(mx.array([float(v)], dtype=mx.int64).tolist(), [v])
+        # Small non-zero values are still True
+        self.assertTrue(mx.array(1e-50, dtype=mx.bool_).item())
+        self.assertEqual(mx.array([1e-50], dtype=mx.bool_).tolist(), [True])
+
+        # Python ints to float64
+        out = mx.array([v], dtype=mx.float64).tolist()
+        self.assertEqual(out, [float(v)])
+
     def test_construction_from_lists_wide_ints(self):
         # A python int that does not fit in int32 widens to int64, the same
         # rule the scalar path already uses. It used to raise std::bad_cast.
