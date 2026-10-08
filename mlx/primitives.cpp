@@ -1503,7 +1503,7 @@ std::vector<array> Convolution::vjp(
 
         int64_t in_size = dilate_size(in.shape(1 + i), input_dilation_[i]);
         int64_t out_size = dilate_size(cotan.shape(1 + i), kernel_strides_[i]);
-        padding_hi[i] = safe_cast(in_size - out_size + padding_hi_[i], "conv");
+        padding_hi[i] = safe_cast(in_size - out_size + padding_lo_[i], "conv");
       }
 
       // Check for negative padding
@@ -1515,13 +1515,21 @@ std::vector<array> Convolution::vjp(
         has_neg_padding |= (pd < 0);
       }
 
+      // Negative padding is cropped from the output below
+      std::vector<int> conv_padding_lo = padding_lo;
+      std::vector<int> conv_padding_hi = padding_hi;
+      for (int i = 0; i < conv_padding_lo.size(); ++i) {
+        conv_padding_lo[i] = std::max(conv_padding_lo[i], 0);
+        conv_padding_hi[i] = std::max(conv_padding_hi[i], 0);
+      }
+
       auto wt_trans = group_transpose(wt, 0, 1, -1);
       auto grad = conv_general(
           /* const array& input = */ cotan,
           /* const array& weight = */ wt_trans,
           /* std::vector<int> stride = */ input_dilation_,
-          /* std::vector<int> padding_lo = */ padding_lo,
-          /* std::vector<int> padding_hi = */ padding_hi,
+          /* std::vector<int> padding_lo = */ conv_padding_lo,
+          /* std::vector<int> padding_hi = */ conv_padding_hi,
           /* std::vector<int> kernel_dilation = */ kernel_dilation_,
           /* std::vector<int> input_dilation = */ kernel_strides_,
           /* int groups = */ groups_,
