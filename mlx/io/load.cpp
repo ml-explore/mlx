@@ -312,6 +312,21 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
     }
   }
 
+  // Reject negative dims and a total byte count that overflows size_t
+  size_t max_size = std::numeric_limits<size_t>::max() / size_of(dtype);
+  size_t total_size = 1;
+  for (auto dim : shape) {
+    if (dim < 0) {
+      throw std::runtime_error(
+          "[load] Negative dimension in shape in " + in_stream->label());
+    }
+    if (dim != 0 && total_size > max_size / dim) {
+      throw std::runtime_error(
+          "[load] Shape is too large in " + in_stream->label());
+    }
+    total_size *= dim;
+  }
+
   ////////////////////////////////////////////////////////
   // Build primitive
 
