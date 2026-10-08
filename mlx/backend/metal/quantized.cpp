@@ -1207,15 +1207,11 @@ void qmm_splitk(
   int k_partition_size = K / split_k;
   int split_k_partition_stride = M * N;
 
-  // Allocate intermediate buffer: insert split_k at the front so that
-  // partition_stride = M * N matches the leading stride of the buffer.
+  // Allocate a float32 buffer for the partial sums, so that each partition is
+  // rounded to the output type only once, after they're summed, as in
+  // steel_matmul_splitk.
   auto& compute_encoder = metal::get_command_encoder(s);
-  auto temp_shape = out.shape();
-  if (temp_shape.size() == 1) {
-    temp_shape.insert(temp_shape.begin(), 1);
-  }
-  temp_shape.insert(temp_shape.begin(), split_k);
-  array intermediate(temp_shape, x.dtype(), nullptr, {});
+  array intermediate({split_k, M, N}, float32, nullptr, {});
   intermediate.set_data(allocator::malloc(intermediate.nbytes()));
   compute_encoder.add_temporary(intermediate);
 
@@ -1257,13 +1253,18 @@ void qmm_splitk(
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
-  // Sum across split_k dimension (axis 0)
-  ReductionPlan plan(
-      ReductionOpType::ContiguousStridedReduce,
-      {intermediate.shape(0)},
-      {intermediate.strides(0)});
-  strided_reduce_general_dispatch(
-      intermediate, out, "sum", plan, {0}, compute_encoder, d, s);
+  // Sum the partitions and cast to the output type
+  auto accum_kname = "steel_gemm_splitk_accum_" + type_to_name(out) + "_" +
+      type_to_name(intermediate);
+  auto accum_kernel = get_steel_gemm_splitk_accum_kernel(
+      d, accum_kname, intermediate, out, false);
+  compute_encoder.set_compute_pipeline_state(accum_kernel);
+  compute_encoder.set_input_array(intermediate, 0);
+  compute_encoder.set_output_array(out, 1);
+  compute_encoder.set_bytes(split_k, 2);
+  compute_encoder.set_bytes(split_k_partition_stride, 3);
+  compute_encoder.set_bytes(N, 4);
+  compute_encoder.dispatch_threads(MTL::Size(N, M, 1), get_block_dims(N, M, 1));
 }
 
 void gather_qmm(

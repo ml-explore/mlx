@@ -386,6 +386,13 @@ MTL::ComputePipelineState* get_steel_gemm_segmented_nax_kernel(
     int wm,
     int wn);
 
+MTL::ComputePipelineState* get_steel_gemm_thin_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const std::string& template_def);
+
 MTL::ComputePipelineState* get_qmm_nax_kernel(
     metal::Device& d,
     const std::string& kernel_name,

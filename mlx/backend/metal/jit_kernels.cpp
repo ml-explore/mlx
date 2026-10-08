@@ -30,6 +30,9 @@ const char* steel_gemm_splitk_nax() {
 const char* steel_gemm_segmented_nax() {
   return "";
 }
+const char* steel_gemm_thin_nax() {
+  return "";
+}
 const char* quantized_nax() {
   return "";
 }
@@ -1259,6 +1262,25 @@ MTL::ComputePipelineState* get_steel_gemm_segmented_nax_kernel(
                          transpose_a,
                          transpose_b);
     return kernel_source.str();
+  });
+  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_steel_gemm_thin_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const std::string& template_def) {
+  auto lib = d.get_library(kernel_name, [&]() {
+    std::string kernel_source;
+    concatenate(
+        kernel_source,
+        metal::utils(),
+        metal::gemm_nax(),
+        metal::steel_gemm_thin_nax(),
+        template_def);
+    return kernel_source;
   });
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
 }
