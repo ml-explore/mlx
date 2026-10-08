@@ -685,6 +685,43 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 rounding = (y_ref.astype(dtype).astype(mx.float32) - y_ref).abs().mean()
                 self.assertLess(error.item(), 1.1 * rounding.item())
 
+    def test_qmm_few_rows(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        mx.random.seed(0)
+        K = 4224
+
+        def rel_err(got, expected):
+            d = mx.abs(got.astype(mx.float32) - expected.astype(mx.float32))
+            return d.max() / mx.abs(expected.astype(mx.float32)).max()
+
+        modes = ["nvfp4", "mxfp4", "mxfp8"]
+        dtypes = [mx.bfloat16, mx.float16, mx.float32]
+        for N, mode, dtype in product([4128, 4112], modes, dtypes):
+            tol = 1e-5 if dtype == mx.float32 else 3e-2
+            w = mx.random.normal((N, K)).astype(dtype)
+            w_q, scales = mx.quantize(w, mode=mode)
+            w_hat = mx.dequantize(w_q, scales, mode=mode, dtype=dtype)
+            for M in [5, 6, 8, 13, 16, 17]:
+                with self.subTest(N=N, mode=mode, dtype=dtype, M=M):
+                    x = (mx.random.normal((M, K)) / K**0.5).astype(dtype)
+                    out = mx.quantized_matmul(x, w_q, scales, mode=mode)
+                    self.assertLess(rel_err(out, x @ w_hat.T), tol)
+
+            # Views at odd offsets must not reach the Metal vector loads
+            if not mx.metal.is_available():
+                continue
+            x = (mx.random.normal((16 * K + 1,)) / K**0.5).astype(dtype)
+            s = mx.concatenate([mx.zeros((1,), mx.uint8), scales.reshape(-1)])
+            views = {
+                "x": (x[1:].reshape(16, K), scales),
+                "scales": (x[:-1].reshape(16, K), s[1:].reshape(scales.shape)),
+            }
+            for name, (xv, sv) in views.items():
+                with self.subTest(N=N, mode=mode, dtype=dtype, offset=name):
+                    out = mx.quantized_matmul(xv, w_q, sv, mode=mode)
+                    self.assertLess(rel_err(out, xv @ w_hat.T), tol)
+
     def test_qmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)

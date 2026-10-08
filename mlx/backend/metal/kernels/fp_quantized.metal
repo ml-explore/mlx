@@ -253,8 +253,35 @@
   instantiate_quantized_qmv_wrap(qmv_fast, type, nvfp4, 16, 4, 1, 2) \
   instantiate_quantized_qmv_wrap(qmv_fast, type, nvfp4, 16, 4, 0, 2)
 
+#define instantiate_qmv_mma(type, mode, group_size, bits, wk, bn, tm) \
+  instantiate_kernel( \
+      #mode "_qmv_mma_" #type "_gs_" #group_size "_b_" #bits "_wk" #wk "_bn" #bn "_tm" #tm, \
+      fp_qmv_mma, \
+      type, \
+      group_size, \
+      bits, \
+      wk, \
+      bn, \
+      tm)
+
+#define instantiate_qmv_mma_rows(type, mode, group_size, bits, wk, bn) \
+  instantiate_qmv_mma(type, mode, group_size, bits, wk, bn, 1) \
+  instantiate_qmv_mma(type, mode, group_size, bits, wk, bn, 2)
+
+#define instantiate_qmv_mma_modes(type, wk, bn) \
+  instantiate_qmv_mma_rows(type, nvfp4, 16, 4, wk, bn) \
+  instantiate_qmv_mma_rows(type, mxfp8, 32, 8, wk, bn) \
+  instantiate_qmv_mma_rows(type, mxfp4, 32, 4, wk, bn)
+
+#define instantiate_qmv_mma_types(type) \
+  instantiate_qmv_mma_modes(type, 8, 16) \
+  instantiate_qmv_mma_modes(type, 4, 16)
+
 instantiate_quantized_types(float)
 instantiate_quantized_types(bfloat16_t)
 instantiate_quantized_types(float16_t)
 instantiate_quantized_qmm_hgs(bfloat16_t)
+instantiate_qmv_mma_types(float)
+instantiate_qmv_mma_types(bfloat16_t)
+instantiate_qmv_mma_types(float16_t)
     // clang-format on
