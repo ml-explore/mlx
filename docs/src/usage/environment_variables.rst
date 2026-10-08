@@ -4,9 +4,11 @@ Environment Variables
 =====================
 
 MLX uses environment variables to configure compilation, numerical precision,
-backend behavior, and distributed execution. Set them before starting the
-process. Many variables are read when the corresponding subsystem is first
-initialized and changing them later may have no effect.
+backend behavior, and distributed execution. They must be set before invoking
+any MLX API, and can not be changed later.
+
+For dynamically changing the configurations in the middle of program, use the
+:func:`mlx.core.config.update` API.
 
 Boolean variables use ``0`` to disable and a nonzero integer to enable unless
 otherwise noted.

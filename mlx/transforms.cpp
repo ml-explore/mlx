@@ -184,7 +184,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
 
     // Build the tape in BFS order with a width limit
-    int max_width = env::bfs_max_width();
+    int max_width = config::get("MLX_BFS_MAX_WIDTH", 20);
     dfs = std::stack<std::pair<std::reference_wrapper<array>, int>>();
     tape.push_back(synchronizer);
     for (int i = 0; !cache.empty() && (i < tape.size() || !dfs.empty());) {

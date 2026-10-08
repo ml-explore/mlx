@@ -289,26 +289,6 @@ std::ostream& operator<<(std::ostream& os, array a) {
   return os;
 }
 
-namespace env {
-
-int get_var(const char* name, int default_value) {
-  if (const char* buff_str = std::getenv(name)) {
-    return atoi(buff_str);
-  } else {
-    return default_value;
-  }
-}
-
-std::string get_var(const char* name, const char* default_value) {
-  if (const char* buff_str = std::getenv(name)) {
-    return buff_str;
-  } else {
-    return default_value;
-  }
-}
-
-} // namespace env
-
 template <typename T>
 void set_finfo_limits(
     int& bits,

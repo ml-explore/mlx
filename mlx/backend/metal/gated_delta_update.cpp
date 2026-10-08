@@ -16,17 +16,17 @@ namespace {
 
 inline int gated_delta_chunk_size(int T) {
   const bool nax = metal::is_nax_available();
-  const int C = env::get_var("GATED_DELTA_CHUNK", T > 8 ? (nax ? 16 : 8) : 1);
+  const int C = config::get("GATED_DELTA_CHUNK", T > 8 ? (nax ? 16 : 8) : 1);
   return (C == 16 && !nax) ? 8 : C;
 }
 
 inline int gated_delta_chunk_size_vjp() {
   const bool nax = metal::is_nax_available();
-  return nax ? env::get_var("GATED_DELTA_CHUNK_VJP", 16) : 1;
+  return nax ? config::get("GATED_DELTA_CHUNK_VJP", 16) : 1;
 }
 
 inline int gated_delta_ckpt(int chunk) {
-  int c = env::get_var("GATED_DELTA_CKPT", 16);
+  int c = config::get("GATED_DELTA_CKPT", 16);
   if (c != 1 && c != 4 && c != 8 && c != 16) {
     c = 16;
   }
@@ -226,7 +226,7 @@ bool GatedDeltaUpdateVJP::use_fallback(
   if (s.device == Device::cpu) {
     return true;
   }
-  if (env::get_var("GATED_DELTA_VJP_FALLBACK", 0) != 0) {
+  if (config::get("GATED_DELTA_VJP_FALLBACK", 0) != 0) {
     return true;
   }
   return !supported_gated_delta_shape(Hk, Dk, Hv, Dv);

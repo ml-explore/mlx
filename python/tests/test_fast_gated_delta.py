@@ -309,9 +309,9 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 return out, state
 
             def run(fallback, chunk):
-                with mlx_tests.scoped_env(
-                    GATED_DELTA_VJP_FALLBACK="1" if fallback else "0",
-                    GATED_DELTA_CHUNK_VJP=str(chunk),
+                with mx.config.scoped_update(
+                    GATED_DELTA_VJP_FALLBACK=1 if fallback else 0,
+                    GATED_DELTA_CHUNK_VJP=chunk,
                 ):
                     outs, vjps = mx.vjp(f, primals, cotans)
                     mx.eval(outs, vjps)
