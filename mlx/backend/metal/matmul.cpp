@@ -7,6 +7,7 @@
 #include <sstream>
 
 #include "mlx/backend/common/broadcasting.h"
+#include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/matmul.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/binary.h"
@@ -990,7 +991,61 @@ void steel_matmul_axpby(
         /* float beta = */ beta);
   }
 
-  // Case 2: Large K with sufficient M, N, and NAX is available, use NAX split-K
+  // Case 2: Few output columns, rows stay in registers and B is read once
+  if (use_nax && batch_size_out == 1 && !transpose_a && N <= 64 &&
+      out.dtype() != float32 && (transpose_b || int64_t(K) * ldb <= INT_MAX)) {
+    int sn = M < 2048 ? 1 : 2, ks = 4 / sn;
+    std::ostringstream kname;
+    kname << "steel_gemm_thin_nax_n" << (transpose_b ? 't' : 'n') << "_"
+          << type_to_name(out) << "_um2_un2_sm1_sn" << sn << "_ks" << ks;
+    auto base_name = kname.str();
+    bool use_out_source = CHECK_AB && (alpha != 0.0f || beta != 1.0f);
+    bool do_axpby = use_out_source && (alpha != 1.0f || beta != 1.0f);
+    bool align_M = M % 32 == 0, align_N = N % (32 * sn) == 0;
+    bool align_K = K % 64 == 0;
+    kname << "_" << use_out_source << do_axpby << align_M << align_N << align_K;
+    auto kernel = get_steel_gemm_thin_nax_kernel(
+        d,
+        base_name,
+        kname.str(),
+        {{&use_out_source, MTL::DataType::DataTypeBool, 100},
+         {&do_axpby, MTL::DataType::DataTypeBool, 110},
+         {&align_M, MTL::DataType::DataTypeBool, 200},
+         {&align_N, MTL::DataType::DataTypeBool, 201},
+         {&align_K, MTL::DataType::DataTypeBool, 202}},
+        get_template_definition(
+            base_name,
+            "gemm_thin_nax",
+            get_type_string(out.dtype()),
+            2,
+            2,
+            1,
+            sn,
+            ks,
+            transpose_b));
+    auto& compute_encoder = metal::get_command_encoder(s);
+    compute_encoder.set_compute_pipeline_state(kernel);
+    int tm = (M + 31) / 32, tn = (N + 32 * sn - 1) / (32 * sn);
+    int k_iters = ((K + 63) / 64 + ks - 1) / ks;
+    steel::GEMMParams params{
+        M, N, K, lda, ldb, N, tn, tm, 0, 0, 0, 0, k_iters, 0};
+    compute_encoder.set_input_array(a, 0);
+    compute_encoder.set_input_array(b, 1);
+    compute_encoder.set_output_array(out, 3);
+    compute_encoder.set_bytes(params, 4);
+    if (use_out_source) {
+      int ldc = c.strides()[c.ndim() - 2], fdc = c.strides()[c.ndim() - 1];
+      steel::GEMMAddMMParams addmm_params{ldc, fdc, 0, alpha, beta};
+      compute_encoder.set_input_array(c, 2);
+      compute_encoder.set_bytes(addmm_params, 5);
+    }
+    compute_encoder.dispatch_threadgroups(
+        MTL::Size(tm * tn, 1, 1), MTL::Size(32 * sn * ks, 1, 1));
+    compute_encoder.add_temporaries(std::move(copies));
+    return;
+  }
+
+  // Case 3: Large K with sufficient M, N, and NAX is available, use NAX split-K
   if (use_nax && batch_size_out == 1 &&
       (K >= 3 * std::max(M, N) ||
        (std::max(M, N) <= 1024 && K > 2 * std::max(M, N)))) {
