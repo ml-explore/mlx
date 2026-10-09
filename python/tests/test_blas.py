@@ -1241,6 +1241,15 @@ class TestBlas(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(c_mx, c_np, atol=1e-5))
         self.assertTrue(np.allclose(e_mx, e_np, atol=1e-5))
 
+        # Strided output mask with a vector lhs
+        a = mx.random.normal((1, 64))
+        b = mx.random.normal((64, 128))
+        mask = mx.array([[True, False, False, True, True, False, False, True]])
+        out_mask = mask[:, ::2]
+        out = mx.block_masked_mm(a, b, 32, out_mask)
+        expected = ref_block_masked_mm(a, b, 32, out_mask)
+        self.assertTrue(mx.allclose(out, expected, atol=1e-5))
+
     def test_gather_matmul(self):
         def np_gather_mm(a, b, lhs_indices=None, rhs_indices=None):
             a = a.reshape((-1, a.shape[-2], a.shape[-1]))
