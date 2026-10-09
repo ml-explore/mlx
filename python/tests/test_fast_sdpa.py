@@ -892,7 +892,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         ref = mlx_ref_attn(q, k, v, mask=mask)
         self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
-    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
     def test_sdpa_vector_2pass_threadgroup_limit(self):
         for dtype, D, q_heads, kv_heads, q_len in (
             (mx.float16, 192, 32, 8, 8),

@@ -859,6 +859,7 @@ void sdpa_vector_2pass(
 
   // Get the kernel
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
+  // M1/M2 do not have enough threads per threadgroup for default TK=4 kernel
   bool has_tk1_variant =
       (q.dtype() == bfloat16 && q.shape(-1) == 256 && v.shape(-1) == 256) ||
       (q.dtype() == float32 && q.shape(-1) == v.shape(-1) &&
