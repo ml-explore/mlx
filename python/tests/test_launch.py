@@ -7,7 +7,6 @@ import subprocess
 import sys
 import tempfile
 import textwrap
-import unittest
 
 import mlx_tests
 
@@ -73,7 +72,6 @@ def launch(rank_code, slow_reads=False, timeout=60):
 
 
 class TestLaunch(mlx_tests.MLXTestCase):
-
     def test_output_written_right_before_exit_is_kept(self):
         # Slow down the launcher's reads so that each rank writes its last line
         # and exits while the reader thread is still handling an earlier chunk.
@@ -148,7 +146,8 @@ class TestLaunch(mlx_tests.MLXTestCase):
         rank = textwrap.dedent(f"""
             import os, subprocess, sys
 
-            child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+            sleeper = "import time; time.sleep(30)"
+            child = subprocess.Popen([sys.executable, "-c", sleeper])
             with open(os.path.join({tmp.name!r}, os.environ["MLX_RANK"]), "w") as f:
                 f.write(str(child.pid))
             print("last", flush=True)
