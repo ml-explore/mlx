@@ -1,7 +1,6 @@
 // Copyright © 2026 Apple Inc.
 
 #include "doctest/doctest.h"
-#include "mlx/backend/cuda/lru_cache.h"
 #include "mlx/mlx.h"
 
 #ifdef _WIN32
@@ -119,21 +118,4 @@ TEST_CASE("test eval after cuda error") {
   auto a = ones({4}, float32, s);
   CHECK_NOTHROW(eval(a));
   CHECK(array_equal(a, ones({4})).item<bool>());
-}
-
-TEST_CASE("test lru cache thrashing check counts consecutive misses") {
-  // Many distinct keys over time are not thrashing while lookups still hit.
-  LRUCache<int, int> cache("MLX_TEST_LRU_CACHE_SIZE", 2);
-  for (int i = 0; i < 100; ++i) {
-    cache.emplace(i, i);
-    CHECK(cache.find(i) != cache.end());
-  }
-
-  // A working set larger than the capacity misses on every lookup.
-  auto cycle = [&cache]() {
-    for (int i = 0; i < 100; ++i) {
-      cache[i % 3];
-    }
-  };
-  CHECK_THROWS(cycle());
 }

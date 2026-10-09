@@ -130,8 +130,6 @@ class LRUCache {
   }
 
   const char* env_name_{nullptr};
-  // Consecutive misses: any hit resets it, so only a working set larger than
-  // the capacity (every lookup missing) counts as thrashing.
   size_t cache_misses_{0};
 
   list_type vlist_;
