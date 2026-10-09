@@ -219,27 +219,6 @@ Simd<T, 1> divide(Simd<T, 1> a_, Simd<T, 1> b_) {
 }
 
 template <typename T>
-Simd<T, 1> remainder(Simd<T, 1> a_, Simd<T, 1> b_) {
-  T a = a_.value;
-  T b = b_.value;
-  T r;
-  if constexpr (std::is_integral_v<T>) {
-    if (b == 0) {
-      return a;
-    }
-    r = a % b;
-  } else {
-    r = std::remainder(a, b);
-  }
-  if constexpr (is_signed_v<T>) {
-    if (r != 0 && (r < 0 != b < 0)) {
-      r += b;
-    }
-  }
-  return r;
-}
-
-template <typename T>
 Simd<T, 1> floor_divide(Simd<T, 1> a_, Simd<T, 1> b_) {
   T a = a_.value;
   T b = b_.value;
@@ -260,6 +239,27 @@ Simd<T, 1> floor_divide(Simd<T, 1> a_, Simd<T, 1> b_) {
   } else {
     return floor(divide(a_, b_));
   }
+}
+
+template <typename T>
+Simd<T, 1> remainder(Simd<T, 1> a_, Simd<T, 1> b_) {
+  T a = a_.value;
+  T b = b_.value;
+  T r;
+  if constexpr (std::is_integral_v<T>) {
+    if (b == 0) {
+      return a;
+    }
+    r = a % b;
+  } else {
+    r = std::remainder(a, b);
+  }
+  if constexpr (is_signed_v<T>) {
+    if (r != 0 && (r < 0 != b < 0)) {
+      r += b;
+    }
+  }
+  return r;
 }
 
 template <typename T>

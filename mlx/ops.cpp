@@ -3307,10 +3307,6 @@ array floor_divide(
     const array& b,
     StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
-  if (issubdtype(dtype, inexact)) {
-    return floor(divide(a, b, s), s);
-  }
-
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
   return array(

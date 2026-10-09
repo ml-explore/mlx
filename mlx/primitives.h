@@ -965,20 +965,6 @@ class Remainder : public UnaryPrimitive {
   DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
-class FloorDivide : public UnaryPrimitive {
- public:
-  explicit FloorDivide(Stream stream) : UnaryPrimitive(stream) {}
-
-  void eval_cpu(const std::vector<array>& inputs, array& out) override;
-  void eval_gpu(const std::vector<array>& inputs, array& out) override;
-
-  DEFINE_VMAP()
-  DEFINE_GRADS()
-  DEFINE_NAME(FloorDivide)
-  DEFINE_DEFAULT_IS_EQUIVALENT()
-  DEFINE_INPUT_OUTPUT_SHAPE()
-};
-
 class Equal : public UnaryPrimitive {
  public:
   explicit Equal(Stream stream, bool equal_nan = false)
@@ -1157,6 +1143,20 @@ class Floor : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_NAME(Floor)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+};
+
+class FloorDivide : public UnaryPrimitive {
+ public:
+  explicit FloorDivide(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_NAME(FloorDivide)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
 };

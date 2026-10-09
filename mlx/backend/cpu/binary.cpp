@@ -92,13 +92,6 @@ void Remainder::eval_cpu(const std::vector<array>& inputs, array& out) {
   binary_op_cpu(a, b, out, detail::Remainder(), stream());
 }
 
-void FloorDivide::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2);
-  auto& a = inputs[0];
-  auto& b = inputs[1];
-  binary_op_cpu(a, b, out, detail::FloorDivide(), stream());
-}
-
 void Equal::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
@@ -124,6 +117,13 @@ void Equal::eval_cpu(const std::vector<array>& inputs, array& out) {
   } else {
     comparison_op_cpu(a, b, out, detail::Equal(), stream());
   }
+}
+
+void FloorDivide::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  binary_op_cpu(a, b, out, detail::FloorDivide(), stream());
 }
 
 void Greater::eval_cpu(const std::vector<array>& inputs, array& out) {

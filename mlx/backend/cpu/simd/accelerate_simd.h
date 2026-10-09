@@ -243,21 +243,6 @@ Simd<T, N> divide(Simd<T, N> a, Simd<T, N> b) {
   }
 }
 
-template <typename T, int N>
-Simd<T, N> remainder(Simd<T, N> a, Simd<T, N> b) {
-  Simd<T, N> r;
-  if constexpr (!std::is_integral_v<T>) {
-    r = asd::remainder(a.value, b.value);
-  } else {
-    r = a - b * (a / b);
-  }
-  if constexpr (is_signed_v<T>) {
-    auto mask = r != 0 && (r < 0 != b < 0);
-    r = select(mask, r + b, r);
-  }
-  return r;
-}
-
 // Signed types round the quotient towards minus infinity.
 template <typename T, int N>
 Simd<T, N> floor_divide(Simd<T, N> a, Simd<T, N> b) {
@@ -277,6 +262,21 @@ Simd<T, N> floor_divide(Simd<T, N> a, Simd<T, N> b) {
   } else {
     return floor(divide(a, b));
   }
+}
+
+template <typename T, int N>
+Simd<T, N> remainder(Simd<T, N> a, Simd<T, N> b) {
+  Simd<T, N> r;
+  if constexpr (!std::is_integral_v<T>) {
+    r = asd::remainder(a.value, b.value);
+  } else {
+    r = a - b * (a / b);
+  }
+  if constexpr (is_signed_v<T>) {
+    auto mask = r != 0 && (r < 0 != b < 0);
+    r = select(mask, r + b, r);
+  }
+  return r;
 }
 
 template <typename MaskT, typename T1, typename T2, int N>
