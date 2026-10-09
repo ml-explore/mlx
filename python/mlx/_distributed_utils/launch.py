@@ -193,44 +193,41 @@ def _launch_with_io(command_class, arguments, verbose):
         to_write = [p.stdin.fileno()]
 
         stdin_buffer = b""
-        while p.poll() is None:
+        while True:
+            # Sampled before select(): output written before the exit is in the
+            # pipes already, so it is read below before the loop ends.
+            exited = p.poll() is not None
             try:
                 stdin_buffer += stdin_queue.get_nowait()
             except QueueEmpty:
                 pass
-            rlist, wlist, _ = select(to_read, to_write, [], 1.0)
+            rlist, wlist, _ = select(to_read, to_write, [], 0 if exited else 1.0)
             for fd in rlist:
                 is_stdout = fd == p.stdout.fileno()
-                msg = os.read(fd, 8192).decode(errors="ignore")
-                msg = command.preprocess_output(msg, is_stdout)
+                try:
+                    data = os.read(fd, 8192)
+                except BlockingIOError:
+                    continue
+                if not data:
+                    to_read.remove(fd)
+                    continue
+                msg = command.preprocess_output(data.decode(errors="ignore"), is_stdout)
                 if is_stdout:
                     stdout_queue.put(msg.encode())
                 else:
                     stderr_queue.put(msg.encode())
             for fd in wlist:
                 if len(stdin_buffer) > 0:
-                    n = os.write(fd, stdin_buffer)
+                    try:
+                        n = os.write(fd, stdin_buffer)
+                    except BrokenPipeError:
+                        to_write.remove(fd)
+                        continue
                     stdin_buffer = stdin_buffer[n:]
-            if stop:
-                command.terminate()
+            if exited and not rlist:
                 break
-
-        # The process can write its last output and exit between select() and
-        # poll() above, so read what is left in the pipes before giving up on it.
-        for fd in to_read:
-            is_stdout = fd == p.stdout.fileno()
-            while True:
-                try:
-                    data = os.read(fd, 8192)
-                except BlockingIOError:
-                    break
-                if not data:
-                    break
-                msg = command.preprocess_output(data.decode(errors="ignore"), is_stdout)
-                if is_stdout:
-                    stdout_queue.put(msg.encode())
-                else:
-                    stderr_queue.put(msg.encode())
+            if stop and not exited:
+                command.terminate()
 
         exit_codes[rank] = command.exit_status
 
