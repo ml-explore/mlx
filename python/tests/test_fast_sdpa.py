@@ -1057,6 +1057,20 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         ref = mlx_ref_attn(q, k, v, scale=1.0, mask=mask)
         self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    def test_sdpa_vector_reversed_mask(self):
+        mx.random.seed(0)
+        q = mx.random.normal(shape=(1, 2, 1, 64))
+        k = mx.random.normal(shape=(1, 2, 16, 64))
+        v = mx.random.normal(shape=(1, 2, 16, 64))
+        masks = [
+            mx.random.normal(shape=(1, 2, 1, 16))[..., ::-1],
+            (mx.arange(16) % 3 != 0).reshape(1, 1, 1, 16)[..., ::-1],
+        ]
+        for mask in masks:
+            out = mx.fast.scaled_dot_product_attention(q, k, v, scale=0.125, mask=mask)
+            ref = mlx_ref_attn(q, k, v, scale=0.125, mask=mask)
+            self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+
     def test_sdpa_promote_mask(self):
         mask = mx.array(2.0, mx.bfloat16)
         D = 64
