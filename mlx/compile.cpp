@@ -650,14 +650,16 @@ void compile_simplify(
     return pa.is_equivalent(pb);
   };
 
-  std::unordered_set<uintptr_t> output_ids;
+  std::unordered_map<uintptr_t, array> output_map;
   for (auto& o : outputs) {
-    output_ids.insert(o.id());
+    output_map.insert({o.id(), o});
   }
+
+  // Merge scalars, except outputs
   std::vector<array> new_tape;
   for (auto& arr : tape) {
-    // Check if we can merge scalars, except outputs
-    if (is_scalar(arr) && output_ids.find(arr.id()) == output_ids.end()) {
+    // Check if we can merge scalars
+    if (is_scalar(arr) && output_map.find(arr.id()) == output_map.end()) {
       auto scalar = scalars.find(get_scalar_rep(arr));
       if (scalar->second.id() != arr.id()) {
         merge(scalar->second, arr, parents_map);
@@ -671,10 +673,6 @@ void compile_simplify(
 
   // Remove no-ops
   {
-    std::unordered_map<uintptr_t, array> output_map;
-    for (auto& o : outputs) {
-      output_map.insert({o.id(), o});
-    }
     for (auto& arr : tape) {
       if (!arr.has_primitive() || !is_noop(arr.primitive())) {
         new_tape.push_back(std::move(arr));
@@ -696,11 +694,6 @@ void compile_simplify(
     tape_order.insert({tape[i].id(), i});
   }
 
-  std::unordered_set<uintptr_t> output_set;
-  for (auto& o : outputs) {
-    output_set.insert(o.id());
-  }
-
   // Multi-pass merge only keeping non-orphaned arrays in the tape
   for (int pass = 0; pass < passes; ++pass) {
     for (auto& arr : tape) {
@@ -720,7 +713,7 @@ void compile_simplify(
             auto& src = parents->second[src_idx].first;
             auto& dst = parents->second[dst_idx].first;
             if (src.id() != dst.id() && array_equivalent(src, dst) &&
-                output_set.find(src.id()) == output_set.end()) {
+                output_map.find(src.id()) == output_map.end()) {
               merge(dst, src, parents_map);
               mask[src_idx] = true;
             }
@@ -786,7 +779,7 @@ void compile_simplify(
           }
           return false;
         } else {
-          return output_set.find(a.id()) == output_set.end();
+          return output_map.find(a.id()) == output_map.end();
         }
       };
       bool discard = maybe_merge_parents(arr);
