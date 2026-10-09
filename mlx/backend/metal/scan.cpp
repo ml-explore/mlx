@@ -89,11 +89,12 @@ void scan_gpu_inplace(
     MTL::Size group_dims(thread_group_size, 1, 1);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   } else {
-    size_t stride = in.strides()[axis];
+    size_t stride = in.strides(axis);
     int bn = 32;
     size_t stride_blocks = (stride + bn - 1) / bn;
-    compute_encoder.set_bytes(stride, 3);
-    compute_encoder.set_bytes(stride_blocks, 4);
+    compute_encoder.set_bytes(int64_t(stride), 3);
+    compute_encoder.set_bytes(int64_t(stride_blocks), 4);
+    compute_encoder.set_bytes(int64_t(in.data_size()), 5);
 
     // Compute the thread grid
     int n_reads = (in.itemsize() <= 4) ? 4 : 2;
