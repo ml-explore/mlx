@@ -378,6 +378,21 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.dtype, mx.int32)
         self.assertEqual(z.item(), 2)
 
+    def test_complex_divide_extreme_values(self):
+        values = np.array(
+            [1e20 + 1e20j, 1e-30 + 1e-30j, 1 + 0j, 1e20 + 0j, 3 + 4j],
+            dtype=np.complex64,
+        )
+        divisors = np.array(
+            [1e20 + 1e20j, 1e-30 + 1e-30j, 1e20 + 0j, 1 + 0j, 1 + 2j],
+            dtype=np.complex64,
+        )
+        a, b = mx.array(values), mx.array(divisors)
+        for result in [mx.divide(a, b), a / b]:
+            np.testing.assert_allclose(result, values / divisors, rtol=1e-6, atol=0)
+        for result in [1 / b, mx.reciprocal(b)]:
+            np.testing.assert_allclose(result, 1 / divisors, rtol=1e-6, atol=0)
+
     def test_floor_divide(self):
         a = [4, 5, -1, -6]
         b = [-2, 3, 2, -3]
