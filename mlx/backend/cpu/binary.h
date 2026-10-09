@@ -387,6 +387,7 @@ void binary_int_op_cpu(
     switch (out.dtype()) {
       case bool_:
         binary_op<bool, Op>(a, b, out, bopt);
+        break;
       case uint8:
         binary_op<uint8_t, Op>(a, b, out, bopt);
         break;
