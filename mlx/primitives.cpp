@@ -2221,12 +2221,6 @@ std::vector<Shape> Flatten::output_shapes(const std::vector<array>& inputs) {
   return {Flatten::output_shape(inputs[0], start_axis_, end_axis_)};
 }
 
-bool FFT::is_equivalent(const Primitive& other) const {
-  const FFT& r_other = static_cast<const FFT&>(other);
-  return axes_ == r_other.axes_ && inverse_ == r_other.inverse_ &&
-      real_ == r_other.real_ && odd_out_ == r_other.odd_out_;
-}
-
 std::vector<array> Unflatten::vjp(
     const std::vector<array>&,
     const std::vector<array>& cotangents,
@@ -2409,6 +2403,12 @@ std::vector<array> FFT::jvp(
   }
 }
 
+bool FFT::is_equivalent(const Primitive& other) const {
+  const FFT& r_other = static_cast<const FFT&>(other);
+  return axes_ == r_other.axes_ && inverse_ == r_other.inverse_ &&
+      real_ == r_other.real_ && odd_out_ == r_other.odd_out_;
+}
+
 std::vector<array> Floor::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
@@ -2432,6 +2432,32 @@ std::pair<std::vector<array>, std::vector<int>> Floor::vmap(
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
   return {{floor(inputs[0], stream())}, axes};
+}
+
+std::vector<array> FloorDivide::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>&,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  std::vector<array> vjps;
+  for (auto arg : argnums) {
+    vjps.push_back(zeros_like(primals[arg], stream()));
+  }
+  return vjps;
+}
+
+std::vector<array> FloorDivide::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>&,
+    const std::vector<int>&) {
+  return {zeros_like(primals[0], stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> FloorDivide::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
+  return {{floor_divide(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> Full::vjp(
