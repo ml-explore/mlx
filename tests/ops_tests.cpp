@@ -9,6 +9,7 @@
 
 #include "mlx/backend/cuda/cuda.h"
 #include "mlx/mlx.h"
+#include "mlx/primitives.h"
 
 using namespace mlx::core;
 
@@ -975,6 +976,29 @@ TEST_CASE("test comparison ops") {
     expected = array({true, false, true, true}, {2, 2});
     z = less_equal(x, y);
     CHECK(array_equal(z, expected).item<bool>());
+  }
+}
+
+TEST_CASE("test float16 sigmoid mixed lanes") {
+  const float values[] = {-12, -4, -1, 0, 1, 4, 12, -2};
+  for (int size : {1, 7, 8, 9, 15, 16, 17}) {
+    for (int offset = 0; offset < 8; ++offset) {
+      std::vector<float> input(size);
+      for (int i = 0; i < size; ++i) {
+        input[i] = values[(i + offset) % 8];
+      }
+      auto result = sigmoid(array(input.begin(), {size}, float16), Device::cpu);
+      result.eval();
+      for (int i = 0; i < size; ++i) {
+        CAPTURE(size);
+        CAPTURE(offset);
+        CAPTURE(i);
+        auto expected = 1.0 / (1.0 + std::exp(-double(input[i])));
+        CHECK_EQ(
+            static_cast<float>(result.data<float16_t>()[i]),
+            doctest::Approx(expected).epsilon(0.002));
+      }
+    }
   }
 }
 
@@ -2088,9 +2112,10 @@ TEST_CASE("test arithmetic binary ops") {
   // Integer division by zero gives quotient 0 and remainder a.
   if (default_device() == Device::cpu) {
     for (auto dt : {int8, int16, int32, int64, uint8, uint16, uint32, uint64}) {
-      auto num = astype(array({7, 0, 5}, {3}), dt);
-      auto den = zeros({3}, dt);
-      CHECK(array_equal(floor_divide(num, den), zeros({3}, dt)).item<bool>());
+      auto num = astype(array({7, 0, 5, -7}, {4}), dt);
+      auto den = zeros({4}, dt);
+      auto q = floor_divide(num, den);
+      CHECK(array_equal(q, zeros({4}, dt)).item<bool>());
       CHECK(array_equal(remainder(num, den), num).item<bool>());
     }
   }
@@ -3718,6 +3743,25 @@ TEST_CASE("inner") {
   z = inner(eye(2), array(7.));
   expected = array({7., 0., 0., 7.}, {2, 2});
   CHECK(array_equal(z, expected).item<bool>());
+}
+
+TEST_CASE("test floor divide") {
+  // Signed integers round the quotient towards minus infinity.
+  auto x = array({4, 5, -1, -6});
+  auto y = array({-2, 3, 2, -3});
+  CHECK(array_equal(floor_divide(x, y), array({-2, 1, -1, 2})).item<bool>());
+
+  // Unsigned integers use the plain quotient.
+  auto ux = astype(array({7, 0, 5}, {3}), uint32);
+  auto uy = astype(array({2, 2, 3}, {3}), uint32);
+  auto expected = astype(array({3, 0, 1}, {3}), uint32);
+  CHECK(array_equal(floor_divide(ux, uy), expected).item<bool>());
+
+  // The dtype is kept and the result is one primitive.
+  auto out = floor_divide(astype(x, int8), astype(array(3), int8));
+  CHECK_EQ(out.dtype(), int8);
+  CHECK_EQ(std::string(out.primitive().name()), "FloorDivide");
+  CHECK(out.siblings().empty());
 }
 
 TEST_CASE("test divmod") {

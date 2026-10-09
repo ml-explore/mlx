@@ -1,9 +1,9 @@
 # Copyright © 2025 Apple Inc.
 
 import argparse
-import base64
 import json
 import os
+import platform
 import shlex
 import shutil
 import sys
@@ -440,7 +440,7 @@ def get_mpi_libname():
             filter(lambda line: "libmpi" in line, otool_output.splitlines())
         )
         return libmpi_line.strip().split()[0].removeprefix("@rpath/")
-    except:
+    except BaseException:
         return None
 
 
@@ -592,5 +592,6 @@ def main():
         launch_jaccl(parser, hostfile.hosts, args, rest)
     else:
         parser.error(
-            "The backend should be one of {'ring', 'mpi', 'nccl', 'jaccl', 'jaccl-ring'}"
+            "The backend should be one of "
+            "{'ring', 'mpi', 'nccl', 'jaccl', 'jaccl-ring'}"
         )

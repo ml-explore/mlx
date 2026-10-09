@@ -11,7 +11,7 @@ try:
     import torch
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 
@@ -473,18 +473,45 @@ class TestFFT(mlx_tests.MLXTestCase):
     def test_fft_vmap(self):
         for fftn, a_np, axes in self.make_ffts():
             a = mx.array(a_np)
-            f = lambda x: fftn(x, axes=axes)
+
+            def f(x):
+                return fftn(x, axes=axes)
+
             expected = mx.stack([f(a[i]) for i in range(a.shape[0])])
             out = mx.vmap(f)(a)
             self.assertEqual(tuple(out.shape), tuple(expected.shape))
             np.testing.assert_allclose(out, expected, atol=1e-5, rtol=1e-5)
+
+    def test_fft_vmap_explicit_size(self):
+        # An inverse real transform to an odd length is not recoverable from
+        # the input shape.
+        shape = (3, 8, 6)
+        a = mx.array(np.random.rand(*shape) + 1j * np.random.rand(*shape))
+        for n in [10, 11, 12, 13]:
+            for fftn, axes in [
+                (mx.fft.irfftn, (-1,)),
+                (mx.fft.irfftn, (-2, -1)),
+                (mx.fft.ifftn, (-1,)),
+            ]:
+                s_arg = [shape[-2], n] if len(axes) == 2 else [n]
+
+                def f(x):
+                    return fftn(x, s=s_arg, axes=axes)
+
+                expected = mx.stack([f(a[i]) for i in range(a.shape[0])])
+                out = mx.vmap(f)(a)
+                self.assertEqual(tuple(out.shape), tuple(expected.shape))
+                np.testing.assert_allclose(out, expected, atol=1e-5, rtol=1e-5)
 
     def test_fft_jvp(self):
         # The fft is linear so the jvp is the fft of the tangent
         for fftn, a_np, axes in self.make_ffts():
             a = mx.array(a_np)
             t = mx.array(np.random.rand(*a_np.shape).astype(a_np.dtype))
-            f = lambda x: fftn(x, axes=axes)
+
+            def f(x):
+                return fftn(x, axes=axes)
+
             expected = f(t)
             out = mx.jvp(f, [a], [t])[1][0]
             self.assertEqual(tuple(out.shape), tuple(expected.shape))

@@ -32,9 +32,11 @@ class Linear(Module):
 
         y = x W^\top + b
 
-    where :math:`W` has shape ``[output_dims, input_dims]`` and :math:`b` has shape ``[output_dims]``.
+    where :math:`W` has shape ``[output_dims, input_dims]`` and :math:`b` has shape
+    ``[output_dims]``.
 
-    The values are initialized from the uniform distribution :math:`\mathcal{U}(-{k}, {k})`,
+    The values are initialized from the uniform distribution
+    :math:`\mathcal{U}(-{k}, {k})`,
     where :math:`k = \frac{1}{\sqrt{D_i}}` and :math:`D_i` is equal to ``input_dims``.
 
     Args:
@@ -60,7 +62,10 @@ class Linear(Module):
             )
 
     def _extra_repr(self) -> str:
-        return f"input_dims={self.weight.shape[1]}, output_dims={self.weight.shape[0]}, bias={'bias' in self}"
+        return (
+            f"input_dims={self.weight.shape[1]}, "
+            f"output_dims={self.weight.shape[0]}, bias={'bias' in self}"
+        )
 
     def __call__(self, x: mx.array) -> mx.array:
         if "bias" in self:
@@ -101,7 +106,8 @@ class Linear(Module):
         if quantize_input:
             if mode not in ["nvfp4", "mxfp8"]:
                 raise ValueError(
-                    f"Quantized activations are only supported for 'nvfp4' and 'mxfp8' modes, got {mode}."
+                    f"Quantized activations are only supported for 'nvfp4' and 'mxfp8' "
+                    f"modes, got {mode}."
                 )
             return QQLinear.from_linear(self, group_size, bits, mode)
         return QuantizedLinear.from_linear(self, group_size, bits, mode)
@@ -117,10 +123,12 @@ class Bilinear(Module):
         y_i = x_2^\top W_i x_1 + b_i
 
     where:
-    :math:`W` has shape ``[output_dims, input2_dims, input1_dims]``, :math:`b` has shape ``[output_dims]``,
+    :math:`W` has shape ``[output_dims, input2_dims, input1_dims]``, :math:`b` has
+    shape ``[output_dims]``,
     and :math:`i` indexes the output dimension.
 
-    The values are initialized from the uniform distribution :math:`\mathcal{U}(-{k}, {k})`,
+    The values are initialized from the uniform distribution
+    :math:`\mathcal{U}(-{k}, {k})`,
     where :math:`k = \frac{1}{\sqrt{D_1}}` and :math:`D_1` is ``input1_dims``.
 
     Args:

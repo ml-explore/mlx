@@ -1,7 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import operator
-import os
 import pickle
 import platform
 import sys
@@ -599,6 +598,18 @@ class TestArray(mlx_tests.MLXTestCase):
         out = mx.array([x], dtype=mx.float64).item()
         self.assertEqual(out, x)
 
+        # Integer and bool targets
+        v = 2**24 + 1
+        self.assertEqual(mx.array(float(v), dtype=mx.int32).item(), v)
+        self.assertEqual(mx.array([float(v)], dtype=mx.int64).tolist(), [v])
+        # Small non-zero values are still True
+        self.assertTrue(mx.array(1e-50, dtype=mx.bool_).item())
+        self.assertEqual(mx.array([1e-50], dtype=mx.bool_).tolist(), [True])
+
+        # Python ints to float64
+        out = mx.array([v], dtype=mx.float64).tolist()
+        self.assertEqual(out, [float(v)])
+
     def test_construction_from_lists_wide_ints(self):
         # A python int that does not fit in int32 widens to int64, the same
         # rule the scalar path already uses. It used to raise std::bad_cast.
@@ -649,7 +660,8 @@ class TestArray(mlx_tests.MLXTestCase):
             expected = mx.stack([x, y], axis=0)
             self.assertEqualArray(z, expected)
 
-            # check heterogeneous construction with mlx arrays and python primitive types
+            # check heterogeneous construction with mlx arrays and python primitive
+            # types
             x, y = mx.array([True], x_t), mx.array([False], y_t)
             z = mx.array([[x, [2.0]], [[3.0], y]])
             expected = mx.array([[[x.item()], [2.0]], [[3.0], [y.item()]]], z.dtype)
@@ -1117,6 +1129,10 @@ class TestArray(mlx_tests.MLXTestCase):
             state = pickle.dumps(x)
             y = pickle.loads(state)
             self.assertEqualArray(y, x)
+            # F-contiguous
+            x = x.T
+            y = pickle.loads(pickle.dumps(x))
+            self.assertEqualArray(y, x)
 
     def test_array_copy(self):
         dtypes = [
@@ -1258,7 +1274,7 @@ class TestArray(mlx_tests.MLXTestCase):
             idx_mlx = [
                 mx.array(idx) if isinstance(idx, np.ndarray) else idx for idx in idx_np
             ]
-            slice_mlx = arr_mlx[tuple(idx_mlx)]
+            _slice_mlx = arr_mlx[tuple(idx_mlx)]
             self.assertTrue(
                 np.array_equal(arr_np[tuple(idx_np)], arr_mlx[tuple(idx_mlx)])
             )
@@ -1731,6 +1747,13 @@ class TestArray(mlx_tests.MLXTestCase):
         a = a.at[1:3, :, 0].minimum(update)
         self.assertEqualArray(a[1:3, :, 0], mx.minimum(a[1:3, :, 0], update))
 
+        # Indices and updates with negative strides
+        idx = mx.array([0, 1, 2, 3])
+        upd = mx.array([1.0, 2.0, 3.0, 4.0])
+        expected = [4.0, 3.0, 2.0, 1.0]
+        self.assertEqual(mx.zeros(4).at[idx[::-1]].add(upd).tolist(), expected)
+        self.assertEqual(mx.zeros(4).at[idx].add(upd[::-1]).tolist(), expected)
+
     @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_array_at_complex_add_gpu(self):
         n = 4096
@@ -2080,7 +2103,8 @@ class TestArray(mlx_tests.MLXTestCase):
                 self.assertEqual(mv_mx.shape, mv_np.shape, f"{mlx_dtype}{np_dtype}")
                 # correct buffer format for 8 byte (unsigned) 'long long' is Q/q, see
                 # https://docs.python.org/3.10/library/struct.html#format-characters
-                # numpy returns L/l, as 'long' is equivalent to 'long long' on 64bit machines, so q and l are equivalent
+                # numpy returns L/l, as 'long' is equivalent to 'long long' on 64bit
+                # machines, so q and l are equivalent
                 # see https://github.com/pybind/pybind11/issues/1908
                 if np_dtype == np.uint64:
                     self.assertEqual(mv_mx.format, "Q", f"{mlx_dtype}{np_dtype}")
@@ -2141,7 +2165,7 @@ class TestArray(mlx_tests.MLXTestCase):
         mv = memoryview(a)
         a = None
         self.assertIsNotNone(wr())
-        mv = None
+        del mv
         self.assertIsNone(wr())
 
     def test_buffer_protocol_eval_error(self):
@@ -2157,7 +2181,7 @@ class TestArray(mlx_tests.MLXTestCase):
         a_np = np.array(a, copy=False)
         a = None
         self.assertIsNotNone(wr())
-        a_np = None
+        del a_np
         self.assertIsNone(wr())
 
     def test_create_from_buffer(self):
@@ -2533,7 +2557,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(y.tolist(), [0.0, 1.0, 2.0])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_torch_mps_dlpack_zero_copy_shares_updates(self):
+    def test_torch_mps_dlpack_zero_copy_one_way_updates(self):
         assert torch is not None
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
         torch.mps.synchronize()
@@ -2545,7 +2569,8 @@ class TestArray(mlx_tests.MLXTestCase):
 
         y += 10
         mx.eval(y)
-        self.assertEqual(x.cpu().numpy().tolist(), y.tolist())
+        self.assertEqual(y.tolist(), [[10.0] * 4] * 3)
+        self.assertEqual(x.cpu().numpy().tolist(), [[0.0] * 4] * 3)
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_matching_dtype_argument_shares_updates(self):
@@ -2710,7 +2735,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.tolist(), [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 6.0, 7.0])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_from_dlpack_torch_mps_copy_none_shares_updates(self):
+    def test_from_dlpack_torch_mps_copy_none_one_way_updates(self):
         assert torch is not None
         x = torch.arange(3, device="mps", dtype=torch.float32)
         torch.mps.synchronize()
@@ -2722,7 +2747,8 @@ class TestArray(mlx_tests.MLXTestCase):
 
         y += 10
         mx.eval(y)
-        self.assertEqual(x.cpu().numpy().tolist(), [10.0, 10.0, 10.0])
+        self.assertEqual(y.tolist(), [10.0, 10.0, 10.0])
+        self.assertEqual(x.cpu().numpy().tolist(), [0.0, 0.0, 0.0])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_from_dlpack_torch_mps_copy_false_shares_updates(self):
@@ -2830,6 +2856,13 @@ class TestArray(mlx_tests.MLXTestCase):
         expected = mx.array([5.0, 5.0, 5.0])
         a[mask] = 5.0
         self.assertTrue(mx.array_equal(a, expected))
+
+        # Scalar target and scalar mask
+        for selected in (False, True):
+            a = mx.array(False)
+            a[mx.array(selected)] = True
+            self.assertEqual(a.shape, ())
+            self.assertEqual(a.item(), selected)
 
         mask_np = np.zeros((1, 10, 10), dtype=bool)
         with self.assertRaises(ValueError):
@@ -2955,7 +2988,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(f"{b:.1f}", "0.4")
 
         with self.assertRaises(TypeError):
-            s = f"{a:.2f}"
+            f"{a:.2f}"
 
         a = mx.array([1, 2, 3])
         self.assertEqual(f"{a}", "array([1, 2, 3], dtype=int32)")

@@ -3307,20 +3307,13 @@ array floor_divide(
     const array& b,
     StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
-  if (issubdtype(dtype, inexact)) {
-    return floor(divide(a, b, s), s);
-  }
-
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
-  auto quotient = array(
-      shape, dtype, std::make_shared<Divide>(to_stream(s)), std::move(inputs));
-  auto rem = remainder(a, b, s);
-  auto zero = array(0, dtype);
-  auto step = logical_and(
-      not_equal(rem, zero, s),
-      not_equal(less(a, zero, s), less(b, zero, s), s));
-  return subtract(quotient, astype(step, dtype, s), s);
+  return array(
+      shape,
+      dtype,
+      std::make_shared<FloorDivide>(to_stream(s)),
+      std::move(inputs));
 }
 
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
@@ -4440,12 +4433,13 @@ array logcumsumexp(
     bool inclusive /* = true*/,
     StreamOrDevice s /* = {}*/) {
   axis = normalize_axis_index(axis, a.ndim(), "[logcumsumexp] ");
+  auto out_type = at_least_float(a.dtype());
   return array(
       a.shape(),
-      a.dtype(),
+      out_type,
       std::make_shared<Scan>(
           to_stream(s), Scan::ReduceType::LogAddExp, axis, reverse, inclusive),
-      {a});
+      {astype(a, out_type, s)});
 }
 
 array logcumsumexp(
@@ -5176,10 +5170,10 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
     throw std::invalid_argument(msg.str());
   }
 
-  if (bits < 2 || bits > 8 || bits == 7) {
+  if (bits < 1 || bits > 8 || bits == 7) {
     std::ostringstream msg;
     msg << "[quantize] The requested number of bits " << bits
-        << " is not supported. The supported bits are 2, 3, 4, 5, 6 and 8.";
+        << " is not supported. The supported bits are 1, 2, 3, 4, 5, 6 and 8.";
     throw std::invalid_argument(msg.str());
   }
 
@@ -5200,14 +5194,22 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
     w_max = astype(w_max, float32, s);
     w_min = astype(w_min, float32, s);
 
-    array mask = greater(abs(w_min, s), abs(w_max, s), s);
-    array scales =
-        maximum(divide(subtract(w_max, w_min, s), n_bins, s), eps, s);
-    scales = where(mask, scales, negative(scales, s), s);
-    array edge = where(mask, w_min, w_max, s);
-    array q0 = round(divide(edge, scales, s), s);
-    scales = where(not_equal(q0, zero, s), divide(edge, q0, s), scales);
-    array biases = where(equal(q0, zero, s), zero, edge, s);
+    array scales(0, float32);
+    array biases(0, float32);
+
+    if (bits == 1) {
+      // Affine 1-bit: bit 0 -> w_min, bit 1 -> w_max
+      scales = maximum(subtract(w_max, w_min, s), eps, s);
+      biases = w_min;
+    } else {
+      array mask = greater(abs(w_min, s), abs(w_max, s), s);
+      scales = maximum(divide(subtract(w_max, w_min, s), n_bins, s), eps, s);
+      scales = where(mask, scales, negative(scales, s), s);
+      array edge = where(mask, w_min, w_max, s);
+      array q0 = round(divide(edge, scales, s), s);
+      scales = where(not_equal(q0, zero, s), divide(edge, q0, s), scales);
+      biases = where(equal(q0, zero, s), zero, edge, s);
+    }
 
     packed_w = pack_and_quantize(packed_w, scales, biases, bits, s);
 

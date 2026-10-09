@@ -12,7 +12,6 @@ import mlx_tests
 
 
 class TestExportImport(mlx_tests.MLXTestCase):
-
     @classmethod
     def setUpClass(cls):
         cls.test_dir_fid = tempfile.TemporaryDirectory()
@@ -160,7 +159,7 @@ class TestExportImport(mlx_tests.MLXTestCase):
             return out
 
         x = mx.array([1, 2, 3])
-        y = mx.array([1, 1, 0])
+        _y = mx.array([1, 1, 0])
         z = mx.array([2, 2, 2])
 
         mx.export_function(path, fun, (x,), {"z": z})

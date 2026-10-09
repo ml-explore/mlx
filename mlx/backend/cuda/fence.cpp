@@ -45,8 +45,7 @@ uint32_t Fence::update(Stream s, const array& a, bool cross_device) {
   auto& f = cast<FenceImpl>();
   if (cross_device) {
     // Move to managed memory if there is a device switch
-    auto& cbuf =
-        *static_cast<cu::CudaBuffer*>(const_cast<array&>(a).buffer().ptr());
+    auto& cbuf = *static_cast<cu::CudaBuffer*>(a.buffer().ptr());
     if (cbuf.device != -1) {
       auto& encoder = cu::get_command_encoder(s);
       encoder.commit();

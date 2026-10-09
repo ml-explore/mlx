@@ -178,7 +178,9 @@ def binary_cross_entropy(
 
         >>> probs = mx.array([0.1, 0.1, 0.4, 0.4])
         >>> targets = mx.array([0, 0, 1, 1])
-        >>> loss = nn.losses.binary_cross_entropy(probs, targets, with_logits=False, reduction="mean")
+        >>> loss = nn.losses.binary_cross_entropy(
+        ...     probs, targets, with_logits=False, reduction="mean",
+        ... )
         >>> loss
         array(0.510826, dtype=float32)
     """
@@ -304,8 +306,8 @@ def gaussian_nll_loss(
         inputs (array): The predicted expectation of the Gaussian distribution.
         targets (array): The target values (samples from the Gaussian distribution).
         vars (array): The predicted variance of the Gaussian distribution.
-        full (bool, optional): Whether to include the constant term in the loss calculation.
-            Default: ``False``.
+        full (bool, optional): Whether to include the constant term in the loss
+            calculation. Default: ``False``.
         eps (float, optional): Small positive constant for numerical stability.
             Default: ``1e-6``.
         reduction (str, optional): Specifies the reduction to apply to the output:
@@ -439,9 +441,9 @@ def triplet_loss(
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        array: Computed triplet loss. If reduction is ``"none"``, returns a tensor with the
-          same shape as the inputs but with the ``axis`` dimension removed; if reduction
-          is ``"mean"`` or ``"sum"``, returns a scalar tensor.
+        array: Computed triplet loss. If reduction is ``"none"``, returns a tensor with
+          the same shape as the inputs but with the ``axis`` dimension removed;
+          if reduction is ``"mean"`` or ``"sum"``, returns a scalar tensor.
     """
     pos_dist = mx.power(
         mx.power(mx.abs(anchors - positives), p).sum(axis) + eps, 1.0 / p
@@ -498,8 +500,8 @@ def huber_loss(
     Args:
         inputs (array): The predicted values.
         targets (array): The target values.
-        delta (float, optional): The threshold at which to change between L1 and L2 loss.
-          Default: ``1.0``.
+        delta (float, optional): The threshold at which to change between L1 and L2
+          loss. Default: ``1.0``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
@@ -590,22 +592,22 @@ def margin_ranking_loss(
     reduction: Reduction = "none",
 ) -> mx.array:
     r"""
-    Calculate the margin ranking loss that loss given inputs :math:`x_1`, :math:`x_2` and a label
-    :math:`y` (containing 1 or -1).
+    Calculate the margin ranking loss that loss given inputs :math:`x_1`, :math:`x_2`
+    and a label :math:`y` (containing 1 or -1).
 
     The loss is given by:
 
     .. math::
         \text{loss} = \max (0, -y * (x_1 - x_2) + \text{margin})
 
-    Where :math:`y` represents ``targets``, :math:`x_1` represents ``inputs1`` and :math:`x_2`
-    represents ``inputs2``.
+    Where :math:`y` represents ``targets``, :math:`x_1` represents ``inputs1`` and
+    :math:`x_2` represents ``inputs2``.
 
     Args:
         inputs1 (array): Scores for the first input.
         inputs2 (array): Scores for the second input.
-        targets (array): Labels indicating whether samples in ``inputs1`` should be ranked higher
-            than samples in ``inputs2``. Values should be 1 or -1.
+        targets (array): Labels indicating whether samples in ``inputs1`` should be
+            ranked higher than samples in ``inputs2``. Values should be 1 or -1.
         margin (float, optional): The margin by which the scores should be separated.
             Default: ``0.0``.
         reduction (str, optional): Specifies the reduction to apply to the output:

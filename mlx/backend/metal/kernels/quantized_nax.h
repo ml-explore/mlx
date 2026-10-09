@@ -31,15 +31,30 @@ inline constexpr short get_bytes_per_pack() {
 template <typename T, typename U, int values_per_thread, int bits>
 inline U load_vector(const device T* x, thread U* x_thread) {
   static_assert(
-      bits == 2 || bits == 3 || bits == 4 || bits == 5 || bits == 6 ||
-          bits == 8,
-      "Template undefined for bits not in {2, 3, 4, 5, 6, 8}");
+      bits == 1 || bits == 2 || bits == 3 || bits == 4 || bits == 5 ||
+          bits == 6 || bits == 8,
+      "Template undefined for bits not in {1, 2, 3, 4, 5, 6, 8}");
 
   U sum = 0;
 
-  if (bits == 2) {
+  if (bits == 1) {
+    for (int i = 0; i < values_per_thread; i += 8) {
+      sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3] + x[i + 4] + x[i + 5] +
+          x[i + 6] + x[i + 7];
+      x_thread[i] = x[i];
+      x_thread[i + 1] = x[i + 1] / 2.0f;
+      x_thread[i + 2] = x[i + 2] / 4.0f;
+      x_thread[i + 3] = x[i + 3] / 8.0f;
+      x_thread[i + 4] = x[i + 4] / 16.0f;
+      x_thread[i + 5] = x[i + 5] / 32.0f;
+      x_thread[i + 6] = x[i + 6] / 64.0f;
+      x_thread[i + 7] = x[i + 7] / 128.0f;
+    }
+  }
+
+  else if (bits == 2) {
     for (int i = 0; i < values_per_thread; i += 4) {
-      sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3];
+      sum += U(x[i]) + U(x[i + 1]) + U(x[i + 2]) + U(x[i + 3]);
       x_thread[i] = x[i];
       x_thread[i + 1] = x[i + 1] / 4.0f;
       x_thread[i + 2] = x[i + 2] / 16.0f;
@@ -49,8 +64,8 @@ inline U load_vector(const device T* x, thread U* x_thread) {
 
   else if (bits == 3) {
     for (int i = 0; i < values_per_thread; i += 8) {
-      sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3] + x[i + 4] + x[i + 5] +
-          x[i + 6] + x[i + 7];
+      sum += U(x[i]) + U(x[i + 1]) + U(x[i + 2]) + U(x[i + 3]) + U(x[i + 4]) +
+          U(x[i + 5]) + U(x[i + 6]) + U(x[i + 7]);
       x_thread[i] = x[i];
       x_thread[i + 1] = x[i + 1] / 8.0f;
       x_thread[i + 2] = x[i + 2] / 64.0f;
@@ -64,7 +79,7 @@ inline U load_vector(const device T* x, thread U* x_thread) {
 
   else if (bits == 4) {
     for (int i = 0; i < values_per_thread; i += 4) {
-      sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3];
+      sum += U(x[i]) + U(x[i + 1]) + U(x[i + 2]) + U(x[i + 3]);
       x_thread[i] = x[i];
       x_thread[i + 1] = x[i + 1] / 16.0f;
       x_thread[i + 2] = x[i + 2] / 256.0f;
@@ -74,8 +89,8 @@ inline U load_vector(const device T* x, thread U* x_thread) {
 
   else if (bits == 5) {
     for (int i = 0; i < values_per_thread; i += 8) {
-      sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3] + x[i + 4] + x[i + 5] +
-          x[i + 6] + x[i + 7];
+      sum += U(x[i]) + U(x[i + 1]) + U(x[i + 2]) + U(x[i + 3]) + U(x[i + 4]) +
+          U(x[i + 5]) + U(x[i + 6]) + U(x[i + 7]);
       x_thread[i] = x[i];
       x_thread[i + 1] = x[i + 1] / 32.0f;
       x_thread[i + 2] = x[i + 2] / 4.0f;
@@ -89,7 +104,7 @@ inline U load_vector(const device T* x, thread U* x_thread) {
 
   else if (bits == 6) {
     for (int i = 0; i < values_per_thread; i += 4) {
-      sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3];
+      sum += U(x[i]) + U(x[i + 1]) + U(x[i + 2]) + U(x[i + 3]);
       x_thread[i] = x[i];
       x_thread[i + 1] = x[i + 1] / 64.0f;
       x_thread[i + 2] = x[i + 2] / 16.0f;
@@ -110,15 +125,30 @@ inline U load_vector(const device T* x, thread U* x_thread) {
 template <typename T, typename U, int values_per_thread, int bits>
 inline U load_vector_safe(const device T* x, thread U* x_thread, int N) {
   static_assert(
-      bits == 2 || bits == 3 || bits == 4 || bits == 5 || bits == 6 ||
-          bits == 8,
-      "Template undefined for bits not in {2, 3, 4, 5, 6, 8}");
+      bits == 1 || bits == 2 || bits == 3 || bits == 4 || bits == 5 ||
+          bits == 6 || bits == 8,
+      "Template undefined for bits not in {1, 2, 3, 4, 5, 6, 8}");
 
   U sum = 0;
 
-  if (bits == 2) {
+  if (bits == 1) {
+    for (int i = 0; i < N; i += 8) {
+      sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3] + x[i + 4] + x[i + 5] +
+          x[i + 6] + x[i + 7];
+      x_thread[i] = x[i];
+      x_thread[i + 1] = x[i + 1] / 2.0f;
+      x_thread[i + 2] = x[i + 2] / 4.0f;
+      x_thread[i + 3] = x[i + 3] / 8.0f;
+      x_thread[i + 4] = x[i + 4] / 16.0f;
+      x_thread[i + 5] = x[i + 5] / 32.0f;
+      x_thread[i + 6] = x[i + 6] / 64.0f;
+      x_thread[i + 7] = x[i + 7] / 128.0f;
+    }
+  }
+
+  else if (bits == 2) {
     for (int i = 0; i < N; i += 4) {
-      sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3];
+      sum += U(x[i]) + U(x[i + 1]) + U(x[i + 2]) + U(x[i + 3]);
       x_thread[i] = x[i];
       x_thread[i + 1] = x[i + 1] / 4.0f;
       x_thread[i + 2] = x[i + 2] / 16.0f;
@@ -128,8 +158,8 @@ inline U load_vector_safe(const device T* x, thread U* x_thread, int N) {
 
   else if (bits == 3) {
     for (int i = 0; i < N; i += 8) {
-      sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3] + x[i + 4] + x[i + 5] +
-          x[i + 6] + x[i + 7];
+      sum += U(x[i]) + U(x[i + 1]) + U(x[i + 2]) + U(x[i + 3]) + U(x[i + 4]) +
+          U(x[i + 5]) + U(x[i + 6]) + U(x[i + 7]);
 
       x_thread[i] = x[i];
       x_thread[i + 1] = x[i + 1] / 8.0f;
@@ -144,7 +174,7 @@ inline U load_vector_safe(const device T* x, thread U* x_thread, int N) {
 
   else if (bits == 4) {
     for (int i = 0; i < N; i += 4) {
-      sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3];
+      sum += U(x[i]) + U(x[i + 1]) + U(x[i + 2]) + U(x[i + 3]);
       x_thread[i] = x[i];
       x_thread[i + 1] = x[i + 1] / 16.0f;
       x_thread[i + 2] = x[i + 2] / 256.0f;
@@ -154,8 +184,8 @@ inline U load_vector_safe(const device T* x, thread U* x_thread, int N) {
 
   else if (bits == 5) {
     for (int i = 0; i < N; i += 8) {
-      sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3] + x[i + 4] + x[i + 5] +
-          x[i + 6] + x[i + 7];
+      sum += U(x[i]) + U(x[i + 1]) + U(x[i + 2]) + U(x[i + 3]) + U(x[i + 4]) +
+          U(x[i + 5]) + U(x[i + 6]) + U(x[i + 7]);
       x_thread[i] = x[i];
       x_thread[i + 1] = x[i + 1] / 32.0f;
       x_thread[i + 2] = x[i + 2] / 4.0f;
@@ -169,7 +199,7 @@ inline U load_vector_safe(const device T* x, thread U* x_thread, int N) {
 
   else if (bits == 6) {
     for (int i = 0; i < N; i += 4) {
-      sum += x[i] + x[i + 1] + x[i + 2] + x[i + 3];
+      sum += U(x[i]) + U(x[i + 1]) + U(x[i + 2]) + U(x[i + 3]);
       x_thread[i] = x[i];
       x_thread[i + 1] = x[i + 1] / 64.0f;
       x_thread[i + 2] = x[i + 2] / 16.0f;
@@ -199,13 +229,27 @@ inline U qdot(
     U bias,
     U sum) {
   static_assert(
-      bits == 2 || bits == 3 || bits == 4 || bits == 5 || bits == 6 ||
-          bits == 8,
-      "Template undefined for bits not in {2, 3, 4, 5, 6, 8}");
+      bits == 1 || bits == 2 || bits == 3 || bits == 4 || bits == 5 ||
+          bits == 6 || bits == 8,
+      "Template undefined for bits not in {1, 2, 3, 4, 5, 6, 8}");
 
   U accum = 0;
 
-  if (bits == 2) {
+  if (bits == 1) {
+    for (int i = 0; i < (values_per_thread / 8); i++) {
+      accum +=
+          (x_thread[8 * i] * (w[i] & 0x01) +
+           x_thread[8 * i + 1] * (w[i] & 0x02) +
+           x_thread[8 * i + 2] * (w[i] & 0x04) +
+           x_thread[8 * i + 3] * (w[i] & 0x08) +
+           x_thread[8 * i + 4] * (w[i] & 0x10) +
+           x_thread[8 * i + 5] * (w[i] & 0x20) +
+           x_thread[8 * i + 6] * (w[i] & 0x40) +
+           x_thread[8 * i + 7] * (w[i] & 0x80));
+    }
+  }
+
+  else if (bits == 2) {
     for (int i = 0; i < (values_per_thread / 4); i++) {
       accum +=
           (x_thread[4 * i] * (w[i] & 0x03) +
@@ -301,13 +345,27 @@ inline U qdot_safe(
     U sum,
     int N) {
   static_assert(
-      bits == 2 || bits == 3 || bits == 4 || bits == 5 || bits == 6 ||
-          bits == 8,
-      "Template undefined for bits not in {2, 3, 4, 5, 6, 8}");
+      bits == 1 || bits == 2 || bits == 3 || bits == 4 || bits == 5 ||
+          bits == 6 || bits == 8,
+      "Template undefined for bits not in {1, 2, 3, 4, 5, 6, 8}");
 
   U accum = 0;
 
-  if (bits == 2) {
+  if (bits == 1) {
+    for (int i = 0; i < (N / 8); i++) {
+      accum +=
+          (x_thread[8 * i] * (w[i] & 0x01) +
+           x_thread[8 * i + 1] * (w[i] & 0x02) +
+           x_thread[8 * i + 2] * (w[i] & 0x04) +
+           x_thread[8 * i + 3] * (w[i] & 0x08) +
+           x_thread[8 * i + 4] * (w[i] & 0x10) +
+           x_thread[8 * i + 5] * (w[i] & 0x20) +
+           x_thread[8 * i + 6] * (w[i] & 0x40) +
+           x_thread[8 * i + 7] * (w[i] & 0x80));
+    }
+  }
+
+  else if (bits == 2) {
     for (int i = 0; i < (N / 4); i++) {
       accum +=
           (x_thread[4 * i] * (w[i] & 0x03) +
@@ -398,11 +456,33 @@ template <typename U, int values_per_thread, int bits>
 inline void
 qouter(const thread uint8_t* w, U x, U scale, U bias, thread U* result) {
   static_assert(
-      bits == 2 || bits == 3 || bits == 4 || bits == 5 || bits == 6 ||
-          bits == 8,
-      "Template undefined for bits not in {2, 3, 4, 5, 6, 8}");
+      bits == 1 || bits == 2 || bits == 3 || bits == 4 || bits == 5 ||
+          bits == 6 || bits == 8,
+      "Template undefined for bits not in {1, 2, 3, 4, 5, 6, 8}");
 
-  if (bits == 2) {
+  if (bits == 1) {
+    U s[8] = {
+        scale,
+        scale / 2.0f,
+        scale / 4.0f,
+        scale / 8.0f,
+        scale / 16.0f,
+        scale / 32.0f,
+        scale / 64.0f,
+        scale / 128.0f};
+    for (int i = 0; i < (values_per_thread / 8); i++) {
+      result[8 * i] += x * (s[0] * (w[i] & 0x01) + bias);
+      result[8 * i + 1] += x * (s[1] * (w[i] & 0x02) + bias);
+      result[8 * i + 2] += x * (s[2] * (w[i] & 0x04) + bias);
+      result[8 * i + 3] += x * (s[3] * (w[i] & 0x08) + bias);
+      result[8 * i + 4] += x * (s[4] * (w[i] & 0x10) + bias);
+      result[8 * i + 5] += x * (s[5] * (w[i] & 0x20) + bias);
+      result[8 * i + 6] += x * (s[6] * (w[i] & 0x40) + bias);
+      result[8 * i + 7] += x * (s[7] * (w[i] & 0x80) + bias);
+    }
+  }
+
+  else if (bits == 2) {
     U s[4] = {scale, scale / 4.0f, scale / 16.0f, scale / 64.0f};
     for (int i = 0; i < (values_per_thread / 4); i++) {
       result[4 * i] += x * (s[0] * (w[i] & 0x03) + bias);
@@ -487,14 +567,36 @@ template <typename U, int N, int bits>
 inline void
 dequantize(const device uint8_t* w, U scale, U bias, threadgroup U* w_local) {
   static_assert(
-      bits == 2 || bits == 3 || bits == 4 || bits == 5 || bits == 6 ||
-          bits == 8,
-      "Template undefined for bits not in {2, 3, 4, 5, 6, 8}");
+      bits == 1 || bits == 2 || bits == 3 || bits == 4 || bits == 5 ||
+          bits == 6 || bits == 8,
+      "Template undefined for bits not in {1, 2, 3, 4, 5, 6, 8}");
 
   const float s = float(scale);
   const float b = float(bias);
 
-  if (bits == 2) {
+  if (bits == 1) {
+    float sc[8] = {
+        s,
+        s / 2.0f,
+        s / 4.0f,
+        s / 8.0f,
+        s / 16.0f,
+        s / 32.0f,
+        s / 64.0f,
+        s / 128.0f};
+    for (int i = 0; i < (N / 8); i++) {
+      w_local[8 * i] = static_cast<U>(sc[0] * (w[i] & 0x01) + b);
+      w_local[8 * i + 1] = static_cast<U>(sc[1] * (w[i] & 0x02) + b);
+      w_local[8 * i + 2] = static_cast<U>(sc[2] * (w[i] & 0x04) + b);
+      w_local[8 * i + 3] = static_cast<U>(sc[3] * (w[i] & 0x08) + b);
+      w_local[8 * i + 4] = static_cast<U>(sc[4] * (w[i] & 0x10) + b);
+      w_local[8 * i + 5] = static_cast<U>(sc[5] * (w[i] & 0x20) + b);
+      w_local[8 * i + 6] = static_cast<U>(sc[6] * (w[i] & 0x40) + b);
+      w_local[8 * i + 7] = static_cast<U>(sc[7] * (w[i] & 0x80) + b);
+    }
+  }
+
+  else if (bits == 2) {
     float sc[4] = {s, s / 4.0f, s / 16.0f, s / 64.0f};
     for (int i = 0; i < (N / 4); i++) {
       w_local[4 * i] = static_cast<U>(sc[0] * (w[i] & 0x03) + b);
@@ -587,9 +689,9 @@ struct QuantizedBlockLoader {
       group_size % BCOLS == 0,
       "The group size should be divisible by the columns");
   static_assert(
-      bits == 2 || bits == 3 || bits == 4 || bits == 5 || bits == 6 ||
-          bits == 8,
-      "Template undefined for bits not in {2, 3, 4, 5, 6, 8}");
+      bits == 1 || bits == 2 || bits == 3 || bits == 4 || bits == 5 ||
+          bits == 6 || bits == 8,
+      "Template undefined for bits not in {1, 2, 3, 4, 5, 6, 8}");
 
   MLX_MTL_CONST short pack_factor = get_pack_factor<bits, 8>();
   MLX_MTL_CONST short bytes_per_pack = get_bytes_per_pack<bits>();
@@ -715,9 +817,9 @@ struct QuantizedBlockLoader<
       BCOLS % group_size == 0,
       "The group size should be divisible by the columns");
   static_assert(
-      bits == 2 || bits == 3 || bits == 4 || bits == 5 || bits == 6 ||
-          bits == 8,
-      "Template undefined for bits not in {2, 3, 4, 5, 6, 8}");
+      bits == 1 || bits == 2 || bits == 3 || bits == 4 || bits == 5 ||
+          bits == 6 || bits == 8,
+      "Template undefined for bits not in {1, 2, 3, 4, 5, 6, 8}");
 
   MLX_MTL_CONST short pack_factor = get_pack_factor<bits, 8>();
   MLX_MTL_CONST short bytes_per_pack = get_bytes_per_pack<bits>();

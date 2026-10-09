@@ -9,7 +9,7 @@ try:
     import torch
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 
@@ -32,9 +32,12 @@ def gated_delta_oracle(
         k: [B, T, H, K]
         v: [B, T, H, V]
         beta: [B, T, H]
-        g: [B, T, H]                    <--- Difference: with out kernel: this is expected as a log.
-        scale: float, optional          <--- Difference: This is done by the qwen3_5 model.
-        initial_state: [B, H, K, V], optional <- Difference: last two dimensions are transposed.
+        g: [B, T, H]                    <--- Difference: with out kernel:
+                                            this is expected as a log.
+        scale: float, optional          <--- Difference: This is done by the
+                                            qwen3_5 model.
+        initial_state: [B, H, K, V], optional <- Difference: last two dimensions
+                                                are transposed.
         output_final_state: bool
 
     Returns:
@@ -115,7 +118,8 @@ def runner(dims, stream=mx.gpu, reference=True):
         out_ref = mx.array(out_on)
         hf_ref = mx.array(hf_on)
     else:
-        # use fallback for tests once fallback is validated by setting a mask instead of using the cpu
+        # use fallback for tests once fallback is validated by setting a mask instead of
+        # using the cpu
         mask = mx.ones((B, T))
 
         out_ref, hf_ref = mx.fast.gated_delta_update(
@@ -171,7 +175,6 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
 
     def test_gated_delta_fallback_masked(self):
         for dims in self.fallback_dims:
-
             B, Hk, Hv, T, Dk, Dv = dims
 
             q = mx.random.normal(shape=(B, T, Hk, Dk))
@@ -226,7 +229,6 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
         dtypes = [mx.bfloat16, mx.float32]
         for dtype in dtypes:
             for dims in [self.base_dims]:
-
                 B, Hk, Hv, T, Dk, Dv = dims
 
                 q = mx.random.normal(shape=(B, T, Hk, Dk), dtype=dtype)

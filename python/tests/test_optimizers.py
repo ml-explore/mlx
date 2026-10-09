@@ -15,10 +15,10 @@ from mlx.utils import tree_flatten, tree_map, tree_unflatten
 
 try:
     import torch
-    import torch.nn.functional as F
+    import torch.nn.functional as F  # noqa: F401
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 
@@ -132,7 +132,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             "first": [mx.zeros((10,)), mx.zeros((1,))],
             "second": mx.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        _grads = tree_map(lambda x: mx.ones_like(x), params)
 
         # Explicit init
         optim = opt.Adagrad(learning_rate=1e-2)
@@ -150,7 +150,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             "first": [mx.zeros((10,)), mx.zeros((1,))],
             "second": mx.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        _grads = tree_map(lambda x: mx.ones_like(x), params)
 
         # Explicit init
         optim = opt.AdaDelta(learning_rate=1e-2)
@@ -263,7 +263,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             "first": [mx.zeros((10,)), mx.zeros((1,))],
             "second": mx.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        _grads = tree_map(lambda x: mx.ones_like(x), params)
 
         # Explicit init
         optim = opt.Lion(learning_rate=1e-2)
@@ -406,7 +406,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         uncompiled_params = model.parameters()
 
         # Pure version
-        def loss(params, x):
+        def loss(params, x):  # noqa: F811
             model.update(params)
             return model(x).sum()
 
@@ -426,7 +426,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(pure_params["bias"], uncompiled_params["bias"]))
 
         # Impure version
-        def loss(model, x):
+        def loss(model, x):  # noqa: F811
             return model(x).sum()
 
         model.update(orig_params)
@@ -587,6 +587,57 @@ class TestSchedulers(mlx_tests.MLXTestCase):
 
         with self.assertRaises(ValueError):
             opt.clip_grad_norm(small_grads, -1.0)
+
+    def test_clip_grad_norm_float16(self):
+        grads = {
+            "first": [mx.full((100,), 30.0, dtype=mx.float16)],
+            "second": mx.array([400.0], dtype=mx.float16),
+        }
+        for clip in (opt.clip_grad_norm, mx.compile(opt.clip_grad_norm)):
+            for max_norm, first, second in (
+                (1.0, 0.06, 0.8),
+                (1e-5, 6e-7, 8e-6),
+                (0.0, 0.0, 0.0),
+                (1000.0, 30.0, 400.0),
+            ):
+                with self.subTest(clip=clip, max_norm=max_norm):
+                    clipped, total_norm = clip(grads, max_norm)
+                    self.assertEqual(total_norm.dtype, mx.float32)
+                    self.assertAlmostEqual(total_norm.item(), 500.0, places=3)
+                    for actual, expected in (
+                        (clipped["first"][0], first),
+                        (clipped["second"], second),
+                    ):
+                        self.assertEqual(actual.dtype, mx.float16)
+                        self.assertTrue(
+                            mx.allclose(
+                                actual, mx.array(expected), rtol=1e-3, atol=1e-7
+                            )
+                        )
+        self.assertTrue(mx.array_equal(grads["first"][0], mx.full((100,), 30.0)))
+        self.assertTrue(mx.array_equal(grads["second"], mx.array([400.0])))
+
+        grads = {"w": mx.full((16,), 30000.0, dtype=mx.float16)}
+        clipped, total_norm = opt.clip_grad_norm(grads, max_norm=1.0)
+        self.assertAlmostEqual(total_norm.item(), 120000.0, delta=0.1)
+        self.assertTrue(mx.array_equal(clipped["w"], mx.full((16,), 0.25)))
+
+    def test_clip_grad_norm_mixed_dtypes(self):
+        grads = {
+            "first": mx.array([300.0], dtype=mx.float16),
+            "second": [
+                mx.array([400.0], dtype=mx.bfloat16),
+                mx.array([0.0], dtype=mx.float32),
+            ],
+        }
+        clipped, total_norm = opt.clip_grad_norm(grads, max_norm=1.0)
+        self.assertTrue(mx.isfinite(total_norm))
+        self.assertAlmostEqual(total_norm.item(), 500.0, delta=1.0)
+        for (_, g), (_, c), expected in zip(
+            tree_flatten(grads), tree_flatten(clipped), (0.6, 0.8, 0.0)
+        ):
+            self.assertEqual(c.dtype, g.dtype)
+            self.assertTrue(mx.allclose(c, mx.array(expected), rtol=1e-2, atol=1e-7))
 
     def test_init_from_state(self):
         class Model(nn.Module):

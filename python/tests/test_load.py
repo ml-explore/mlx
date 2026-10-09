@@ -65,7 +65,7 @@ class TestLoad(mlx_tests.MLXTestCase):
                         load_arr_mlx_npy = np.load(save_file_mlx)
                         self.assertTrue(np.array_equal(load_arr_mlx_npy, save_arr_npy))
 
-        save_file = os.path.join(self.test_dir, f"mlx_path.npy")
+        save_file = os.path.join(self.test_dir, "mlx_path.npy")
         save_arr = mx.ones((32,))
         mx.save(Path(save_file), save_arr)
 
@@ -98,6 +98,26 @@ class TestLoad(mlx_tests.MLXTestCase):
         out = mx.load(save_file, stream=mx.cpu)
         with self.assertRaises(RuntimeError):
             mx.eval(out)
+
+    def test_load_npy_invalid_shape(self):
+        def write_npy(path, shape):
+            header = "{'descr': '<f4', 'fortran_order': False, 'shape': %s, }" % shape
+            header += " " * ((16 - (11 + len(header)) % 16) % 16) + "\n"
+            with open(path, "wb") as f:
+                f.write(b"\x93NUMPY\x01\x00")
+                f.write(struct.pack("<H", len(header)))
+                f.write(header.encode())
+                f.write(b"\x00" * 64)
+
+        for name, shape in [
+            ("negative", "(-1,)"),
+            ("negative_nd", "(4, -2)"),
+        ]:
+            with self.subTest(shape=shape):
+                save_file = os.path.join(self.test_dir, f"invalid_{name}.npy")
+                write_npy(save_file, shape)
+                with self.assertRaises(RuntimeError):
+                    mx.load(save_file, stream=mx.cpu)
 
     def test_async_load_npy_read_error_across_streams(self):
         save_file = os.path.join(self.test_dir, "truncated_async.npy")
@@ -210,7 +230,7 @@ class TestLoad(mlx_tests.MLXTestCase):
                             mx.array_equal(load_dict["test"], save_dict["test"])
                         )
 
-        save_file_mlx = os.path.join(self.test_dir, f"mlx_path_test_fs.gguf")
+        save_file_mlx = os.path.join(self.test_dir, "mlx_path_test_fs.gguf")
         save_dict = {"test": mx.ones(shape)}
         mx.save_gguf(Path(save_file_mlx), save_dict)
         load_dict = mx.load(Path(save_file_mlx))
@@ -315,7 +335,11 @@ class TestLoad(mlx_tests.MLXTestCase):
             -0.0039,
         ]
         expected = mx.array(expected, dtype=mx.bfloat16)
-        contents = b'H\x00\x00\x00\x00\x00\x00\x00{"tensor":{"dtype":"F8_E4M3","shape":[10],"data_offsets":[0,10]}}       \x00~\xfe\xb6.\x83\xba\xba\xbc\x82'
+        contents = (
+            b"H\x00\x00\x00\x00\x00\x00\x00"
+            b'{"tensor":{"dtype":"F8_E4M3","shape":[10],"data_offsets":[0,10]}}  '
+            b"     \x00~\xfe\xb6.\x83\xba\xba\xbc\x82"
+        )
         with tempfile.NamedTemporaryFile(suffix=".safetensors") as f:
             f.write(contents)
             f.seek(0)
@@ -327,7 +351,7 @@ class TestLoad(mlx_tests.MLXTestCase):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
 
-        save_file_mlx = os.path.join(self.test_dir, f"mlx_gguf_with_metadata.gguf")
+        save_file_mlx = os.path.join(self.test_dir, "mlx_gguf_with_metadata.gguf")
         save_dict = {"test": mx.ones((4, 4), dtype=mx.int32)}
         metadata = {}
 
@@ -360,7 +384,7 @@ class TestLoad(mlx_tests.MLXTestCase):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
 
-        save_file_mlx = os.path.join(self.test_dir, f"mlx_gguf_with_metadata.gguf")
+        save_file_mlx = os.path.join(self.test_dir, "mlx_gguf_with_metadata.gguf")
         save_dict = {"test": mx.ones((4, 4), dtype=mx.int32)}
 
         # Test scalars and one dimensional arrays
@@ -396,7 +420,7 @@ class TestLoad(mlx_tests.MLXTestCase):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
 
-        save_file_mlx = os.path.join(self.test_dir, f"mlx_gguf_with_metadata.gguf")
+        save_file_mlx = os.path.join(self.test_dir, "mlx_gguf_with_metadata.gguf")
         save_dict = {"test": mx.ones((4, 4), dtype=mx.int32)}
 
         # Test string and array

@@ -21,7 +21,7 @@ class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         self.assertEqual(world.rank(), world2.rank())
 
         with self.assertRaises(RuntimeError):
-            sub = world.split(world.rank() % 2)
+            world.split(world.rank() % 2)
 
     def test_strict_init_after_fallback(self):
         with mlx_tests.scoped_env(

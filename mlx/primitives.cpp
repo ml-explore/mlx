@@ -2221,12 +2221,6 @@ std::vector<Shape> Flatten::output_shapes(const std::vector<array>& inputs) {
   return {Flatten::output_shape(inputs[0], start_axis_, end_axis_)};
 }
 
-bool FFT::is_equivalent(const Primitive& other) const {
-  const FFT& r_other = static_cast<const FFT&>(other);
-  return axes_ == r_other.axes_ && inverse_ == r_other.inverse_ &&
-      real_ == r_other.real_;
-}
-
 std::vector<array> Unflatten::vjp(
     const std::vector<array>&,
     const std::vector<array>& cotangents,
@@ -2292,13 +2286,13 @@ std::pair<std::vector<array>, std::vector<int>> FFT::vmap(
   // Only the last transformed axis changes size in a real transform
   if (real_) {
     auto n = out_shape[fft_axes.back()];
-    out_shape[fft_axes.back()] = inverse_ ? 2 * (n - 1) : n / 2 + 1;
+    out_shape[fft_axes.back()] = inverse_ ? 2 * (n - 1) + odd_out_ : n / 2 + 1;
   }
   return {
       {array(
           out_shape,
           real_ && inverse_ ? float32 : complex64,
-          std::make_shared<FFT>(stream(), fft_axes, inverse_, real_),
+          std::make_shared<FFT>(stream(), fft_axes, inverse_, real_, odd_out_),
           {in})},
       {ax}};
 }
@@ -2409,6 +2403,12 @@ std::vector<array> FFT::jvp(
   }
 }
 
+bool FFT::is_equivalent(const Primitive& other) const {
+  const FFT& r_other = static_cast<const FFT&>(other);
+  return axes_ == r_other.axes_ && inverse_ == r_other.inverse_ &&
+      real_ == r_other.real_ && odd_out_ == r_other.odd_out_;
+}
+
 std::vector<array> Floor::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
@@ -2432,6 +2432,32 @@ std::pair<std::vector<array>, std::vector<int>> Floor::vmap(
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
   return {{floor(inputs[0], stream())}, axes};
+}
+
+std::vector<array> FloorDivide::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>&,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  std::vector<array> vjps;
+  for (auto arg : argnums) {
+    vjps.push_back(zeros_like(primals[arg], stream()));
+  }
+  return vjps;
+}
+
+std::vector<array> FloorDivide::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>&,
+    const std::vector<int>&) {
+  return {zeros_like(primals[0], stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> FloorDivide::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
+  return {{floor_divide(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> Full::vjp(
@@ -4472,6 +4498,49 @@ std::vector<array> Scan::jvp(
 
   if (reduce_type_ == Scan::Sum) {
     return {cumsum(tangents[0], axis_, reverse_, inclusive_, stream())};
+  } else if (reduce_type_ == Scan::LogAddExp) {
+    if (issubdtype(tangents[0].dtype(), complexfloating)) {
+      throw std::invalid_argument(
+          "[logcumsumexp] JVP is not supported for complex inputs.");
+    }
+    auto x = primals[0];
+    auto t = tangents[0];
+    auto y = logcumsumexp(x, axis_, reverse_, inclusive_, stream());
+
+    auto zero = zeros({1}, t.dtype(), stream());
+    auto t_min = array(finfo(t.dtype()).min, t.dtype());
+    auto log_abs_t = log(abs(t, stream()), stream());
+    auto log_t_positive =
+        where(greater(t, zero, stream()), log_abs_t, t_min, stream());
+    auto log_t_negative =
+        where(less(t, zero, stream()), log_abs_t, t_min, stream());
+
+    auto out_pos = exp(subtract(
+        logcumsumexp(
+            add(log_t_positive, x, stream()),
+            axis_,
+            reverse_,
+            inclusive_,
+            stream()),
+        y,
+        stream()));
+
+    auto out_neg = exp(subtract(
+        logcumsumexp(
+            add(log_t_negative, x, stream()),
+            axis_,
+            reverse_,
+            inclusive_,
+            stream()),
+        y,
+        stream()));
+
+    return {where(
+        isneginf(y, stream()),
+        zeros_like(y, stream()),
+        subtract(out_pos, out_neg, stream()),
+        stream())};
+
   } else {
     throw std::runtime_error(
         "JVP is not implemented for cumulative prod/min/max");
