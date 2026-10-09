@@ -451,7 +451,7 @@ TEST_CASE("test stft and istft") {
       x, 16, 8, 16, win, true, "reflect", fft::FFTNorm::Backward, false);
   CHECK_EQ(zf.shape(0), 16);
 
-  // Edge padding must not raise (regression: edge mode on the last axis).
+  // Edge padding.
   auto ze = fft::stft(x, 16, 8, 16, win, true, "edge");
   CHECK_EQ(ze.shape(0), 9);
 

@@ -338,45 +338,6 @@ array rfftfreq(int n, double d /* = 1.0 */, StreamOrDevice s /* = {} */) {
 
 namespace {
 
-// Pad the last axis; mx::pad has no reflect mode, so build it from take.
-array pad_last_axis(
-    const array& a,
-    int pad_width,
-    const std::string& mode,
-    StreamOrDevice s) {
-  if (pad_width <= 0) {
-    return a;
-  }
-  int ax = a.ndim() - 1;
-  if (mode == "constant") {
-    return pad(
-        a, {ax}, {pad_width}, {pad_width}, array(0, a.dtype()), "constant", s);
-  }
-  if (mode == "edge") {
-    int n = a.shape(ax);
-    auto left = take(a, full(Shape{pad_width}, array(0), int32, s), ax, s);
-    auto right = take(a, full(Shape{pad_width}, array(n - 1), int32, s), ax, s);
-    return concatenate({left, a, right}, ax, s);
-  }
-  if (mode == "reflect") {
-    int n = a.shape(ax);
-    if (pad_width >= n) {
-      std::ostringstream msg;
-      msg << "[stft] Reflect padding (" << pad_width
-          << ") requires an input longer than the padding along the last axis ("
-          << n << ").";
-      throw std::invalid_argument(msg.str());
-    }
-    auto left = take(a, arange(pad_width, 0, -1, s), ax, s);
-    auto right = take(a, arange(n - 2, n - 2 - pad_width, -1, s), ax, s);
-    return concatenate({left, a, right}, ax, s);
-  }
-  std::ostringstream msg;
-  msg << "[stft] Invalid pad_mode '" << mode
-      << "'. Expected one of {'constant', 'reflect', 'edge'}.";
-  throw std::invalid_argument(msg.str());
-}
-
 // Center a window of length <= n_fft inside an n_fft-length frame.
 array prepare_window(
     const std::optional<array>& window,
@@ -446,7 +407,8 @@ array stft(
   array x = reshape(x_in, {-1, t}, s);
 
   if (center) {
-    x = pad_last_axis(x, n_fft / 2, pad_mode, s);
+    int p = n_fft / 2;
+    x = pad(x, {1}, {p}, {p}, array(0, x.dtype()), pad_mode, s);
   }
   int tp = x.shape(-1);
   if (tp < n_fft) {
