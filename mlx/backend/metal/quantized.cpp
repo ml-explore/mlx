@@ -1680,7 +1680,7 @@ void gather_qmm_rhs(
     metal::Device& d,
     const Stream& s,
     const std::string mode) {
-  if (metal::is_nax_available() && transpose &&
+  if (metal::is_nax_available() &&
       (env::enable_tf32() || x_.dtype() != float32)) {
     return gather_qmm_rhs_nax(
         /* const array& x_ = */ x_,
