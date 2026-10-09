@@ -437,6 +437,10 @@ void CommandEncoder::dispatch_threads(
   get_command_encoder()->dispatchThreads(grid_dims, group_dims);
 }
 
+void CommandEncoder::wait_for_in_flight_encoders() {
+  wait_in_flight_ = true;
+}
+
 void CommandEncoder::barrier() {
   get_command_encoder()->memoryBarrier(MTL::BarrierScopeBuffers);
 }
@@ -478,6 +482,14 @@ void CommandEncoder::end_encoding() {
         }
       }
     }
+    // A spin wait must start after all earlier encoders, see Fence::wait.
+    if (wait_in_flight_) {
+      for (auto& [_, fence] : prev_ce_outputs_) {
+        if (waiting_on.insert(fence).second) {
+          encoder_->waitForFence(fence.get());
+        }
+      }
+    }
     for (auto& out : all_outputs_) {
       prev_ce_outputs_[out] = fence_;
     }
@@ -503,6 +515,7 @@ void CommandEncoder::end_encoding() {
   encoder_->endEncoding();
   encoder_.reset();
   needs_barrier_ = false;
+  wait_in_flight_ = false;
   concurrent_ = false;
   prev_inputs_.clear();
   next_inputs_.clear();

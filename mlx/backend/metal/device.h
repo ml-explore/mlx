@@ -94,6 +94,7 @@ class MLX_API CommandEncoder {
   }
 
   void barrier();
+  void wait_for_in_flight_encoders();
   void end_encoding();
   void wait_event(Event event, uint64_t value);
   void signal_event(Event event, uint64_t value);
@@ -134,6 +135,7 @@ class MLX_API CommandEncoder {
   NS::SharedPtr<MTL::ComputeCommandEncoder> encoder_;
   NS::SharedPtr<MTL::Fence> fence_;
   bool needs_barrier_{false};
+  bool wait_in_flight_{false};
   bool concurrent_{false};
   std::vector<array> temporaries_;
   std::unordered_set<MTL::Resource*> prev_inputs_;
