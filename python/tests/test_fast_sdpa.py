@@ -892,6 +892,40 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         ref = mlx_ref_attn(q, k, v, mask=mask)
         self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_vector_2pass_threadgroup_limit(self):
+        for dtype, D, q_heads, kv_heads, q_len in (
+            (mx.float16, 192, 32, 8, 8),
+            (mx.float16, 256, 24, 4, 5),
+            (mx.float16, 256, 32, 4, 4),
+            (mx.bfloat16, 256, 24, 4, 5),
+            (mx.bfloat16, 256, 32, 4, 4),
+            (mx.float32, 192, 32, 8, 8),
+            (mx.float32, 256, 24, 4, 5),
+            (mx.float32, 256, 32, 4, 4),
+        ):
+            with self.subTest(dtype=dtype, D=D, q_len=q_len):
+                self.assertGreater(32 * q_heads // kv_heads * q_len, 896)
+                q = mx.random.normal(shape=(1, q_heads, q_len, D), dtype=dtype)
+                k = mx.random.normal(shape=(1, kv_heads, 1029, D), dtype=dtype)
+                v = mx.random.normal(shape=(1, kv_heads, 1029, D), dtype=dtype)
+                scale = D**-0.5
+
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask="causal", force_fused=True
+                )
+                ref = mlx_ref_attn(
+                    q.astype(mx.float32),
+                    k.astype(mx.float32),
+                    v.astype(mx.float32),
+                    scale=scale,
+                    mask="causal",
+                )
+                atol = 1e-4 if dtype == mx.float32 else 2e-3
+                if dtype == mx.bfloat16:
+                    atol = 2e-2
+                self.assertTrue(mx.allclose(out.astype(mx.float32), ref, atol=atol))
+
     @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
     def test_sdpa_blocks_env_override(self):
         # MLX_SDPA_BLOCKS used to be applied as-is, and values that are not
