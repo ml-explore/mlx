@@ -303,6 +303,19 @@ void slow_conv_2D(
             oH_border_1,
             (iH + padding_lo[0] - wH * wt_dilation[0]) / wt_strides[0]);
         int oH_border_3 = oH;
+        // The estimate can run past the output. The loops index with it.
+        if (oH_border_1 < 0) {
+          oH_border_1 = 0;
+        }
+        if (oH_border_1 > oH) {
+          oH_border_1 = oH;
+        }
+        if (oH_border_2 < oH_border_1) {
+          oH_border_2 = oH_border_1;
+        }
+        if (oH_border_2 > oH) {
+          oH_border_2 = oH;
+        }
 
         int oW_border_0 = 0;
         int oW_border_1 = is_idil_one
@@ -312,6 +325,18 @@ void slow_conv_2D(
             oW_border_1,
             (iW + padding_lo[1] - wW * wt_dilation[1]) / wt_strides[1]);
         int oW_border_3 = oW;
+        if (oW_border_1 < 0) {
+          oW_border_1 = 0;
+        }
+        if (oW_border_1 > oW) {
+          oW_border_1 = oW;
+        }
+        if (oW_border_2 < oW_border_1) {
+          oW_border_2 = oW_border_1;
+        }
+        if (oW_border_2 > oW) {
+          oW_border_2 = oW;
+        }
 
         for (int n = 0; n < N; ++n) {
           // Case 1: oh might put us out of bounds
@@ -590,6 +615,19 @@ void slow_conv_3D(
         oD_border_1,
         (iD + padding_lo[0] - wD * wt_dilation[0]) / wt_strides[0]);
     int oD_border_3 = oD;
+    // The estimate can run past the output. The loops index with it.
+    if (oD_border_1 < 0) {
+      oD_border_1 = 0;
+    }
+    if (oD_border_1 > oD) {
+      oD_border_1 = oD;
+    }
+    if (oD_border_2 < oD_border_1) {
+      oD_border_2 = oD_border_1;
+    }
+    if (oD_border_2 > oD) {
+      oD_border_2 = oD;
+    }
 
     int oH_border_0 = 0;
     int oH_border_1 = is_idil_one
@@ -599,6 +637,18 @@ void slow_conv_3D(
         oH_border_1,
         (iH + padding_lo[1] - wH * wt_dilation[1]) / wt_strides[1]);
     int oH_border_3 = oH;
+    if (oH_border_1 < 0) {
+      oH_border_1 = 0;
+    }
+    if (oH_border_1 > oH) {
+      oH_border_1 = oH;
+    }
+    if (oH_border_2 < oH_border_1) {
+      oH_border_2 = oH_border_1;
+    }
+    if (oH_border_2 > oH) {
+      oH_border_2 = oH;
+    }
 
     int oW_border_0 = 0;
     int oW_border_1 = is_idil_one
@@ -608,6 +658,18 @@ void slow_conv_3D(
         oW_border_1,
         (iW + padding_lo[2] - wW * wt_dilation[2]) / wt_strides[2]);
     int oW_border_3 = oW;
+    if (oW_border_1 < 0) {
+      oW_border_1 = 0;
+    }
+    if (oW_border_1 > oW) {
+      oW_border_1 = oW;
+    }
+    if (oW_border_2 < oW_border_1) {
+      oW_border_2 = oW_border_1;
+    }
+    if (oW_border_2 > oW) {
+      oW_border_2 = oW;
+    }
 
     for (int n = 0; n < N; ++n) {
       // Case 1: od might put us out of bounds
