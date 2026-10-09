@@ -72,12 +72,17 @@ def _quant_matmul(x, w, s, b, transpose, group_size, bits):
 
 
 quant_matmul = {
+    "quant_matmul_32_1": partial(_quant_matmul, transpose=False, group_size=32, bits=1),
     "quant_matmul_32_2": partial(_quant_matmul, transpose=False, group_size=32, bits=2),
     "quant_matmul_32_4": partial(_quant_matmul, transpose=False, group_size=32, bits=4),
     "quant_matmul_32_8": partial(_quant_matmul, transpose=False, group_size=32, bits=8),
+    "quant_matmul_64_1": partial(_quant_matmul, transpose=False, group_size=64, bits=1),
     "quant_matmul_64_2": partial(_quant_matmul, transpose=False, group_size=64, bits=2),
     "quant_matmul_64_4": partial(_quant_matmul, transpose=False, group_size=64, bits=4),
     "quant_matmul_64_8": partial(_quant_matmul, transpose=False, group_size=64, bits=8),
+    "quant_matmul_128_1": partial(
+        _quant_matmul, transpose=False, group_size=128, bits=1
+    ),
     "quant_matmul_128_2": partial(
         _quant_matmul, transpose=False, group_size=128, bits=2
     ),
@@ -86,6 +91,9 @@ quant_matmul = {
     ),
     "quant_matmul_128_8": partial(
         _quant_matmul, transpose=False, group_size=128, bits=8
+    ),
+    "quant_matmul_t_32_1": partial(
+        _quant_matmul, transpose=True, group_size=32, bits=1
     ),
     "quant_matmul_t_32_2": partial(
         _quant_matmul, transpose=True, group_size=32, bits=2
@@ -96,6 +104,9 @@ quant_matmul = {
     "quant_matmul_t_32_8": partial(
         _quant_matmul, transpose=True, group_size=32, bits=8
     ),
+    "quant_matmul_t_64_1": partial(
+        _quant_matmul, transpose=True, group_size=64, bits=1
+    ),
     "quant_matmul_t_64_2": partial(
         _quant_matmul, transpose=True, group_size=64, bits=2
     ),
@@ -104,6 +115,9 @@ quant_matmul = {
     ),
     "quant_matmul_t_64_8": partial(
         _quant_matmul, transpose=True, group_size=64, bits=8
+    ),
+    "quant_matmul_t_128_1": partial(
+        _quant_matmul, transpose=True, group_size=128, bits=1
     ),
     "quant_matmul_t_128_2": partial(
         _quant_matmul, transpose=True, group_size=128, bits=2
