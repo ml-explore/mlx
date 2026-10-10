@@ -1617,6 +1617,21 @@ class TestConv(mlx_tests.MLXTestCase):
         mx.eval(wide_y)
         self.assertEqual(tuple(wide_y.shape), (1, 1, 500000, 2))
 
+    def test_grouped_depthwise_conv_padding_bounds(self):
+        x = mx.random.normal((1, 16, 64))
+        w = mx.random.normal((64, 3, 1))
+        y = mx.conv1d(x, w, padding=1, groups=64)
+        mx.eval(y)
+        self.assertEqual(tuple(y.shape), (1, 16, 64))
+
+    def test_conv2d_large_output_channels(self):
+        x = mx.random.normal((1, 33, 33, 5))
+        w = mx.random.normal((32800, 1, 1, 5))
+        yg = mx.conv2d(x, w, stride=(2, 2), stream=mx.gpu)
+        yc = mx.conv2d(x, w, stride=(2, 2), stream=mx.cpu)
+        mx.eval(yg, yc)
+        self.assertTrue(mx.allclose(yg, yc, atol=1e-3))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

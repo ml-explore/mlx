@@ -48,8 +48,8 @@ struct Conv2DInputBlockLoaderGeneral {
   const short base_wh;
   const short base_ww;
 
-  short weight_h;
-  short weight_w;
+  int weight_h;
+  int weight_w;
 
   const device T* src[n_rows];
 
@@ -248,8 +248,8 @@ struct Conv2DWeightBlockLoaderGeneral {
   const short base_wh;
   const short base_ww;
 
-  short weight_h;
-  short weight_w;
+  int weight_h;
+  int weight_w;
 
   const int start_row;
 

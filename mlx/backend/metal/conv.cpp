@@ -356,7 +356,7 @@ void implicit_gemm_conv_2D_gpu(
   }
 
   int tn = (implicit_N + bn - 1) / bn;
-  int tm = (implicit_M + bm - 1) / bm;
+  int tm = (static_cast<int64_t>(implicit_M) + bm - 1) / bm;
   int swizzle_log = 0;
 
   // Fix small channel specialization
@@ -554,7 +554,7 @@ void implicit_gemm_conv_2D_general_gpu(
   int bk = 16;
 
   int tn = (implicit_N + bn - 1) / bn;
-  int tm = (adj_implicit_m + bm - 1) / bm;
+  int tm = (static_cast<int64_t>(adj_implicit_m) + bm - 1) / bm;
   int swizzle_log = 0;
 
   // Get channel iteration info
@@ -678,7 +678,7 @@ void implicit_gemm_conv_3D_gpu(
   }
 
   int tn = (implicit_N + bn - 1) / bn;
-  int tm = (implicit_M + bm - 1) / bm;
+  int tm = (static_cast<int64_t>(implicit_M) + bm - 1) / bm;
   int swizzle_log = 0;
 
   bool small_filter =
