@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import unittest
 
 import mlx_tests
 
@@ -71,6 +72,9 @@ def launch(rank_code, slow_reads=False, timeout=60):
     )
 
 
+@unittest.skipIf(
+    sys.platform == "win32", "The launcher requires POSIX pipes and /bin/bash"
+)
 class TestLaunch(mlx_tests.MLXTestCase):
     def test_output_written_right_before_exit_is_kept(self):
         # Slow down the launcher's reads so that each rank writes its last line
@@ -103,7 +107,10 @@ class TestLaunch(mlx_tests.MLXTestCase):
     def test_stop_reaches_rank_with_closed_pipes(self):
         # Rank 1 fails while rank 0 runs with both pipes at EOF. The launcher
         # must still terminate rank 0.
-        rank = textwrap.dedent("""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        ready = os.path.join(tmp.name, "ready")
+        rank = textwrap.dedent(f"""
             import os, sys, time
 
             rank = os.environ["MLX_RANK"]
@@ -111,8 +118,13 @@ class TestLaunch(mlx_tests.MLXTestCase):
             if rank == "0":
                 os.close(1)
                 os.close(2)
+                open({ready!r}, "w").close()
                 time.sleep(60)
-            time.sleep(0.5)
+            deadline = time.monotonic() + 15
+            while not os.path.exists({ready!r}):
+                if time.monotonic() > deadline:
+                    sys.exit(2)
+                time.sleep(0.01)
             sys.exit(1)
             """)
         result = launch(rank, timeout=30)
@@ -121,15 +133,24 @@ class TestLaunch(mlx_tests.MLXTestCase):
         self.assertIn("Node with rank 1 exited with code 1", result.stderr)
 
     def test_failed_rank_stops_the_others(self):
-        # Rank 0 fails at once. The launcher must terminate rank 1 and keep the
-        # output of both ranks.
-        rank = textwrap.dedent("""
+        # Rank 0 fails once rank 1 has written its output. The launcher must
+        # terminate rank 1 and keep the output of both ranks.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        ready = os.path.join(tmp.name, "ready")
+        rank = textwrap.dedent(f"""
             import os, sys, time
 
             rank = os.environ["MLX_RANK"]
             print("rank", rank, flush=True)
             if rank == "0":
+                deadline = time.monotonic() + 15
+                while not os.path.exists({ready!r}):
+                    if time.monotonic() > deadline:
+                        sys.exit(2)
+                    time.sleep(0.01)
                 sys.exit(1)
+            open({ready!r}, "w").close()
             time.sleep(60)
             """)
         result = launch(rank, timeout=30)
