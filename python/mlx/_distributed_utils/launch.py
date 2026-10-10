@@ -194,8 +194,6 @@ def _launch_with_io(command_class, arguments, verbose):
 
         stdin_buffer = b""
         while True:
-            # Sampled before select(): output written before the exit is in the
-            # pipes already, so it is read below before the loop ends.
             exited = p.poll() is not None
             try:
                 stdin_buffer += stdin_queue.get_nowait()
