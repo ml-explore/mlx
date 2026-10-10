@@ -480,6 +480,13 @@ void reduce_dispatch_min_max(
   }
 }
 
+void MinMax::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  Reduce(stream(), Reduce::Min, {0}).eval_cpu(inputs, outputs[0]);
+  Reduce(stream(), Reduce::Max, {0}).eval_cpu(inputs, outputs[1]);
+}
+
 void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];

@@ -2676,6 +2676,30 @@ void init_ops(nb::module_& m) {
             array: The output array with the corresponding axes reduced.
       )pbdoc");
   m.def(
+      "minmax",
+      [](const mx::array& a, mx::StreamOrDevice s) {
+        auto outputs = mx::minmax(a, s);
+        return nb::make_tuple(outputs[0], outputs[1]);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def minmax(a: array, /, *, stream: StreamOrDevice = None) -> tuple[array, array]"),
+      R"pbdoc(
+        Return the minimum and maximum over all elements as scalar arrays.
+
+        The input must be nonempty and have dtype float32. Metal uses a
+        fused reduction; CPU and CUDA use separate reductions. Noncontiguous
+        inputs may require a copy. Axes, autodiff, and vmap are not supported.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            tuple[array, array]: The minimum and maximum, in that order.
+      )pbdoc");
+  m.def(
       "min",
       [](const mx::array& a,
          const IntOrVec& axis,

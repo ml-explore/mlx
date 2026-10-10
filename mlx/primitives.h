@@ -919,6 +919,22 @@ class Divide : public UnaryPrimitive {
   DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
+class MinMax : public Primitive {
+ public:
+  explicit MinMax(Stream stream) : Primitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(MinMax)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    return {Shape{}, Shape{}};
+  }
+};
+
 class DivMod : public Primitive {
  public:
   explicit DivMod(Stream stream) : Primitive(stream) {}

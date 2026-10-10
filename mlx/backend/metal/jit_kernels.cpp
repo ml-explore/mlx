@@ -550,7 +550,10 @@ MTL::ComputePipelineState* get_reduce_kernel(
     std::string op = op_type + "<" + out_t + ">";
     std::string kernel_source = metal::utils();
     concatenate(kernel_source, metal::reduce_utils(), metal::reduce());
-    if (bm >= 0) {
+    if (func_name == "all_reduce_min_max") {
+      kernel_source +=
+          get_template_definition(kernel_name, func_name, in_t, out_t, idx_t);
+    } else if (bm >= 0) {
       kernel_source += get_template_definition(
           kernel_name, func_name, in_t, out_t, op, idx_t, ndim, bm, bn);
     } else if (ndim >= 0) {

@@ -133,6 +133,7 @@ Operations
    median
    meshgrid
    min
+   minmax
    minimum
    moveaxis
    multiply

@@ -3349,6 +3349,18 @@ divmod(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       inputs);
 }
 
+std::vector<array> minmax(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() != float32 || a.size() == 0) {
+    throw std::invalid_argument(
+        "[minmax] Input must be a nonempty float32 array.");
+  }
+  return array::make_arrays(
+      {Shape{}, Shape{}},
+      {float32, float32},
+      std::make_shared<MinMax>(to_stream(s)),
+      {reshape(a, {-1}, s)});
+}
+
 array maximum(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto out_type = promote_types(a.dtype(), b.dtype());
   auto inputs =

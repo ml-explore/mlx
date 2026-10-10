@@ -10,6 +10,13 @@
 
 namespace mlx::core {
 
+void MinMax::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  Reduce(stream(), Reduce::Min, {0}).eval_gpu(inputs, outputs[0]);
+  Reduce(stream(), Reduce::Max, {0}).eval_gpu(inputs, outputs[1]);
+}
+
 void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Reduce::eval_gpu");
   assert(inputs.size() == 1);
