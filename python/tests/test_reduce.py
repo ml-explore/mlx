@@ -10,6 +10,44 @@ import numpy as np
 
 
 class TestReduce(mlx_tests.MLXTestCase):
+    def test_minmax(self):
+        for device in [mx.cpu, mx.gpu]:
+            if device == mx.gpu and not mx.metal.is_available():
+                continue
+            with mx.stream(device):
+                for size in [1, 31, 4096, 4097, (1 << 20) + 1]:
+                    x = mx.arange(size, dtype=mx.float32) - 17
+                    result = mx.minmax(x)
+                    self.assertIsInstance(result, tuple)
+                    mx.eval(result)
+                    self.assertEqual(result[0].shape, ())
+                    self.assertEqual(result[1].shape, ())
+                    self.assertEqual(result[0].item(), -17)
+                    self.assertEqual(result[1].item(), size - 18)
+                x = mx.arange(120, dtype=mx.float32).reshape(10, 12)
+                for view in [x.T, x[:, ::2], x[::-1], mx.broadcast_to(x[:1], (8, 12))]:
+                    lo, hi = mx.minmax(view)
+                    self.assertEqual(lo.item(), mx.min(view).item())
+                    self.assertEqual(hi.item(), mx.max(view).item())
+                lo, hi = mx.minmax(mx.array(3.0))
+                self.assertEqual((lo.item(), hi.item()), (3.0, 3.0))
+
+    def test_minmax_invalid_input(self):
+        for dtype in [mx.int32, mx.float16, mx.bfloat16, mx.bool_, mx.complex64]:
+            with self.assertRaises(ValueError):
+                mx.minmax(mx.ones((2,), dtype=dtype))
+        with self.assertRaises(ValueError):
+            mx.minmax(mx.array([], dtype=mx.float32))
+        with self.assertRaises(TypeError):
+            mx.minmax(mx.ones((2,)), axis=0)
+
+    def test_minmax_transforms_unsupported(self):
+        x = mx.ones((2, 3))
+        with self.assertRaises(ValueError):
+            mx.grad(lambda a: mx.minmax(a)[0])(x)
+        with self.assertRaises(ValueError):
+            mx.vmap(mx.minmax)(x)
+
     def test_axis_permutation_sums(self):
         for shape in [(5, 5, 1, 5, 5), (65, 65, 1, 65)]:
             with self.subTest(shape=shape):

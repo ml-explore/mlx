@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <stdexcept>
 
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
@@ -425,6 +426,82 @@ void all_reduce_dispatch(
     compute_encoder.set_bytes(intermediate_size, 2);
     compute_encoder.set_bytes(intermediate_size, 3);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
+  }
+}
+
+void all_reduce_min_max_dispatch(
+    const array& in,
+    array& out_min,
+    array& out_max,
+    CommandEncoder& compute_encoder,
+    metal::Device& d,
+    const Stream& s) {
+  if (in.dtype() != float32) {
+    throw std::invalid_argument(
+        "[all_reduce_min_max_dispatch] Only float32 is supported.");
+  }
+  if (in.size() == 0 || !in.flags().contiguous || in.data_size() != in.size() ||
+      !in.data_shared_ptr() || !in.buffer().raw_ptr()) {
+    throw std::invalid_argument(
+        "[all_reduce_min_max_dispatch] Input must be nonempty, allocated, "
+        "and contiguous with full data.");
+  }
+  for (const auto* out : {&out_min, &out_max}) {
+    if (out->ndim() != 0 || out->dtype() != in.dtype() ||
+        !out->data_shared_ptr() || !out->buffer().raw_ptr()) {
+      throw std::invalid_argument(
+          "[all_reduce_min_max_dispatch] Outputs must be allocated scalars "
+          "with the input dtype.");
+    }
+  }
+  if (out_min.data<void>() == out_max.data<void>() ||
+      out_min.buffer().raw_ptr() == in.buffer().raw_ptr() ||
+      out_max.buffer().raw_ptr() == in.buffer().raw_ptr()) {
+    throw std::invalid_argument(
+        "[all_reduce_min_max_dispatch] Input and outputs must not alias.");
+  }
+  const std::string func_name = "all_reduce_min_max";
+  std::string kname = func_name;
+  concatenate(kname, "_", type_to_name(in));
+  auto kernel = get_reduce_kernel(
+      d, kname, func_name, "min", in.dtype(), in.dtype(), "int64_t");
+  compute_encoder.set_compute_pipeline_state(kernel);
+  size_t in_size = in.size();
+  if (in_size <= REDUCE_N_READS * 1024) {
+    int threadgroup_size = (in_size + REDUCE_N_READS - 1) / REDUCE_N_READS;
+    threadgroup_size = ((threadgroup_size + 31) / 32) * 32;
+    MTL::Size grid_dims(threadgroup_size, 1, 1);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(out_min, 1);
+    compute_encoder.set_bytes(in_size, 2);
+    compute_encoder.set_bytes(in_size, 3);
+    compute_encoder.set_output_array(out_max, 4);
+    compute_encoder.dispatch_threads(grid_dims, grid_dims);
+  } else {
+    int n_rows =
+        in.nbytes() <= (1 << 26) ? 32 * REDUCE_N_READS : 1024 * REDUCE_N_READS;
+    array intermediate_min({n_rows}, in.dtype(), nullptr, {});
+    array intermediate_max({n_rows}, in.dtype(), nullptr, {});
+    intermediate_min.set_data(allocator::malloc(intermediate_min.nbytes()));
+    intermediate_max.set_data(allocator::malloc(intermediate_max.nbytes()));
+    compute_encoder.add_temporary(intermediate_min);
+    compute_encoder.add_temporary(intermediate_max);
+    size_t row_size = (in_size + n_rows - 1) / n_rows;
+    int threadgroup_size =
+        std::min((row_size + REDUCE_N_READS - 1) / REDUCE_N_READS, 1024ul);
+    threadgroup_size = ((threadgroup_size + 31) / 32) * 32;
+    MTL::Size grid_dims(threadgroup_size, n_rows, 1);
+    MTL::Size group_dims(threadgroup_size, 1, 1);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(intermediate_min, 1);
+    compute_encoder.set_bytes(in_size, 2);
+    compute_encoder.set_bytes(row_size, 3);
+    compute_encoder.set_output_array(intermediate_max, 4);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+    all_reduce_dispatch(
+        intermediate_min, out_min, "min", compute_encoder, d, s);
+    all_reduce_dispatch(
+        intermediate_max, out_max, "max", compute_encoder, d, s);
   }
 }
 
@@ -984,6 +1061,23 @@ void strided_reduce_general_dispatch(
   }
 
   return strided_reduce_looped(in, out, op_name, args, compute_encoder, d, s);
+}
+
+void MinMax::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  auto in = inputs[0];
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+  auto& encoder = metal::get_command_encoder(s);
+  if (!in.flags().contiguous || in.data_size() != in.size()) {
+    in = contiguous_copy_gpu(in, s);
+    encoder.add_temporary(in);
+  }
+  for (auto& out : outputs) {
+    out.set_data(allocator::malloc(out.nbytes()));
+  }
+  all_reduce_min_max_dispatch(in, outputs[0], outputs[1], encoder, d, s);
 }
 
 void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {

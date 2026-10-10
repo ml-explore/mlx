@@ -1015,6 +1015,8 @@ MLX_API array operator/(const array& a, double b);
 MLX_API std::vector<array>
 divmod(const array& a, const array& b, StreamOrDevice s = {});
 
+MLX_API std::vector<array> minmax(const array& a, StreamOrDevice s = {});
+
 /** Compute integer division. Equivalent to doing floor(a / x). */
 MLX_API array
 floor_divide(const array& a, const array& b, StreamOrDevice s = {});

@@ -18,6 +18,14 @@ void all_reduce_dispatch(
     metal::Device& d,
     const Stream& s);
 
+void all_reduce_min_max_dispatch(
+    const array& in,
+    array& out_min,
+    array& out_max,
+    CommandEncoder& compute_encoder,
+    metal::Device& d,
+    const Stream& s);
+
 void row_reduce_general_dispatch(
     const array& in,
     array& out,

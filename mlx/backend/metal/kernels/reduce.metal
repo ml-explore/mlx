@@ -47,6 +47,23 @@ instantiate_init_sum_prod(prod, Prod)
 instantiate_init_min_max(min, Min)
 instantiate_init_min_max(max, Max)
 
+#define instantiate_all_reduce_min_max(name, type) \
+  instantiate_kernel("all_reduce_min_max_" #name, all_reduce_min_max, type, type, int64_t)
+
+instantiate_all_reduce_min_max(bool_, bool)
+instantiate_all_reduce_min_max(int8, int8_t)
+instantiate_all_reduce_min_max(int16, int16_t)
+instantiate_all_reduce_min_max(int32, int32_t)
+instantiate_all_reduce_min_max(int64, int64_t)
+instantiate_all_reduce_min_max(uint8, uint8_t)
+instantiate_all_reduce_min_max(uint16, uint16_t)
+instantiate_all_reduce_min_max(uint32, uint32_t)
+instantiate_all_reduce_min_max(uint64, uint64_t)
+instantiate_all_reduce_min_max(float16, float16_t)
+instantiate_all_reduce_min_max(bfloat16, bfloat16_t)
+instantiate_all_reduce_min_max(float32, float)
+instantiate_all_reduce_min_max(complex64, complex64_t)
+
 #define instantiate_all_reduce(name, itype, otype, op) \
   instantiate_kernel("all_reduce_" #name,              \
                      all_reduce,                       \
