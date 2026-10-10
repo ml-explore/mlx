@@ -76,6 +76,7 @@ class LRUCache {
     auto it = map_.find(key);
     if (it == map_.end())
       return end();
+    cache_misses_ = 0;
     vlist_.splice(vlist_.begin(), vlist_, it->second);
     return it->second;
   }
@@ -84,6 +85,7 @@ class LRUCache {
   std::pair<iterator, bool> emplace(const K& key, U&& value) {
     auto it = map_.find(key);
     if (it != map_.end()) {
+      cache_misses_ = 0;
       vlist_.splice(vlist_.begin(), vlist_, it->second);
       return {it->second, false};
     }
