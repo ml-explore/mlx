@@ -665,8 +665,10 @@ class TestQuantized(mlx_tests.MLXTestCase):
         if mx.default_device() == mx.cpu:
             self.skipTest("Covers GPU kernels only")
         K, N = 2560, 1024
+        # Keep M at or above get_qmv_batch_limit on all devices. Below it the
+        # qmv kernel runs, which dequantizes in float32 and not in the input type.
         for mode, dtype, M in product(
-            ["affine", "mxfp4"], [mx.bfloat16, mx.float16], [16, 33, 65]
+            ["affine", "mxfp4"], [mx.bfloat16, mx.float16], [25, 33, 65]
         ):
             with self.subTest(mode=mode, dtype=dtype, M=M):
                 k1, k2 = mx.random.split(mx.random.key(0))
