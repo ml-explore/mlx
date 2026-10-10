@@ -633,11 +633,11 @@ void qmv_wide(
 }
 
 void qvm_split_k(
-    const array& x,
+    const array& x_in,
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
-    array& out,
+    array& out_in,
     int group_size,
     int bits,
     int M,
@@ -650,7 +650,13 @@ void qvm_split_k(
 
   int split_k = K > 8192 ? 32 : 8;
   int split_D = (K + split_k - 1) / split_k;
-  int B = out.size() / M / N;
+  int B = out_in.size() / M / N;
+
+  // When weights are 2D, collapse leading batch dimensions of x and out into M
+  // so the kernel and reduction operate on standard 2D matrices.
+  array x = (B == 1 && x_in.ndim() != 2) ? reshape_in_eval(x_in, {M, K}, s) : x_in;
+  array out = (B == 1 && out_in.ndim() != 2) ? reshape_in_eval(out_in, {M, N}, s) : out_in;
+
   B *= split_k;
 
   constexpr int num_simdgroups = 2;
