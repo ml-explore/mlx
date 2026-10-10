@@ -409,7 +409,7 @@ struct Conv2DWeightBlockLoader {
 
   /* Load from device memory into threadgroup memory - without bound checking */
   METAL_FUNC void load_unsafe() const thread {
-    if (BN != 8 || do_read) {
+    if (do_read) {
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < BN; i += TROWS) {
         STEEL_PRAGMA_UNROLL
@@ -912,7 +912,7 @@ struct Conv3DWeightBlockLoader {
 
   /* Load from device memory into threadgroup memory - without bound checking */
   METAL_FUNC void load_unsafe() const thread {
-    if (BN != 8 || do_read) {
+    if (do_read) {
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < BN; i += TROWS) {
         STEEL_PRAGMA_UNROLL
