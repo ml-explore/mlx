@@ -1562,6 +1562,61 @@ class TestConv(mlx_tests.MLXTestCase):
                     f"C{Cin}->{Cout} k{kd}{kh}{kw} flip={flip}",
                 )
 
+    def test_grouped_conv_padding_stays_in_output(self):
+        # groups takes the direct CPU kernel. Padding taller than the output
+        # used to run the border loop past the buffer.
+        mx.random.seed(0)
+        x = mx.random.normal((1, 1, 8, 2))
+        w = mx.random.normal((2, 5, 1, 1))
+        y = mx.conv2d(x, w, stride=(1, 1), padding=(2, 0), groups=2, stream=mx.cpu)
+        parts = [
+            mx.conv2d(
+                x[..., g : g + 1],
+                w[g : g + 1],
+                stride=(1, 1),
+                padding=(2, 0),
+                stream=mx.cpu,
+            )
+            for g in range(2)
+        ]
+        expected = mx.concatenate(parts, axis=-1)
+        self.assertEqual(tuple(y.shape), (1, 1, 8, 2))
+        self.assertTrue(mx.allclose(y, expected, atol=1e-4))
+
+        # A 1-wide kernel makes weight dilation a no-op, but any dilation
+        # other than 1 sends 3D conv to the direct kernel. Depth padding is
+        # the same overhang as the 2D case.
+        x3 = mx.random.normal((1, 1, 4, 2, 1))
+        w3 = mx.random.normal((1, 5, 1, 1, 1))
+        y3 = mx.conv3d(
+            x3,
+            w3,
+            padding=(2, 0, 0),
+            dilation=(1, 2, 1),
+            stream=mx.cpu,
+        )
+        expected3 = mx.conv3d(
+            x3,
+            w3,
+            padding=(2, 0, 0),
+            stream=mx.cpu,
+        )
+        self.assertEqual(tuple(y3.shape), tuple(expected3.shape))
+        self.assertTrue(mx.allclose(y3, expected3, atol=1e-4))
+
+        wide = mx.random.normal((1, 1, 500000, 2))
+        wide_w = mx.random.normal((2, 5, 1, 1))
+        wide_y = mx.conv2d(
+            wide,
+            wide_w,
+            stride=(1, 1),
+            padding=(2, 0),
+            groups=2,
+            stream=mx.cpu,
+        )
+        mx.eval(wide_y)
+        self.assertEqual(tuple(wide_y.shape), (1, 1, 500000, 2))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
