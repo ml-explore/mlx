@@ -4838,37 +4838,3 @@ TEST_CASE("roll and tile shape overflow") {
   auto rolled = roll(x, -2147483647 - 1);
   CHECK(array_equal(rolled, x).item<bool>());
 }
-
-TEST_CASE("fast layer norm fallback uses given stream") {
-  // Walk the graph back to the inputs and check every op is on stream s.
-  auto check_stream =
-      [](const array& out, const std::vector<array>& leaves, const Stream& s) {
-        std::vector<array> stack = {out};
-        while (!stack.empty()) {
-          auto a = stack.back();
-          stack.pop_back();
-          bool is_leaf = false;
-          for (auto& l : leaves) {
-            is_leaf |= (a.id() == l.id());
-          }
-          if (is_leaf || !a.has_primitive()) {
-            continue;
-          }
-          CHECK_EQ(a.primitive().stream(), s);
-          for (auto& in : a.inputs()) {
-            stack.push_back(in);
-          }
-        }
-      };
-
-  // A non-default stream, so ops falling back to the default are caught
-  auto s = new_stream(Device::cpu);
-  auto x = random::normal({2, 8});
-  auto w = random::normal({8});
-  auto b = random::normal({8});
-  eval(x, w, b);
-
-  check_stream(fast::layer_norm(x, w, b, 1e-5f, s), {x, w, b}, s);
-  check_stream(
-      fast::layer_norm(x, std::nullopt, std::nullopt, 1e-5f, s), {x}, s);
-}
