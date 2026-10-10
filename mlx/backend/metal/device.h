@@ -166,7 +166,7 @@ class MLX_API Device {
   int get_architecture_gen() const {
     return arch_gen_;
   }
-  std::tuple<int, int> get_max_ops_mb_per_buffer() const {
+  std::tuple<int, int> get_default_max_ops_mb_per_buffer() const {
     return std::make_tuple(max_ops_per_buffer_, max_mb_per_buffer_);
   }
 

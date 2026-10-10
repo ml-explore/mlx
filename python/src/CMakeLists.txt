@@ -8,6 +8,7 @@ nanobind_add_module(
   mlx
   ${CMAKE_CURRENT_SOURCE_DIR}/mlx.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/array.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/config.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/convert.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cpp

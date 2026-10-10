@@ -34,6 +34,17 @@ namespace {
 
 constexpr const char* default_mtllib_path = METAL_PATH;
 
+const std::string& metal_gpu_arch() {
+  static std::string gpu_arch_ = []() {
+    if (const char* str = std::getenv("MLX_METAL_GPU_ARCH")) {
+      return str;
+    } else {
+      return "";
+    }
+  }();
+  return gpu_arch_;
+}
+
 void set_compile_options(
     MTL::CompileOptions* mtl_options,
     const CompileOptions& compile_options) {
@@ -525,7 +536,9 @@ void CommandEncoder::wait_event(Event event, uint64_t value) {
 }
 
 bool CommandEncoder::needs_commit() const {
-  auto [max_ops, max_mb] = device_.get_max_ops_mb_per_buffer();
+  auto [max_ops, max_mb] = device_.get_default_max_ops_mb_per_buffer();
+  max_ops = env::max_ops_per_buffer(max_ops);
+  max_mb = env::max_mb_per_buffer(max_mb);
   return (buffer_ops_ > max_ops) || ((buffer_sizes_ >> 20) > max_mb);
 }
 
@@ -602,7 +615,7 @@ MTL::ComputeCommandEncoder* CommandEncoder::get_command_encoder() {
 Device::Device() : device_(load_device()), residency_sets_(device_.get()) {
   auto pool = new_scoped_memory_pool();
   default_library_ = NS::TransferPtr(load_default_library(device_.get()));
-  arch_ = env::metal_gpu_arch();
+  arch_ = metal_gpu_arch();
   if (arch_.empty()) {
     arch_ = std::string(device_->architecture()->name()->utf8String());
   }
@@ -638,8 +651,6 @@ Device::Device() : device_(load_device()), residency_sets_(device_.get()) {
       max_mb_per_buffer_ = 40;
       break;
   }
-  max_ops_per_buffer_ = env::max_ops_per_buffer(max_ops_per_buffer_);
-  max_mb_per_buffer_ = env::max_mb_per_buffer(max_mb_per_buffer_);
 }
 
 Device::~Device() = default;

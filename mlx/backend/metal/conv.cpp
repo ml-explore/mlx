@@ -35,7 +35,7 @@ inline int max_unfold_rows(metal::Device& d, size_t row_bytes, int total_rows) {
   size_t max_buffer = d.mtl_device()->maxBufferLength();
   size_t max_rows = row_bytes == 0 ? total_rows : max_buffer / row_bytes;
   // Force a smaller tile (tests, or to bound the unfold buffer further).
-  if (int forced = env::get_var("MLX_CONV_UNFOLD_TILE_ROWS", 0); forced > 0) {
+  if (int forced = config::get("MLX_CONV_UNFOLD_TILE_ROWS", 0); forced > 0) {
     max_rows = std::min(max_rows, static_cast<size_t>(forced));
   }
   if (max_rows == 0) {
@@ -72,7 +72,7 @@ inline int winograd_batch_step(
 
   // Limit of maximum memory can be used for the step.
   size_t working_set = d.mtl_device()->recommendedMaxWorkingSetSize();
-  if (int env_ws = env::get_var("MLX_CONV_WINOGRAD_WORKING_SET", 0);
+  if (int env_ws = config::get("MLX_CONV_WINOGRAD_WORKING_SET", 0);
       env_ws > 0) {
     working_set = env_ws;
   }
@@ -96,8 +96,7 @@ inline int winograd_batch_step(
           (conv_params.C + conv_params.O) * itemsize;
   auto max_n = static_cast<int64_t>(budget / bytes_per_n);
   int safe_n = static_cast<int>(std::min<int64_t>(max_n, total_n));
-  if (int forced = env::get_var("MLX_CONV_WINOGRAD_TILE_BATCH", 0);
-      forced > 0) {
+  if (int forced = config::get("MLX_CONV_WINOGRAD_TILE_BATCH", 0); forced > 0) {
     return std::min(forced, safe_n);
   }
 
@@ -1450,7 +1449,7 @@ void dispatch_conv_2D_gpu(
   if (!conv_params.flip && is_stride_one && is_kdil_one && is_idil_one &&
       conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
       conv_params.C % 32 == 0 && conv_params.O % 32 == 0 && inp_large &&
-      channels_large && env::get_var("MLX_CONV_WINOGRAD", 1)) {
+      channels_large && config::get("MLX_CONV_WINOGRAD", 1)) {
     // Only use winograd conv when having enough memory.
     if (int n_step = winograd_batch_step(d, in, conv_params); n_step > 0) {
       return winograd_conv_2D_gpu(

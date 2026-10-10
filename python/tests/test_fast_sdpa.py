@@ -146,7 +146,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
     def test_sdpa_pad_head_dim_opt_in(self):
         if mx.default_device() != mx.gpu:
             self.skipTest("requires GPU")
-        with mlx_tests.scoped_env(MLX_SDPA_PAD_HEAD_DIM="1"):
+        with mx.config.scoped_update(MLX_SDPA_PAD_HEAD_DIM=1):
             self.test_sdpa_head_dim_72()
             self.test_sdpa_head_dim_80()
             self.test_sdpa_head_dim_72_80_sinks()
@@ -688,7 +688,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         scale = D**-0.5
         mx.random.seed(0)
 
-        with mlx_tests.scoped_env(MLX_SDPA_D512_MIN_KL="0"):
+        with mx.config.scoped_update(MLX_SDPA_D512_MIN_KL=0):
             # Test 1-pass kernel.
             for dtype in (mx.float32, mx.float16, mx.bfloat16):
                 with self.subTest(L=128, dtype=dtype, threshold="off"):
@@ -937,7 +937,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         v = mx.random.normal(shape=(1, 8, 8192, D), dtype=mx.float16)
         ref = mx.fast.scaled_dot_product_attention(q, k, v, scale=D**-0.5)
         for blocks in (16, 33, 48, 100):
-            with mlx_tests.scoped_env(MLX_SDPA_BLOCKS=str(blocks)):
+            with mx.config.scoped_update(MLX_SDPA_BLOCKS=blocks):
                 out = mx.fast.scaled_dot_product_attention(q, k, v, scale=D**-0.5)
                 self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
@@ -996,7 +996,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
                 out_ref = do_attention(mlx_ref_attn, q, k, v, scale, mask, t)
 
-                with mlx_tests.scoped_env(MLX_ENABLE_TF32="0"):
+                with mx.config.scoped_update(MLX_ENABLE_TF32=0):
                     out_fst = do_attention(
                         mx.fast.scaled_dot_product_attention,
                         q,
@@ -1284,7 +1284,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         # Vector attention kernel.
         for D in (192, 256, 512):
             with self.subTest(head_dim=D):
-                with mlx_tests.scoped_env(MLX_SDPA_D512_MIN_KL="0"):
+                with mx.config.scoped_update(MLX_SDPA_D512_MIN_KL=0):
                     q, k, v = make_qkv(4, 16385, D, 4, 2)
                     scale = D**-0.5
                     ref = mlx_ref_attn(q, k, v, scale=scale)
@@ -1324,7 +1324,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 q, k, v, scale=64**-0.5, force_fused=True
             )
         with self.assertRaisesRegex(ValueError, r"requires at least \d+ keys"):
-            with mlx_tests.scoped_env(MLX_SDPA_D512_MIN_KL=None):
+            with mx.config.scoped_update(MLX_SDPA_D512_MIN_KL=1024):
                 q, k, v = make_qkv(1, 512, 512, qH=32, kH=4)
                 mx.fast.scaled_dot_product_attention(
                     q, k, v, scale=512**-0.5, force_fused=True
