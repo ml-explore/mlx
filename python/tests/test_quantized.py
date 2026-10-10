@@ -2619,6 +2619,28 @@ class TestQuantized(mlx_tests.MLXTestCase):
         expected = mx.dequantize(w_q, mx.contiguous(scales), mode=mode)
         self.assertTrue(mx.allclose(w_hat, expected))
 
+    def test_quantized_matmul_batched_split_k(self):
+        tol = 3e-2 if mx.cuda.is_available() else 1e-3
+        K, N = 2048, 512
+        w = mx.random.normal(shape=(K, N))
+        w_q, scales, biases = mx.quantize(w, group_size=64, bits=4)
+        w_hat = mx.dequantize(w_q, scales, biases, group_size=64, bits=4)
+
+        shapes = [
+            (2, K),
+            (2, 1, K),
+            (3, 1, K),
+            (2, 1, 1, K),
+        ]
+        for shape in shapes:
+            x = mx.random.normal(shape=shape)
+            y_q = mx.quantized_matmul(
+                x, w_q, scales, biases, transpose=False, group_size=64, bits=4
+            )
+            y_hat = x @ w_hat
+            self.assertEqual(y_q.shape, y_hat.shape)
+            self.assertLess((y_q - y_hat).abs().max(), tol)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
