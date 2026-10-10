@@ -264,10 +264,20 @@ constexpr complex_t<T> operator*(complex_t<T> a, complex_t<T> b) {
 
 template <typename T>
 constexpr complex_t<T> operator/(complex_t<T> a, complex_t<T> b) {
-  auto denom = b.real * b.real + b.imag * b.imag;
-  auto x = a.real * b.real + a.imag * b.imag;
-  auto y = a.imag * b.real - a.real * b.imag;
-  return {x / denom, y / denom};
+  float ar = a.real, ai = a.imag;
+  float br = b.real, bi = b.imag;
+  if (abs(br) >= abs(bi)) {
+    auto ratio = bi / br;
+    auto denom = br + bi * ratio;
+    return {
+        static_cast<T>((ar + ai * ratio) / denom),
+        static_cast<T>((ai - ar * ratio) / denom)};
+  }
+  auto ratio = br / bi;
+  auto denom = bi + br * ratio;
+  return {
+      static_cast<T>((ar * ratio + ai) / denom),
+      static_cast<T>((ai * ratio - ar) / denom)};
 }
 
 template <
@@ -275,11 +285,7 @@ template <
     typename U,
     enable_if_t<!is_complex_v<U> && is_lane_convertible_v<U, T>, bool> = true>
 constexpr complex_t<T> operator/(U a, complex_t<T> b) {
-  auto scalar = static_cast<T>(a);
-  auto denom = b.real * b.real + b.imag * b.imag;
-  auto x = scalar * b.real;
-  auto y = -scalar * b.imag;
-  return {x / denom, y / denom};
+  return complex_t<T>(a) / b;
 }
 
 template <typename T>

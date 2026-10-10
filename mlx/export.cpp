@@ -384,6 +384,7 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(FFT),
       SERIALIZE_PRIMITIVE(Flatten),
       SERIALIZE_PRIMITIVE(Floor),
+      SERIALIZE_PRIMITIVE(FloorDivide),
       SERIALIZE_PRIMITIVE(Full),
       SERIALIZE_PRIMITIVE(Gather),
       SERIALIZE_PRIMITIVE(GatherAxis),

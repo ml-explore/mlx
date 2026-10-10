@@ -119,6 +119,13 @@ void Equal::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void FloorDivide::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  binary_op_cpu(a, b, out, detail::FloorDivide(), stream());
+}
+
 void Greater::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   comparison_op_cpu(inputs[0], inputs[1], out, detail::Greater(), stream());

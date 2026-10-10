@@ -378,6 +378,21 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.dtype, mx.int32)
         self.assertEqual(z.item(), 2)
 
+    def test_complex_divide_extreme_values(self):
+        values = np.array(
+            [1e20 + 1e20j, 1e-30 + 1e-30j, 1 + 0j, 1e20 + 0j, 3 + 4j],
+            dtype=np.complex64,
+        )
+        divisors = np.array(
+            [1e20 + 1e20j, 1e-30 + 1e-30j, 1e20 + 0j, 1 + 0j, 1 + 2j],
+            dtype=np.complex64,
+        )
+        a, b = mx.array(values), mx.array(divisors)
+        for result in [mx.divide(a, b), a / b]:
+            np.testing.assert_allclose(result, values / divisors, rtol=1e-6, atol=0)
+        for result in [1 / b, mx.reciprocal(b)]:
+            np.testing.assert_allclose(result, 1 / divisors, rtol=1e-6, atol=0)
+
     def test_floor_divide(self):
         a = [4, 5, -1, -6]
         b = [-2, 3, 2, -3]
@@ -399,9 +414,33 @@ class TestOps(mlx_tests.MLXTestCase):
                     np.array(b, dtype=np_int_float_dtypes[kind]),
                 )
                 self.assertEqual(result.tolist(), expected.tolist())
+                self.assertEqual(result.dtype, dtype)
 
                 result = mx.array(a, dtype=dtype) // mx.array(b, dtype=dtype)
                 self.assertEqual(result.tolist(), expected.tolist())
+
+        # Unsigned integers use the plain quotient.
+        ua = [7, 0, 5]
+        ub = [2, 2, 3]
+
+        mx_uint_dtypes = mx.__array_namespace_info__().dtypes(
+            kind=("unsigned integer",)
+        )
+        np_uint_dtypes = np.__array_namespace_info__().dtypes(
+            kind=("unsigned integer",)
+        )
+
+        for kind, dtype in mx_uint_dtypes.items():
+            with self.subTest(dtype=dtype):
+                result = mx.floor_divide(
+                    mx.array(ua, dtype=dtype), mx.array(ub, dtype=dtype)
+                )
+                expected = np.floor_divide(
+                    np.array(ua, dtype=np_uint_dtypes[kind]),
+                    np.array(ub, dtype=np_uint_dtypes[kind]),
+                )
+                self.assertEqual(result.tolist(), expected.tolist())
+                self.assertEqual(result.dtype, dtype)
 
     def test_remainder(self):
         # Complex is not supported and has to say so rather than quietly
@@ -4116,6 +4155,11 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(c.shape, (3, 2, 5))
         self.assertTrue(mx.array_equal(c, mx.ones((3, 2, 5), dtype=mx.bool_)))
 
+        x = mx.array([1, -1, 1, -1])
+        y = mx.array([1, 1, -1, -1])
+        out = (x > 0) ^ (y > 0)
+        self.assertEqual(out.tolist(), [False, True, True, False])
+
     def test_bitwise_grad(self):
         a = np.random.randint(0, 10, size=(4, 3))
         b = np.random.randint(0, 10, size=(4, 3))
@@ -4636,6 +4680,12 @@ class TestOps(mlx_tests.MLXTestCase):
                 target, mx.array([-4.0, 3.0, 5.0, -2.0, 9.0], dtype=mx.float32)
             )
         )
+
+        # source with a negative stride
+        a = mx.zeros((4,))
+        mask = mx.array([True, False, True, True])
+        a[mask] = mx.array([1.0, 2.0, 3.0, 4.0])[::-1]
+        self.assertTrue(mx.array_equal(a, mx.array([4.0, 0.0, 3.0, 2.0])))
 
     def test_broadcast_shapes(self):
         # Basic broadcasting

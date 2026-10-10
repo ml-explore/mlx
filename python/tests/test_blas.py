@@ -926,6 +926,32 @@ class TestBlas(mlx_tests.MLXTestCase):
                 out = mx.addmm(c, a, mx.swapaxes(b, -1, -2), 0.125, 0.0)
                 self.assertTrue(np.allclose(out.astype(mx.float32), 12800.0))
 
+    def test_thin_matmul(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("requires GPU")
+
+        # few output columns or few rows with a transposed b takes the thin NAX
+        # kernel on Metal.
+        np.random.seed(0)
+        shapes = [(2048, 64, 2048), (2049, 48, 300), (4100, 16, 1), (1025, 24, 63)]
+        shapes += [(20, 300, 1), (33, 1000, 999), (64, 2560, 128)]
+        for M, N, K in shapes:
+            scale = K**-0.5
+            a_np = np.random.normal(0.0, scale, (M, K)).astype(np.float32)
+            b_np = np.random.normal(0.0, scale, (N, K)).astype(np.float32)
+            c_np = np.random.normal(0.0, scale, (N,)).astype(np.float32)
+            for dtype in (mx.float16, mx.bfloat16):
+                a, b, c = (mx.array(x).astype(dtype) for x in (a_np, b_np, c_np))
+                a_r, b_r, c_r = (np.array(x.astype(mx.float32)) for x in (a, b, c))
+                ref = a_r @ b_r.T
+                for layout, b_mx in (("nt", b.T), ("nn", mx.contiguous(b.T))):
+                    with self.subTest(shape=(M, N, K), dtype=str(dtype), layout=layout):
+                        out = (a @ b_mx).astype(mx.float32)
+                        self.assertTrue(np.allclose(out, ref, 1e-2, 0.05 * scale))
+                        out = mx.addmm(c, a, b_mx, 0.5, 2.0).astype(mx.float32)
+                        ref_c = 0.5 * ref + 2.0 * c_r
+                        self.assertTrue(np.allclose(out, ref_c, 1e-2, 0.125 * scale))
+
     def test_addmm_grad(self):
         def make_ref_addmm(alpha, beta):
             return lambda c, a, b: alpha * (a @ b) + beta * c
@@ -1240,6 +1266,15 @@ class TestBlas(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(c_mx, c_np, atol=1e-5))
         self.assertTrue(np.allclose(e_mx, e_np, atol=1e-5))
+
+        # Strided output mask with a vector lhs
+        a = mx.random.normal((1, 64))
+        b = mx.random.normal((64, 128))
+        mask = mx.array([[True, False, False, True, True, False, False, True]])
+        out_mask = mask[:, ::2]
+        out = mx.block_masked_mm(a, b, 32, out_mask)
+        expected = ref_block_masked_mm(a, b, 32, out_mask)
+        self.assertTrue(mx.allclose(out, expected, atol=1e-5))
 
     def test_gather_matmul(self):
         def np_gather_mm(a, b, lhs_indices=None, rhs_indices=None):
@@ -1611,6 +1646,14 @@ class TestBlas(mlx_tests.MLXTestCase):
                 c1 = segmented_mm_ref(a.T, b.T, segments)
                 c2 = mx.segmented_mm(a.T, b.T, segments)
                 self.assertTrue(mx.allclose(c1, c2, atol=1e-4))
+
+        # Negative leading dimension
+        a = mx.random.normal((8, 64))
+        b = mx.random.normal((64, 16))[::-1]
+        segments = mx.array([[0, 20], [20, 64]], dtype=mx.uint32)
+        c1 = segmented_mm_ref(a, b, segments)
+        c2 = mx.segmented_mm(a, b, segments)
+        self.assertTrue(mx.allclose(c1, c2, atol=1e-4))
 
         with self.assertRaises(ValueError):
             a = mx.ones((2, 10, 10))

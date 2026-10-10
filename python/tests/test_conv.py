@@ -1189,6 +1189,35 @@ class TestConv(mlx_tests.MLXTestCase):
             )
             self.assertEqual(grads.shape, k_shape)
 
+    def test_padding_input_grad(self):
+        def conv_loss(x, w, stride, padding):
+            out = mx.conv_general(x, w, stride=stride, padding=padding)
+            return mx.sum(out * out)
+
+        def padded_loss(x, w, stride, padding):
+            lo, hi = padding
+            pad_width = [(0, 0)] + list(zip(lo, hi)) + [(0, 0)]
+            out = mx.conv_general(mx.pad(x, pad_width), w, stride=stride)
+            return mx.sum(out * out)
+
+        for in_shape, w_shape, stride, padding in [
+            ((1, 4, 1), (1, 3, 1), (1,), ([0], [1])),
+            ((1, 4, 1), (1, 3, 1), (2,), ([0], [1])),
+            ((1, 4, 1), (1, 3, 1), (1,), ([1], [0])),
+            ((2, 6, 6, 3), (4, 3, 3, 3), (2, 2), ([0, 1], [1, 2])),
+            ((2, 5, 5, 5, 2), (3, 2, 2, 2, 2), (2, 1, 2), ([0, 0, 1], [1, 1, 0])),
+            ((1, 4, 1), (1, 2, 1), (1,), ([3], [3])),
+            ((1, 4, 1), (1, 2, 1), (1,), ([0], [3])),
+            ((1, 4, 1), (1, 2, 1), (2,), ([3], [0])),
+            ((2, 5, 6, 3), (4, 2, 3, 3), (1, 2), ([4, 0], [1, 5])),
+        ]:
+            x = mx.random.normal(in_shape)
+            w = mx.random.normal(w_shape)
+            expected = mx.grad(padded_loss)(x, w, stride, padding)
+            grad = mx.grad(conv_loss)(x, w, stride, padding)
+            self.assertEqual(grad.shape, x.shape)
+            self.assertTrue(mx.allclose(grad, expected, atol=1e-4, rtol=1e-4))
+
     @unittest.skipIf(mx.cuda.is_available() and "CI" in os.environ, "flaky in CI")
     def test_conv_1d_with_2d(self):
         x = mx.random.uniform(shape=(2, 10, 16))
