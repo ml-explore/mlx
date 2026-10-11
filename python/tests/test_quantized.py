@@ -685,6 +685,45 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 rounding = (y_ref.astype(dtype).astype(mx.float32) - y_ref).abs().mean()
                 self.assertLess(error.item(), 1.1 * rounding.item())
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_mid_m(self):
+        # Mid-size M with narrow outputs, where a single batch routes to the
+        # split-K and vector kernels: every split count, both row tilings and
+        # the boundaries between the routes.
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        shapes = [(2048, 512), (2560, 1024), (4096, 2048), (1024, 6144), (2880, 2048)]
+        for (K, N), M, bits, group_size, dtype in product(
+            shapes,
+            [8, 12, 16, 31, 33, 64, 65, 130],
+            [2, 4, 8],
+            [32, 64, 128],
+            [mx.bfloat16, mx.float16],
+        ):
+            if K % group_size != 0:
+                continue
+            with self.subTest(
+                K=K, N=N, M=M, bits=bits, group_size=group_size, dtype=dtype
+            ):
+                k1, k2 = mx.random.split(mx.random.key(M * K + N))
+                x = mx.random.normal((M, K), key=k1).astype(dtype)
+                w = (0.02 * mx.random.normal((N, K), key=k2)).astype(dtype)
+                wq = mx.quantize(w, group_size=group_size, bits=bits)
+                w_hat = mx.dequantize(*wq, group_size=group_size, bits=bits)
+                y_ref = x.astype(mx.float32) @ w_hat.astype(mx.float32).T
+                y = mx.quantized_matmul(
+                    x, *wq, transpose=True, group_size=group_size, bits=bits
+                )
+                self.assertEqual(y.shape, (M, N))
+                error = (y.astype(mx.float32) - y_ref).abs().mean()
+                rounding = (y_ref.astype(dtype).astype(mx.float32) - y_ref).abs().mean()
+                # The split-K and NAX routes round once. The vector kernels
+                # (below 16384 outputs, or when K does not split in two) reach
+                # ~1.6x the output rounding.
+                splits = K % (2 * max(64, group_size)) == 0
+                tol = 1.1 if M * N >= 16384 and splits else 2.0
+                self.assertLess(error.item(), tol * rounding.item())
+
     def test_qmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
