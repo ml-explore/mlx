@@ -78,7 +78,9 @@
   instantiate_quantized_aligned_batched(affine_qmm_t_nax, type, group_size, bits, 32, 64, 64, 2, 2, true, 1) \
   instantiate_quantized_aligned_batched(affine_qmm_t_nax, type, group_size, bits, 32, 64, 64, 2, 2, true, 0) \
   instantiate_quantized_aligned_batched(affine_qmm_t_nax, type, group_size, bits, 32, 64, 64, 2, 2, false, 1) \
-  instantiate_quantized_aligned_batched(affine_qmm_t_nax, type, group_size, bits, 32, 64, 64, 2, 2, false, 0)
+  instantiate_quantized_aligned_batched(affine_qmm_t_nax, type, group_size, bits, 32, 64, 64, 2, 2, false, 0) \
+  instantiate_quantized_aligned(affine_qmm_t_nax_splitk, type, group_size, bits, 64, 64, 64, 2, 2, true) \
+  instantiate_quantized_aligned(affine_qmm_t_nax_splitk, type, group_size, bits, 32, 64, 64, 2, 2, true)
 
 #define instantiate_quantized_all_rhs(type, group_size, bits) \
   instantiate_gather_qmm_rhs(affine_gather_qmm_rhs_nax, affine_gather_qmm_rhs_nax_nt, type, group_size, bits, 64, 64, 64, 2, 2, true) \

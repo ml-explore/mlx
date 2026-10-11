@@ -1029,13 +1029,14 @@ template <
     const int BK = 64,
     const int BN = 64,
     const int WM = 2,
-    const int WN = 2>
+    const int WN = 2,
+    typename U = T>
 METAL_FUNC void qmm_t_nax_tgp_impl(
     const device uint32_t* w,
     const device T* scales,
     const device T* biases,
     const device T* x,
-    device T* y,
+    device U* y,
     threadgroup T* Ws,
     const constant int& K,
     const constant int& N,
@@ -1043,7 +1044,8 @@ METAL_FUNC void qmm_t_nax_tgp_impl(
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
-    uint simd_lid [[thread_index_in_simdgroup]]) {
+    uint simd_lid [[thread_index_in_simdgroup]],
+    const int k_size = -1) {
   static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
   static_assert(BK % SIMD_SIZE == 0, "BK should be divisible by SIMD_SIZE");
 
@@ -1112,7 +1114,9 @@ METAL_FUNC void qmm_t_nax_tgp_impl(
 
   dispatch_bool(!is_unaligned_sm, [&](auto kAlignedM) {
     dispatch_bool(aligned_N || !is_unaligned_bn, [&](auto kAlignedN) {
-      for (int k = 0; k < K; k += BK) {
+      // k_size < K: one split-K partition; K stays the row stride.
+      const int k_end = k_size < 0 ? int(K) : k_size;
+      for (int k = 0; k < k_end; k += BK) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         if constexpr (kAlignedN.value) {
           loader_w.load_unsafe();
@@ -1352,6 +1356,62 @@ template <
   }
   qmm_t_nax_tgp_impl<T, group_size, bits, aligned_N, BM, BK, BN, WM, WN>(
       w, scales, biases, x, y, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
+}
+
+template <
+    typename T,
+    const int group_size,
+    const int bits,
+    const bool aligned_N,
+    const int BM = 64,
+    const int BK = 64,
+    const int BN = 64,
+    const int WM = 2,
+    const int WN = 2>
+[[kernel]] void affine_qmm_t_nax_splitk(
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
+    device float* y [[buffer(4)]],
+    const constant int& K [[buffer(5)]],
+    const constant int& N [[buffer(6)]],
+    const constant int& M [[buffer(7)]],
+    const constant int& k_partition_size [[buffer(8)]],
+    const constant int& split_k_partition_stride [[buffer(9)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  constexpr int BK_padded = (BK + 16 / sizeof(T));
+  constexpr int pack_factor = get_pack_factor<bits, 8>();
+  constexpr int bytes_per_pack = get_bytes_per_pack<bits>();
+
+  threadgroup T Ws[BN * BK_padded];
+
+  const int k_start = tid.z * k_partition_size;
+  x += k_start;
+  auto wl = (const device uint8_t*)w;
+  wl += k_start * bytes_per_pack / pack_factor;
+  scales += k_start / group_size;
+  biases += k_start / group_size;
+  y += tid.z * static_cast<int64_t>(split_k_partition_stride);
+
+  qmm_t_nax_tgp_impl<T, group_size, bits, aligned_N, BM, BK, BN, WM, WN, float>(
+      (const device uint32_t*)wl,
+      scales,
+      biases,
+      x,
+      y,
+      Ws,
+      K,
+      N,
+      M,
+      tid,
+      lid,
+      simd_gid,
+      simd_lid,
+      k_partition_size);
 }
 
 template <
