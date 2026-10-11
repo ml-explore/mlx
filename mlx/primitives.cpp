@@ -4295,6 +4295,79 @@ std::vector<Shape> Reduce::output_shapes(const std::vector<array>& inputs) {
   return {std::move(out_shape)};
 }
 
+namespace {
+
+array variance_gradient(
+    const array& in,
+    const std::vector<int>& axes,
+    int ddof,
+    Stream s) {
+  auto shape = in.shape();
+  for (auto ax : axes) {
+    shape[ax] = 1;
+  }
+  auto x = multiply(in, array(0.5f), s);
+  x = subtract(x, slice(x, Shape(in.ndim(), 0), shape, s), s);
+  auto d = subtract(x, mean(x, axes, true, s), s);
+  auto n = maximum(
+      subtract(number_of_elements(in, axes, false, float32, s), array(ddof), s),
+      array(0.0f),
+      s);
+  return divide(multiply(d, array(4.0f), s), n, s);
+}
+
+} // namespace
+
+std::vector<array> Variance::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  return {multiply(
+      variance_gradient(primals[0], axes_, ddof_, stream()),
+      cotangents[0],
+      stream())};
+}
+
+std::vector<array> Variance::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  return {
+      sum(multiply(
+              variance_gradient(primals[0], axes_, ddof_, stream()),
+              tangents[0],
+              stream()),
+          axes_,
+          true,
+          stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> Variance::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto reduce_axes = axes_;
+  for (auto& ax : reduce_axes) {
+    if (axes[0] >= 0 && ax >= axes[0]) {
+      ++ax;
+    }
+  }
+  return {{var(inputs[0], reduce_axes, true, ddof_, stream())}, axes};
+}
+
+bool Variance::is_equivalent(const Primitive& other) const {
+  const auto& v = static_cast<const Variance&>(other);
+  return axes_ == v.axes_ && ddof_ == v.ddof_;
+}
+
+std::vector<Shape> Variance::output_shapes(const std::vector<array>& inputs) {
+  auto shape = inputs[0].shape();
+  for (auto ax : axes_) {
+    shape[ax] = 1;
+  }
+  return {std::move(shape)};
+}
+
 std::vector<array> Round::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

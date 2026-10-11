@@ -1031,6 +1031,162 @@ class TestOps(mlx_tests.MLXTestCase):
             (1,),
         )
 
+    def test_cpu_float32_offset_reductions(self):
+        rng = np.random.RandomState(0)
+        for n in (257, 10000, 10003):
+            a = rng.standard_normal((3, n)).astype(np.float32) * 10 + 1e6
+            y = mx.array(a)
+            b = np.ascontiguousarray(a.T)
+            z = mx.array(b)
+            cases = (
+                ("flat", y[0], a[0], None),
+                ("rows", y, a, 1),
+                ("columns", z, b, 0),
+                ("transpose", z.T, b.T, 1),
+                ("slice", mx.array(np.repeat(a[0], 2))[::2], a[0], None),
+                (
+                    "broadcast",
+                    mx.broadcast_to(y[0], (3, n)),
+                    np.broadcast_to(a[0], (3, n)),
+                    None,
+                ),
+            )
+            for layout, x, ref, axis in cases:
+                ref = ref.astype(np.float64)
+                for name in ("sum", "mean", "var", "std"):
+                    for keepdims in (False, True):
+                        with self.subTest(
+                            n=n, layout=layout, op=name, keepdims=keepdims
+                        ):
+                            out = getattr(mx, name)(
+                                x, axis=axis, keepdims=keepdims, stream=mx.cpu
+                            )
+                            expected = getattr(np, name)(
+                                ref, axis=axis, keepdims=keepdims
+                            )
+                            self.assertEqual(out.dtype, mx.float32)
+                            self.assertEqual(out.shape, expected.shape)
+                            rtol, atol = (0, 0.125) if name == "mean" else (1e-5, 1e-5)
+                            if name == "sum":
+                                rtol, atol = 2e-7, 0
+                            if name == "mean":
+                                expected = expected.astype(np.float32)
+                            np.testing.assert_allclose(
+                                out, expected, rtol=rtol, atol=atol
+                            )
+
+        for shape, axis in (((10000, 2, 3), (0, 2)), ((100, 3, 100, 4), (0, 2))):
+            a = rng.standard_normal(shape).astype(np.float32) * 10 + 1e6
+            x = mx.array(a)
+            ref = a.astype(np.float64)
+            for ddof in (0, 1):
+                for name in ("var", "std"):
+                    with self.subTest(shape=shape, op=name, ddof=ddof):
+                        out = getattr(mx, name)(x, axis=axis, ddof=ddof, stream=mx.cpu)
+                        expected = getattr(np, name)(ref, axis=axis, ddof=ddof)
+                        np.testing.assert_allclose(out, expected, rtol=1e-5, atol=1e-5)
+            out = mx.mean(x, axis=axis, stream=mx.cpu)
+            np.testing.assert_allclose(
+                out, ref.mean(axis=axis).astype(np.float32), rtol=0, atol=0.125
+            )
+
+    def test_cpu_float32_offset_variance_edges(self):
+        a = np.broadcast_to(
+            np.array([1e6 + 0.5, 1e6 + 1, 1e6 + 7], dtype=np.float32),
+            (10000, 3),
+        ).copy()
+        x = mx.array(a)
+        np.testing.assert_allclose(
+            mx.mean(x, axis=0, stream=mx.cpu), a[0], rtol=0, atol=0.125
+        )
+        np.testing.assert_allclose(
+            mx.var(x, axis=0, stream=mx.cpu), np.zeros(3), rtol=0, atol=1e-7
+        )
+        for n in (1, 129, 10003):
+            for v in (0.0, 1e6, float(np.finfo(np.float32).max)):
+                with self.subTest(n=n, value=v):
+                    x = mx.full((n,), v, dtype=mx.float32, stream=mx.cpu)
+                    self.assertAlmostEqual(
+                        mx.var(x, stream=mx.cpu).item(), 0.0, places=7
+                    )
+        for values in (
+            [1.0, float("nan")],
+            [1.0, float("inf")],
+            [float("inf"), -float("inf")],
+        ):
+            x = mx.array(values, dtype=mx.float32)
+            self.assertTrue(math.isnan(mx.var(x, stream=mx.cpu).item()))
+        v = float(np.finfo(np.float32).max)
+        x = mx.array([v, -v], dtype=mx.float32)
+        self.assertTrue(math.isinf(mx.var(x, stream=mx.cpu).item()))
+        x = mx.array([1.0, 2.0], dtype=mx.float32)
+        self.assertTrue(math.isinf(mx.var(x, ddof=2, stream=mx.cpu).item()))
+        self.assertTrue(
+            math.isnan(mx.var(mx.array([], dtype=mx.float32), stream=mx.cpu).item())
+        )
+
+    def test_cpu_float32_offset_variance_grad(self):
+        a = np.random.RandomState(0).standard_normal(257).astype(np.float32) * 10 + 1e6
+        r = a.astype(np.float64)
+        for name in ("var", "std"):
+            for ddof in (0, 1):
+                with self.subTest(op=name, ddof=ddof):
+
+                    def f(x):
+                        return getattr(mx, name)(x, ddof=ddof, stream=mx.cpu)
+
+                    out = mx.grad(f)(mx.array(a))
+                    g = 2 * (r - r.mean()) / (r.size - ddof)
+                    if name == "std":
+                        g /= 2 * r.std(ddof=ddof)
+                    np.testing.assert_allclose(out, g, rtol=1e-5, atol=1e-7)
+
+    def test_cpu_float32_variance_transforms(self):
+        rng = np.random.RandomState(3)
+        a = rng.standard_normal((3, 257)).astype(np.float32) * 10 + 1e6
+        x = mx.array(a)
+        r = a.astype(np.float64)
+
+        def f(z):
+            return mx.var(z, ddof=1, stream=mx.cpu)
+
+        for out in (mx.vmap(f)(x), mx.vmap(f, in_axes=1)(x.T)):
+            np.testing.assert_allclose(out, r.var(axis=1, ddof=1), rtol=1e-5)
+        out = mx.grad(lambda z: mx.sum(mx.var(z, axis=1, ddof=1, stream=mx.cpu)))(x)
+        g = 2 * (r - r.mean(axis=1, keepdims=True)) / 256
+        np.testing.assert_allclose(out, g, rtol=1e-5, atol=1e-7)
+
+        t = rng.standard_normal(257).astype(np.float32)
+        _, out = mx.jvp(f, [x[0]], [mx.array(t)])
+        np.testing.assert_allclose(out[0], (g[0] * t).sum(), rtol=1e-5, atol=1e-7)
+        _, out = mx.jvp(mx.grad(f), [x[0]], [mx.array(t)])
+        expected = 2 * (t.astype(np.float64) - t.astype(np.float64).mean()) / 256
+        np.testing.assert_allclose(out[0], expected, rtol=1e-5, atol=1e-7)
+
+    def test_cpu_float32_variance_layouts(self):
+        rng = np.random.RandomState(4)
+        a = rng.standard_normal((129, 257)).astype(np.float32) * 10 + 1e6
+        x = mx.array(a)
+        cases = (
+            (x, a, 0),
+            (x.T, a.T, 1),
+            (x[::-1, ::2], a[::-1, ::2], 0),
+            (mx.broadcast_to(x[:1], (129, 257)), np.broadcast_to(a[:1], (129, 257)), 0),
+        )
+        for z, ref, axis in cases:
+            for ddof in (-1, 0, 1):
+                out = mx.var(z, axis=axis, ddof=ddof, stream=mx.cpu)
+                expected = ref.astype(np.float64).var(axis=axis, ddof=ddof)
+                np.testing.assert_allclose(out, expected, rtol=1e-5, atol=1e-5)
+        for shape, axis, expected in (((0, 3), 0, (3,)), ((0, 3), 1, (0,))):
+            out = mx.var(mx.zeros(shape), axis=axis, stream=mx.cpu)
+            self.assertEqual(out.shape, expected)
+            self.assertTrue(bool(mx.all(mx.isnan(out)).item()))
+        self.assertEqual(
+            mx.var(mx.array([], dtype=mx.float32), ddof=-1, stream=mx.cpu).item(),
+            0.0,
+        )
+
     def test_mean(self):
         x = mx.array(
             [

@@ -132,6 +132,7 @@ NO_CPU(Transpose)
 NO_CPU(Unflatten)
 NO_CPU(Inverse)
 NO_CPU(View)
+NO_CPU(Variance)
 
 namespace fast {
 NO_CPU_MULTI(Quantize)

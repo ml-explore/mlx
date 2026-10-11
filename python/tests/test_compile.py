@@ -998,6 +998,29 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = cmean(x)
         self.assertTrue(mx.allclose(out, mean(x)))
 
+    def test_cpu_float32_variance_compile(self):
+        def f(x):
+            return (
+                mx.var(x, axis=-1, stream=mx.cpu),
+                mx.var(x, axis=-1, ddof=1, stream=mx.cpu),
+                mx.var(x, axis=0, stream=mx.cpu),
+            )
+
+        c = mx.compile(f, shapeless=True)
+        rng = np.random.RandomState(5)
+        for shape in ((1, 1), (3, 129), (2, 257), (0, 3)):
+            a = rng.standard_normal(shape).astype(np.float32) * 10 + 1e6
+            out = c(mx.array(a))
+            expected = f(mx.array(a))
+            for v, ref in zip(out, expected):
+                self.assertEqual(v.shape, ref.shape)
+                self.assertTrue(mx.allclose(v, ref, rtol=1e-5, equal_nan=True))
+            if min(shape) > 1:
+                r = a.astype(np.float64)
+                refs = (r.var(axis=-1), r.var(axis=-1, ddof=1), r.var(axis=0))
+                for v, ref in zip(out, refs):
+                    np.testing.assert_allclose(v, ref, rtol=1e-5, atol=1e-5)
+
     def test_compile_broadcast_only(self):
         def fn(a):
             a = mx.broadcast_to(a, (1,))

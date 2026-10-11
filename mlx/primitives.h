@@ -1875,6 +1875,31 @@ class MLX_API Reduce : public UnaryPrimitive {
   std::vector<int> axes_;
 };
 
+class Variance : public UnaryPrimitive {
+ public:
+  explicit Variance(Stream stream, const std::vector<int>& axes, int ddof)
+      : UnaryPrimitive(stream), axes_(axes), ddof_(ddof) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override {
+    throw std::runtime_error("Variance has no GPU implementation.");
+  }
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_NAME(Variance)
+
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  std::pair<std::vector<int>, int> state() const {
+    return {axes_, ddof_};
+  }
+
+ private:
+  std::vector<int> axes_;
+  int ddof_;
+};
+
 class Round : public UnaryPrimitive {
  public:
   explicit Round(Stream stream) : UnaryPrimitive(stream) {}

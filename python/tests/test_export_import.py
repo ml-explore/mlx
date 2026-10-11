@@ -23,6 +23,18 @@ class TestExportImport(mlx_tests.MLXTestCase):
     def tearDownClass(cls):
         cls.test_dir_fid.cleanup()
 
+    def test_cpu_float32_variance_export(self):
+        def f(x):
+            return mx.var(x, axis=1, ddof=1, stream=mx.cpu)
+
+        x = mx.reshape(mx.arange(771, dtype=mx.float32), (3, 257)) + 1e6
+        path = os.path.join(self.test_dir, "variance.mlxfn")
+        mx.export_function(path, f, x, shapeless=True)
+        imported = mx.import_function(path)
+        for z in (x, x[:, ::2]):
+            (out,) = imported(z)
+            self.assertTrue(mx.allclose(out, f(z), rtol=1e-5))
+
     def test_basic_export_import(self):
         path = os.path.join(self.test_dir, "fn.mlxfn")
 

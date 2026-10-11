@@ -2473,6 +2473,16 @@ array var(
     bool keepdims /* = false */,
     int ddof /* = 0*/,
     StreamOrDevice s /* = {}*/) {
+  if (a.dtype() == float32 && to_stream(s).device == Device::cpu &&
+      !axes.empty()) {
+    auto [shape, sorted_axes, is_noop] = compute_reduce_shape(axes, a.shape());
+    auto out = array(
+        std::move(shape),
+        float32,
+        std::make_shared<Variance>(to_stream(s), sorted_axes, ddof),
+        {a});
+    return keepdims ? out : squeeze(out, sorted_axes, s);
+  }
   auto dtype = at_least_float(a.dtype());
   auto mu = mean(a, axes, /* keepdims= */ true, s);
   auto d = subtract(a, mu, s);

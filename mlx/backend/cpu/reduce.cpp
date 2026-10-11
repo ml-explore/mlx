@@ -1,5 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
+#include <bit>
 #include <cassert>
 #include <functional>
 #include <limits>
@@ -68,6 +69,144 @@ const complex64_t Limits<complex64_t>::max =
 const complex64_t Limits<complex64_t>::min =
     -std::numeric_limits<float>::infinity();
 
+struct SumReduce;
+
+template <typename T, typename U, typename Op>
+constexpr bool use_pairwise_sum =
+    std::is_same_v<T, float> && std::is_same_v<U, float> &&
+    std::is_same_v<Op, SumReduce> && simd::max_size<float> == 1;
+
+template <bool Strided = false>
+float pairwise_sum(const float* x, int64_t size, int64_t stride = 1) {
+  const auto step = Strided ? stride : 1;
+  if constexpr (Strided) {
+    if (stride == 0 && size != 0) {
+      return 0.0f + x[0] * static_cast<float>(size);
+    }
+  }
+  if (size > 128) {
+    auto mid = size / 2;
+    return pairwise_sum<Strided>(x, mid, step) +
+        pairwise_sum<Strided>(x + mid * step, size - mid, step);
+  }
+  float v[8] = {};
+  int64_t i = 0;
+  for (; i + 8 <= size; i += 8) {
+    for (int j = 0; j < 8; j++) {
+      v[j] += x[(i + j) * step];
+    }
+  }
+  float out = ((v[0] + v[1]) + (v[2] + v[3])) + ((v[4] + v[5]) + (v[6] + v[7]));
+  for (; i < size; i++) {
+    out += x[i * step];
+  }
+  return out;
+}
+
+void pairwise_strided_sum(
+    const float* x,
+    float* out,
+    int size,
+    size_t stride,
+    float* scratch,
+    bool accumulate = false) {
+  if (size <= 16) {
+    if (!accumulate) {
+      std::fill_n(out, stride, 0.0f);
+    }
+    for (int i = 0; i < size; i++) {
+      for (size_t j = 0; j < stride; j++) {
+        out[j] += x[j];
+      }
+      x += stride;
+    }
+    return;
+  }
+  int mid = size / 2;
+  pairwise_strided_sum(x, out, mid, stride, scratch + stride, accumulate);
+  pairwise_strided_sum(
+      x + mid * stride, scratch, size - mid, stride, scratch + stride);
+  for (size_t j = 0; j < stride; j++) {
+    out[j] += scratch[j];
+  }
+}
+
+float pairwise_general_sum(
+    const float* x,
+    const Shape& shape,
+    const Strides& strides,
+    size_t dim,
+    int64_t start,
+    int64_t size) {
+  const auto stride = static_cast<int64_t>(strides[dim]);
+  if (dim + 1 == shape.size()) {
+    return pairwise_sum<true>(x + start * stride, size, stride);
+  }
+  if (size > 8) {
+    auto mid = size / 2;
+    return pairwise_general_sum(x, shape, strides, dim, start, mid) +
+        pairwise_general_sum(x, shape, strides, dim, start + mid, size - mid);
+  }
+  float v[8] = {};
+  for (int64_t i = 0; i < size; i++) {
+    v[i] = pairwise_general_sum(
+        x + (start + i) * stride, shape, strides, dim + 1, 0, shape[dim + 1]);
+  }
+  return ((v[0] + v[1]) + (v[2] + v[3])) + ((v[4] + v[5]) + (v[6] + v[7]));
+}
+
+class PairwiseBufferSum {
+ public:
+  PairwiseBufferSum(size_t width, int64_t count)
+      : width_(width),
+        levels_(std::bit_width(static_cast<uint64_t>(count))),
+        values_((levels_ + 1) * width) {}
+
+  float* block() {
+    return values_.data() + levels_ * width_;
+  }
+
+  void add() {
+    float* v = block();
+    auto n = count_++;
+    size_t level = 0;
+    for (; n & 1; n >>= 1, level++) {
+      auto p = values_.data() + level * width_;
+      for (size_t j = 0; j < width_; j++) {
+        v[j] += p[j];
+      }
+    }
+    std::copy_n(v, width_, values_.data() + level * width_);
+  }
+
+  void finish(float* out) {
+    std::fill_n(out, width_, 0.0f);
+    size_t level = 0;
+    for (auto n = count_; n; n >>= 1, level++) {
+      if (n & 1) {
+        auto p = values_.data() + level * width_;
+        for (size_t j = 0; j < width_; j++) {
+          out[j] += p[j];
+        }
+      }
+    }
+  }
+
+ private:
+  size_t width_;
+  size_t levels_;
+  uint64_t count_ = 0;
+  std::vector<float> values_;
+};
+
+int64_t reduction_count(const Shape& shape) {
+  int64_t n = 1;
+  for (auto size : shape) {
+    n *= size;
+  }
+  return n;
+}
+
 template <typename T, typename U, typename Op>
 struct ReductionAccumulator {
   static constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
@@ -87,6 +226,19 @@ void strided_reduce(
     int size,
     size_t stride,
     Op op) {
+  if constexpr (use_pairwise_sum<T, U, Op>) {
+    if (size <= 16) {
+      pairwise_strided_sum(x, accumulator, size, stride, nullptr, true);
+      return;
+    }
+    size_t levels = 0;
+    for (auto n = size; n > 16; n = (n + 1) / 2) {
+      levels++;
+    }
+    std::vector<float> values(levels * stride);
+    pairwise_strided_sum(x, accumulator, size, stride, values.data(), true);
+    return;
+  }
   constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
   for (int i = 0; i < size; i++) {
     U* moving_accumulator = accumulator;
@@ -114,6 +266,10 @@ void contiguous_reduce(
     int64_t size,
     Op op,
     U init) {
+  if constexpr (use_pairwise_sum<T, U, Op>) {
+    *accumulator += pairwise_sum(x, size);
+    return;
+  }
   constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
   simd::Simd<U, N> accumulator_v(init);
   while (size >= N) {
@@ -194,6 +350,19 @@ void reduction_op(
       for (int i = 0; i < out.size(); i++, out_ptr++) {
         int64_t offset = elem_to_loc(i, shape, strides);
         *out_ptr = init;
+        if constexpr (use_pairwise_sum<T, U, Op>) {
+          PairwiseBufferSum total(1, reduction_count(plan.shape));
+          nd_loop(
+              [&](int64_t extra_offset) {
+                *total.block() = pairwise_sum(
+                    in_ptr + offset + extra_offset, reduction_size);
+                total.add();
+              },
+              plan.shape,
+              plan.strides);
+          total.finish(out_ptr);
+          continue;
+        }
         nd_loop(
             [&](int64_t extra_offset) {
               contiguous_reduce(
@@ -244,6 +413,26 @@ void reduction_op(
       for (int i = 0; i < out.size(); i += reduction_stride) {
         int64_t offset = elem_to_loc(i, shape, strides);
         std::fill_n(out_ptr, reduction_stride, init);
+        if constexpr (use_pairwise_sum<T, U, Op>) {
+          PairwiseBufferSum total(
+              reduction_stride, reduction_count(plan.shape));
+          nd_loop(
+              [&](int64_t extra_offset) {
+                std::fill_n(total.block(), reduction_stride, 0.0f);
+                strided_reduce(
+                    in_ptr + offset + extra_offset,
+                    total.block(),
+                    reduction_size,
+                    reduction_stride,
+                    Op{});
+                total.add();
+              },
+              plan.shape,
+              plan.strides);
+          total.finish(out_ptr);
+          out_ptr += reduction_stride;
+          continue;
+        }
         nd_loop(
             [&](int64_t extra_offset) {
               strided_reduce(
@@ -267,6 +456,11 @@ void reduction_op(
     for (int i = 0; i < out.size(); i++, out_ptr++) {
       int64_t offset = elem_to_loc(i, shape, strides);
       U val = init;
+      if constexpr (use_pairwise_sum<T, U, Op>) {
+        *out_ptr = pairwise_general_sum(
+            in_ptr + offset, plan.shape, plan.strides, 0, 0, plan.shape[0]);
+        continue;
+      }
       nd_loop(
           [&](int64_t extra_offset) {
             val = Op{}(val, *(in_ptr + offset + extra_offset));
@@ -478,6 +672,228 @@ void reduce_dispatch_min_max(
     auto init = Limits<InT>::max;
     reduction_op<InT, InT, MinReduce>(in, out, axes, init);
   }
+}
+
+namespace {
+
+template <bool Squared, bool Strided = false>
+float variance_sum(
+    const float* x,
+    int64_t size,
+    int64_t stride,
+    float origin,
+    float mu) {
+  const auto step = Strided ? stride : 1;
+  if constexpr (Strided) {
+    if (stride == 0) {
+      auto d = (0.5f * x[0] - origin) - mu;
+      return (Squared ? d * d : d) * static_cast<float>(size);
+    }
+  }
+  if (size > 128) {
+    auto mid = size / 2;
+    return variance_sum<Squared, Strided>(x, mid, step, origin, mu) +
+        variance_sum<Squared, Strided>(
+               x + mid * step, size - mid, step, origin, mu);
+  }
+  float v[8] = {};
+  int64_t i = 0;
+  for (; i + 7 < size; i += 8) {
+    for (int j = 0; j < 8; ++j) {
+      auto d = (0.5f * x[(i + j) * step] - origin) - mu;
+      v[j] += Squared ? d * d : d;
+    }
+  }
+  auto total =
+      ((v[0] + v[1]) + (v[2] + v[3])) + ((v[4] + v[5]) + (v[6] + v[7]));
+  for (; i < size; ++i) {
+    auto d = (0.5f * x[i * step] - origin) - mu;
+    total += Squared ? d * d : d;
+  }
+  return total;
+}
+
+template <bool Squared>
+float variance_nd(
+    const float* x,
+    const Shape& shape,
+    const Strides& strides,
+    int dim,
+    int64_t start,
+    int64_t size,
+    float origin,
+    float mu) {
+  auto stride = static_cast<int64_t>(strides[dim]);
+  if (dim + 1 == shape.size()) {
+    x += start * stride;
+    return stride == 1
+        ? variance_sum<Squared>(x, size, stride, origin, mu)
+        : variance_sum<Squared, true>(x, size, stride, origin, mu);
+  }
+  if (stride == 0) {
+    return variance_nd<Squared>(
+               x, shape, strides, dim + 1, 0, shape[dim + 1], origin, mu) *
+        static_cast<float>(size);
+  }
+  if (size > 8) {
+    auto mid = size / 2;
+    return variance_nd<Squared>(
+               x, shape, strides, dim, start, mid, origin, mu) +
+        variance_nd<Squared>(
+               x, shape, strides, dim, start + mid, size - mid, origin, mu);
+  }
+  float v[8] = {};
+  for (int64_t i = 0; i < size; ++i) {
+    v[i] = variance_nd<Squared>(
+        x + (start + i) * stride,
+        shape,
+        strides,
+        dim + 1,
+        0,
+        shape[dim + 1],
+        origin,
+        mu);
+  }
+  return ((v[0] + v[1]) + (v[2] + v[3])) + ((v[4] + v[5]) + (v[6] + v[7]));
+}
+
+template <bool Squared>
+void variance_columns(
+    const float* x,
+    float* out,
+    int64_t size,
+    int64_t stride,
+    int width,
+    const float* origin,
+    const float* mu,
+    float* scratch) {
+  if (size <= 16) {
+    std::fill_n(out, width, 0.0f);
+    for (int64_t i = 0; i < size; ++i) {
+      for (int j = 0; j < width; ++j) {
+        auto d = 0.5f * x[i * stride + j] - origin[j];
+        if constexpr (Squared) {
+          d -= mu[j];
+        }
+        out[j] += Squared ? d * d : d;
+      }
+    }
+    return;
+  }
+  auto mid = size / 2;
+  variance_columns<Squared>(
+      x, out, mid, stride, width, origin, mu, scratch + width);
+  variance_columns<Squared>(
+      x + mid * stride,
+      scratch,
+      size - mid,
+      stride,
+      width,
+      origin,
+      mu,
+      scratch + width);
+  for (int j = 0; j < width; ++j) {
+    out[j] += scratch[j];
+  }
+}
+
+void variance(
+    const array& in,
+    array& out,
+    const std::vector<int>& axes,
+    int ddof) {
+  int64_t count = 1;
+  for (auto ax : axes) {
+    count *= in.shape(ax);
+  }
+  auto factor = 4.0f /
+      std::max(static_cast<float>(count) - static_cast<float>(ddof), 0.0f);
+  auto x = in.data<float>();
+  auto dst = out.data<float>();
+  if (out.size() == 0) {
+    return;
+  }
+  if (count == 0) {
+    std::fill_n(dst, out.size(), 0.0f * factor);
+    return;
+  }
+  auto [shape, strides] = shapes_without_reduction_axes(in, axes);
+  if (count == 1) {
+    for (int64_t i = 0; i < out.size(); ++i) {
+      auto v = x[elem_to_loc(i, shape, strides)];
+      auto d = 0.5f * v - 0.5f * v;
+      dst[i] = d * d * factor;
+    }
+    return;
+  }
+  auto plan = get_reduction_plan(in, axes);
+  if (plan.type == ContiguousAllReduce) {
+    auto origin = 0.5f * x[0];
+    auto mu = variance_sum<false>(x, count, 1, origin, 0.0f) /
+        static_cast<float>(count);
+    dst[0] = variance_sum<true>(x, count, 1, origin, mu) * factor;
+    return;
+  }
+  if ((plan.type == ContiguousStridedReduce ||
+       plan.type == GeneralStridedReduce) &&
+      plan.shape.size() == 1) {
+    auto stride = static_cast<int64_t>(plan.strides[0]);
+    int levels = 0;
+    for (auto n = count; n > 16; n = (n + 1) / 2) {
+      ++levels;
+    }
+    std::vector<float> scratch(levels * 128);
+    float origin[128];
+    float mu[128];
+    for (int64_t i = 0; i < out.size(); i += stride) {
+      auto offset = elem_to_loc(i, shape, strides);
+      for (int64_t j = 0; j < stride; j += 128) {
+        int width = std::min<int64_t>(128, stride - j);
+        auto ptr = x + offset + j;
+        for (int k = 0; k < width; ++k) {
+          origin[k] = 0.5f * ptr[k];
+        }
+        variance_columns<false>(
+            ptr, mu, count, stride, width, origin, nullptr, scratch.data());
+        for (int k = 0; k < width; ++k) {
+          mu[k] /= static_cast<float>(count);
+        }
+        variance_columns<true>(
+            ptr, dst + i + j, count, stride, width, origin, mu, scratch.data());
+        for (int k = 0; k < width; ++k) {
+          dst[i + j + k] *= factor;
+        }
+      }
+    }
+    return;
+  }
+  for (int64_t i = 0; i < out.size(); ++i) {
+    auto ptr = x + elem_to_loc(i, shape, strides);
+    auto origin = 0.5f * ptr[0];
+    auto mu =
+        variance_nd<false>(
+            ptr, plan.shape, plan.strides, 0, 0, plan.shape[0], origin, 0.0f) /
+        static_cast<float>(count);
+    dst[i] =
+        variance_nd<true>(
+            ptr, plan.shape, plan.strides, 0, 0, plan.shape[0], origin, mu) *
+        factor;
+  }
+}
+
+} // namespace
+
+void Variance::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  assert(inputs[0].dtype() == float32);
+  out.set_data(allocator::malloc(out.nbytes()));
+  auto& encoder = cpu::get_command_encoder(stream());
+  encoder.set_input_array(inputs[0]);
+  encoder.set_output_array(out);
+  encoder.dispatch([in = array::unsafe_weak_copy(inputs[0]),
+                    out = array::unsafe_weak_copy(out),
+                    axes = axes_,
+                    ddof = ddof_]() mutable { variance(in, out, axes, ddof); });
 }
 
 void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {

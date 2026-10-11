@@ -421,6 +421,7 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(Remainder),
       SERIALIZE_PRIMITIVE(Reshape),
       SERIALIZE_PRIMITIVE(Reduce, "And", "Or", "Sum", "Prod", "Min", "Max"),
+      SERIALIZE_PRIMITIVE(Variance),
       SERIALIZE_PRIMITIVE(Round),
       SERIALIZE_PRIMITIVE(
           Scan,
