@@ -1400,6 +1400,133 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(result, expected))
 
+    def test_angular_input_types(self):
+        streams = [None, mx.default_device(), mx.new_stream(mx.default_device())]
+        for op, npop, angles in [
+            (mx.degrees, np.degrees, [0, math.pi / 2]),
+            (mx.radians, np.radians, [0, 90]),
+        ]:
+            inputs = [
+                (True, mx.float32),
+                (1, mx.float32),
+                (1.0, mx.float32),
+                (np.float16(1), mx.float16),
+                (np.float32(1), mx.float32),
+                (np.float64(1), mx.float32),
+                (np.int32(1), mx.float32),
+                (angles, mx.float32),
+                (tuple(angles), mx.float32),
+                ([angles, angles], mx.float32),
+                ([], mx.float32),
+                ([[], []], mx.float32),
+                (np.array(angles, dtype=np.float32), mx.float32),
+                (np.array(angles, dtype=np.float16), mx.float16),
+                (mx.array(angles, dtype=mx.float16), mx.float16),
+                (mx.array(angles, dtype=mx.float32), mx.float32),
+            ]
+            for (value, dtype), stream in product(inputs, streams):
+                with self.subTest(op=op.__name__, value=value, stream=stream):
+                    result = op(value, stream=stream)
+                    expected = npop(np.asarray(value, dtype=np.float32))
+                    self.assertEqual(result.shape, expected.shape)
+                    self.assertEqual(result.dtype, dtype)
+                    np.testing.assert_allclose(
+                        np.asarray(result),
+                        expected,
+                        rtol=1e-3 if dtype == mx.float16 else 1e-6,
+                        atol=1e-6,
+                    )
+
+    def test_angular_array_protocol(self):
+        class ArrayWrapper:
+            def __mlx_array__(self):
+                return mx.array([0.0, 1.0])
+
+        class ArrayList(list, ArrayWrapper):
+            pass
+
+        class ArrayTuple(tuple, ArrayWrapper):
+            pass
+
+        inputs = [ArrayWrapper(), ArrayList([5, 6]), ArrayTuple([5, 6])]
+        for (op, npop), value in product(
+            [(mx.degrees, np.degrees), (mx.radians, np.radians)], inputs
+        ):
+            with self.subTest(op=op.__name__, value=value):
+                result = op(value)
+                self.assertEqual(result.dtype, mx.float32)
+                np.testing.assert_allclose(
+                    np.asarray(result), npop([0.0, 1.0]), rtol=1e-6
+                )
+
+    def test_arctan2_input_types(self):
+        inputs = [
+            (1, 1),
+            (1.0, 1.0),
+            (True, True),
+            (-1, 1),
+            (1, -1),
+            (-1, -1),
+            (np.array([1, -1], dtype=np.float32), 1),
+            (1, np.array([1, -1], dtype=np.float32)),
+            (
+                np.array([[1], [-1]], dtype=np.float32),
+                np.array([1, -1, 2], dtype=np.float32),
+            ),
+            (mx.array([[1.0], [-1.0]]), mx.array([1.0, -1.0, 2.0])),
+            (np.array([1, -1], dtype=np.float32), mx.array([1.0, -1.0])),
+        ]
+        streams = [None, mx.default_device(), mx.new_stream(mx.default_device())]
+        for (a, b), stream in product(inputs, streams):
+            with self.subTest(a=a, b=b, stream=stream):
+                result = mx.arctan2(a, b, stream=stream)
+                expected = np.arctan2(
+                    np.asarray(a, dtype=np.float32), np.asarray(b, dtype=np.float32)
+                )
+                self.assertEqual(result.shape, expected.shape)
+                self.assertEqual(result.dtype, mx.float32)
+                np.testing.assert_allclose(
+                    np.asarray(result), expected, rtol=1e-6, atol=1e-6
+                )
+
+    def test_arctan2_scalar_promotion(self):
+        for dtype, scalar, reverse in product(
+            [mx.float16, mx.bfloat16, mx.float32], [2, 2.0], [False, True]
+        ):
+            with self.subTest(dtype=dtype, scalar=scalar, reverse=reverse):
+                array = mx.array([1.0, -1.0], dtype=dtype)
+                a, b = (scalar, array) if reverse else (array, scalar)
+                result = mx.arctan2(a, b)
+                expected = np.arctan2(
+                    scalar if reverse else [1.0, -1.0],
+                    [1.0, -1.0] if reverse else scalar,
+                )
+                self.assertEqual(result.dtype, dtype)
+                np.testing.assert_allclose(
+                    np.asarray(result.astype(mx.float32)),
+                    expected,
+                    rtol=1e-2,
+                    atol=1e-3,
+                )
+
+    def test_angular_invalid_inputs(self):
+        invalid_inputs = [
+            (None, TypeError),
+            ("90", ValueError),
+            (object(), ValueError),
+            ([[1], [2, 3]], ValueError),
+        ]
+        for op, (value, error_type) in product(
+            [mx.degrees, mx.radians], invalid_inputs
+        ):
+            with self.subTest(op=op.__name__, value=value):
+                with self.assertRaises(error_type):
+                    op(value)
+        for a, b in [(1j, 1), (1, 1j), (None, 1), (1, "90")]:
+            with self.subTest(a=a, b=b):
+                with self.assertRaises((TypeError, ValueError)):
+                    mx.arctan2(a, b)
+
     def test_log1p(self):
         a = mx.array([1, 0.5, 10, 100])
         result = mx.log1p(a)

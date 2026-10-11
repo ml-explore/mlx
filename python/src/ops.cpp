@@ -25,6 +25,21 @@ namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
+namespace {
+
+mx::array to_angle_array(const ScalarOrArray& a) {
+  if (auto pv = std::get_if<ArrayLike>(&a); pv) {
+    auto obj = pv->obj;
+    if ((nb::isinstance<nb::list>(obj) || nb::isinstance<nb::tuple>(obj)) &&
+        !nb::hasattr(obj, "__mlx_array__")) {
+      return create_array(obj, std::nullopt, std::nullopt);
+    }
+  }
+  return to_array(a);
+}
+
+} // namespace
+
 using Scalar = std::variant<bool, int64_t, double>;
 
 mx::Dtype scalar_to_dtype(Scalar s) {
@@ -1158,19 +1173,24 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arctan2",
-      &mx::arctan2,
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return mx::arctan2(a, b, s);
+      },
       nb::arg(),
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arctan2(a: array, b: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def arctan2(a: scalar | array, b: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise inverse tangent of the ratio of two arrays.
 
         Args:
-            a (array): Input array.
-            b (array): Input array.
+            a (array or scalar): Input array or scalar.
+            b (array or scalar): Input array or scalar.
 
         Returns:
             array: The inverse tangent of the ratio of ``a`` and ``b``.
@@ -1292,18 +1312,18 @@ void init_ops(nb::module_& m) {
   m.def(
       "degrees",
       [](const ScalarOrArray& a, mx::StreamOrDevice s) {
-        return mx::degrees(to_array(a), s);
+        return mx::degrees(to_angle_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def degrees(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def degrees(a: scalar | array | Sequence | DLPackCompatible, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Convert angles from radians to degrees.
 
       Args:
-          a (array): Input array.
+          a: Input angles as an array, scalar, list, or tuple.
 
       Returns:
           array: The angles in degrees.
@@ -1311,18 +1331,18 @@ void init_ops(nb::module_& m) {
   m.def(
       "radians",
       [](const ScalarOrArray& a, mx::StreamOrDevice s) {
-        return mx::radians(to_array(a), s);
+        return mx::radians(to_angle_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def radians(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def radians(a: scalar | array | Sequence | DLPackCompatible, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Convert angles from degrees to radians.
 
       Args:
-          a (array): Input array.
+          a: Input angles as an array, scalar, list, or tuple.
 
       Returns:
           array: The angles in radians.
