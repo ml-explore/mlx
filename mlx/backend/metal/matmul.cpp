@@ -1428,9 +1428,9 @@ inline std::optional<GemvWideConfig> gemv_wide_config(
       mat_ld % 4 == 0 && vec_ld % 4 == 0 && all_aligned(mat_batch_stride, 4) &&
       all_aligned(vec_batch_stride, 4);
 
-  // Wide amortizes one matrix stream over several vectors; M == 1 has
-  // nothing to amortize and stays with gemv.
-  if (M <= 1 || N <= 1 || K % 4 != 0 ||
+  // M == 1 has no cross-vector reuse, but the single-vector tile still
+  // uses the vectorized loads and reduction.
+  if (M < 1 || N <= 1 || K % 4 != 0 ||
       (out.dtype() != float16 && out.dtype() != bfloat16) || !vec4_aligned) {
     return std::nullopt;
   }
