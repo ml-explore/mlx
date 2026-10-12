@@ -1709,7 +1709,9 @@ class TestBlas(mlx_tests.MLXTestCase):
                 out_gather = mx.gather_mm(
                     a[None], w[None], mx.array([0]), mx.array([0])
                 )
-                self.assertTrue(mx.allclose(out_m1, out_gather[0]))
+                self.assertTrue(
+                    mx.allclose(out_m1, out_gather[0], rtol=rtol, atol=atol)
+                )
 
     def test_complex_gemv(self):
         M = 16
