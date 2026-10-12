@@ -10,6 +10,32 @@ import numpy as np
 
 
 class TestReduce(mlx_tests.MLXTestCase):
+    def test_minmax(self):
+        x = mx.array([[3.0, 1.0, 4.0], [2.0, 6.0, 5.0]])
+        out = mx.minmax(x)
+        self.assertIsInstance(out, tuple)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(tuple(a.item() for a in out), (1.0, 6.0))
+        for axis in (None, 0, (0, 1)):
+            for keepdims in (False, True):
+                with self.subTest(axis=axis, keepdims=keepdims):
+                    out = mx.minmax(x, axis=axis, keepdims=keepdims)
+                    for actual, op in zip(out, (mx.min, mx.max)):
+                        expected = op(x, axis=axis, keepdims=keepdims)
+                        self.assertEqual(actual.shape, expected.shape)
+                        self.assertTrue(mx.array_equal(actual, expected))
+
+    def test_minmax_stream_and_empty(self):
+        x = mx.array([3.0, 1.0, 4.0])
+        stream = mx.new_stream(mx.cpu)
+        out = mx.minmax(x, stream=stream)
+        for actual, op in zip(out, (mx.min, mx.max)):
+            expected = op(x, stream=stream)
+            mx.eval(actual, expected)
+            self.assertTrue(mx.array_equal(actual, expected))
+        with self.assertRaises(ValueError):
+            mx.minmax(mx.zeros((0,)))
+
     def test_axis_permutation_sums(self):
         for shape in [(5, 5, 1, 5, 5), (65, 65, 1, 65)]:
             with self.subTest(shape=shape):
