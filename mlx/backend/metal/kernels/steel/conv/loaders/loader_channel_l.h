@@ -47,8 +47,8 @@ struct Conv2DInputBlockLoaderLargeFilter {
   const constant MLXConvParams<2>* params;
   const constant ImplicitGemmConv2DParams* gemm_params;
 
-  short weight_h;
-  short weight_w;
+  int weight_h;
+  int weight_w;
 
   const device T* src[n_rows];
 
@@ -197,8 +197,8 @@ struct Conv2DInputBlockLoaderSmallFilter {
   const constant MLXConvParams<2>* params;
   const constant ImplicitGemmConv2DParams* gemm_params;
 
-  short weight_h;
-  short weight_w;
+  int weight_h;
+  int weight_w;
 
   const device T* src[n_rows];
 
@@ -384,6 +384,7 @@ struct Conv2DWeightBlockLoader {
   int weight_step;
 
   const int read_n;
+  const int N;
   const bool do_read;
 
   /* Constructor */
@@ -405,6 +406,7 @@ struct Conv2DWeightBlockLoader {
         weight_hw(0),
         weight_step(params->C / params->groups),
         read_n(offsets.y + bi),
+        N(gemm_params_->N),
         do_read(read_n + n_rows * TROWS <= gemm_params_->N) {}
 
   /* Load from device memory into threadgroup memory - without bound checking */
@@ -419,7 +421,7 @@ struct Conv2DWeightBlockLoader {
       }
     } else {
       for (short i = 0; i < BN; i += TROWS) {
-        if ((read_n + i) < params->O) {
+        if ((read_n + i) < N) {
           STEEL_PRAGMA_UNROLL
           for (short j = 0; j < vec_size; j++) {
             dst[i * dst_ld + j] = src[i * src_ld + j];
@@ -481,9 +483,9 @@ struct Conv3DInputBlockLoaderLargeFilter {
   const constant MLXConvParams<3>* params;
   const constant ImplicitGemmConv3DParams* gemm_params;
 
-  short weight_d;
-  short weight_h;
-  short weight_w;
+  int weight_d;
+  int weight_h;
+  int weight_w;
 
   short kdil_d;
   short kdil_h;
@@ -665,9 +667,9 @@ struct Conv3DInputBlockLoaderSmallFilter {
   const constant MLXConvParams<3>* params;
   const constant ImplicitGemmConv3DParams* gemm_params;
 
-  short weight_d;
-  short weight_h;
-  short weight_w;
+  int weight_d;
+  int weight_h;
+  int weight_w;
 
   const device T* src[n_rows];
 
@@ -887,6 +889,7 @@ struct Conv3DWeightBlockLoader {
   int weight_step;
 
   const int read_n;
+  const int N;
   const bool do_read;
 
   /* Constructor */
@@ -908,6 +911,7 @@ struct Conv3DWeightBlockLoader {
         weight_dhw(0),
         weight_step(params->C / params->groups),
         read_n(offsets.y + bi),
+        N(gemm_params_->N),
         do_read(read_n + n_rows * TROWS <= gemm_params_->N) {}
 
   /* Load from device memory into threadgroup memory - without bound checking */
@@ -922,7 +926,7 @@ struct Conv3DWeightBlockLoader {
       }
     } else {
       for (short i = 0; i < BN; i += TROWS) {
-        if ((read_n + i) < params->O) {
+        if ((read_n + i) < N) {
           STEEL_PRAGMA_UNROLL
           for (short j = 0; j < vec_size; j++) {
             dst[i * dst_ld + j] = src[i * src_ld + j];
