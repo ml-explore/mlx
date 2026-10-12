@@ -1428,10 +1428,12 @@ inline std::optional<GemvWideConfig> gemv_wide_config(
       mat_ld % 4 == 0 && vec_ld % 4 == 0 && all_aligned(mat_batch_stride, 4) &&
       all_aligned(vec_batch_stride, 4);
 
-  // M == 1 has no cross-vector reuse, but the single-vector tile still
-  // uses the vectorized loads and reduction.
+  // M == 1 has no cross-vector reuse, but the single-vector tile still uses
+  // the vectorized loads and reduction. Only FP16 wins in practice; BF16
+  // M == 1 regresses on some GPUs, so it stays with the scalar GEMV path.
   if (M < 1 || N <= 1 || K % 4 != 0 ||
-      (out.dtype() != float16 && out.dtype() != bfloat16) || !vec4_aligned) {
+      (out.dtype() != float16 && out.dtype() != bfloat16) ||
+      (M == 1 && out.dtype() != float16) || !vec4_aligned) {
     return std::nullopt;
   }
 
