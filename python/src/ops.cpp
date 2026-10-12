@@ -25,21 +25,6 @@ namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
-namespace {
-
-mx::array to_angle_array(const ScalarOrArray& a) {
-  if (auto pv = std::get_if<ArrayLike>(&a); pv) {
-    auto obj = pv->obj;
-    if ((nb::isinstance<nb::list>(obj) || nb::isinstance<nb::tuple>(obj)) &&
-        !nb::hasattr(obj, "__mlx_array__")) {
-      return create_array(obj, std::nullopt, std::nullopt);
-    }
-  }
-  return to_array(a);
-}
-
-} // namespace
-
 using Scalar = std::variant<bool, int64_t, double>;
 
 mx::Dtype scalar_to_dtype(Scalar s) {
@@ -1312,18 +1297,18 @@ void init_ops(nb::module_& m) {
   m.def(
       "degrees",
       [](const ScalarOrArray& a, mx::StreamOrDevice s) {
-        return mx::degrees(to_angle_array(a), s);
+        return mx::degrees(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def degrees(a: scalar | array | Sequence | DLPackCompatible, /, *, stream: StreamOrDevice = None) -> array"),
+          "def degrees(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Convert angles from radians to degrees.
 
       Args:
-          a: Input angles as an array, scalar, list, or tuple.
+          a (array or scalar): Input array.
 
       Returns:
           array: The angles in degrees.
@@ -1331,18 +1316,18 @@ void init_ops(nb::module_& m) {
   m.def(
       "radians",
       [](const ScalarOrArray& a, mx::StreamOrDevice s) {
-        return mx::radians(to_angle_array(a), s);
+        return mx::radians(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def radians(a: scalar | array | Sequence | DLPackCompatible, /, *, stream: StreamOrDevice = None) -> array"),
+          "def radians(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Convert angles from degrees to radians.
 
       Args:
-          a: Input angles as an array, scalar, list, or tuple.
+          a (array or scalar): Input array.
 
       Returns:
           array: The angles in radians.
