@@ -1617,6 +1617,7 @@ class TestConv(mlx_tests.MLXTestCase):
         mx.eval(wide_y)
         self.assertEqual(tuple(wide_y.shape), (1, 1, 500000, 2))
 
+    @unittest.skipIf(not mx.is_available(mx.gpu), "requires GPU")
     def test_grouped_depthwise_conv_padding_bounds(self):
         x = mx.random.normal((1, 16, 64))
         w = mx.random.normal((64, 3, 1))
@@ -1624,6 +1625,7 @@ class TestConv(mlx_tests.MLXTestCase):
         mx.eval(y)
         self.assertEqual(tuple(y.shape), (1, 16, 64))
 
+    @unittest.skipIf(not mx.is_available(mx.gpu), "requires GPU")
     def test_conv2d_large_output_channels(self):
         x = mx.random.normal((1, 33, 33, 5))
         w = mx.random.normal((32800, 1, 1, 5))
