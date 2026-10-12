@@ -755,9 +755,20 @@ void sdpa_vector_2pass(
   bool gqa_dims =
       (gqa_factor == 8 && (q.shape(-1) == 64 || q.shape(-1) == 128)) ||
       ((gqa_factor == 12 || gqa_factor == 16) && q.shape(-1) == 128);
+  // The duplication-free GQA decode kernel (sdpa_vector_2pass_1_gqa) trades the
+  // regular kernel's "redundant" per-query-head K/V rereads for a
+  // threadgroup_barrier plus a cross-subchunk shared-memory softmax reduction.
+  // On M5 Max GPUs the sibling query heads of one KV head read identical
+  // addresses and coalesce / hit cache, so those rereads are nearly free while
+  // the extra barrier + reduction are not: the regular 2-pass kernel is faster
+  // at every measured context length (up to ~10% across kv 8k-32k, fp16 and
+  // bf16). Keep it there. Scoped exactly like use_narrow_qmv / use_qmv_wide in
+  // quantized.cpp so every other architecture is byte-identical.
+  bool gqa_kernel_regresses =
+      d.get_architecture_gen() == 17 && d.get_architecture().back() == 's';
   if (!mask && !sinks && q.shape(2) == 1 &&
       q.shape(1) == gqa_factor * k.shape(1) && q.shape(-1) == v.shape(-1) &&
-      gqa_dims && k.shape(2) >= 8192) {
+      gqa_dims && k.shape(2) >= 8192 && !gqa_kernel_regresses) {
     kname += "_gqa_";
     kname += std::to_string(gqa_factor);
   }
