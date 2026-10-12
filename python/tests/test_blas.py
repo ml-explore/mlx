@@ -1683,6 +1683,35 @@ class TestBlas(mlx_tests.MLXTestCase):
             out_gemm = (b @ c)[0]
             self.assertTrue(mx.allclose(out_gemv, out_gemm))
 
+    def test_gemv_wide_m1(self):
+        # M == 1 fp16/bf16 matvecs are dispatched through gemv_wide (the
+        # single-vector tile) instead of the scalar gemv kernel. Check the
+        # dispatch change is numerically consistent with a true gemm (a
+        # different kernel) and that the gather entry point, which shares the
+        # same config, agrees with the plain path.
+        if not mx.is_available(mx.gpu):
+            return
+        mx.random.seed(0)
+        # (K in, N out): square hidden, MLP up/down, packed QKV, LM-head slice.
+        shapes = [(3072, 3072), (3072, 8192), (8192, 3072), (3072, 16384)]
+        for t in [mx.float16, mx.bfloat16]:
+            rtol = 6e-2 if t == mx.bfloat16 else 2e-2
+            atol = 2e-2 if t == mx.bfloat16 else 5e-3
+            for K, N in shapes:
+                with self.subTest(dtype=t, K=K, N=N):
+                    a = mx.random.normal([1, K]).astype(t)
+                    w = (mx.random.normal([K, N]) / (K**0.5)).astype(t)
+
+                    out_m1 = a @ w
+                    # M == 32 goes through the steel gemm, not gemv_wide.
+                    out_gemm = (mx.repeat(a, 32, axis=0) @ w)[:1]
+                    self.assertTrue(mx.allclose(out_m1, out_gemm, rtol=rtol, atol=atol))
+
+                    out_gather = mx.gather_mm(
+                        a[None], w[None], mx.array([0]), mx.array([0])
+                    )
+                    self.assertTrue(mx.allclose(out_m1, out_gather[0]))
+
     def test_complex_gemv(self):
         M = 16
         N = 50

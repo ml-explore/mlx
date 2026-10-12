@@ -10,7 +10,6 @@ Point ``PYTHONPATH`` at the importable package for the build being measured:
 
     PYTHONPATH=/path/to/package python gemv_m1_bench.py --out parent.json
 
-Use gemv_m1_compare.py for sequential alternating parent/PR measurements.
 """
 
 import argparse
