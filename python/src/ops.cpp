@@ -1158,19 +1158,24 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arctan2",
-      &mx::arctan2,
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return mx::arctan2(a, b, s);
+      },
       nb::arg(),
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arctan2(a: array, b: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def arctan2(a: scalar | array, b: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise inverse tangent of the ratio of two arrays.
 
         Args:
-            a (array): Input array.
-            b (array): Input array.
+            a (array or scalar): Input array or scalar.
+            b (array or scalar): Input array or scalar.
 
         Returns:
             array: The inverse tangent of the ratio of ``a`` and ``b``.
@@ -1298,12 +1303,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def degrees(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def degrees(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Convert angles from radians to degrees.
 
       Args:
-          a (array): Input array.
+          a (array or scalar): Input array.
 
       Returns:
           array: The angles in degrees.
@@ -1317,12 +1322,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def radians(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def radians(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Convert angles from degrees to radians.
 
       Args:
-          a (array): Input array.
+          a (array or scalar): Input array.
 
       Returns:
           array: The angles in radians.

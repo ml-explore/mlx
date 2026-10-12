@@ -1393,10 +1393,22 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(result, expected))
 
+        a = math.pi
+        result = mx.degrees(a)
+        expected = np.degrees(a, dtype=np.float32)
+
+        self.assertTrue(np.allclose(result, expected))
+
     def test_radians(self):
         a = mx.array([0.0, 45.0, 90.0, 180.0, 270.0, 360.0])
         result = mx.radians(a)
         expected = np.radians(a, dtype=np.float32)
+
+        self.assertTrue(np.allclose(result, expected))
+
+        a = 45.0
+        result = mx.degrees(a)
+        expected = np.degrees(a, dtype=np.float32)
 
         self.assertTrue(np.allclose(result, expected))
 
