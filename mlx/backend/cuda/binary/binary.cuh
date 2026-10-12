@@ -209,9 +209,10 @@ __global__ void binary_g(
 template <typename Op, typename In, typename Out>
 constexpr bool supports_binary_op() {
   if (std::is_same_v<Op, Add> || std::is_same_v<Op, Divide> ||
-      std::is_same_v<Op, Maximum> || std::is_same_v<Op, Minimum> ||
-      std::is_same_v<Op, Multiply> || std::is_same_v<Op, Subtract> ||
-      std::is_same_v<Op, Power> || std::is_same_v<Op, Remainder>) {
+      std::is_same_v<Op, FloorDivide> || std::is_same_v<Op, Maximum> ||
+      std::is_same_v<Op, Minimum> || std::is_same_v<Op, Multiply> ||
+      std::is_same_v<Op, Subtract> || std::is_same_v<Op, Power> ||
+      std::is_same_v<Op, Remainder>) {
     return std::is_same_v<In, Out>;
   }
   if (std::is_same_v<Op, Equal> || std::is_same_v<Op, Greater> ||

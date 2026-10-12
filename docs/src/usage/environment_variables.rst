@@ -193,8 +193,9 @@ The MLX-prefixed variables in this section are advanced CUDA backend controls.
 
 .. envvar:: MLX_ENABLE_CACHE_THRASHING_CHECK
 
-   Detect repeated CUDA cache misses and raise an error suggesting a larger
-   cache capacity. The default is ``1``.
+   Detect consecutive CUDA cache misses (more than twice the capacity with no
+   hit in between) and raise an error suggesting a larger cache capacity. The
+   default is ``1``.
 
 MLX also uses ``CUDA_HOME`` or ``CUDA_PATH`` to locate CUDA headers for runtime
 kernel compilation when they cannot be found in the Python environment.

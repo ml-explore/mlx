@@ -598,6 +598,18 @@ class TestArray(mlx_tests.MLXTestCase):
         out = mx.array([x], dtype=mx.float64).item()
         self.assertEqual(out, x)
 
+        # Integer and bool targets
+        v = 2**24 + 1
+        self.assertEqual(mx.array(float(v), dtype=mx.int32).item(), v)
+        self.assertEqual(mx.array([float(v)], dtype=mx.int64).tolist(), [v])
+        # Small non-zero values are still True
+        self.assertTrue(mx.array(1e-50, dtype=mx.bool_).item())
+        self.assertEqual(mx.array([1e-50], dtype=mx.bool_).tolist(), [True])
+
+        # Python ints to float64
+        out = mx.array([v], dtype=mx.float64).tolist()
+        self.assertEqual(out, [float(v)])
+
     def test_construction_from_lists_wide_ints(self):
         # A python int that does not fit in int32 widens to int64, the same
         # rule the scalar path already uses. It used to raise std::bad_cast.
@@ -1116,6 +1128,10 @@ class TestArray(mlx_tests.MLXTestCase):
             x = mx.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], dtype=dtype)
             state = pickle.dumps(x)
             y = pickle.loads(state)
+            self.assertEqualArray(y, x)
+            # F-contiguous
+            x = x.T
+            y = pickle.loads(pickle.dumps(x))
             self.assertEqualArray(y, x)
 
     def test_array_copy(self):
@@ -1730,6 +1746,13 @@ class TestArray(mlx_tests.MLXTestCase):
         a[1:3, :, 0] = 5
         a = a.at[1:3, :, 0].minimum(update)
         self.assertEqualArray(a[1:3, :, 0], mx.minimum(a[1:3, :, 0], update))
+
+        # Indices and updates with negative strides
+        idx = mx.array([0, 1, 2, 3])
+        upd = mx.array([1.0, 2.0, 3.0, 4.0])
+        expected = [4.0, 3.0, 2.0, 1.0]
+        self.assertEqual(mx.zeros(4).at[idx[::-1]].add(upd).tolist(), expected)
+        self.assertEqual(mx.zeros(4).at[idx].add(upd[::-1]).tolist(), expected)
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_array_at_complex_add_gpu(self):

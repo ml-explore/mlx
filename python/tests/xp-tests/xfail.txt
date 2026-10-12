@@ -285,10 +285,6 @@ array_api_tests/test_searching_functions.py::test_argmax
 ### returns uint32 indices instead of the required default signed integer dtype
 array_api_tests/test_searching_functions.py::test_argmin
 
-# test_array_object.py
-## Other failures
-array_api_tests/test_array_object.py::test_setitem_masking
-
 # test_utility_functions.py
 ## Misisng arguments
 ### Missing argument `append` `prepend`

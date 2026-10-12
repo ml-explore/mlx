@@ -516,7 +516,7 @@ void init_array(nb::module_& m) {
                      nd.ndim(),
                      reinterpret_cast<const size_t*>(nd.shape_ptr()),
                      owner,
-                     nullptr,
+                     nd.stride_ptr(),
                      nb::dtype<mx::bfloat16_t>()),
                   mx::bfloat16));
             } else {

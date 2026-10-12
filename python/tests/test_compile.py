@@ -765,6 +765,24 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(cfn(x4).shape, fn(x4).shape)
         self.assertEqual(cfn(x8).shape, fn(x8).shape)
 
+    def test_compile_scalar_constant_output(self):
+        for shapeless in [False, True]:
+            fun = mx.compile(lambda x: (x + 1.0, mx.array(1.0)), shapeless=shapeless)
+            out, c = fun(mx.array(3.0))
+            self.assertEqual(out.item(), 4.0)
+            self.assertEqual(c.item(), 1.0)
+
+        s = mx.array(7.0)
+        out, c = mx.compile(lambda x: (x + 7.0, s))(mx.array([1.0, 2.0]))
+        self.assertEqual(out.tolist(), [8.0, 9.0])
+        self.assertEqual(c.item(), 7.0)
+
+        # The gradient is the seed constant of the backward pass
+        fun = mx.compile(mx.value_and_grad(lambda x: x + 1.0))
+        value, grad = fun(mx.array(2.0))
+        self.assertEqual(value.item(), 3.0)
+        self.assertEqual(grad.item(), 1.0)
+
     def test_compile_with_constant(self):
         # Test float
         @partial(mx.compile)

@@ -633,11 +633,11 @@ void qmv_wide(
 }
 
 void qvm_split_k(
-    const array& x,
+    array x,
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
-    array& out,
+    array out,
     int group_size,
     int bits,
     int M,
@@ -651,6 +651,16 @@ void qvm_split_k(
   int split_k = K > 8192 ? 32 : 8;
   int split_D = (K + split_k - 1) / split_k;
   int B = out.size() / M / N;
+
+  // When weights are 2D, collapse leading batch dimensions of x and out into M
+  // so the kernel and reduction operate on standard 2D matrices.
+  if (B == 1 && x.ndim() != 2) {
+    x = reshape_in_eval(x, {M, K}, s);
+  }
+  if (B == 1 && out.ndim() != 2) {
+    out = reshape_in_eval(out, {M, N}, s);
+  }
+
   B *= split_k;
 
   constexpr int num_simdgroups = 2;
@@ -1843,7 +1853,8 @@ void dispatch_qmv(
     const Stream& s,
     const std::string& mode) {
   // It is a qmv with a small inner dimension so route to qmv_quad kernel
-  if ((K == 128 || K == 64) && is_power_of_2(bits) && !global_scale) {
+  if ((K == 128 || (K == 64 && bits >= 2)) && is_power_of_2(bits) &&
+      !global_scale) {
     qmv_quad(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
     return;
   }

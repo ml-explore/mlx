@@ -292,10 +292,23 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
   size_t ed = header.find_last_of(')');
   std::string shape_str = header.substr(st, ed - st);
 
+  size_t max_size = std::numeric_limits<size_t>::max() / size_of(dtype);
+  size_t total_size = 1;
   while (!shape_str.empty()) {
     // Read current number and get position of comma
     size_t pos;
     int dim = std::stoi(shape_str, &pos);
+
+    // Reject negative dims and a total byte count that overflows size_t
+    if (dim < 0) {
+      throw std::runtime_error(
+          "[load] Negative dimension in shape in " + in_stream->label());
+    }
+    if (dim != 0 && total_size > max_size / dim) {
+      throw std::runtime_error(
+          "[load] Shape is too large in " + in_stream->label());
+    }
+    total_size *= dim;
     shape.push_back(dim);
 
     // Skip the comma and space and read the next number

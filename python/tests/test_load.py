@@ -99,6 +99,26 @@ class TestLoad(mlx_tests.MLXTestCase):
         with self.assertRaises(RuntimeError):
             mx.eval(out)
 
+    def test_load_npy_invalid_shape(self):
+        def write_npy(path, shape):
+            header = "{'descr': '<f4', 'fortran_order': False, 'shape': %s, }" % shape
+            header += " " * ((16 - (11 + len(header)) % 16) % 16) + "\n"
+            with open(path, "wb") as f:
+                f.write(b"\x93NUMPY\x01\x00")
+                f.write(struct.pack("<H", len(header)))
+                f.write(header.encode())
+                f.write(b"\x00" * 64)
+
+        for name, shape in [
+            ("negative", "(-1,)"),
+            ("negative_nd", "(4, -2)"),
+        ]:
+            with self.subTest(shape=shape):
+                save_file = os.path.join(self.test_dir, f"invalid_{name}.npy")
+                write_npy(save_file, shape)
+                with self.assertRaises(RuntimeError):
+                    mx.load(save_file, stream=mx.cpu)
+
     def test_async_load_npy_read_error_across_streams(self):
         save_file = os.path.join(self.test_dir, "truncated_async.npy")
         expected = np.arange(16, dtype=np.float32)

@@ -32,7 +32,7 @@ template <typename T, bool src_contiguous>
   if (src_contiguous) {
     out[idx] = src[batch_idx * src_batch_size + src_index];
   } else {
-    out[idx] = src[elem_to_loc<uint>(
+    out[idx] = src[elem_to_loc<int64_t>(
         batch_idx * src_batch_size + src_index,
         src_shapes,
         src_strides,
