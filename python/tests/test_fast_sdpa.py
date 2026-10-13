@@ -7,6 +7,24 @@ import mlx.core as mx
 import mlx_tests
 
 
+def make_causal_mask(qL, kL):
+    offset = kL - qL
+    q_indices = mx.arange(qL) + offset
+    k_indices = mx.arange(kL)
+    mask = q_indices[:, None] >= k_indices[None]
+
+    return mask
+
+
+def make_window_mask(qL, kL, window_size):
+    offset = kL - qL
+    q_indices = mx.arange(qL) + offset
+    k_indices = mx.arange(kL)
+    mask = mx.abs(q_indices[:, None] - k_indices[None]) < window_size
+
+    return mask
+
+
 def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
     q_dtype = q.dtype
     q = q * mx.array(scale, q_dtype)
@@ -1391,6 +1409,77 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     else:
                         tolerance = {"rtol": 1e-2, "atol": 1e-2}
                     self.assertTrue(mx.allclose(ref, out, **tolerance))
+
+    def test_sdpa_window_size(self):
+        D = 64
+        scale = D**-0.5
+
+        qH = 4
+        kH = 2
+
+        for qL, kL, window, causal, sinks, mask_type in product(
+            (1, 7, 16),
+            (16, 33),
+            (1, 3, 16, 100),
+            (False, True),
+            (False, True),
+            (None, "bool", "additive"),
+        ):
+            if qL > kL or (causal and mask_type is not None):
+                continue
+            with self.subTest(
+                qL=qL,
+                kL=kL,
+                window=window,
+                causal=causal,
+                sinks=sinks,
+                mask_type=mask_type,
+            ):
+                q = mx.random.normal((2, qH, qL, D))
+                k = mx.random.normal((2, kH, kL, D))
+                v = mx.random.normal((2, kH, kL, D))
+                s = mx.random.normal((qH,)) if sinks else None
+
+                arr_mask = None
+                if mask_type == "bool":
+                    arr_mask = mx.random.uniform(shape=(2, qH, qL, kL)) < 0.7
+                    arr_mask[..., 0] = True
+                elif mask_type == "additive":
+                    arr_mask = mx.random.uniform(shape=(2, qH, qL, kL))
+
+                # Reference: the window as a boolean array mask.
+                ref_mask = make_window_mask(qL, kL, window)
+                if causal:
+                    ref_mask = ref_mask & make_causal_mask(qL, kL)
+
+                if mask_type == "bool":
+                    ref_mask = ref_mask & arr_mask
+                elif mask_type == "additive":
+                    ref_mask = mx.where(ref_mask, arr_mask, -mx.inf)
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask=ref_mask, sinks=s)
+
+                kwargs = {"scale": scale, "sinks": s, "window_size": window}
+                if causal:
+                    kwargs["mask"] = "causal"
+                elif arr_mask is not None:
+                    kwargs["mask"] = arr_mask
+                out = mx.fast.scaled_dot_product_attention(q, k, v, **kwargs)
+                self.assertTrue(mx.allclose(ref, out, atol=1e-5, rtol=1e-5))
+
+    def test_sdpa_window_size_errors(self):
+        q = mx.random.normal((1, 2, 4, 32))
+        for window in (0, -2):
+            with self.assertRaises(ValueError):
+                mx.fast.scaled_dot_product_attention(
+                    q, q, q, scale=1.0, window_size=window
+                )
+        out = mx.fast.scaled_dot_product_attention(q, q, q, scale=1.0, window_size=-1)
+        ref = mx.fast.scaled_dot_product_attention(q, q, q, scale=1.0)
+        self.assertTrue(mx.array_equal(out, ref))
+        with self.assertRaises(ValueError):
+            mx.fast.scaled_dot_product_attention(
+                q, q, q, scale=1.0, window_size=2, force_fused=True
+            )
 
 
 if __name__ == "__main__":
