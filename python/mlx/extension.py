@@ -276,7 +276,8 @@ def _metal_extension_cmake(
         "endif()",
         "find_package(MLX CONFIG REQUIRED)",
         "if(NOT MLX_BUILD_METAL)",
-        '  message(FATAL_ERROR "MetalExtension requires an MLX build with Metal support.")',
+        '  message(FATAL_ERROR "MetalExtension requires an MLX build '
+        'with Metal support.")',
         "endif()",
         "",
         "nanobind_add_module(",
@@ -288,7 +289,8 @@ def _metal_extension_cmake(
         "  mlx",
         *_cmake_arguments(host_sources),
         ")",
-        f"set_target_properties(mlx_extension PROPERTIES OUTPUT_NAME {_cmake_quote(ext.metal_library_name)})",
+        "set_target_properties(mlx_extension PROPERTIES OUTPUT_NAME "
+        f"{_cmake_quote(ext.metal_library_name)})",
         "set_target_properties(",
         "  mlx_extension",
         "  PROPERTIES",
@@ -448,7 +450,8 @@ def _metal_extension_cmake(
                 "  DEPENDS mlx_extension",
                 f'  COMMENT "Generating {ext.metal_library_name}.pyi"',
                 "  VERBATIM)",
-                f"add_custom_target(mlx_extension_stub ALL DEPENDS {_cmake_quote(stub_path)})",
+                "add_custom_target(mlx_extension_stub ALL DEPENDS "
+                f"{_cmake_quote(stub_path)})",
                 "",
             ]
         )

@@ -69,9 +69,12 @@ Load command 10
  platform MACOS
     minos 15.2
 """
-        with patch("mlx.extension._MLX_PACKAGE_PATH", "/tmp/mlx"), patch(
-            "mlx.extension.subprocess.check_output", return_value=vtool_output
-        ) as check_output:
+        with (
+            patch("mlx.extension._MLX_PACKAGE_PATH", "/tmp/mlx"),
+            patch(
+                "mlx.extension.subprocess.check_output", return_value=vtool_output
+            ) as check_output,
+        ):
             deployment_target = _mlx_macos_deployment_target()
 
         self.assertEqual(deployment_target, "15.2")
@@ -121,9 +124,7 @@ Load command 10
                 directory = Path(directory)
                 xcrun = directory / "xcrun"
                 xcrun.write_text(
-                    "#!/bin/sh\n"
-                    f"printf '%s\\n' '{help_text}'\n"
-                    f"exit {exit_code}\n",
+                    f"#!/bin/sh\nprintf '%s\\n' '{help_text}'\nexit {exit_code}\n",
                     encoding="utf-8",
                 )
                 xcrun.chmod(0o755)
@@ -382,7 +383,8 @@ Load command 10
         self.assertIn("nanobind_add_module(", cmake)
         self.assertIn("cmake_minimum_required(VERSION 3.25)", cmake)
         self.assertIn(
-            "find_package(Python 3.10 COMPONENTS Interpreter Development.Module REQUIRED)",
+            "find_package(Python 3.10 COMPONENTS "
+            "Interpreter Development.Module REQUIRED)",
             cmake,
         )
         self.assertNotIn("Development.SABIModule", cmake)

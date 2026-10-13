@@ -1,3 +1,3 @@
 # Copyright © 2023 Apple Inc.
 
-from ._ext import axpby
+from ._ext import axpby as axpby
