@@ -116,7 +116,9 @@ void GatedDeltaUpdate::eval_gpu(
   out.set_data(allocator::malloc(out.nbytes()));
   hf.set_data(allocator::malloc(hf.nbytes()));
 
-  fill_gpu(array(0, out.dtype()), out, s);
+  array zero(0, out.dtype());
+  compute_encoder.add_temporary(zero);
+  fill_gpu(zero, out, s);
 
   // The forward is inference-only here: the vjp runs its own save pass. The
   // kernel declares buffers 9, 10 and 11 unconditionally, so bind a placeholder
@@ -289,12 +291,16 @@ void GatedDeltaUpdateVJP::eval_gpu(
   auto dg_acc = stage_fp32 ? scratch_alloc(dg.shape(), float32, s) : dg;
   auto db_acc = stage_fp32 ? scratch_alloc(db.shape(), float32, s) : db;
 
-  fill_gpu(array(0, float32), dq_acc, s);
-  fill_gpu(array(0, float32), dk_acc, s);
-  fill_gpu(array(0, float32), dv_acc, s);
-  fill_gpu(array(0, float32), dg_acc, s);
-  fill_gpu(array(0, float32), db_acc, s);
-  fill_gpu(array(0, dh.dtype()), dh, s);
+  array zero(0, float32);
+  array zero_h(0, dh.dtype());
+  compute_encoder.add_temporary(zero);
+  compute_encoder.add_temporary(zero_h);
+  fill_gpu(zero, dq_acc, s);
+  fill_gpu(zero, dk_acc, s);
+  fill_gpu(zero, dv_acc, s);
+  fill_gpu(zero, dg_acc, s);
+  fill_gpu(zero, db_acc, s);
+  fill_gpu(zero_h, dh, s);
 
   array state_cache = scratch_alloc({B, Hv, n_states, Dv, Dk}, float32, s);
   array seg_states = scratch_alloc(
@@ -305,9 +311,9 @@ void GatedDeltaUpdateVJP::eval_gpu(
       chunked ? Shape({B, Hv, n_chunks, 16, Dv}) : Shape({1}), float32, s);
 
   if (chunked) {
-    fill_gpu(array(0, float32), state_cache, s);
-    fill_gpu(array(0, float32), chunk_mats, s);
-    fill_gpu(array(0, float32), chunk_delta, s);
+    fill_gpu(zero, state_cache, s);
+    fill_gpu(zero, chunk_mats, s);
+    fill_gpu(zero, chunk_delta, s);
   }
 
   array y_scratch = scratch_alloc({B, T, Hv, Dv}, q.dtype(), s);
