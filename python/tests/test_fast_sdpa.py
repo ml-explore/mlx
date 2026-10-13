@@ -622,7 +622,13 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
     def test_sdpa_vector_gqa_long(self):
         scale = 1.0
         mx.random.seed(0)
-        for Nq, Nkv, D in [(32, 4, 128), (64, 8, 64), (48, 4, 128), (64, 4, 128)]:
+        for Nq, Nkv, D in [
+            (32, 4, 128),
+            (64, 8, 64),
+            (48, 4, 128),
+            (64, 4, 128),
+            (16, 2, 256),
+        ]:
             for B, L in [(1, 8192), (1, 8201), (2, 8192)]:
                 q = 5e-1 * mx.random.normal(shape=(B, Nq, 1, D))
                 k = 5e-1 * mx.random.normal(shape=(B, Nkv, L + 32, D))[:, :, :L]
@@ -1350,7 +1356,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             return q, k, v
 
         # Vector attention kernel.
-        for D in (64, 96, 128):
+        for D in (64, 96, 128, 256):
             with self.subTest(head_dim=D):
                 q, k, v = make_qkv(3, 128, D, 4, 2)
                 scale = D**-0.5
