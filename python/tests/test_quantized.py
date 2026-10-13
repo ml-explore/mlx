@@ -685,6 +685,37 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 rounding = (y_ref.astype(dtype).astype(mx.float32) - y_ref).abs().mean()
                 self.assertLess(error.item(), 1.1 * rounding.item())
 
+    def test_qmm_fp4_half_tile(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        mx.random.seed(0)
+
+        def rel_err(got, expected):
+            d = mx.abs(got.astype(mx.float32) - expected.astype(mx.float32))
+            return d.max() / mx.abs(expected.astype(mx.float32)).max()
+
+        tests = [
+            (512, 8192, 1040, ()),  # 64 x 64
+            (552, 8224, 1040, ()),  # 64 x 64, M % 64 == 40, N % 64 == 32
+            (300, 8192, 1040, (2,)),  # 64 x 64, batched w
+            (40, 1040, 1200, ()),  # 32 x 32, N % 32 == 16
+            (40, 512, 1024, ()),  # split K
+            (40, 528, 1024, ()),  # split K, N % 32 == 16
+        ]
+        modes = [("nvfp4", 16), ("mxfp4", 32)]
+        dtypes = [mx.bfloat16, mx.float16]
+        for (M, N, K, batch), (mode, group_size), dtype in product(
+            tests, modes, dtypes
+        ):
+            K -= K % group_size
+            with self.subTest(M=M, N=N, K=K, batch=batch, mode=mode, dtype=dtype):
+                w = mx.random.normal(batch + (N, K)).astype(dtype)
+                w_q, scales = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(w_q, scales, mode=mode, dtype=dtype)
+                x = (mx.random.normal(batch + (M, K)) / K**0.5).astype(dtype)
+                out = mx.quantized_matmul(x, w_q, scales, mode=mode)
+                self.assertLess(rel_err(out, x @ w_hat.swapaxes(-1, -2)), 3e-2)
+
     def test_qmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)

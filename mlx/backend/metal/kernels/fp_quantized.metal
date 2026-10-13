@@ -253,8 +253,51 @@
   instantiate_quantized_qmv_wrap(qmv_fast, type, nvfp4, 16, 4, 1, 2) \
   instantiate_quantized_qmv_wrap(qmv_fast, type, nvfp4, 16, 4, 0, 2)
 
+#define instantiate_qmm_t_half(type, mode, group_size, bm, bn, aligned, batched) \
+  instantiate_kernel( \
+      #mode "_qmm_t_half_" #type "_gs_" #group_size "_b_4_bm" #bm "_bn" #bn "_alN_" #aligned "_batch_" #batched, \
+      fp_qmm_t, \
+      type, \
+      group_size, \
+      4, \
+      aligned, \
+      batched, \
+      false, \
+      bm, \
+      32, \
+      bn, \
+      true)
+
+#define instantiate_qmm_t_half_tile(type, mode, group_size, bm, bn) \
+  instantiate_qmm_t_half(type, mode, group_size, bm, bn, true, 0) \
+  instantiate_qmm_t_half(type, mode, group_size, bm, bn, true, 1) \
+  instantiate_qmm_t_half(type, mode, group_size, bm, bn, false, 0) \
+  instantiate_qmm_t_half(type, mode, group_size, bm, bn, false, 1)
+
+#define instantiate_qmm_t_splitk_half(type, mode, group_size, aligned) \
+  instantiate_kernel( \
+      #mode "_qmm_t_splitk_half_" #type "_gs_" #group_size "_b_4_alN_" #aligned, \
+      fp_qmm_t_splitk, \
+      type, \
+      group_size, \
+      4, \
+      aligned, \
+      32, \
+      32, \
+      32, \
+      true)
+
+#define instantiate_qmm_t_half_modes(type, mode, group_size) \
+  instantiate_qmm_t_half_tile(type, mode, group_size, 32, 32) \
+  instantiate_qmm_t_half_tile(type, mode, group_size, 64, 64) \
+  instantiate_qmm_t_splitk_half(type, mode, group_size, true) \
+  instantiate_qmm_t_splitk_half(type, mode, group_size, false)
+
 instantiate_quantized_types(float)
 instantiate_quantized_types(bfloat16_t)
 instantiate_quantized_types(float16_t)
 instantiate_quantized_qmm_hgs(bfloat16_t)
+instantiate_qmm_t_half_modes(bfloat16_t, nvfp4, 16)
+instantiate_qmm_t_half_modes(float16_t, nvfp4, 16)
+instantiate_qmm_t_half_modes(float16_t, mxfp4, 32)
     // clang-format on
