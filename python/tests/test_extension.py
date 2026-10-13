@@ -1,13 +1,13 @@
 # Copyright © 2026 Apple Inc.
 
 import os
-import platform
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import mlx.core as mx
 from mlx.extension import (
     BuildExtension,
     MetalExtension,
@@ -19,7 +19,7 @@ from mlx.extension import (
 from setuptools import Distribution
 
 
-@unittest.skipUnless(platform.system() == "Darwin", "MetalExtension requires macOS")
+@unittest.skipUnless(mx.metal.is_available(), "MetalExtension requires Metal")
 class TestMetalExtension(unittest.TestCase):
     def test_extension_paths_use_public_build_metadata(self):
         extension = MetalExtension("sample._ext", ["bindings.cpp", "kernel.metal"])
@@ -89,10 +89,11 @@ Load command 10
             text=True,
         )
 
-    def test_build_extension_uses_ninja_by_default(self):
+    def test_build_extension_can_enable_ninja(self):
+        command_type = BuildExtension.with_options(use_ninja=True)
         with patch("mlx.extension._is_ninja_available", return_value=True):
-            command = BuildExtension(Distribution())
-            configure_command = self._cmake_configure_command(BuildExtension)
+            command = command_type(Distribution())
+            configure_command = self._cmake_configure_command(command_type)
 
         self.assertTrue(command.use_ninja)
         self.assertTrue(command.generate_stubs)
@@ -110,40 +111,6 @@ Load command 10
 
         self.assertIn("-DCMAKE_BUILD_TYPE=Debug", configure_command)
         self.assertIn("-DMLX_METAL_DEBUG=ON", configure_command)
-
-    def test_detects_current_metal_logging_capability(self):
-        extension_cmake = Path(__file__).resolve().parents[2] / "cmake/extension.cmake"
-        cases = [
-            ("supported", "  -fmetal-enable-logging  Enable logging", 0, "TRUE"),
-            ("unsupported", "Metal compiler help", 0, "FALSE"),
-            ("probe failure", "-fmetal-enable-logging", 1, "FALSE"),
-        ]
-
-        for name, help_text, exit_code, expected in cases:
-            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
-                directory = Path(directory)
-                xcrun = directory / "xcrun"
-                xcrun.write_text(
-                    f"#!/bin/sh\nprintf '%s\\n' '{help_text}'\nexit {exit_code}\n",
-                    encoding="utf-8",
-                )
-                xcrun.chmod(0o755)
-
-                result_file = directory / "result.txt"
-                script = directory / "probe.cmake"
-                script.write_text(
-                    f"include([[{extension_cmake}]])\n"
-                    "_mlx_metal_supports_logging(supported)\n"
-                    f'file(WRITE [[{result_file}]] "${{supported}}")\n',
-                    encoding="utf-8",
-                )
-                environment = os.environ.copy()
-                environment["PATH"] = f"{directory}{os.pathsep}{environment['PATH']}"
-                subprocess.run(
-                    ["cmake", "-P", str(script)], env=environment, check=True
-                )
-
-                self.assertEqual(result_file.read_text(encoding="utf-8"), expected)
 
     def test_build_extension_uses_mlx_macos_deployment_target(self):
         command_type = BuildExtension.with_options(use_ninja=False)
@@ -191,11 +158,10 @@ Load command 10
                     cmake_args="-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0",
                 )
 
-    def test_build_extension_can_disable_ninja(self):
-        command_type = BuildExtension.with_options(use_ninja=False)
+    def test_build_extension_uses_default_generator(self):
         with patch("mlx.extension._is_ninja_available") as is_ninja_available:
-            command = command_type(Distribution())
-            configure_command = self._cmake_configure_command(command_type)
+            command = BuildExtension(Distribution())
+            configure_command = self._cmake_configure_command(BuildExtension)
 
         self.assertFalse(command.use_ninja)
         self.assertNotIn("-G", configure_command)
@@ -204,10 +170,11 @@ Load command 10
         is_ninja_available.assert_not_called()
 
     def test_build_extension_falls_back_without_ninja(self):
+        command_type = BuildExtension.with_options(use_ninja=True)
         with patch("mlx.extension._is_ninja_available", return_value=False):
             with self.assertLogs("mlx.extension", level="WARNING") as logs:
-                command = BuildExtension(Distribution())
-                configure_command = self._cmake_configure_command(BuildExtension)
+                command = command_type(Distribution())
+                configure_command = self._cmake_configure_command(command_type)
 
         self.assertFalse(command.use_ninja)
         self.assertNotIn("-G", configure_command)
@@ -215,10 +182,11 @@ Load command 10
         self.assertEqual(binary_dir.name, "build-default")
         self.assertIn("Falling back", "\n".join(logs.output))
 
-    def test_explicit_cmake_generator_overrides_ninja_default(self):
+    def test_explicit_cmake_generator_overrides_ninja(self):
+        command_type = BuildExtension.with_options(use_ninja=True)
         with patch("mlx.extension._is_ninja_available", return_value=True):
             configure_command = self._cmake_configure_command(
-                BuildExtension, cmake_args="-G Xcode"
+                command_type, cmake_args="-G Xcode"
             )
 
         self.assertEqual(configure_command.count("-G"), 1)

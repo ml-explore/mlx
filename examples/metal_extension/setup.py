@@ -14,8 +14,6 @@ if __name__ == "__main__":
                 sources=[
                     "activation.cpp",
                     "silu_and_mul.metal",
-                    "gelu.metal",
-                    "fatrelu_and_mul.metal",
                 ],
                 extra_compile_args={"cxx": ["-O3"], "metal": ["-O3"]},
             )

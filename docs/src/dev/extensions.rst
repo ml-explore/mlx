@@ -761,8 +761,6 @@ extension project.
                 sources=[
                     "activation.cpp",
                     "silu_and_mul.metal",
-                    "gelu.metal",
-                    "fatrelu_and_mul.metal",
                 ],
                 extra_compile_args={
                     "cxx": ["-O3"],
@@ -807,11 +805,6 @@ the binding does not hard-code either the module or Metal library name:
       // bindings
     }
 
-Each Metal source is compiled independently to an AIR file before the AIR files
-are linked into the final metallib. Changing one Metal source therefore only
-recompiles its AIR file before relinking the metallib. Included headers are
-tracked automatically and rebuild only the AIR files that depend on them.
-
 Debug builds include Metal line tables and recorded sources. Metal logging is
 enabled when the current ``xcrun metal`` compiler advertises support. The
 effective Python
@@ -823,11 +816,10 @@ select a lower target for cross-building, provided the extension is used with
 an MLX build for that target at runtime. Explicit targets below macOS 14 are
 rejected.
 
-``BuildExtension`` uses CMake's Ninja generator by default, so projects should
-include ``ninja`` in their build requirements. To use CMake's platform default
-generator instead, configure the command class with
-``BuildExtension.with_options(use_ninja=False)``. If Ninja is unavailable, the
-build emits a warning and falls back to the platform default generator.
+``BuildExtension`` uses CMake's platform default generator. To use Ninja,
+include ``ninja`` in the build requirements and configure the command class
+with ``BuildExtension.with_options(use_ninja=True)``. It falls back to the platform
+default generator if Ninja is not available.
 
 The complete standalone example is available in
 ``examples/metal_extension/``.
