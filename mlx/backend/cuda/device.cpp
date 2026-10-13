@@ -155,6 +155,17 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
         }
       }
     }
+    if (serial_graph_) {
+      // Each node also waits for the one added before it, so the graph runs
+      // its kernels one at a time (see get_graph_serial).
+      for (auto& prev : last_nodes_) {
+        auto [_, inserted] = set_deps.insert(prev.node);
+        if (inserted) {
+          deps.push_back(prev);
+        }
+      }
+      last_nodes_ = nodes;
+    }
   }
   active_deps_.clear();
 
@@ -202,6 +213,17 @@ std::pair<int, int> get_graph_limits(Device& d) {
   return {env::max_ops_per_buffer(ops), env::max_mb_per_buffer(mb)};
 }
 
+// Whether a graph's kernels run one at a time, can be set with
+// MLX_CUDA_GRAPH_SERIAL. On a DGX Spark (GB10) kernels the graph lets run
+// concurrently slow each other down more than they overlap: a 2048-token
+// prefill of a 27B 4-bit model took 6.70 s with the default graph and 3.05 s
+// serialized; decoding a 35B-A3B MoE went from 62.2 to 68.3 tok/s.
+bool get_graph_serial(Device& d) {
+  auto cc =
+      d.compute_capability_major() * 100 + d.compute_capability_minor() * 10;
+  return env::get_var("MLX_CUDA_GRAPH_SERIAL", cc == 1210);
+}
+
 CommandEncoder::CommandEncoder(Device& d)
     : device_(d),
       stream_(d),
@@ -209,6 +231,7 @@ CommandEncoder::CommandEncoder(Device& d)
       worker_(std::make_shared<Worker>(d)),
       graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {
   std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits(d);
+  serial_graph_ = get_graph_serial(d);
   worker_->start();
 }
 
@@ -579,6 +602,7 @@ void CommandEncoder::clear_graph_state() {
   active_deps_.clear();
   active_outputs_.clear();
   concurrent_nodes_.clear();
+  last_nodes_.clear();
   is_graph_updatable_ = true;
 }
 

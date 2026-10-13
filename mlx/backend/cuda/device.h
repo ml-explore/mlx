@@ -154,6 +154,7 @@ class MLX_API CommandEncoder {
   std::string graph_nodes_key_;
   std::string graph_deps_key_;
   std::vector<GraphNode> concurrent_nodes_;
+  std::vector<GraphNode> last_nodes_;
   std::vector<std::shared_ptr<array::Data>> temporaries_;
   LRUCache<std::string, CudaGraphExec> graph_cache_;
   std::vector<std::uintptr_t> active_deps_;
@@ -163,6 +164,7 @@ class MLX_API CommandEncoder {
   bool is_graph_updatable_{true};
   int max_ops_per_graph_;
   int max_mb_per_graph_;
+  bool serial_graph_{false};
 };
 
 class MLX_API Device {
