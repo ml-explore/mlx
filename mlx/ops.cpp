@@ -1,6 +1,7 @@
 // Copyright © 2023-2026 Apple Inc.
 
 // Required for using M_PI in MSVC.
+#include <tuple>
 #define _USE_MATH_DEFINES
 #include <algorithm>
 #include <climits>
@@ -2655,6 +2656,31 @@ array min(
     bool keepdims /* = false */,
     StreamOrDevice s /* = {} */) {
   return min(a, std::vector<int>{axis}, keepdims, s);
+}
+
+std::tuple<array, array>
+minmax(const array& a, bool keepdims, StreamOrDevice s /* = {}*/) {
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  return {min(a, axes, keepdims, s), max(a, axes, keepdims, s)};
+}
+
+std::tuple<array, array> minmax(
+    const array& a,
+    const std::vector<int>& axes,
+    bool keepdims /* = false */,
+    StreamOrDevice s /* = {}*/) {
+  return {min(a, axes, keepdims, s), max(a, axes, keepdims, s)};
+}
+
+std::tuple<array, array> minmax(
+    const array& a,
+    int axis,
+    bool keepdims /* = false */,
+    StreamOrDevice s /* = {} */) {
+  return {
+      min(a, std::vector<int>{axis}, keepdims, s),
+      max(a, std::vector<int>{axis}, keepdims, s)};
 }
 
 array argmin(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {

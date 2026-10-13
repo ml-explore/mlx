@@ -11,6 +11,7 @@
 #include <limits>
 #include <numeric>
 #include <ostream>
+#include <tuple>
 #include <variant>
 
 #include "mlx/einsum.h"
@@ -2743,10 +2744,9 @@ void init_ops(nb::module_& m) {
       [](const mx::array& a,
          const IntOrVec& axis,
          bool keepdims,
-         mx::StreamOrDevice s) {
+         mx::StreamOrDevice s) -> std::tuple<mx::array, mx::array> {
         auto axes = get_reduce_axes(axis, a.ndim());
-        return std::make_pair(
-            mx::min(a, axes, keepdims, s), mx::max(a, axes, keepdims, s));
+        return mx::minmax(a, axes, keepdims, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
