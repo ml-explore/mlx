@@ -262,6 +262,7 @@ void init_fast(nb::module_& parent_module) {
          const mx::array& keys,
          const mx::array& values,
          const float scale,
+         int window_size,
          const std::variant<std::monostate, std::string, mx::array>& mask,
          const std::optional<mx::array>& sinks,
          bool force_fused,
@@ -285,6 +286,7 @@ void init_fast(nb::module_& parent_module) {
                 keys,
                 values,
                 scale,
+                window_size,
                 mask_str,
                 std::nullopt,
                 sinks,
@@ -297,6 +299,7 @@ void init_fast(nb::module_& parent_module) {
                 keys,
                 values,
                 scale,
+                window_size,
                 "",
                 mask_arr,
                 sinks,
@@ -306,7 +309,16 @@ void init_fast(nb::module_& parent_module) {
 
         } else {
           return mx::fast::scaled_dot_product_attention(
-              queries, keys, values, scale, "", {}, sinks, force_fused, s);
+              queries,
+              keys,
+              values,
+              scale,
+              window_size,
+              "",
+              {},
+              sinks,
+              force_fused,
+              s);
         }
       },
       "q"_a,
@@ -314,12 +326,13 @@ void init_fast(nb::module_& parent_module) {
       "v"_a,
       nb::kw_only(),
       "scale"_a,
+      "window_size"_a = -1,
       "mask"_a = nb::none(),
       "sinks"_a = nb::none(),
       "force_fused"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: None | str | array = None, sinks: array | None = None, force_fused: bool = False, stream: StreamOrDevice = None) -> array"),
+          "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float, window_size: int = -1, mask: None | str | array = None, sinks: array | None = None, force_fused: bool = False, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         A fast implementation of multi-head attention: ``O = softmax(Q @ K.T, dim=-1) @ V``.
 
@@ -350,6 +363,9 @@ void init_fast(nb::module_& parent_module) {
             k (array): Keys with shape ``[B, N_kv, T_kv, D]``.
             v (array): Values with shape ``[B, N_kv, T_kv, D]``.
             scale (float): Scale for queries (typically ``1.0 / sqrt(q.shape(-1)``).
+            window_size (int, optional): The size of the sliding window. A
+               query attends only to keys less than ``window_size`` positions  
+               away. Use ``-1`` for no window. Must not be ``0``. Default: ``-1``.
             mask (str or array, optional): The mask to apply to the
                query-key scores. The mask can be an array or a string indicating
                the mask type. The only supported string type is ``"causal"``. If

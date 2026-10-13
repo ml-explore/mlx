@@ -273,12 +273,14 @@ class ScaledDotProductAttention : public Custom {
       float scale,
       bool do_causal,
       bool has_sinks,
+      int window_size,
       bool output_logsumexp,
       bool force_fused)
       : Custom(stream, std::move(fallback)),
         scale_(scale),
         do_causal_(do_causal),
         has_sinks_(has_sinks),
+        window_size_(window_size),
         output_logsumexp_(output_logsumexp),
         force_fused_(force_fused) {}
 
@@ -290,6 +292,7 @@ class ScaledDotProductAttention : public Custom {
       bool has_arr_mask,
       bool do_causal,
       bool has_sinks,
+      int window_size,
       bool is_training,
       bool output_logsumexp,
       bool force_fused,
@@ -320,6 +323,7 @@ class ScaledDotProductAttention : public Custom {
         scale_,
         do_causal_,
         has_sinks_,
+        window_size_,
         output_logsumexp_,
         force_fused_);
   }
@@ -328,6 +332,7 @@ class ScaledDotProductAttention : public Custom {
   float scale_;
   bool do_causal_;
   bool has_sinks_;
+  int window_size_;
   bool output_logsumexp_;
   bool force_fused_;
 };

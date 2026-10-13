@@ -942,10 +942,18 @@ std::tuple<bool, std::string> has_fused_kernel(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    int window_size,
     bool output_logsumexp,
     Stream s) {
   if (s.device != Device::gpu) {
     return {false, "the fused kernels require a GPU (Metal) stream."};
+  }
+
+  if (window_size > 0) {
+    return {false, "window attention support for Metal is NYI"};
+  }
+  if (output_logsumexp && window_size > 0) {
+    return {false, "window support for backward attention is NYI"};
   }
 
   if (output_logsumexp && has_arr_mask) {
@@ -1399,12 +1407,21 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_arr_mask,
     bool do_causal,
     bool has_sinks,
+    int window_size,
     bool is_training,
     bool output_logsumexp,
     bool force_fused,
     Stream s) {
   auto [has_fused, reason] = has_fused_kernel(
-      q, k, v, has_mask, has_arr_mask, do_causal, output_logsumexp, s);
+      q,
+      k,
+      v,
+      has_mask,
+      has_arr_mask,
+      do_causal,
+      window_size,
+      output_logsumexp,
+      s);
   if (force_fused) {
     if (!has_fused) {
       std::ostringstream msg;
