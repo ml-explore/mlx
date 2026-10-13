@@ -1238,6 +1238,8 @@ class TestConv(mlx_tests.MLXTestCase):
             ((1, 5, 1), (1, 2, 1), (2,), ([0], [0]), (2,)),
             ((1, 5, 1), (1, 3, 1), (2,), ([1], [0]), (3,)),
             ((1, 6, 2), (3, 2, 2), (1,), ([4], [3]), (3,)),
+            ((1, 3, 1), (1, 1, 1), (2,), ([2], [1]), (2,)),
+            ((1, 3, 1), (1, 3, 1), (3,), ([0], [0]), (2,)),
             ((2, 5, 4, 3), (4, 2, 3, 3), (2, 1), ([1, 0], [0, 2]), (2, 3)),
             (
                 (1, 3, 4, 3, 2),
@@ -1250,6 +1252,14 @@ class TestConv(mlx_tests.MLXTestCase):
             x = mx.random.normal(in_shape)
             w = mx.random.normal(w_shape)
             args = (stride, padding, dilation)
+            out = mx.conv_general(
+                x, w, stride=stride, padding=padding, input_dilation=dilation
+            )
+            expected = mx.conv_general(
+                dilate(x, dilation), w, stride=stride, padding=padding
+            )
+            self.assertEqual(out.shape, expected.shape)
+            self.assertTrue(mx.allclose(out, expected, atol=1e-4, rtol=1e-4))
             expected = mx.grad(dilated_loss, argnums=(0, 1))(x, w, *args)
             grads = mx.grad(conv_loss, argnums=(0, 1))(x, w, *args)
             for grad, exp in zip(grads, expected):
