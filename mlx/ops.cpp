@@ -96,7 +96,7 @@ array indices_or_default(
           << " Got indices with invalid dtype. Indices must be integral.";
       throw std::invalid_argument(msg.str());
     }
-    return astype(indices.value(), uint32);
+    return astype(indices.value(), uint32, s);
   }
 
   Shape shape(x.shape().begin(), x.shape().end() - 2);
@@ -2655,6 +2655,31 @@ array min(
     bool keepdims /* = false */,
     StreamOrDevice s /* = {} */) {
   return min(a, std::vector<int>{axis}, keepdims, s);
+}
+
+std::tuple<array, array>
+minmax(const array& a, bool keepdims, StreamOrDevice s /* = {}*/) {
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  return {min(a, axes, keepdims, s), max(a, axes, keepdims, s)};
+}
+
+std::tuple<array, array> minmax(
+    const array& a,
+    const std::vector<int>& axes,
+    bool keepdims /* = false */,
+    StreamOrDevice s /* = {}*/) {
+  return {min(a, axes, keepdims, s), max(a, axes, keepdims, s)};
+}
+
+std::tuple<array, array> minmax(
+    const array& a,
+    int axis,
+    bool keepdims /* = false */,
+    StreamOrDevice s /* = {} */) {
+  return {
+      min(a, std::vector<int>{axis}, keepdims, s),
+      max(a, std::vector<int>{axis}, keepdims, s)};
 }
 
 array argmin(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {

@@ -134,6 +134,7 @@ Operations
    meshgrid
    min
    minimum
+   minmax
    moveaxis
    multiply
    nan_to_num
