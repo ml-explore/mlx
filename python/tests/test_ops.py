@@ -4204,15 +4204,29 @@ class TestOps(mlx_tests.MLXTestCase):
                 out_mlx = getattr(mx, op)(a_mlx, b_mlx)
                 out_np = getattr(np, op)(a_np, b_np)
                 self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
-        for op in ["left_shift", "right_shift"]:
-            for t in types:
-                a_mlx = a.astype(t)
-                b_mlx = mx.random.randint(0, t.size, (1000,)).astype(t)
+        for t in types:
+            width = t.size * 8
+            signed = mx.issubdtype(t, mx.signedinteger)
+            counts = [0, 1, width - 1, width, width + 1]
+            if signed:
+                counts.extend([-1, -width + 1, -width, -width - 1])
+            values = [0, 1, 5, -1, -5] if signed else [0, 1, 5]
+            cases = [
+                (a.astype(t), mx.random.randint(0, width, (1000,)).astype(t)),
+                (
+                    mx.array(values, dtype=t)[:, None],
+                    mx.array(counts, dtype=t)[None, :],
+                ),
+            ]
+            for case, (a_mlx, b_mlx) in enumerate(cases):
                 a_np = np.array(a_mlx)
                 b_np = np.array(b_mlx)
-                out_mlx = getattr(mx, op)(a_mlx, b_mlx)
-                out_np = getattr(np, op)(a_np, b_np)
-                self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
+                for op in ["left_shift", "right_shift"]:
+                    with self.subTest(dtype=t, op=op, case=case):
+                        expected = getattr(np, op)(a_np, b_np)
+                        actual = getattr(mx, op)(a_mlx, b_mlx)
+                        self.assertEqual(actual.dtype, t)
+                        np.testing.assert_array_equal(np.array(actual), expected)
 
         for t in types:
             a_mlx = a.astype(t)

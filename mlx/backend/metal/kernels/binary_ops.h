@@ -313,14 +313,16 @@ struct BitwiseXor {
 struct LeftShift {
   template <typename T>
   T operator()(T x, T y) thread {
-    return x << y;
+    auto valid = y >= 0 && y < static_cast<T>(sizeof(T) * 8);
+    return valid ? x << y : T(0);
   };
 };
 
 struct RightShift {
   template <typename T>
   T operator()(T x, T y) thread {
-    return x >> y;
+    auto valid = y >= 0 && y < static_cast<T>(sizeof(T) * 8);
+    return valid ? x >> y : (x < 0) ? T(-1) : T(0);
   };
 };
 
