@@ -11,7 +11,6 @@
 #include <limits>
 #include <numeric>
 #include <ostream>
-#include <tuple>
 #include <variant>
 
 #include "mlx/einsum.h"

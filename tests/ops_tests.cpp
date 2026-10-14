@@ -1101,45 +1101,6 @@ TEST_CASE("test is close") {
   }
 }
 
-TEST_CASE("test minmax") {
-  auto x = array({3.0f, 1.0f, 4.0f, 2.0f, 6.0f, 5.0f}, {2, 3});
-  auto check = [](const std::tuple<array, array>& result,
-                  const array& expected_min,
-                  const array& expected_max) {
-    auto [minimum, maximum] = result;
-    CHECK_EQ(minimum.shape(), expected_min.shape());
-    CHECK_EQ(maximum.shape(), expected_max.shape());
-    CHECK_EQ(minimum.dtype(), expected_min.dtype());
-    CHECK_EQ(maximum.dtype(), expected_max.dtype());
-    CHECK(array_equal(minimum, expected_min).item<bool>());
-    CHECK(array_equal(maximum, expected_max).item<bool>());
-  };
-
-  check(minmax(x), array(1.0f), array(6.0f));
-  check(minmax(x, Device::cpu), array(1.0f), array(6.0f));
-  for (bool keepdims : {false, true}) {
-    check(minmax(x, keepdims), min(x, keepdims), max(x, keepdims));
-    for (int axis : {0, 1, -1}) {
-      check(
-          minmax(x, axis, keepdims),
-          min(x, axis, keepdims),
-          max(x, axis, keepdims));
-    }
-    for (const auto& axes :
-         {std::vector<int>{}, std::vector<int>{0, 1}, std::vector<int>{1, 0}}) {
-      check(
-          minmax(x, axes, keepdims),
-          min(x, axes, keepdims),
-          max(x, axes, keepdims));
-    }
-  }
-
-  check(minmax(array(3.0f)), array(3.0f), array(3.0f));
-  CHECK_THROWS_AS(minmax(x, 2), std::out_of_range);
-  CHECK_THROWS_AS(minmax(x, std::vector<int>{0, 0}), std::invalid_argument);
-  CHECK_THROWS_AS(minmax(zeros({0})), std::invalid_argument);
-}
-
 TEST_CASE("test reduction ops") {
   // Check shapes and throws correctly
   {

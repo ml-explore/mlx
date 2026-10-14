@@ -3,7 +3,6 @@
 #pragma once
 
 #include <optional>
-#include <tuple>
 
 #include "mlx/api.h"
 #include "mlx/array.h"
