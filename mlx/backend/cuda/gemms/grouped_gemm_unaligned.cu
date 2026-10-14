@@ -87,7 +87,6 @@ __global__ void prepare_grouped_mm_data(
     out_lds[group] = N;
     // Fill pointers.
     auto offset = group == 0 ? 0 : cum_histo[group - 1];
-    // In 64 bits: an expert tensor past 2 GiB overflowed the int product.
     a_ptrs[group] =
         a_start + static_cast<int64_t>(offset) * item_size * a_batch_stride;
     b_ptrs[group] =

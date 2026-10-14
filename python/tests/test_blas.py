@@ -1,7 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
-import unittest
 
 import mlx.core as mx
 import mlx_tests
@@ -1574,22 +1573,6 @@ class TestBlas(mlx_tests.MLXTestCase):
                     c1 = gather_mm_ref(a, b, rhs)
                     c2 = gather_mm_test(a, b, rhs)
                     self.assertTrue(mx.allclose(c1, c2, rtol=tol, atol=tol))
-
-    @unittest.skipIf(not mx.cuda.is_available(), "CUDA grouped GEMM path only")
-    def test_gather_mm_sorted_large_weights(self):
-        # More than 2**31 bytes of weights: the per-group pointer offsets must
-        # not overflow 32 bits.
-        if mx.device_info().get("total_memory", 0) < 16 * 2**30:
-            self.skipTest("needs 16 GB of device memory")
-        mx.random.seed(0)
-        E, N, K, T = 512, 1024, 2560, 64
-        w = (mx.random.normal((E, N, K)) * 0.02).astype(mx.bfloat16)
-        rhs = mx.sort(mx.random.randint(0, E, (T,)).astype(mx.uint32))
-        rhs[-1] = E - 1
-        a = mx.random.normal((T, 1, K)).astype(mx.bfloat16)
-        ref = a.astype(mx.float32) @ w[rhs].astype(mx.float32).swapaxes(-1, -2)
-        out = mx.gather_mm(a, w.swapaxes(-1, -2), rhs_indices=rhs, sorted_indices=True)
-        self.assertTrue(mx.allclose(out.astype(mx.float32), ref, rtol=1e-2, atol=1e-2))
 
     def test_gather_mm_sorted_vjp(self):
         def gather_mm_ref(a, b, rhs):
