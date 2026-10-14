@@ -441,7 +441,7 @@ void CommandEncoder::barrier() {
   get_command_encoder()->memoryBarrier(MTL::BarrierScopeBuffers);
 }
 
-void CommandEncoder::end_encoding() {
+void CommandEncoder::end_encoding(bool wait_in_flight) {
   // Each command encoder has a unique fence. We also store a map of
   // all previous outputs of command encoders to their corresponding fence.
   // - The command encoder records its inputs and outputs.
@@ -475,6 +475,16 @@ void CommandEncoder::end_encoding() {
         if (waiting_on.find(it->second) == waiting_on.end()) {
           encoder_->waitForFence(it->second.get());
           waiting_on.insert(it->second);
+        }
+      }
+    }
+    // A spin wait must start after all earlier encoders, as it might block
+    // earlier operations to be finished.
+    // See https://github.com/ml-explore/mlx/pull/4689
+    if (wait_in_flight) {
+      for (auto& [_, fence] : prev_ce_outputs_) {
+        if (waiting_on.insert(fence).second) {
+          encoder_->waitForFence(fence.get());
         }
       }
     }
