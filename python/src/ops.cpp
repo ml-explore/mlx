@@ -2739,6 +2739,37 @@ void init_ops(nb::module_& m) {
             array: The output array with the corresponding axes reduced.
       )pbdoc");
   m.def(
+      "minmax",
+      [](const mx::array& a,
+         const IntOrVec& axis,
+         bool keepdims,
+         mx::StreamOrDevice s) -> std::tuple<mx::array, mx::array> {
+        auto axes = get_reduce_axes(axis, a.ndim());
+        return mx::minmax(a, axes, keepdims, s);
+      },
+      nb::arg(),
+      "axis"_a = nb::none(),
+      "keepdims"_a = false,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def minmax(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, *, stream: StreamOrDevice = None) -> tuple[array, array]"),
+      R"pbdoc(
+        Return the minimum and maximum over the given axes.
+
+        Equivalent to calling :func:`min` and :func:`max` separately.
+
+        Args:
+            a (array): Input array.
+            axis (int or list(int), optional): Axis or axes to reduce over.
+              If unspecified, reduce over the entire array.
+            keepdims (bool, optional): Keep reduced axes as singleton
+              dimensions. Default: ``False``.
+
+        Returns:
+            tuple(array, array): The minimum and maximum arrays, in that order.
+      )pbdoc");
+  m.def(
       "logcumsumexp",
       [](const mx::array& a,
          std::optional<int> axis,
