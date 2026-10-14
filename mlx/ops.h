@@ -786,6 +786,23 @@ min(const array& a,
 MLX_API array
 min(const array& a, int axis, bool keepdims = false, StreamOrDevice s = {});
 
+MLX_API std::tuple<array, array>
+minmax(const array& a, bool keepdims, StreamOrDevice s = {});
+inline std::tuple<array, array> minmax(const array& a, StreamOrDevice s = {}) {
+  return minmax(a, false, to_stream(s));
+}
+
+/** The minimum and maximum of the elements of an array along the given axes. */
+MLX_API std::tuple<array, array> minmax(
+    const array& a,
+    const std::vector<int>& axes,
+    bool keepdims = false,
+    StreamOrDevice s = {});
+
+/** The minimum and maximum of the elements of an array along the given axis. */
+MLX_API std::tuple<array, array>
+minmax(const array& a, int axis, bool keepdims = false, StreamOrDevice s = {});
+
 /** Returns the Hanning window of size M. */
 MLX_API array hanning(int M, StreamOrDevice s = {});
 
