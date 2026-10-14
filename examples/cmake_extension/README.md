@@ -1,4 +1,7 @@
 
+The example builds `mlx_sample_extensions` as a top-level Python extension
+module. No `._ext` suffix or Python wrapper package is required.
+
 ## Build
 
 ```
