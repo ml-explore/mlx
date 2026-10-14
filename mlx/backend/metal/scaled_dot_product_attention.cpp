@@ -1719,6 +1719,16 @@ bool ScaledDotProductAttention::use_fallback(
     return false;
   }
 
+  // Causal 16-bit queries with 512 to 1023 rows (e.g. the last chunk of a
+  // chunked prefill) are also faster on the fused kernel, as long as there are
+  // enough heads to keep the GPU busy.
+  if (metal::is_nax_available() &&
+      (q.dtype() == float16 || q.dtype() == bfloat16) &&
+      query_head_dim == 256 && do_causal && !has_arr_mask &&
+      query_sequence_length >= 512 && int64_t(q.shape(0)) * q.shape(1) >= 8) {
+    return false;
+  }
+
   if (!metal::is_nax_available() && q.dtype() != float32 && do_causal &&
       query_head_dim == 256 && query_sequence_length >= 2048 &&
       query_sequence_length == k.shape(2)) {
