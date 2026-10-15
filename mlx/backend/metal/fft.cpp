@@ -860,7 +860,15 @@ void nd_fft_op(
     fft_op(in_arr, out_arr, axis, inverse, step_real, inplace, s);
   }
 
-  metal::get_command_encoder(s).add_temporaries(std::move(temp_arrs));
+  // A size one axis can alias its output onto its input, so a temporary can
+  // end up sharing a buffer with in or out and must not be registered as one.
+  auto& encoder = metal::get_command_encoder(s);
+  for (auto& temp : temp_arrs) {
+    if (temp.buffer().ptr() != in.buffer().ptr() &&
+        temp.buffer().ptr() != out.buffer().ptr()) {
+      encoder.add_temporary(std::move(temp));
+    }
+  }
 }
 
 void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
