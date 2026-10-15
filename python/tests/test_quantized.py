@@ -536,6 +536,134 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertLess((y_q - y_hat).abs().max(), tol)
 
     @unittest.skipIf("CI" in os.environ, "too slow in CI")
+    def test_qmm_int8(self):
+        # With MLX_QMM_INT8 set, eligible affine qmms run on int8 where the
+        # matrix kernels support it. The result stays close to the float one.
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        dtype = mx.float16 if (mx.default_device() == mx.gpu) else mx.float32
+        tests = product(
+            [128, 64, 32],  # group_size
+            [2, 3, 4, 5, 6, 8],  # bits
+            [(64, 128, 256), (100, 96, 512), (257, 200, 1024)],  # M, N, K
+        )
+        for group_size, bits, (M, N, K) in tests:
+            with self.subTest(shape=(M, N, K), group_size=group_size, bits=bits):
+                x = (mx.random.normal(shape=(M, K), key=k1) / K**0.5).astype(dtype)
+                w = (mx.random.normal(shape=(N, K), key=k2) / K**0.5).astype(dtype)
+                w_q, scales, biases = mx.quantize(w, group_size, bits)
+
+                ys = []
+                # 1 and 4: a scale per block or per 4 blocks of x, 2: per row
+                for flag in ("0", "1", "2", "4"):
+                    # The switch is read when the op is built
+                    with mlx_tests.scoped_env(MLX_QMM_INT8=flag):
+                        y = mx.quantized_matmul(
+                            x, w_q, scales, biases, True, group_size, bits
+                        )
+                    mx.eval(y)
+                    ys.append(y.astype(mx.float32))
+                for y in ys[1:]:
+                    self.assertEqual(ys[0].shape, y.shape)
+                    err = mx.linalg.norm(y - ys[0]) / mx.linalg.norm(ys[0])
+                    self.assertLess(err.item(), 5e-2)
+
+    def test_qmm_int8_reference(self):
+        # Compare with x times the dequantized weights. The bound is for
+        # Gaussian inputs, heavy tailed inputs measure up to 7%.
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        dtype = mx.float16 if (mx.default_device() == mx.gpu) else mx.float32
+        tests = product(
+            ["1", "2", "4"],  # MLX_QMM_INT8
+            [128, 64, 32],  # group_size
+            [4, 8],  # bits
+            [(64, 128, 256), (100, 96, 512), (257, 200, 1024)],  # M, N, K
+        )
+        for flag, group_size, bits, (M, N, K) in tests:
+            with self.subTest(
+                flag=flag, group_size=group_size, bits=bits, shape=(M, N, K)
+            ):
+                x = (mx.random.normal(shape=(M, K), key=k1) / K**0.5).astype(dtype)
+                w = (mx.random.normal(shape=(N, K), key=k2) / K**0.5).astype(dtype)
+                w_q, scales, biases = mx.quantize(w, group_size, bits)
+                w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
+                y_ref = x.astype(mx.float32) @ w_hat.astype(mx.float32).T
+                with mlx_tests.scoped_env(MLX_QMM_INT8=flag):
+                    y = mx.quantized_matmul(
+                        x, w_q, scales, biases, True, group_size, bits
+                    )
+                err = mx.linalg.norm(y.astype(mx.float32) - y_ref)
+                self.assertLess((err / mx.linalg.norm(y_ref)).item(), 5e-2)
+
+    def test_qmm_int8_semantics(self):
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        dtype = mx.float16 if (mx.default_device() == mx.gpu) else mx.float32
+
+        def operands(M, N, K):
+            x = (mx.random.normal(shape=(M, K), key=k1) / K**0.5).astype(dtype)
+            w = (mx.random.normal(shape=(N, K), key=k2) / K**0.5).astype(dtype)
+            return x, w
+
+        def qmm(x, q, flag, group_size=64, bits=4, transpose=True):
+            # The switch is read when the op is built
+            with mlx_tests.scoped_env(MLX_QMM_INT8=flag):
+                y = mx.quantized_matmul(x, *q, transpose, group_size, bits)
+            mx.eval(y)
+            return y
+
+        # Unset, 0 and values that are not modes keep the default path
+        x, w = operands(128, 128, 512)
+        q = mx.quantize(w, 64, 4)
+        y_off = qmm(x, q, "0")
+        for flag in (None, "3", "8", "-1"):
+            self.assertTrue(mx.array_equal(qmm(x, q, flag), y_off).item())
+
+        # Fewer than 64 rows, K that is not a multiple of 64, 1-bit weights and
+        # weights that are not transposed keep the default path
+        cases = []
+        for M, N, K in [(63, 128, 512), (1, 128, 512), (128, 128, 96)]:
+            x, w = operands(M, N, K)
+            cases.append((x, mx.quantize(w, 32, 4), 32, 4, True))
+        x, w = operands(128, 128, 512)
+        cases.append((x, mx.quantize(w, 64, 1), 64, 1, True))
+        w = (mx.random.normal(shape=(512, 128), key=k2) / 512**0.5).astype(dtype)
+        cases.append((x, mx.quantize(w, 64, 4), 64, 4, False))
+        for i, (x, q, group_size, bits, transpose) in enumerate(cases):
+            y_off = qmm(x, q, "0", group_size, bits, transpose)
+            for flag in ("1", "2", "4"):
+                with self.subTest(case=i, flag=flag):
+                    y = qmm(x, q, flag, group_size, bits, transpose)
+                    self.assertTrue(mx.array_equal(y, y_off).item())
+
+        # A row does not depend on the rows after it and a column not on the
+        # columns after it. The default path rounds differently by shape, so
+        # the rows are only close where the path does not run.
+        x, w = operands(128, 128, 512)
+        q = mx.quantize(w, 64, 4)
+        staged = not mx.array_equal(qmm(x, q, "1"), qmm(x, q, "0")).item()
+        for flag in ("1", "2", "4"):
+            for M, N, K in [(257, 128, 512), (300, 200, 512)]:
+                with self.subTest(flag=flag, shape=(M, N, K)):
+                    x, w = operands(M, N, K)
+                    q = mx.quantize(w, 64, 4)
+                    y = qmm(x, q, flag)
+                    y_part = qmm(x[:256], q, flag)
+                    err = mx.linalg.norm(y[:256].astype(mx.float32) - y_part)
+                    self.assertLess((err / mx.linalg.norm(y_part)).item(), 1e-3)
+                    if staged:
+                        self.assertTrue(mx.array_equal(y[:256], y_part).item())
+            with self.subTest(flag=flag, columns=True):
+                x, w = operands(128, 200, 512)
+                q = mx.quantize(w, 64, 4)
+                y = qmm(x, q, flag)
+                y_part = qmm(x, [a[:192] for a in q], flag)
+                err = mx.linalg.norm(y[:, :192].astype(mx.float32) - y_part)
+                self.assertLess((err / mx.linalg.norm(y_part)).item(), 1e-3)
+                if staged:
+                    self.assertTrue(mx.array_equal(y[:, :192], y_part).item())
+
     def test_qmm_non_transposed(self):
         # The non-transposed matmul (w is [K, N]) is reachable mainly from the
         # vjp of a quantized linear layer, so it gets much less coverage than

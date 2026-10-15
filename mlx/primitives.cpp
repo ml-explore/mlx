@@ -3685,7 +3685,8 @@ std::vector<array> QuantizedMatmul::jvp(
 bool QuantizedMatmul::is_equivalent(const Primitive& other) const {
   const QuantizedMatmul& qm_other = static_cast<const QuantizedMatmul&>(other);
   return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
-      mode_ == qm_other.mode_ && transpose_ == qm_other.transpose_;
+      mode_ == qm_other.mode_ && transpose_ == qm_other.transpose_ &&
+      compute_8bit_ == qm_other.compute_8bit_;
 }
 
 std::vector<Shape> QuantizedMatmul::output_shapes(
