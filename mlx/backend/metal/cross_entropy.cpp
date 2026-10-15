@@ -94,8 +94,10 @@ void CrossEntropyVJP::eval_gpu(
   auto& d = metal::device(s.device);
   auto& compute_encoder = metal::get_command_encoder(s);
 
-  bool donate_in = in_pre.is_donatable() || !in_pre.flags().row_contiguous;
-  auto in = ensure_row_contiguous(in_pre, compute_encoder, s);
+  // The copy is donated to the output so it must not be a temporary.
+  bool in_copied = !in_pre.flags().row_contiguous;
+  bool donate_in = in_copied || in_pre.is_donatable();
+  array in = in_copied ? contiguous_copy_gpu(in_pre, s) : in_pre;
   auto targets = ensure_row_contiguous(inputs[1], compute_encoder, s);
   auto loss = ensure_row_contiguous(inputs[2], compute_encoder, s);
   auto cotan = ensure_row_contiguous(inputs[3], compute_encoder, s);
