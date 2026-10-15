@@ -2133,3 +2133,349 @@ template <
     });
   });
 }
+
+// Staged int8 qmm: weights and activations are rounded to int8 with one scale
+// per row and the product is accumulated in int32.
+
+// Fixed point bits of the weight fold w8 = (q * a + b) >> QMM_I8_FRAC
+MLX_MTL_CONST int QMM_I8_FRAC = 16;
+
+// Unpack 4 consecutive codes, p points at the start of a pack
+template <int bits>
+inline int4 qmm_i8_unpack4(const device uint8_t* p, int i) {
+  static_assert(
+      bits == 2 || bits == 3 || bits == 4 || bits == 5 || bits == 6 ||
+          bits == 8,
+      "Template undefined for bits not in {2, 3, 4, 5, 6, 8}");
+
+  constexpr uint mask = (1u << bits) - 1u;
+
+  uint w;
+  if (bits == 4) {
+    w = *(const device uint16_t*)(p + 2 * i);
+  } else if (bits == 8) {
+    w = *(const device uint32_t*)(p + 4 * i);
+  } else {
+    const int offset = 4 * bits * i;
+    p += offset >> 3;
+    w = p[0];
+    if (bits > 2) {
+      w |= uint(p[1]) << 8;
+    }
+    if (bits > 4) {
+      w |= uint(p[2]) << 16;
+    }
+    w >>= (offset & 7);
+  }
+
+  return int4(
+      w & mask,
+      (w >> bits) & mask,
+      (w >> (2 * bits)) & mask,
+      (w >> (3 * bits)) & mask);
+}
+
+// The scale of each row of the weights and its fixed point reciprocal
+template <typename T, const int bits>
+[[kernel]] void affine_qmm_i8_row_scales(
+    const device T* scales [[buffer(0)]],
+    const device T* biases [[buffer(1)]],
+    device float* w_scale [[buffer(2)]],
+    device float* w_inv [[buffer(3)]],
+    const constant int& K_g [[buffer(4)]],
+    uint tid [[thread_position_in_grid]]) {
+  constexpr float q_max = float((1 << bits) - 1);
+
+  scales += size_t(tid) * K_g;
+  biases += size_t(tid) * K_g;
+
+  float extent = 0.0f;
+  for (int g = 0; g < K_g; g++) {
+    const float s = float(scales[g]);
+    const float b = float(biases[g]);
+    extent = max(extent, max(fabs(b), fabs(fma(s, q_max, b))));
+  }
+
+  const float sw = max(extent * (1.0f / 127.0f), 1e-30f);
+  w_scale[tid] = sw;
+  w_inv[tid] = float(1 << QMM_I8_FRAC) / sw;
+}
+
+// Quantize each row of x to int8, one threadgroup per row. A block of 64 has
+// the row scale / 2^e, one e per x_span blocks. Output [M/64][K/64][64][64].
+template <typename T>
+[[kernel]] void affine_qmm_i8_quantize_x(
+    const device T* x [[buffer(0)]],
+    device int8_t* x8 [[buffer(1)]],
+    device float* x_scale [[buffer(2)]],
+    device uint8_t* x_exp [[buffer(3)]],
+    const constant int& K [[buffer(4)]],
+    const constant int& M [[buffer(5)]],
+    const constant int& max_exp [[buffer(6)]],
+    const constant int& x_span [[buffer(7)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]],
+    uint n_simd [[simdgroups_per_threadgroup]]) {
+  constexpr int BM = 64;
+  constexpr int BK = 64;
+
+  threadgroup float shared[33];
+
+  const int row = tid.y;
+  const int n_blocks = K / BK;
+  const size_t tile = size_t(row / BM) * n_blocks + lid;
+  device char4* q = (device char4*)(x8 + (tile * BM + row % BM) * BK);
+
+  // The exponent of the first block is stored twice so that the matmul can
+  // read the change from the block before
+  x_exp += size_t(row) * (n_blocks + 1);
+
+  if (row >= M) {
+    for (int i = 0; i < BK / 4; i++) {
+      q[i] = char4(0);
+    }
+    x_exp[lid + 1] = 0;
+    if (lid == 0) {
+      x_exp[0] = 0;
+    }
+    return;
+  }
+
+  x += size_t(row) * K + lid * BK;
+
+  float vals[BK];
+  float block_max = 0.0f;
+  for (int i = 0; i < BK; i++) {
+    vals[i] = float(x[i]);
+    block_max = max(block_max, fabs(vals[i]));
+  }
+  const float simd_row_max = simd_max(block_max);
+  if (simd_lid == 0) {
+    shared[simd_gid] = simd_row_max;
+  }
+
+  // The blocks that share an exponent are threads next to each other
+  float span_max = block_max;
+  if (x_span >= 2) {
+    span_max = max(span_max, simd_shuffle_xor(span_max, ushort(1)));
+  }
+  if (x_span >= 4) {
+    span_max = max(span_max, simd_shuffle_xor(span_max, ushort(2)));
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  if (lid == 0) {
+    float row_max = shared[0];
+    for (uint i = 1; i < n_simd; i++) {
+      row_max = max(row_max, shared[i]);
+    }
+    shared[32] = max(row_max * (1.0f / 127.0f), 1e-12f);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  const float sx = shared[32];
+  const float inv = 1.0f / sx;
+
+  // Halve the scale of these blocks while their values still fit in int8
+  float t = span_max * inv;
+  int e = 0;
+  while (e < max_exp && t * 2.0f < 127.5f) {
+    t *= 2.0f;
+    e++;
+  }
+  const float gain = float(1 << e);
+
+  for (int i = 0; i < BK / 4; i++) {
+    const float4 v =
+        float4(vals[4 * i], vals[4 * i + 1], vals[4 * i + 2], vals[4 * i + 3]);
+    q[i] = char4(clamp(int4(round((v * inv) * gain)), -127, 127));
+  }
+
+  x_exp[lid + 1] = e;
+  if (lid == 0) {
+    x_exp[0] = e;
+  }
+  // The results are in the units of the last block
+  if (lid == n_blocks - 1) {
+    x_scale[row] = sx / gain;
+  }
+}
+
+// Same structure as qmm_t_nax_tgp_impl, with int8 tiles and an int32 sum.
+// x_span is 0 for one scale per row of x, or the blocks sharing an exponent.
+template <typename T, const int group_size, const int bits, const int x_span>
+[[kernel]] void affine_qmm_t_nax_i8(
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device float* w_inv [[buffer(3)]],
+    const device float* w_scale [[buffer(4)]],
+    const device int8_t* x8 [[buffer(5)]],
+    const device float* x_scale [[buffer(6)]],
+    device T* y [[buffer(7)]],
+    const device uint8_t* x_exp [[buffer(8)]],
+    const constant int& K [[buffer(9)]],
+    const constant int& N [[buffer(10)]],
+    const constant int& M [[buffer(11)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]]) {
+  constexpr int BM = 64;
+  constexpr int BN = 64;
+  constexpr int BK = 64;
+  constexpr int WM = 2;
+  constexpr int WN = 2;
+  constexpr int BK_padded = BK + 16;
+
+  // Each thread folds VPT weights of one row, all in one quantization group
+  constexpr int VPT = (BN * BK) / (WM * WN * SIMD_SIZE);
+  static_assert(
+      VPT % 8 == 0 && BK % VPT == 0 && group_size % VPT == 0,
+      "A thread stages whole packs of the weights within one group");
+
+  constexpr int pack_factor = get_pack_factor<bits, 8>();
+  constexpr int bytes_per_pack = get_bytes_per_pack<bits>();
+
+  threadgroup uint Ws_storage[(BN * BK_padded) / 4];
+  threadgroup int8_t* Ws = (threadgroup int8_t*)Ws_storage;
+
+  constexpr short SM = BM / WM;
+  constexpr short SN = BN / WN;
+  constexpr short SK = 32;
+
+  constexpr short TM = SM / 16;
+  constexpr short TN = SN / 16;
+  constexpr short TK = SK / 16;
+
+  const int y_row = tid.y * BM;
+  const int y_col = tid.x * BN;
+  const short tm = SM * (simd_gid / WN);
+  const short tn = SN * (simd_gid % WN);
+
+  // The part of the weight tile this thread stages
+  const int nl = lid / (BK / VPT);
+  const int kl = (lid % (BK / VPT)) * VPT;
+  const int n = y_col + nl;
+  const bool valid = n < N;
+
+  threadgroup int8_t* dst = Ws + nl * BK_padded + kl;
+  const device uint8_t* wl = (const device uint8_t*)w;
+  float inv = 0.0f;
+  if (valid) {
+    wl += size_t(n) * (K / pack_factor) * bytes_per_pack;
+    scales += size_t(n) * (K / group_size);
+    biases += size_t(n) * (K / group_size);
+    inv = w_inv[n];
+  } else {
+    for (int i = 0; i < VPT / 4; i++) {
+      *(threadgroup uint*)(dst + 4 * i) = 0;
+    }
+  }
+
+  // x8 has one BM x BK block per row tile and BK columns of K
+  x8 += (size_t(tid.y) * (K / BK) * BM + tm) * BK;
+
+  // A thread has 8 values of the accumulator for each of 4 rows
+  constexpr int exp_ld = BaseNAXFrag::kElemRowsJump;
+  const int x_exp_stride = K / BK + 1;
+  x_exp += size_t(y_row + tm + BaseNAXFrag::get_coord().y) * x_exp_stride;
+
+  NAXTile<int32_t, TM, TN> Dtile;
+  Dtile.clear();
+
+  for (int k = 0; k < K; k += BK) {
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    if (valid) {
+      const int kk = k + kl;
+      const int a = int(rint(float(scales[kk / group_size]) * inv));
+      const int b = int(rint(float(biases[kk / group_size]) * inv)) +
+          (1 << (QMM_I8_FRAC - 1));
+      const device uint8_t* p = wl + (kk / pack_factor) * bytes_per_pack;
+
+      STEEL_PRAGMA_UNROLL
+      for (int i = 0; i < VPT / 4; i++) {
+        const int4 q = qmm_i8_unpack4<bits>(p, i);
+        const int4 v = (q * a + b) >> QMM_I8_FRAC;
+        *(threadgroup uint*)(dst + 4 * i) = as_type<uint>(char4(v));
+      }
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Move the accumulator of each row to the scale of this block of x. A
+    // fragment has 4 values for each of 2 rows.
+    constexpr int shift_every = x_span > 0 ? x_span : 1;
+    const bool shift = x_span > 0 && (k / BK) % shift_every == 0;
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; shift && i < TM; i++) {
+      typedef metal::vec<int32_t, BaseNAXFrag::kElemsPerFrag> frag_t;
+      const device uint8_t* e0 =
+          x_exp + size_t(i * BaseNAXFrag::kFragRows) * x_exp_stride + k / BK;
+      const device uint8_t* e1 = e0 + size_t(exp_ld) * x_exp_stride;
+      const int s0 = int(e0[1]) - int(e0[0]);
+      const int s1 = int(e1[1]) - int(e1[0]);
+      const int l0 = max(s0, 0);
+      const int l1 = max(s1, 0);
+      const int r0 = max(-s0, 0);
+      const int r1 = max(-s1, 0);
+      const frag_t left = frag_t(l0, l0, l0, l0, l1, l1, l1, l1);
+      const frag_t right = frag_t(r0, r0, r0, r0, r1, r1, r1, r1);
+      const frag_t rounding = (frag_t(1) << right) >> 1;
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < TN; j++) {
+        Dtile.frag_at(i, j) =
+            ((Dtile.frag_at(i, j) << left) + rounding) >> right;
+      }
+    }
+
+    STEEL_PRAGMA_NO_UNROLL
+    for (int kk1 = 0; kk1 < BK; kk1 += SK) {
+      NAXTile<int8_t, TM, TK> Atile;
+      NAXTile<int8_t, TN, TK> Btile;
+
+      volatile int compiler_barrier;
+
+      Atile.load(x8 + kk1, BK);
+      Btile.template load<int8_t, BK_padded, 1>(Ws + tn * BK_padded + kk1);
+
+      tile_matmad_nax(
+          Dtile,
+          Atile,
+          metal::bool_constant<false>{},
+          Btile,
+          metal::bool_constant<true>{});
+
+      (void)compiler_barrier;
+    }
+
+    x8 += BM * BK;
+  }
+
+  // Guarded stores are slow, only use them at the edges of the output
+  const bool interior = (y_row + tm + SM <= M) && (y_col + tn + SN <= N);
+  dispatch_bool(interior, [&](auto kInterior) {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < TM; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < TN; j++) {
+        const auto frag = Dtile.frag_at(i, j);
+        STEEL_PRAGMA_UNROLL
+        for (short e = 0; e < BaseNAXFrag::kElemsPerFrag; e++) {
+          const short2 pos = BaseNAXFrag::get_coord(e);
+          const int r = y_row + tm + i * BaseNAXFrag::kFragRows + pos.y;
+          const int c = y_col + tn + j * BaseNAXFrag::kFragCols + pos.x;
+          if constexpr (kInterior.value) {
+            y[size_t(r) * N + c] =
+                static_cast<T>(float(frag[e]) * x_scale[r] * w_scale[c]);
+          } else if (r < M && c < N) {
+            y[size_t(r) * N + c] =
+                static_cast<T>(float(frag[e]) * x_scale[r] * w_scale[c]);
+          }
+        }
+      }
+    }
+  });
+}
