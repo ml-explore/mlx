@@ -7,13 +7,14 @@
 #include <delayimp.h>
 // clang-format on
 
-#include <cuda_runtime_api.h>
-
 namespace mlx::core::cu {
 
 // Defined in dirs.cpp to avoid invalidating compile cache.
 const char* cuda_bin_dir();
 const char* cudnn_bin_dir();
+// Defined in dirs.cpp, as this file can be compiled by applications linking
+// with static MLX, which may not have the CUDA headers.
+std::string python_package_bin_subdir(const char* name);
 
 namespace fs = std::filesystem;
 
@@ -23,17 +24,8 @@ inline fs::path relative_to_current_binary(const char* relative) {
 
 // Get the dir of the DLLs installed by the nvidia python package |name|.
 inline fs::path python_package_bin_dir(const char* name) {
-#if CUDART_VERSION < 13000
-  return relative_to_current_binary("../nvidia") / name / "bin";
-#elif CUDART_VERSION < 14000
-  // The CUDA 13 packages put all DLLs in the same dir.
-  return relative_to_current_binary("../nvidia/cu13/bin/x86_64");
-#else
-  static_assert(
-      false,
-      "Please find out the dir of DLLs under site-packages/nvidia "
-      "and add it in this function.");
-#endif
+  return relative_to_current_binary("../nvidia") /
+      python_package_bin_subdir(name);
 }
 
 inline fs::path cublas_dir() {
