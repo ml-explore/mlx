@@ -265,6 +265,14 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
             )
         )
 
+    def test_sharded_to_all_bias(self):
+        # The bias is added after the sum, so all ranks must hold the same bias
+        world = mx.distributed.init()
+        mx.random.seed(world.rank())
+        layer = nn.ShardedToAllLinear(16, 4)
+        biases = mx.distributed.all_gather(layer.bias[None])
+        self.assertTrue(mx.all(biases == biases[0]).item())
+
     def test_shard_predicate(self):
         mx.random.seed(0xF0F0F0F0)
 
