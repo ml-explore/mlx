@@ -12,6 +12,9 @@ namespace mlx::core::cu {
 // Defined in dirs.cpp to avoid invalidating compile cache.
 const char* cuda_bin_dir();
 const char* cudnn_bin_dir();
+// Defined in dirs.cpp, as this file can be compiled by applications linking
+// with static MLX, which may not have the CUDA headers.
+std::string python_package_bin_subdir(const char* name);
 
 namespace fs = std::filesystem;
 
@@ -19,11 +22,17 @@ inline fs::path relative_to_current_binary(const char* relative) {
   return fs::absolute(current_binary_dir() / relative);
 }
 
+// Get the dir of the DLLs installed by the nvidia python package |name|.
+inline fs::path python_package_bin_dir(const char* name) {
+  return relative_to_current_binary("../nvidia") /
+      python_package_bin_subdir(name);
+}
+
 inline fs::path cublas_dir() {
   if (const char* dir = cuda_bin_dir()) {
     return fs::path(dir);
   }
-  return relative_to_current_binary("../nvidia/cublas/bin");
+  return python_package_bin_dir("cublas");
 }
 
 fs::path load_nvrtc() {
@@ -31,10 +40,20 @@ fs::path load_nvrtc() {
   if (const char* dir = cuda_bin_dir()) {
     nvrtc_dir = fs::path(dir);
   } else {
-    nvrtc_dir = relative_to_current_binary("../nvidia/cuda_nvrtc/bin");
+    nvrtc_dir = python_package_bin_dir("cuda_nvrtc");
   }
   // Internally nvrtc loads some libs dynamically, add to search dirs.
   ::AddDllDirectory(nvrtc_dir.c_str());
+  // The search dirs are not used when nvrtc loads nvrtc-builtins, so load it
+  // beforehand, otherwise compiling kernels fails with "failed to open
+  // nvrtc-builtins64_*.dll".
+  for (const auto& dll : fs::directory_iterator(nvrtc_dir)) {
+    if (dll.path().filename().string().starts_with("nvrtc-builtins64") &&
+        dll.path().extension() == ".dll") {
+      ::LoadLibraryW(dll.path().c_str());
+      break;
+    }
+  }
   return nvrtc_dir;
 }
 
@@ -66,12 +85,10 @@ fs::path load_cusolver() {
   if (const char* dir = cuda_bin_dir()) {
     cusolver_dir = dir;
   } else {
-    cusolver_dir = relative_to_current_binary("../nvidia/cusolver/bin");
+    cusolver_dir = python_package_bin_dir("cusolver");
     ::AddDllDirectory(cublas_dir().c_str());
-    ::AddDllDirectory(
-        relative_to_current_binary("../nvidia/cusparse/bin").c_str());
-    ::AddDllDirectory(
-        relative_to_current_binary("../nvidia/nvjitlink/bin").c_str());
+    ::AddDllDirectory(python_package_bin_dir("cusparse").c_str());
+    ::AddDllDirectory(python_package_bin_dir("nvjitlink").c_str());
   }
   ::AddDllDirectory(cusolver_dir.c_str());
   return cusolver_dir;
