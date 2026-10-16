@@ -2,6 +2,7 @@ target_sources(
   mlx
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/array.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/compile.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/config.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/dtype.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/dtype_utils.cpp

@@ -435,7 +435,7 @@ void sdpa_full_self_attention_metal(
   bool pad_default = qL >= 512 && kL >= 512 && !do_causal_ && !mask && !sinks;
   if ((D == 72 || D == 80) && lse == nullptr && metal::is_nax_available() &&
       (q.dtype() == float16 || q.dtype() == bfloat16) &&
-      env::get_var("MLX_SDPA_PAD_HEAD_DIM", pad_default ? 1 : 0) == 1) {
+      config::get("MLX_SDPA_PAD_HEAD_DIM", pad_default ? 1 : 0) == 1) {
     constexpr int pad_to = 96;
     auto& enc = metal::get_command_encoder(s);
     array zero = array(0, q.dtype());
@@ -805,7 +805,7 @@ void sdpa_vector_2pass(
       blocks = 32;
     }
   }
-  if (int blocks_env = env::get_var("MLX_SDPA_BLOCKS", 0); blocks_env > 0) {
+  if (int blocks_env = config::get("MLX_SDPA_BLOCKS", 0); blocks_env > 0) {
     // The 2-pass reduction consumes the partials in simd-width (32) chunks
     // and silently drops the tail otherwise, so round up to a multiple of 32.
     blocks = ((blocks_env + 31) / 32) * 32;
@@ -1020,7 +1020,7 @@ std::tuple<bool, std::string> has_fused_kernel(
     // cost. By default, use it only for one query, GQA factor 8, and no array
     // mask.
     if (query_head_dim == 512) {
-      int min_key_sequence_length = env::get_var("MLX_SDPA_D512_MIN_KL", 1024);
+      int min_key_sequence_length = config::get("MLX_SDPA_D512_MIN_KL", 1024);
       bool always = (min_key_sequence_length == 0);
       if (!always && query_sequence_length != 1) {
         msg << "the vector attention kernel for head dim 512 defaults to "
@@ -1122,14 +1122,14 @@ array vjp_row_slice(const array& x, int t0, int len) {
 std::pair<int, int> sdpa_vjp_blocks(int B, int H, int qL, int kL, Dtype ctype) {
   constexpr int kDefaultBlock = 1024;
 
-  int blk = env::get_var("MLX_SDPA_VJP_BLOCK", kDefaultBlock);
+  int blk = config::get("MLX_SDPA_VJP_BLOCK", kDefaultBlock);
 
   int bq = std::min(blk, qL);
   int bk = std::min(blk, kL);
-  if (int e = env::get_var("MLX_SDPA_VJP_BQ", 0); e > 0) {
+  if (int e = config::get("MLX_SDPA_VJP_BQ", 0); e > 0) {
     bq = std::min(e, qL);
   }
-  if (int e = env::get_var("MLX_SDPA_VJP_BK", 0); e > 0) {
+  if (int e = config::get("MLX_SDPA_VJP_BK", 0); e > 0) {
     bk = std::min(e, kL);
   }
   return {bq, bk};
@@ -1642,7 +1642,7 @@ bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
   if (s.device != Device::gpu) {
     return true;
   }
-  if (env::get_var("MLX_SDPA_VJP_FALLBACK", 0) != 0) {
+  if (config::get("MLX_SDPA_VJP_FALLBACK", 0) != 0) {
     return true;
   }
   auto dt = q.dtype();
