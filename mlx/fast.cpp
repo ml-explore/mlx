@@ -1187,7 +1187,11 @@ std::vector<array> gated_delta_update(
     return std::vector<array>{out, state};
   };
 
-  if (!GatedDeltaUpdate::use_fallback(Hk, Dk, Hv, Dv, has_mask, s)) {
+  // The fused Metal kernels read the gate as [B, T, Hv]. A per-channel gate
+  // [B, T, Hv, Dk] must take the fallback, which handles both ranks.
+  const bool vector_gate = g.ndim() == 4;
+  if (!vector_gate &&
+      !GatedDeltaUpdate::use_fallback(Hk, Dk, Hv, Dv, has_mask, s)) {
     auto result = array::make_arrays(
         /* output shapes */ {{B, T, Hv, Dv}, {B, Hv, Dv, Dk}},
         /* dtypes */ {out_dtype, float32},

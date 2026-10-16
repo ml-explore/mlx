@@ -173,6 +173,40 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4), msg="State " + msg
             )
 
+    def test_gated_delta_vector_gate(self):
+        # A per-channel gate [B, T, Hv, Dk] must not reach the fused Metal
+        # kernels, which read the gate as [B, T, Hv]. Compare the default
+        # stream against the CPU stream, which always takes the fallback.
+        B, Hk, Hv, T, Dk, Dv = 1, 32, 32, 64, 128, 128
+        mx.random.seed(0)
+        q = mx.random.normal(shape=(B, T, Hk, Dk))
+        k = mx.random.normal(shape=(B, T, Hk, Dk))
+        k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
+        v = mx.random.normal(shape=(B, T, Hv, Dv))
+        g = mx.random.uniform(low=0.85, high=1.0, shape=(B, T, Hv, Dk))
+        b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
+        h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
+        primals = [q, k, v, g, b, h0]
+        cotans = [
+            mx.random.normal(shape=(B, T, Hv, Dv)) * 1e-2,
+            mx.random.normal(shape=(B, Hv, Dv, Dk)) * 1e-2,
+        ]
+
+        def f(q, k, v, g, b, h0):
+            return mx.fast.gated_delta_update(q, k, v, g, b, initial_state=h0)
+
+        outs, vjps = mx.vjp(f, primals, cotans)
+        with mx.stream(mx.cpu):
+            outs_ref, vjps_ref = mx.vjp(f, primals, cotans)
+        for i, (o, o_ref) in enumerate(zip(outs, outs_ref)):
+            self.assertTrue(
+                mx.allclose(o_ref, o, atol=1e-4, rtol=1e-4), msg=f"Output {i}"
+            )
+        for i, (vj, vj_ref) in enumerate(zip(vjps, vjps_ref)):
+            self.assertTrue(
+                mx.allclose(vj_ref, vj, atol=1e-4, rtol=1e-4), msg=f"VJP {i}"
+            )
+
     def test_gated_delta_fallback_masked(self):
         for dims in self.fallback_dims:
             B, Hk, Hv, T, Dk, Dv = dims
