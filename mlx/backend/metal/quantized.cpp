@@ -829,6 +829,16 @@ void qvm(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+// The 16-row schedule reads activations 4 values (8 bytes) at a time.
+bool use_qmm_t_nax_rows16(
+    const array& x,
+    bool transpose,
+    bool aligned_n,
+    const std::string& mode) {
+  return transpose && aligned_n && mode == "affine" &&
+      (x.dtype() == float16 || x.dtype() == bfloat16) && x.offset() % 8 == 0;
+}
+
 void qmm_nax(
     const array& x,
     const array& w,
@@ -847,19 +857,24 @@ void qmm_nax(
     const std::string& mode) {
   int B = out.size() / M / N;
 
-  int wm = 2;
-  int wn = 2;
+  bool aligned = N % 64 == 0;
+  // Transposed affine half/bfloat16 with aligned N: four simdgroups of 16 rows
+  // x 64 columns (WN = 1 selects that schedule in affine_qmm_t_nax).
+  bool rows16 = use_qmm_t_nax_rows16(x, transpose, aligned, mode);
+  int wm = rows16 ? 4 : 2;
+  int wn = rows16 ? 1 : 2;
   // Use smaller bm when one block covers all of M. Only qmm_t_nax has a 32-row
   // instantiation.
-  int bm = (transpose && M <= 32) ? 32 : 64;
+  int bm = (transpose && M <= 32 && !rows16) ? 32 : 64;
   int bn = 64;
   int bk = 64;
-  MTL::Size group_dims(32, wn, wm);
+  // A flat threadgroup runs the 16-row schedule faster than (32, 1, wm)
+  MTL::Size group_dims =
+      rows16 ? MTL::Size(32 * wm, 1, 1) : MTL::Size(32, wn, wm);
   MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
 
   std::string kname;
   kname.reserve(64);
-  bool aligned = N % 64 == 0;
   bool batched = B > 1;
   std::string type_string = get_type_string(x.dtype());
   concatenate(
@@ -1163,6 +1178,167 @@ void qmm(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+// Split-K on the NAX qmm tile, for transposed affine weights with N % 64 == 0.
+// A mid-size M covers too few (64-column x bm-row) tiles to fill the GPU, so K
+// is split until the launch has up to ~256 threadgroups.
+bool use_qmm_nax_splitk(
+    const array& x,
+    const std::string& mode,
+    int N,
+    int K,
+    int group_size) {
+  // float32 inputs keep their exact-fp32 routes (NAX would compute in TF32).
+  return metal::is_nax_available() && mode == "affine" && N % 64 == 0 &&
+      K % 64 == 0 && K % group_size == 0 && x.dtype() != float32;
+}
+
+// Where the split-K NAX route replaces qmv / qmv_wide and qmm_t_splitk: the
+// output covers few enough tiles that a two-way K split fits in 256
+// threadgroups. qmm_nax_split_k then picks the split, which may be 1.
+bool use_qmm_nax_split_route(int M, int N, int K, int group_size) {
+  int bm = M <= 32 ? 32 : 64;
+  int tiles = (N / 64) * ((M + bm - 1) / bm);
+  return tiles * 2 <= 256 && K % (2 * std::max(64, group_size)) == 0;
+}
+
+// K partitions for the NAX split-K launch over 64 x 64 output tiles: double
+// up to 4 while the grid stays within 256 threadgroups and every partition
+// keeps at least 256 columns, a whole number of 64-deep steps and
+// quantization groups.
+int qmm_nax_split_k(int M, int N, int K, int group_size) {
+  int tiles = (N / 64) * ((M + 63) / 64);
+  int k_align = std::max(64, group_size);
+  int split_k = 1;
+  while (split_k < 4 && tiles * split_k * 2 <= 256 &&
+         K % (split_k * 2 * k_align) == 0 && K / (split_k * 2) >= 256) {
+    split_k *= 2;
+  }
+  return split_k;
+}
+
+void qmm_splitk_nax(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s,
+    const std::string& mode) {
+  // The 16-row schedule (use_qmm_nax_splitk excludes float32) needs x at an
+  // 8-byte aligned offset.
+  if (x.offset() % 8 != 0) {
+    array x_copy = contiguous_copy_gpu(x, s);
+    metal::get_command_encoder(s).add_temporary(x_copy);
+    return qmm_splitk_nax(
+        x_copy, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
+  }
+  int bm = 64;
+  int bn = 64;
+  int bk = 64;
+  int wm = 4;
+  int wn = 1;
+  int n_tiles = N / bn;
+  int m_tiles = (M + bm - 1) / bm;
+  int split_k = qmm_nax_split_k(M, N, K, group_size);
+  if (split_k == 1) {
+    return qmm_nax(
+        x,
+        w,
+        scales,
+        biases,
+        std::nullopt,
+        out,
+        true,
+        group_size,
+        bits,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
+  }
+
+  int k_partition_size = K / split_k;
+  int split_k_partition_stride = M * N;
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+  array intermediate({split_k, M, N}, float32, nullptr, {});
+  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
+  compute_encoder.add_temporary(intermediate);
+
+  std::string type_string = get_type_string(x.dtype());
+  std::string kname;
+  kname.reserve(64);
+  concatenate(
+      kname,
+      mode + "_qmm_t_nax_splitk_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      "_bm",
+      bm,
+      "_bn",
+      bn,
+      "_bk",
+      bk,
+      "_wm",
+      wm,
+      "_wn",
+      wn,
+      "_alN_true");
+  auto kernel = get_qmm_nax_kernel_wrapped(
+      d,
+      kname,
+      "qmm_t_nax_splitk",
+      mode,
+      type_string,
+      group_size,
+      bits,
+      true,
+      bm,
+      bk,
+      bn,
+      wm,
+      wn);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  int c = 0;
+  compute_encoder.set_input_array(w, c++);
+  compute_encoder.set_input_array(scales, c++);
+  compute_encoder.set_input_array(*biases, c++);
+  compute_encoder.set_input_array(x, c++);
+  compute_encoder.set_output_array(intermediate, c++);
+  compute_encoder.set_bytes(K, c++);
+  compute_encoder.set_bytes(N, c++);
+  compute_encoder.set_bytes(M, c++);
+  compute_encoder.set_bytes(k_partition_size, c++);
+  compute_encoder.set_bytes(split_k_partition_stride, c++);
+  compute_encoder.dispatch_threadgroups(
+      MTL::Size(n_tiles, m_tiles, split_k), MTL::Size(32 * wm, 1, 1));
+
+  // Sum the partitions and cast to the output type
+  auto accum_kname = "steel_gemm_splitk_accum_" + type_to_name(out) + "_" +
+      type_to_name(intermediate);
+  auto accum_kernel = get_steel_gemm_splitk_accum_kernel(
+      d, accum_kname, intermediate, out, false);
+  compute_encoder.set_compute_pipeline_state(accum_kernel);
+  compute_encoder.set_input_array(intermediate, 0);
+  compute_encoder.set_output_array(out, 1);
+  compute_encoder.set_bytes(split_k, 2);
+  compute_encoder.set_bytes(split_k_partition_stride, 3);
+  compute_encoder.set_bytes(N, 4);
+  compute_encoder.dispatch_threads(MTL::Size(N, M, 1), get_block_dims(N, M, 1));
+}
+
 void qmm_splitk(
     const array& x,
     const array& w,
@@ -1177,6 +1353,13 @@ void qmm_splitk(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
+  // The split-K NAX route
+  if (biases && use_qmm_nax_splitk(x, mode, N, K, group_size) &&
+      use_qmm_nax_split_route(M, N, K, group_size)) {
+    return qmm_splitk_nax(
+        x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
+  }
+
   // Choose split_k to target ~512 threadgroups
   int bm = 32, bn = 32;
   int n_tiles = (N + bn - 1) / bn;
@@ -1905,6 +2088,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
   auto mode = quantization_mode_to_string(mode_);
+  // On NAX devices the NAX qmm (splitting K where that helps) also beats
+  // qmv / qmv_wide from 8 rows, when the output is wide enough to fill its
+  // tiles and narrow enough that a two-way K split fits in 256 threadgroups.
+  if (transpose_ && M < vector_limit && M >= 8 && M * N >= 16384 &&
+      out.size() == size_t(M) * N && inputs.size() == 4 &&
+      use_qmm_nax_splitk(x, mode, N, K, group_size_) &&
+      use_qmm_nax_split_route(M, N, K, group_size_)) {
+    qmm_splitk_nax(
+        x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+    return;
+  }
   // It is a matrix matrix product.
   if (M >= vector_limit) {
     // Use split-K qmm for small M with transposed weights (non-batched only)
