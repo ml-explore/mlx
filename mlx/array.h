@@ -80,13 +80,30 @@ class MLX_API array {
   array& operator=(array&& other) && = delete;
 
   /** Default copy and move constructors otherwise. */
-  array& operator=(array&& other) & = default;
   array(const array& other) = default;
   array(array&& other) = default;
 
+  /**
+   * Assignment releases the previous value through ~array() rather than
+   * through the shared_ptr alone, so that an unevaluated multi-output graph
+   * whose last external reference is overwritten in place gets detached from
+   * its siblings and freed, exactly as it would when going out of scope.
+   */
   array& operator=(const array& other) & {
     if (this->id() != other.id()) {
+      {
+        array previous(std::move(*this));
+      }
       this->array_desc_ = other.array_desc_;
+    }
+    return *this;
+  }
+  array& operator=(array&& other) & {
+    if (this->id() != other.id()) {
+      {
+        array previous(std::move(*this));
+      }
+      this->array_desc_ = std::move(other.array_desc_);
     }
     return *this;
   }

@@ -690,3 +690,28 @@ TEST_CASE("test siblings circular references without eval") {
   fun();
   CHECK(tracker.expired());
 }
+
+TEST_CASE("test assignment releases unevaluated siblings") {
+  // Overwriting the outputs of an unevaluated multi-output primitive in
+  // place must free the graph once the last output is gone, the same as
+  // letting them go out of scope.
+  std::weak_ptr<array::Data> tracker;
+  auto overwrite = [&](bool move_assign) {
+    array key({1, 2});
+    auto splits = split(key, 2);
+    // Set fake data as a tracker for ArrayDesc's lifetime.
+    splits[0].set_data(allocator::malloc(0));
+    tracker = splits[0].data_shared_ptr();
+    for (auto& s : splits) {
+      if (move_assign) {
+        s = array(0);
+      } else {
+        array replacement(0);
+        s = replacement;
+      }
+    }
+    CHECK(tracker.expired());
+  };
+  overwrite(false);
+  overwrite(true);
+}
