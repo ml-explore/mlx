@@ -268,6 +268,86 @@ struct QuantizedBlockLoader {
   }
 };
 
+template <
+    short BROWS,
+    short BCOLS,
+    short dst_ld,
+    short tgp_size,
+    short group_size>
+struct Fp4HalfLoader {
+  MLX_MTL_CONST short BCOLS_PACKED = BCOLS / 2;
+  MLX_MTL_CONST short n_reads = (BCOLS_PACKED * BROWS) / tgp_size;
+  MLX_MTL_CONST short n_words = n_reads / 4;
+
+  static_assert(
+      n_reads == 4 || n_reads == 8,
+      "Each thread reads one or two words of one group");
+  static_assert(BCOLS % group_size == 0, "The block holds whole groups");
+
+  const int src_ld;
+  const short bi;
+  const short bj;
+
+  threadgroup half* dst;
+  const device uint8_t* src;
+  const device uint8_t* scales;
+
+  Fp4HalfLoader(
+      const device uint8_t* src_,
+      const device uint8_t* scales_,
+      const int src_ld_,
+      threadgroup half* dst_,
+      ushort simd_group_id [[simdgroup_index_in_threadgroup]],
+      ushort simd_lane_id [[thread_index_in_simdgroup]],
+      const device float* global_scale = nullptr) thread
+      : src_ld(src_ld_),
+        bi(n_reads*(simd_group_id * 32 + simd_lane_id) / BCOLS_PACKED),
+        bj((n_reads * (simd_group_id * 32 + simd_lane_id)) % BCOLS_PACKED),
+        dst(dst_ + bi * dst_ld + 2 * bj),
+        src(src_ + bi * src_ld / 2 + bj),
+        scales(scales_ + bi * src_ld / group_size + 2 * bj / group_size) {
+    (void)global_scale;
+  }
+
+  void load_unsafe() const thread {
+    const half2 s = half2(dequantize_scale<half, group_size>(*scales));
+    for (short i = 0; i < n_words; i++) {
+      const uint q = ((const device uint*)src)[i];
+      half2 v0 =
+          as_type<half2>(((q & 0x00070007) << 9) | ((q & 0x00080008) << 12));
+      half2 v1 =
+          as_type<half2>(((q & 0x00700070) << 5) | ((q & 0x00800080) << 8));
+      half2 v2 =
+          as_type<half2>(((q & 0x07000700) << 1) | ((q & 0x08000800) << 4));
+      half2 v3 = as_type<half2>(((q & 0x70007000) >> 3) | (q & 0x80008000));
+      v0 = (v0 * half2(16384.0h)) * s;
+      v1 = (v1 * half2(16384.0h)) * s;
+      v2 = (v2 * half2(16384.0h)) * s;
+      v3 = (v3 * half2(16384.0h)) * s;
+      *(threadgroup uint4*)(dst + 8 * i) = uint4(
+          as_type<uint>(half2(v0.x, v1.x)),
+          as_type<uint>(half2(v2.x, v3.x)),
+          as_type<uint>(half2(v0.y, v1.y)),
+          as_type<uint>(half2(v2.y, v3.y)));
+    }
+  }
+
+  void load_safe(short2 src_tile_dim) const thread {
+    if (bi < src_tile_dim.y && 2 * bj < src_tile_dim.x) {
+      load_unsafe();
+    } else {
+      for (short i = 0; i < n_words; i++) {
+        *(threadgroup uint4*)(dst + 8 * i) = uint4(0);
+      }
+    }
+  }
+
+  void next() thread {
+    src += BCOLS_PACKED;
+    scales += BCOLS / group_size;
+  }
+};
+
 template <typename T, int group_size, int bits, int D>
 METAL_FUNC void fp_qmv_quad_impl(
     const device uint32_t* w,
@@ -814,7 +894,8 @@ template <
     const bool has_global_scale = false,
     const int BM = 32,
     const int BK = 32,
-    const int BN = 32>
+    const int BN = 32,
+    const bool half_tile = false>
 METAL_FUNC void fp_qmm_t_impl(
     const device uint32_t* w,
     const device uint8_t* scales,
@@ -822,7 +903,7 @@ METAL_FUNC void fp_qmm_t_impl(
     const device T* x,
     device U* y,
     threadgroup T* Xs,
-    threadgroup T* Ws,
+    threadgroup metal::conditional_t<half_tile, half, T>* Ws,
     const constant int& K,
     const constant int& N,
     const constant int& M,
@@ -833,6 +914,9 @@ METAL_FUNC void fp_qmm_t_impl(
     uint simd_lid [[thread_index_in_simdgroup]]) {
   static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
   static_assert(BK % SIMD_SIZE == 0, "BK should be divisible by SIMD_SIZE");
+  static_assert(
+      !half_tile || (bits == 4 && !has_global_scale && sizeof(T) == 2),
+      "The half weight tile holds fp4 without a global scale");
 
   (void)lid;
 
@@ -848,16 +932,19 @@ METAL_FUNC void fp_qmm_t_impl(
       BlockMMA<T, U, BM, BN, BK, WM, WN, false, true, BK_padded, BK_padded>;
   using loader_x_t =
       mlx::steel::BlockLoader<T, BM, BK, BK_padded, 1, WM * WN * SIMD_SIZE>;
-  using loader_w_t = QuantizedBlockLoader<
-      T,
-      BN,
-      BK,
-      BK_padded,
-      1,
-      WM * WN * SIMD_SIZE,
-      group_size,
-      bits,
-      has_global_scale>;
+  using loader_w_t = metal::conditional_t<
+      half_tile,
+      Fp4HalfLoader<BN, BK, BK_padded, WM * WN * SIMD_SIZE, group_size>,
+      QuantizedBlockLoader<
+          T,
+          BN,
+          BK,
+          BK_padded,
+          1,
+          WM * WN * SIMD_SIZE,
+          group_size,
+          bits,
+          has_global_scale>>;
 
   // Set the block
   const int K_w = K * bytes_per_pack / pack_factor;
@@ -1536,7 +1623,8 @@ template <
     bool has_global_scale = false,
     int BM = 32,
     int BK = 32,
-    int BN = 32>
+    int BN = 32,
+    bool half_tile = false>
 [[kernel]] void fp_qmm_t(
     const device uint32_t* w,
     const device uint8_t* scales,
@@ -1562,7 +1650,7 @@ template <
   constexpr int BK_padded = (BK + 16 / sizeof(T));
 
   threadgroup T Xs[BM * BK_padded];
-  threadgroup T Ws[BN * BK_padded];
+  threadgroup metal::conditional_t<half_tile, half, T> Ws[BN * BK_padded];
 
   if (batched) {
     adjust_matrix_offsets(
@@ -1589,7 +1677,8 @@ template <
       has_global_scale,
       BM,
       BK,
-      BN>(
+      BN,
+      half_tile>(
       w,
       scales,
       global_scale,
@@ -1942,7 +2031,8 @@ template <
     const bool aligned_N,
     const int BM = 32,
     const int BK = 32,
-    const int BN = 32>
+    const int BN = 32,
+    const bool half_tile = false>
 [[kernel]] void fp_qmm_t_splitk(
     const device uint32_t* w [[buffer(0)]],
     const device uint8_t* scales [[buffer(1)]],
@@ -1963,7 +2053,7 @@ template <
   constexpr int pack_factor = get_pack_factor<8, bits>();
   constexpr int bytes_per_pack = get_bytes_per_pack();
   threadgroup T Xs[BM * BK_padded];
-  threadgroup T Ws[BN * BK_padded];
+  threadgroup metal::conditional_t<half_tile, half, T> Ws[BN * BK_padded];
   const int k_start = tid.z * k_partition_size;
   x += k_start;
 
@@ -1972,7 +2062,17 @@ template <
   scales += k_start / group_size;
   y += tid.z * static_cast<int64_t>(split_k_partition_stride);
 
-  fp_qmm_t_impl<T, group_size, bits, aligned_N, float, false, BM, BK, BN>(
+  fp_qmm_t_impl<
+      T,
+      group_size,
+      bits,
+      aligned_N,
+      float,
+      false,
+      BM,
+      BK,
+      BN,
+      half_tile>(
       (const device uint32_t*)wl,
       scales,
       nullptr,
