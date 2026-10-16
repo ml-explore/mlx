@@ -266,8 +266,6 @@ array_api_tests/test_data_type_functions.py::test_iinfo[dtype7]
 ## Other failures
 ### MLX result_type() does not accept Python scalar values alongside dtypes
 array_api_tests/test_data_type_functions.py::TestResultType::test_with_scalars
-### returns a list instead of the required tuple
-array_api_tests/test_data_type_functions.py::test_broadcast_arrays
 ### MLX broadcast_shapes() requires at least one shape
 array_api_tests/test_data_type_functions.py::TestBroadcastShapes::test_empty
 
