@@ -420,12 +420,13 @@ void init_fast(nb::module_& parent_module) {
                 q: Queries [B, T, Hk, Dk]
                 k: Keys [B, T, Hk, Dk]
                 v: Values [B, T, Hv, Dv]
-                gamma: Decay rate in linear space [B, T, Hv]
+                gamma: Decay rate in linear space, [B, T, Hv] for a scalar
+                  gate per head or [B, T, Hv, Dk] for a per-channel gate
                 beta: Delta update rates [B, T, Hv]
-                initial_state: Optional initial hidden state [B, T, Hk, Dv]
+                initial_state: Optional initial hidden state [B, Hv, Dv, Dk]
                 mask: Optional
             Returns:
-                Tuple of (output [B, T, Hv, Dv], final_state [B, T, Hk, Dv])
+                Tuple of (output [B, T, Hv, Dv], final_state [B, Hv, Dv, Dk])
         )");
 
   m.def(
