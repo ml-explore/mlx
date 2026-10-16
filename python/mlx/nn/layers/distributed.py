@@ -314,11 +314,7 @@ class ShardedToAllLinear(Module):
             shape=(output_dims, input_dims // N),
         )
         if bias:
-            self.bias = mx.random.uniform(
-                low=-scale,
-                high=scale,
-                shape=(output_dims,),
-            )
+            self.bias = mx.zeros((output_dims,))
 
     def _extra_repr(self) -> str:
         N = self.group.size()
