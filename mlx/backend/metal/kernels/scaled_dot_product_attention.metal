@@ -89,6 +89,7 @@ instantiate_sdpa_vector_heads(float16_t)
       dim,                                                         \
       1)
 
+instantiate_sdpa_vector_tk1(float16_t, 256)
 instantiate_sdpa_vector_tk1(bfloat16_t, 256)
 instantiate_sdpa_vector_tk1(float, 192)
 instantiate_sdpa_vector_tk1(float, 256)
