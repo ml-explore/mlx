@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <type_traits>
 
 #include "mlx/array.h"
@@ -18,6 +19,28 @@ MTL::Size get_block_dims(int dim0, int dim1, int dim2, int pow2 = 10);
 MTL::Size get_2d_grid_dims(const Shape& shape, const Strides& strides);
 MTL::Size
 get_2d_grid_dims(const Shape& shape, const Strides& strides, size_t divisor);
+
+// Metal silently truncates a grid dimension past UINT32_MAX threads, so a
+// launch of n_groups threadgroups along x is split into several dispatches
+// that each fit. bind(first_group) is called before every dispatch to set the
+// buffer offsets of that slice. The slice size is kept a multiple of 16 groups
+// so those offsets stay aligned.
+template <typename F>
+void dispatch_threadgroups_in_slices(
+    metal::CommandEncoder& compute_encoder,
+    int64_t n_groups,
+    size_t group_size,
+    F&& bind) {
+  const int64_t max_groups =
+      static_cast<int64_t>(UINT32_MAX / group_size) & ~int64_t(15);
+  const MTL::Size group_dims(group_size, 1, 1);
+  for (int64_t start = 0; start < n_groups; start += max_groups) {
+    const int64_t groups = std::min(max_groups, n_groups - start);
+    bind(start);
+    compute_encoder.dispatch_threads(
+        MTL::Size(groups * group_size, 1, 1), group_dims);
+  }
+}
 
 inline NS::String* make_string(std::ostringstream& os) {
   std::string string = os.str();
