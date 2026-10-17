@@ -1,6 +1,7 @@
 # Copyright © 2024 Apple Inc.
 
 import math
+from fractions import Fraction
 from functools import lru_cache, reduce
 from typing import Callable, Optional, Union
 
@@ -593,6 +594,18 @@ class QuantizedShardedToAllLinear(Module):
         group = group or mx.distributed.init()
         output_dims, input_dims = quantized_linear_layer.weight.shape
         input_dims = (input_dims * 32) // quantized_linear_layer.bits
+
+        if not isinstance(segments, int) and isinstance(segments[0], int):
+            edges = [0, *segments, input_dims]
+            chunk = group.size() * quantized_linear_layer.group_size
+            if any((hi - lo) % chunk for lo, hi in zip(edges, edges[1:])):
+                raise ValueError(
+                    f"Segments {segments} must split into whole groups of "
+                    f"{quantized_linear_layer.group_size} on each of "
+                    f"{group.size()} ranks."
+                )
+            # Floats can round a boundary down, so use exact fractions
+            segments = [Fraction(s, input_dims) for s in segments]
 
         sl = cls(
             input_dims,
