@@ -70,6 +70,10 @@ void eval(array& arr) {
     encoder.add_temporary(s);
   }
 
+#ifndef NDEBUG
+  encoder.verify_graph(arr.primitive().name());
+#endif
+
   if (encoder.needs_commit()) {
     scheduler::notify_new_task(stream);
     encoder.add_completed_handler(
