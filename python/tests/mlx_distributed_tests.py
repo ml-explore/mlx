@@ -427,3 +427,24 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
         # The factory must be callable.
         with self.assertRaises(TypeError):
             mx.distributed.init(backend="jaccl", all_gather_factory="not_callable")
+
+    def test_shard_inplace_quantized_segments(self):
+        # Integer segments count inputs, not packed words
+        mx.random.seed(0xF0F0F0F0)
+        world = mx.distributed.init()
+        step = 512 // world.size()
+        lo = world.rank() * step
+        x = mx.random.normal((4, 1024))
+        x_part = mx.concatenate(
+            [x[:, lo : lo + step], x[:, 512 + lo : 512 + lo + step]], axis=1
+        )
+        qlin = nn.Linear(1024, 32, bias=False).to_quantized()
+        y = qlin(x)
+        shard_inplace(qlin, "sharded-to-all", segments=[512])
+        y_part = mx.distributed.all_sum(qlin(x_part))
+        self.assertTrue(mx.allclose(y, y_part, atol=self.atol, rtol=self.rtol))
+
+        # A segment must split into whole quantization groups
+        with self.assertRaises(ValueError):
+            qlin = nn.Linear(1024, 32).to_quantized()
+            shard_inplace(qlin, "sharded-to-all", segments=[528])
