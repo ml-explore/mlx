@@ -93,4 +93,24 @@ instantiate_sdpa_vector_tk1(float16_t, 256)
 instantiate_sdpa_vector_tk1(bfloat16_t, 256)
 instantiate_sdpa_vector_tk1(float, 192)
 instantiate_sdpa_vector_tk1(float, 256)
+
+#define instantiate_sdpa_split_reduce(type, value_dim) \
+  instantiate_kernel(                                  \
+      "sdpa_split_reduce_" #type "_" #value_dim,       \
+      sdpa_split_reduce,                               \
+      type,                                            \
+      value_dim)
+
+#define instantiate_sdpa_split_reduce_heads(type) \
+  instantiate_sdpa_split_reduce(type, 64)         \
+  instantiate_sdpa_split_reduce(type, 72)         \
+  instantiate_sdpa_split_reduce(type, 80)         \
+  instantiate_sdpa_split_reduce(type, 96)         \
+  instantiate_sdpa_split_reduce(type, 128)        \
+  instantiate_sdpa_split_reduce(type, 192)        \
+  instantiate_sdpa_split_reduce(type, 256)
+
+instantiate_sdpa_split_reduce_heads(float)
+instantiate_sdpa_split_reduce_heads(bfloat16_t)
+instantiate_sdpa_split_reduce_heads(float16_t)
 // clang-format on
