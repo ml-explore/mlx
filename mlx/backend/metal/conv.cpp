@@ -974,7 +974,7 @@ void stride_two_conv_transpose_3D_gpu(
     array phase_out({M, O}, out.dtype(), nullptr, {});
     phase_out.set_data(allocator::malloc(phase_out.nbytes()));
 
-    std::vector<array> gemm_copies = {in_matrix, wt_phase};
+    std::vector<array> gemm_copies;
     steel_matmul(
         s,
         d,
@@ -1018,7 +1018,6 @@ void stride_two_conv_transpose_3D_gpu(
     copy_gpu_inplace(phase_out_nd, out_phase_view, CopyType::GeneralGeneral, s);
     copies.push_back(phase_out);
     copies.push_back(phase_out_nd);
-    copies.push_back(out_phase_view);
   }
 }
 

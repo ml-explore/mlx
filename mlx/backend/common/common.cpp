@@ -41,7 +41,7 @@ void AsStrided::eval(const array& in, array& out) {
   flags.row_contiguous = row_contiguous;
   flags.col_contiguous = col_contiguous;
 
-  return out.copy_shared_buffer(in, strides_, flags, data_size, offset_);
+  out.copy_shared_buffer(in, strides_, flags, data_size, offset_);
 }
 
 void Broadcast::eval(const std::vector<array>& inputs, array& out) {

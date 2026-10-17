@@ -56,6 +56,10 @@ void eval(array& arr) {
     buffers.erase(it);
   }
 
+#ifndef NDEBUG
+  encoder.verify_graph(arr.primitive().name(), arr.inputs(), outputs);
+#endif
+
   if (encoder.needs_commit()) {
     encoder.end_encoding();
     scheduler::notify_new_task(s);
