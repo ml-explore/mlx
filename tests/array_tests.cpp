@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 #include <cassert>
 #include <climits>
+#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -760,4 +761,20 @@ TEST_CASE("test assigning a sibling over the last reference keeps the cycle") {
   last = last.siblings()[0];
   REQUIRE_EQ(last.siblings().size(), 1);
   CHECK(array_equal(last, array({2})).item<bool>());
+}
+
+TEST_CASE("test unaligned scalar item") {
+  uint64_t expected = 0x0123456789abcdef;
+  for (size_t offset = 1; offset < sizeof(expected); ++offset) {
+    std::vector<uint8_t> data(offset + sizeof(expected));
+    std::memcpy(data.data() + offset, &expected, sizeof(expected));
+    auto storage = array(data.data(), {static_cast<int>(data.size())}, uint8);
+    auto scalar = view(as_strided(storage, {8}, {1}, offset), uint64);
+    eval(scalar);
+    if (default_device() == Device::cpu) {
+      CHECK_EQ(scalar.data<void>(), storage.data<uint8_t>() + offset);
+    }
+    CHECK_EQ(scalar.item<uint64_t>(), expected);
+    CHECK_EQ(static_cast<const array&>(scalar).item<uint64_t>(), expected);
+  }
 }

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -565,7 +566,9 @@ T array::item() {
     throw std::invalid_argument("item can only be called on arrays of size 1.");
   }
   eval();
-  return *data<T>();
+  T value;
+  std::memcpy(&value, data<void>(), sizeof(T));
+  return value;
 }
 
 template <typename T>
@@ -578,7 +581,9 @@ T array::item() const {
         "item() const can only be called on evaled arrays");
   }
   const_cast<array*>(this)->eval();
-  return *data<T>();
+  T value;
+  std::memcpy(&value, data<void>(), sizeof(T));
+  return value;
 }
 
 template <typename It>

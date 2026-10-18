@@ -1111,6 +1111,14 @@ TEST_CASE("test as_strided grads") {
   out = vjp(fun, x, reshape(astype(arange(9), x.dtype()), {3, 3})).second;
   expected = array({0, 0, 0, 9, 12, 15, 0, 0, 0, 0, 0});
   CHECK(array_equal(out, expected).item<bool>());
+
+  x = transpose(reshape(arange(12, float32), {3, 4}));
+  out = vjp(fun, x, ones(shape)).second;
+  expected = reshape(array({0, 0, 0, 3, 3, 3, 0, 0, 0, 0, 0, 0}), x.shape());
+  CHECK(array_equal(out, expected).item<bool>());
+
+  out = jvp(fun, x, x).second;
+  CHECK(array_equal(out, fun(x)).item<bool>());
 }
 
 TEST_CASE("test jvp from vjp") {

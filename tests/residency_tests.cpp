@@ -1,5 +1,8 @@
 // Copyright © 2026 Apple Inc.
 
+#include <sys/mman.h>
+
+#include <memory>
 #include <vector>
 
 #include "doctest/doctest.h"
@@ -293,4 +296,37 @@ TEST_CASE("test the wired limit is used up to its boundary") {
 
   allocator::allocator().free(second);
   CHECK_EQ(residency().wired_size(), baseline);
+}
+
+TEST_CASE("test as_strided on a mapped buffer larger than INT_MAX") {
+  constexpr size_t length = size_t{131073} * 16384;
+  if (length > metal::device(Device::gpu).mtl_device()->maxBufferLength()) {
+    return;
+  }
+  LimitGuard guard(0, 0);
+  auto pointer = mmap(
+      nullptr, length, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+  REQUIRE(pointer != MAP_FAILED);
+  auto mapping =
+      std::shared_ptr<void>(pointer, [](void* data) { munmap(data, length); });
+  auto buffer = allocator::make_buffer(mapping.get(), length);
+  REQUIRE(buffer.ptr() != nullptr);
+  auto data = allocator::Data(buffer, [mapping](allocator::Buffer buffer) {
+    allocator::release(buffer);
+  });
+  auto storage = array(std::move(data), {131073, 16384}, uint8);
+  auto bytes = static_cast<uint8_t*>(mapping.get());
+  for (int i = 0; i < 64; ++i) {
+    bytes[length - 64 + i] = i + 1;
+  }
+  for (const auto& input : {storage, copy(storage)}) {
+    auto active = get_active_memory();
+    reset_peak_memory();
+    auto result = as_strided(input, {2, 32}, {32, 1}, length - 64);
+    eval(result);
+    CHECK_LE(get_peak_memory(), active);
+    CHECK_EQ(result.data<void>(), bytes + length - 64);
+    CHECK_EQ(result.data<uint8_t>()[0], 1);
+    CHECK_EQ(result.data<uint8_t>()[63], 64);
+  }
 }
