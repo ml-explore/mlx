@@ -100,6 +100,8 @@
 
 #define instantiate_quantized_types(group_size, bits)       \
   instantiate_quantized_funcs(float, group_size, bits)      \
+  instantiate_quantized_aligned(affine_qmm_t_nax_splitk, float, group_size, bits, 32, 64, 64, 2, 2, true) \
+  instantiate_quantized_aligned(affine_qmm_t_nax_splitk, float, group_size, bits, 64, 64, 64, 2, 2, true) \
   instantiate_quantized_funcs(float16_t, group_size, bits)  \
   instantiate_quantized_funcs(bfloat16_t, group_size, bits) \
   instantiate_quantized_rows16(float16_t, group_size, bits) \

@@ -729,7 +729,51 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 # ~1.6x the output rounding.
                 splits = K % (2 * max(64, group_size)) == 0
                 tol = 1.1 if M * N >= 16384 and splits else 2.0
+                if error.item() >= tol * rounding.item():
+                    # Vector kernels can dequantize weights in float32.
+                    qw, scales, biases = wq
+                    w_hat = mx.dequantize(
+                        qw,
+                        scales.astype(mx.float32),
+                        biases.astype(mx.float32),
+                        group_size=group_size,
+                        bits=bits,
+                    )
+                    y_ref = mx.matmul(x.astype(mx.float32), w_hat.T, stream=mx.cpu)
+                    error = (y.astype(mx.float32) - y_ref).abs().mean()
+                    rounding = (
+                        (y_ref.astype(dtype).astype(mx.float32) - y_ref).abs().mean()
+                    )
+                    tol = 1.1
                 self.assertLess(error.item(), tol * rounding.item())
+
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_mid_m_float32(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        # Dyadic inputs and weights are exact in TF32 and float32.
+        shapes = [(256, 512), (512, 512), (2560, 1024), (2048, 6144)]
+        for (K, N), M, bits, group_size in product(
+            shapes, [8, 31, 33, 65, 130], [1, 2, 3, 4, 5, 6, 8], [32, 64, 128]
+        ):
+            with self.subTest(K=K, N=N, M=M, bits=bits, group_size=group_size):
+                k1, k2 = mx.random.split(mx.random.key(M * K + N))
+                x = mx.random.randint(-16, 17, (M * K + 1,), key=k1)
+                x = (x.astype(mx.float32) / 16)[1:].reshape(M, K)
+                w = mx.random.normal((N, K), key=k2)
+                wq, scales, biases = mx.quantize(w, group_size=group_size, bits=bits)
+                scales = mx.full_like(scales, 1 / 256)
+                biases = mx.full_like(biases, -1 / 16)
+                w_hat = mx.dequantize(
+                    wq, scales, biases, group_size=group_size, bits=bits
+                )
+                y_ref = mx.matmul(x, w_hat.T, stream=mx.cpu)
+                y = mx.quantized_matmul(
+                    x, wq, scales, biases, group_size=group_size, bits=bits
+                )
+                self.assertEqual(y.dtype, mx.float32)
+                self.assertEqual(y.shape, (M, N))
+                self.assertTrue(mx.array_equal(y, y_ref))
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_qmm_t_batched_and_strided(self):

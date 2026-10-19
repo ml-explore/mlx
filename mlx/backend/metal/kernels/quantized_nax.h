@@ -1048,8 +1048,8 @@ struct QuantizedBlockLoaderStaged {
           n_words * 4 == n_reads * bytes_per_pack,
       "Every thread loads whole words");
   static_assert(
-      n_reads * pack_factor <= group_size,
-      "A thread's values must lie in one quantization group");
+      n_reads * pack_factor <= group_size && n_reads * pack_factor <= BCOLS,
+      "A thread's values must lie in one row and quantization group");
 
   const short thread_idx;
   const short bi;
@@ -1112,21 +1112,18 @@ struct QuantizedBlockLoaderStaged {
   }
 };
 
-// Transposed qmm with BM / 16 simdgroups, each computing 16 rows x all BN = 64
-// columns. The weight tile is double-buffered (Ws holds two BN x BK_padded
-// tiles) and each simdgroup keeps the next step's activation fragments in
-// registers, so one barrier separates K steps. Rows past M read the last valid
-// row and are not stored. Requires N % BN == 0 and k_size (or K) % BK == 0.
-// Accumulation order matches qmm_t_nax_tgp_impl, so the outputs are identical.
+// Each simdgroup computes SM rows and prefetches the next activation tile.
+// Weights use two threadgroup buffers with one barrier between K steps.
 template <
     typename T,
     const int group_size,
     const int bits,
+    typename U = T,
     const int BM = 64,
     const int BK = 64,
     const int BN = 64,
-    typename U = T>
-METAL_FUNC void qmm_t_nax_rows16_impl(
+    const int SM = 16>
+METAL_FUNC void qmm_t_nax_staged_impl(
     const device uint32_t* w,
     const device T* scales,
     const device T* biases,
@@ -1136,11 +1133,12 @@ METAL_FUNC void qmm_t_nax_rows16_impl(
     const constant int& K,
     const constant int& N,
     const constant int& M,
+    const int k_end,
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
-    uint simd_lid [[thread_index_in_simdgroup]],
-    const int k_size = -1) {
-  static_assert(BK == 64 && BN == 64 && BM % 16 == 0, "16-row x 64 tiles");
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  static_assert(BK == 64 && BN == 64, "64-column tiles");
+  static_assert(SM > 0 && SM % 16 == 0 && BM % SM == 0, "Whole row fragments");
   static_assert(
       sizeof(T) == 2, "Two tiles fit threadgroup memory for 16-bit T");
 
@@ -1154,7 +1152,7 @@ METAL_FUNC void qmm_t_nax_rows16_impl(
       BN,
       BK,
       BK_padded,
-      (BM / 16) * SIMD_SIZE,
+      (BM / SM) * SIMD_SIZE,
       group_size,
       bits>;
   using frag_t = typename BaseNAXFrag::template dtype_frag_t<T>;
@@ -1174,28 +1172,35 @@ METAL_FUNC void qmm_t_nax_rows16_impl(
 
   // This simdgroup's rows and the two rows each thread holds in a fragment
   const int tile_rows = min(BM, M - y_row);
-  const int sm = 16 * int(simd_gid);
-  const int rows = min(16, tile_rows - sm);
+  constexpr int TM = SM / 16;
+  const int sm = SM * int(simd_gid);
+  const int rows = min(SM, tile_rows - sm);
   const short2 sc = BaseNAXFrag::get_coord();
-  const int r0 = min(sm + int(sc.y), tile_rows - 1);
-  const int r1 = min(sm + int(sc.y) + 8, tile_rows - 1);
-  const device T* x0 = x + (y_row + r0) * static_cast<int64_t>(K) + sc.x;
-  const device T* x1 = x + (y_row + r1) * static_cast<int64_t>(K) + sc.x;
+  const device T* x0[TM];
+  const device T* x1[TM];
+  STEEL_PRAGMA_UNROLL
+  for (short m = 0; m < TM; m++) {
+    const int r0 = min(sm + m * 16 + int(sc.y), tile_rows - 1);
+    const int r1 = min(sm + m * 16 + int(sc.y) + 8, tile_rows - 1);
+    x0[m] = x + (y_row + r0) * static_cast<int64_t>(K) + sc.x;
+    x1[m] = x + (y_row + r1) * static_cast<int64_t>(K) + sc.x;
+  }
 
-  NAXTile<float, 1, BN / 16> Dtile;
+  NAXTile<float, TM, BN / 16> Dtile;
   Dtile.clear();
-  vec<T, 4> a_cur[BK / 16][2];
-  vec<T, 4> a_next[BK / 16][2];
-
-  const int k_end = k_size < 0 ? int(K) : k_size;
+  vec<T, 4> a_cur[BK / 16][TM][2];
+  vec<T, 4> a_next[BK / 16][TM][2];
 
   loader_w.fetch(0);
   loader_w.store(Ws);
   if (rows > 0) {
     STEEL_PRAGMA_UNROLL
     for (short s = 0; s < BK / 16; s++) {
-      a_cur[s][0] = *(const device vec<T, 4>*)(x0 + s * 16);
-      a_cur[s][1] = *(const device vec<T, 4>*)(x1 + s * 16);
+      STEEL_PRAGMA_UNROLL
+      for (short m = 0; m < TM; m++) {
+        a_cur[s][m][0] = *(const device vec<T, 4>*)(x0[m] + s * 16);
+        a_cur[s][m][1] = *(const device vec<T, 4>*)(x1[m] + s * 16);
+      }
     }
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -1209,19 +1214,16 @@ METAL_FUNC void qmm_t_nax_rows16_impl(
       const int kn = more ? k + BK : k;
       STEEL_PRAGMA_UNROLL
       for (short s = 0; s < BK / 16; s++) {
-        a_next[s][0] = *(const device vec<T, 4>*)(x0 + kn + s * 16);
-        a_next[s][1] = *(const device vec<T, 4>*)(x1 + kn + s * 16);
+        STEEL_PRAGMA_UNROLL
+        for (short m = 0; m < TM; m++) {
+          a_next[s][m][0] = *(const device vec<T, 4>*)(x0[m] + kn + s * 16);
+          a_next[s][m][1] = *(const device vec<T, 4>*)(x1[m] + kn + s * 16);
+        }
       }
       const threadgroup T* ws =
           Ws + (it & 1) * tile_size + sc.y * BK_padded + sc.x;
       STEEL_PRAGMA_UNROLL
       for (short s = 0; s < BK / 16; s++) {
-        frag_t a;
-        STEEL_PRAGMA_UNROLL
-        for (short c = 0; c < 4; c++) {
-          a[c] = a_cur[s][0][c];
-          a[4 + c] = a_cur[s][1][c];
-        }
         STEEL_PRAGMA_UNROLL
         for (short j = 0; j < BN / 16; j += 2) {
           const threadgroup T* p0 = ws + (j * 16) * BK_padded + s * 16;
@@ -1240,20 +1242,32 @@ METAL_FUNC void qmm_t_nax_rows16_impl(
               b1[h * 4 + c] = u1[c];
             }
           }
-          BaseNAXFrag::mma(
-              Dtile.frag_at(0, j),
-              Dtile.frag_at(0, j + 1),
-              a,
-              metal::bool_constant<false>{},
-              b0,
-              b1,
-              metal::bool_constant<true>{});
+          STEEL_PRAGMA_UNROLL
+          for (short m = 0; m < TM; m++) {
+            frag_t a;
+            STEEL_PRAGMA_UNROLL
+            for (short c = 0; c < 4; c++) {
+              a[c] = a_cur[s][m][0][c];
+              a[4 + c] = a_cur[s][m][1][c];
+            }
+            BaseNAXFrag::mma(
+                Dtile.frag_at(m, j),
+                Dtile.frag_at(m, j + 1),
+                a,
+                metal::bool_constant<false>{},
+                b0,
+                b1,
+                metal::bool_constant<true>{});
+          }
         }
       }
       STEEL_PRAGMA_UNROLL
       for (short s = 0; s < BK / 16; s++) {
-        a_cur[s][0] = a_next[s][0];
-        a_cur[s][1] = a_next[s][1];
+        STEEL_PRAGMA_UNROLL
+        for (short m = 0; m < TM; m++) {
+          a_cur[s][m][0] = a_next[s][m][0];
+          a_cur[s][m][1] = a_next[s][m][1];
+        }
       }
     }
     if (more) {
@@ -1266,7 +1280,7 @@ METAL_FUNC void qmm_t_nax_rows16_impl(
     return;
   }
   y += (y_row + sm) * static_cast<int64_t>(N) + y_col;
-  if (rows == 16) {
+  if (rows == SM) {
     Dtile.store(y, N);
   } else {
     Dtile.store_safe(y, N, short2(BN, rows));
@@ -1278,12 +1292,12 @@ template <
     const int group_size,
     const int bits,
     const bool aligned_N,
+    typename U = T,
     const int BM = 64,
     const int BK = 64,
     const int BN = 64,
     const int WM = 2,
-    const int WN = 2,
-    typename U = T>
+    const int WN = 2>
 METAL_FUNC void qmm_t_nax_tgp_impl(
     const device uint32_t* w,
     const device T* scales,
@@ -1294,11 +1308,11 @@ METAL_FUNC void qmm_t_nax_tgp_impl(
     const constant int& K,
     const constant int& N,
     const constant int& M,
+    const int k_end,
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
-    uint simd_lid [[thread_index_in_simdgroup]],
-    const int k_size = -1) {
+    uint simd_lid [[thread_index_in_simdgroup]]) {
   static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
   static_assert(BK % SIMD_SIZE == 0, "BK should be divisible by SIMD_SIZE");
 
@@ -1367,8 +1381,6 @@ METAL_FUNC void qmm_t_nax_tgp_impl(
 
   dispatch_bool(!is_unaligned_sm, [&](auto kAlignedM) {
     dispatch_bool(aligned_N || !is_unaligned_bn, [&](auto kAlignedN) {
-      // k_size < K: one split-K partition; K stays the row stride.
-      const int k_end = k_size < 0 ? int(K) : k_size;
       for (int k = 0; k < k_end; k += BK) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         if constexpr (kAlignedN.value) {
@@ -1609,12 +1621,12 @@ template <
         tid);
   }
   if constexpr (WN == 1) {
-    static_assert(aligned_N && BM == 16 * WM, "16-row schedule");
-    qmm_t_nax_rows16_impl<T, group_size, bits, BM, BK, BN>(
-        w, scales, biases, x, y, Ws, K, N, M, tid, simd_gid, simd_lid);
+    static_assert(aligned_N, "Aligned output columns");
+    qmm_t_nax_staged_impl<T, group_size, bits, T, BM, BK, BN, BM / WM>(
+        w, scales, biases, x, y, Ws, K, N, M, K, tid, simd_gid, simd_lid);
   } else {
-    qmm_t_nax_tgp_impl<T, group_size, bits, aligned_N, BM, BK, BN, WM, WN>(
-        w, scales, biases, x, y, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
+    qmm_t_nax_tgp_impl<T, group_size, bits, aligned_N, T, BM, BK, BN, WM, WN>(
+        w, scales, biases, x, y, Ws, K, N, M, K, tid, lid, simd_gid, simd_lid);
   }
 }
 
@@ -1658,8 +1670,8 @@ template <
   y += tid.z * static_cast<int64_t>(split_k_partition_stride);
 
   if constexpr (WN == 1) {
-    static_assert(aligned_N && BM == 16 * WM, "16-row schedule");
-    qmm_t_nax_rows16_impl<T, group_size, bits, BM, BK, BN, float>(
+    static_assert(aligned_N, "Aligned output columns");
+    qmm_t_nax_staged_impl<T, group_size, bits, float, BM, BK, BN, BM / WM>(
         (const device uint32_t*)wl,
         scales,
         biases,
@@ -1669,22 +1681,22 @@ template <
         K,
         N,
         M,
+        k_partition_size,
         tid,
         simd_gid,
-        simd_lid,
-        k_partition_size);
+        simd_lid);
   } else {
     qmm_t_nax_tgp_impl<
         T,
         group_size,
         bits,
         aligned_N,
+        float,
         BM,
         BK,
         BN,
         WM,
-        WN,
-        float>(
+        WN>(
         (const device uint32_t*)wl,
         scales,
         biases,
@@ -1694,11 +1706,11 @@ template <
         K,
         N,
         M,
+        k_partition_size,
         tid,
         lid,
         simd_gid,
-        simd_lid,
-        k_partition_size);
+        simd_lid);
   }
 }
 
@@ -1828,8 +1840,8 @@ template <
       s_strides,
       b_strides,
       tid);
-  qmm_t_nax_tgp_impl<T, group_size, bits, aligned_N, BM, BK, BN, WM, WN>(
-      w, scales, biases, x, y, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
+  qmm_t_nax_tgp_impl<T, group_size, bits, aligned_N, T, BM, BK, BN, WM, WN>(
+      w, scales, biases, x, y, Ws, K, N, M, K, tid, lid, simd_gid, simd_lid);
 }
 
 template <

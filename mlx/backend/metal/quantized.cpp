@@ -1184,18 +1184,16 @@ void qmm(
 bool use_qmm_nax_splitk(
     const array& x,
     const std::string& mode,
+    int M,
     int N,
     int K,
     int group_size) {
-  // float32 inputs keep their exact-fp32 routes (NAX would compute in TF32).
-  return metal::is_nax_available() && mode == "affine" && N % 64 == 0 &&
-      K % 64 == 0 && K % group_size == 0 && x.dtype() != float32;
-}
-
-// Where the split-K NAX route replaces qmv / qmv_wide and qmm_t_splitk: the
-// output covers few enough tiles that a two-way K split fits in 256
-// threadgroups. qmm_nax_split_k then picks the split, which may be 1.
-bool use_qmm_nax_split_route(int M, int N, int K, int group_size) {
+  if (!metal::is_nax_available() || mode != "affine" || N % 64 != 0 ||
+      K % 64 != 0 || K % group_size != 0 ||
+      (x.dtype() == float32 && !env::enable_tf32())) {
+    return false;
+  }
+  // A two-way K split must fit within 256 threadgroups.
   int bm = M <= 32 ? 32 : 64;
   int tiles = (N / 64) * ((M + bm - 1) / bm);
   return tiles * 2 <= 256 && K % (2 * std::max(64, group_size)) == 0;
@@ -1205,7 +1203,7 @@ bool use_qmm_nax_split_route(int M, int N, int K, int group_size) {
 // up to 4 while the grid stays within 256 threadgroups and every partition
 // keeps at least 256 columns, a whole number of 64-deep steps and
 // quantization groups.
-int qmm_nax_split_k(int M, int N, int K, int group_size) {
+int qmm_nax_k_partitions(int M, int N, int K, int group_size) {
   int tiles = (N / 64) * ((M + 63) / 64);
   int k_align = std::max(64, group_size);
   int split_k = 1;
@@ -1230,22 +1228,22 @@ void qmm_splitk_nax(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
-  // The 16-row schedule (use_qmm_nax_splitk excludes float32) needs x at an
-  // 8-byte aligned offset.
-  if (x.offset() % 8 != 0) {
+  // The staged schedule needs an 8-byte aligned activation offset.
+  if (x.dtype() != float32 && x.offset() % 8 != 0) {
     array x_copy = contiguous_copy_gpu(x, s);
     metal::get_command_encoder(s).add_temporary(x_copy);
     return qmm_splitk_nax(
         x_copy, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
   }
-  int bm = 64;
+  bool staged = use_qmm_t_nax_rows16(x, true, true, mode);
+  int bm = !staged && M <= 32 ? 32 : 64;
   int bn = 64;
   int bk = 64;
-  int wm = 4;
-  int wn = 1;
+  int wm = staged ? 4 : 2;
+  int wn = staged ? 1 : 2;
   int n_tiles = N / bn;
   int m_tiles = (M + bm - 1) / bm;
-  int split_k = qmm_nax_split_k(M, N, K, group_size);
+  int split_k = qmm_nax_k_partitions(M, N, K, group_size);
   if (split_k == 1) {
     return qmm_nax(
         x,
@@ -1322,8 +1320,10 @@ void qmm_splitk_nax(
   compute_encoder.set_bytes(M, c++);
   compute_encoder.set_bytes(k_partition_size, c++);
   compute_encoder.set_bytes(split_k_partition_stride, c++);
+  MTL::Size group_dims =
+      staged ? MTL::Size(32 * wm, 1, 1) : MTL::Size(32, wn, wm);
   compute_encoder.dispatch_threadgroups(
-      MTL::Size(n_tiles, m_tiles, split_k), MTL::Size(32 * wm, 1, 1));
+      MTL::Size(n_tiles, m_tiles, split_k), group_dims);
 
   // Sum the partitions and cast to the output type
   auto accum_kname = "steel_gemm_splitk_accum_" + type_to_name(out) + "_" +
@@ -1354,8 +1354,7 @@ void qmm_splitk(
     const Stream& s,
     const std::string& mode) {
   // The split-K NAX route
-  if (biases && use_qmm_nax_splitk(x, mode, N, K, group_size) &&
-      use_qmm_nax_split_route(M, N, K, group_size)) {
+  if (biases && use_qmm_nax_splitk(x, mode, M, N, K, group_size)) {
     return qmm_splitk_nax(
         x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
   }
@@ -2093,8 +2092,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // tiles and narrow enough that a two-way K split fits in 256 threadgroups.
   if (transpose_ && M < vector_limit && M >= 8 && M * N >= 16384 &&
       out.size() == size_t(M) * N && inputs.size() == 4 &&
-      use_qmm_nax_splitk(x, mode, N, K, group_size_) &&
-      use_qmm_nax_split_route(M, N, K, group_size_)) {
+      use_qmm_nax_splitk(x, mode, M, N, K, group_size_)) {
     qmm_splitk_nax(
         x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
     return;
