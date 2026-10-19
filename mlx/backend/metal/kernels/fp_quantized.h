@@ -348,6 +348,15 @@ struct Fp4HalfLoader {
   }
 };
 
+// nvfp4 weights are exact in half; mxfp4 scales can exceed half's range, so
+// bfloat16 inputs take the half tile only with nvfp4.
+template <typename T, int group_size, int bits, bool has_global_scale>
+inline constexpr bool use_half_tile() {
+  return !has_global_scale &&
+      ((metal::is_same_v<T, half> && bits == 4) ||
+       (metal::is_same_v<T, bfloat16_t> && bits == 4 && group_size == 16));
+}
+
 template <typename T, int group_size, int bits, int D>
 METAL_FUNC void fp_qmv_quad_impl(
     const device uint32_t* w,
@@ -895,7 +904,7 @@ template <
     const int BM = 32,
     const int BK = 32,
     const int BN = 32,
-    const bool half_tile = false>
+    const bool half_tile>
 METAL_FUNC void fp_qmm_t_impl(
     const device uint32_t* w,
     const device uint8_t* scales,
@@ -1623,8 +1632,7 @@ template <
     bool has_global_scale = false,
     int BM = 32,
     int BK = 32,
-    int BN = 32,
-    bool half_tile = false>
+    int BN = 32>
 [[kernel]] void fp_qmm_t(
     const device uint32_t* w,
     const device uint8_t* scales,
@@ -1648,6 +1656,8 @@ template <
   (void)lid;
 
   constexpr int BK_padded = (BK + 16 / sizeof(T));
+  constexpr bool half_tile =
+      use_half_tile<T, group_size, bits, has_global_scale>();
 
   threadgroup T Xs[BM * BK_padded];
   threadgroup metal::conditional_t<half_tile, half, T> Ws[BN * BK_padded];
@@ -2006,7 +2016,8 @@ template <
       has_global_scale,
       BM,
       BK,
-      BN>(
+      BN,
+      false>(
       w,
       scales,
       global_scale,
@@ -2031,8 +2042,7 @@ template <
     const bool aligned_N,
     const int BM = 32,
     const int BK = 32,
-    const int BN = 32,
-    const bool half_tile = false>
+    const int BN = 32>
 [[kernel]] void fp_qmm_t_splitk(
     const device uint32_t* w [[buffer(0)]],
     const device uint8_t* scales [[buffer(1)]],
@@ -2052,6 +2062,7 @@ template <
   constexpr int BK_padded = (BK + 16 / sizeof(T));
   constexpr int pack_factor = get_pack_factor<8, bits>();
   constexpr int bytes_per_pack = get_bytes_per_pack();
+  constexpr bool half_tile = use_half_tile<T, group_size, bits, false>();
   threadgroup T Xs[BM * BK_padded];
   threadgroup metal::conditional_t<half_tile, half, T> Ws[BN * BK_padded];
   const int k_start = tid.z * k_partition_size;

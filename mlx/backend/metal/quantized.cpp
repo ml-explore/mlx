@@ -1070,12 +1070,12 @@ void gather_qmm_nax(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+// Must match use_half_tile in fp_quantized.h; only those have 64x64 tiles.
 inline bool use_half_tile(
     const array& x,
     const std::string& mode,
     const std::optional<array>& global_scale,
     int bits) {
-  // mxfp4 weights can leave half's range, so only with float16 activations.
   return mode != "affine" && bits == 4 && !global_scale &&
       (x.dtype() == float16 || (x.dtype() == bfloat16 && mode == "nvfp4"));
 }
@@ -1147,37 +1147,21 @@ void qmm(
   bool aligned = N % bn == 0;
   bool batched = B > 1;
   std::string type_string = get_type_string(x.dtype());
-  if (half_tile) {
-    concatenate(
-        kname,
-        mode + "_qmm_t_half_",
-        type_string,
-        "_gs_",
-        group_size,
-        "_b_",
-        bits,
-        "_bm",
-        bm,
-        "_bn",
-        bn,
-        aligned ? "_alN_true" : "_alN_false",
-        batched ? "_batch_1" : "_batch_0");
-  } else {
-    concatenate(
-        kname,
-        mode + (transpose ? "_qmm_t_" : "_qmm_n_"),
-        type_string,
-        "_gs_",
-        group_size,
-        "_b_",
-        bits,
-        transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
-        batched ? "_batch_1" : "_batch_0",
-        global_scale ? "_hgs" : "");
-  }
+  concatenate(
+      kname,
+      mode + (transpose ? "_qmm_t_" : "_qmm_n_"),
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      bm == 64 ? "_bm_64_bn_64" : "",
+      transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
+      batched ? "_batch_1" : "_batch_0",
+      global_scale ? "_hgs" : "");
   std::string template_def;
   MTL::ComputePipelineState* kernel;
-  if (half_tile) {
+  if (transpose) {
     kernel = get_quantized_kernel_wrapped(
         d,
         kname,
@@ -1188,23 +1172,10 @@ void qmm(
         bits,
         aligned,
         batched,
-        false,
+        global_scale.has_value(),
         bm,
         32,
-        bn,
-        true);
-  } else if (transpose) {
-    kernel = get_quantized_kernel_wrapped(
-        d,
-        kname,
-        "qmm_t",
-        mode,
-        type_string,
-        group_size,
-        bits,
-        aligned,
-        batched,
-        global_scale.has_value());
+        bn);
   } else {
     kernel = get_quantized_kernel_wrapped(
         d, kname, "qmm_n", mode, type_string, group_size, bits, batched);
@@ -1470,38 +1441,20 @@ void qmm_splitk(
   MTL::Size grid_dims(n_tiles, m_tiles, split_k);
 
   bool aligned = N % 32 == 0;
-  bool half_tile = use_half_tile(x, mode, std::nullopt, bits);
   std::string type_string = get_type_string(x.dtype());
   std::string kname;
   kname.reserve(64);
   concatenate(
       kname,
-      mode + (half_tile ? "_qmm_t_splitk_half_" : "_qmm_t_splitk_"),
+      mode + "_qmm_t_splitk_",
       type_string,
       "_gs_",
       group_size,
       "_b_",
       bits,
       aligned ? "_alN_true" : "_alN_false");
-  MTL::ComputePipelineState* kernel;
-  if (half_tile) {
-    kernel = get_quantized_kernel_wrapped(
-        d,
-        kname,
-        "qmm_t_splitk",
-        mode,
-        type_string,
-        group_size,
-        bits,
-        aligned,
-        32,
-        32,
-        32,
-        true);
-  } else {
-    kernel = get_quantized_kernel_wrapped(
-        d, kname, "qmm_t_splitk", mode, type_string, group_size, bits, aligned);
-  }
+  auto kernel = get_quantized_kernel_wrapped(
+      d, kname, "qmm_t_splitk", mode, type_string, group_size, bits, aligned);
 
   compute_encoder.set_compute_pipeline_state(kernel);
 
