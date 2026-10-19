@@ -26,15 +26,6 @@ General
    on supported hardware. The default is ``1``. Set it to ``0`` to keep these
    operations in full ``float32`` precision. See :doc:`precision`.
 
-CPU
----
-
-.. envvar:: MLX_CPU_CACHE_DIR
-
-   Override the directory used to cache runtime-compiled CPU kernels. An unset
-   or empty value uses ``mlx/<version>/cpu`` under the system temporary
-   directory, which is the default.
-
 Distributed
 -----------
 
@@ -208,3 +199,12 @@ The MLX-prefixed variables in this section are advanced CUDA backend controls.
 
 MLX also uses ``CUDA_HOME`` or ``CUDA_PATH`` to locate CUDA headers for runtime
 kernel compilation when they cannot be found in the Python environment.
+
+CPU
+---
+
+.. envvar:: MLX_CPU_CACHE_DIR
+
+   Override the directory used to cache runtime-compiled CPU kernels. An unset
+   or empty value uses ``mlx/<version>/cpu`` under the system temporary
+   directory, which is the default.
