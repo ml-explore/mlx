@@ -1658,6 +1658,42 @@ class TestOps(mlx_tests.MLXTestCase):
             out_mlx = mx.take_along_axis(a_mlx, mx.reshape(idx_mlx, shape), axis=ax)
             self.assertTrue(np.array_equal(out_np, np.array(out_mlx)))
 
+    def test_indexing_large_strided_view(self):
+        # A strided view whose logical size fits int32 can still reach past
+        # INT32_MAX elements through its strides; indexing ops must use 64-bit
+        # offsets for the source/update span.
+        if mx.default_device() != mx.gpu:
+            return
+        rows, stride, cols = 2**20, 2**11 + 64, 16
+        a = (mx.arange(rows) % 251 + 1).astype(mx.uint8)[:, None] + mx.zeros(
+            (1, stride), mx.uint8
+        )
+        mx.eval(a)
+        v = a[:, :cols]
+
+        boundary = (2**31 - 1) // stride
+        ids = mx.array([0, boundary + 1, boundary + 3, rows - 1])
+        expected = (ids.astype(mx.uint32) % 251 + 1).astype(mx.uint8)
+        expected = mx.broadcast_to(expected[:, None], (ids.size, cols))
+
+        self.assertTrue(mx.array_equal(mx.take(v, ids, axis=0), expected))
+
+        idx = mx.broadcast_to(ids[:, None], (ids.size, cols))
+        self.assertTrue(mx.array_equal(mx.take_along_axis(v, idx, axis=0), expected))
+
+        # Slice update writing the strided view into a contiguous target.
+        t = mx.zeros((rows, cols), mx.uint8)
+        t[:, :] = v
+        mx.eval(t)
+        self.assertTrue(mx.array_equal(t[ids], expected))
+        del t
+
+        # Scatter with the strided view as the update array.
+        t = mx.zeros((rows, cols), mx.uint8).at[mx.arange(rows)].add(v)
+        mx.eval(t)
+        self.assertTrue(mx.array_equal(t[ids], expected))
+        del t
+
     def test_along_axis_invalid_axis(self):
         # Negative out of bounds axes used to slip past the bounds check
         # (unsigned arithmetic made it dead code) and either raise an internal
