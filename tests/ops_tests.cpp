@@ -3012,6 +3012,16 @@ TEST_CASE("test as_strided op") {
   y = as_strided(x, {3, 3}, {2, 1}, 1);
   expected = array({5, 1, 6, 6, 2, 7, 7, 3, 8}, {3, 3});
   CHECK(array_equal(y, expected).item<bool>());
+
+  x = slice(arange(12), {10}, {0}, {-2});
+  y = as_strided(x, {2, 2}, {2, 1}, 1);
+  expected = array({8, 6, 4, 2}, {2, 2});
+  CHECK(array_equal(y, expected).item<bool>());
+
+  x = broadcast_to(array({1, 2, 3}), {2, 3});
+  y = as_strided(x, {2, 2}, {2, 1}, 1);
+  expected = array({2, 3, 1, 2}, {2, 2});
+  CHECK(array_equal(y, expected).item<bool>());
 }
 
 TEST_CASE("test sort and scan on empty arrays") {

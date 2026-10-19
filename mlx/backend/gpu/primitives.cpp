@@ -8,6 +8,9 @@
 
 #if defined(MLX_USE_CUDA)
 #include <nvtx3/nvtx3.hpp>
+#include "mlx/backend/cuda/device.h"
+#else
+#include "mlx/backend/metal/device.h"
 #endif
 
 #include <cassert>
@@ -22,7 +25,18 @@ namespace mlx::core {
 
 void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("AsStrided::eval_gpu");
-  eval(inputs, out);
+  assert(inputs.size() == 1);
+  if (inputs[0].flags().row_contiguous) {
+    eval(inputs[0], out);
+  } else {
+    auto copy = contiguous_copy_gpu(inputs[0], stream());
+#if defined(MLX_USE_CUDA)
+    cu::get_command_encoder(stream()).add_temporary(copy);
+#else
+    metal::get_command_encoder(stream()).add_temporary(copy);
+#endif
+    eval(copy, out);
+  }
 }
 
 void AsType::eval_gpu(const std::vector<array>& inputs, array& out) {
