@@ -4514,7 +4514,9 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(b.shape, ())
         self.assertEqual(b.dtype, mx.float32)
 
-        a, b = mx.broadcast_arrays(mx.zeros((3, 1, 2)), mx.zeros((4, 1)))
+        out = mx.broadcast_arrays(mx.zeros((3, 1, 2)), mx.zeros((4, 1)))
+        self.assertIsInstance(out, tuple)
+        a, b = out
         self.assertEqual(a.shape, (3, 4, 2))
         self.assertEqual(b.shape, (3, 4, 2))
 
