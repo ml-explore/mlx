@@ -214,7 +214,7 @@ jobs:
     runs-on: |-
       ${{ case(matrix.os == 'Windows', case(matrix.arch == 'aarch64', 'windows-11-arm',
                                             'windows-2022'),
-               matrix.os == 'macOS', fromJson('["self-hosted","macos"]'),
+               matrix.os == 'macOS', 'macos-26-xlarge',
                case(matrix.arch == 'x86_64' && startsWith(matrix.toolkit, 'cuda'), 'gpu-t4-4-core',
                     matrix.arch == 'aarch64', 'ubuntu-22.04-arm',
                     'ubuntu-22.04'))
