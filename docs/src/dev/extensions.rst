@@ -799,6 +799,43 @@ the binding does not hard-code either the module or Metal library name:
       // bindings
     }
 
+To choose Metal library names or build multiple libraries, pass
+``extension.MetalLibrary`` objects through ``metal_libraries``:
+
+.. code-block:: python
+
+    extension.MetalExtension(
+        "mlx_sample_metal_extension",
+        sources=["activation.cpp"],
+        metal_libraries=[
+            extension.MetalLibrary(
+                "activation",
+                sources=["silu_and_mul.metal"],
+                extra_compile_args=["-O3"],
+                deployment_target="14.0",
+            ),
+            extension.MetalLibrary(
+                "something_else",
+                sources=["something_else.metal"],
+            ),
+        ],
+    )
+
+When ``metal_libraries`` is set, put all ``.metal`` sources in those objects
+and keep only C++ sources in ``MetalExtension.sources``. Each library needs a
+unique name, given without a path or ``.metallib`` suffix. This example builds
+``activation.metallib`` and ``something_else.metallib`` beside the Python
+extension.
+
+Each library's ``extra_compile_args`` are added after the extension's shared
+``extra_compile_args["metal"]`` options. ``MLX_METAL_LIBRARY_NAME`` still
+contains the final component of the Python extension name. Load libraries
+explicitly by their configured names:
+
+.. code-block:: C++
+
+    auto library = device.get_library("activation", current_binary_dir());
+
 Debug builds include Metal line tables and recorded sources. Metal logging is
 enabled when the current ``xcrun metal`` compiler advertises support. The
 effective Python

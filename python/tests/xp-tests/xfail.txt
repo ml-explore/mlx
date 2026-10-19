@@ -266,8 +266,6 @@ array_api_tests/test_data_type_functions.py::test_iinfo[dtype7]
 ## Other failures
 ### MLX result_type() does not accept Python scalar values alongside dtypes
 array_api_tests/test_data_type_functions.py::TestResultType::test_with_scalars
-### returns a list instead of the required tuple
-array_api_tests/test_data_type_functions.py::test_broadcast_arrays
 ### MLX broadcast_shapes() requires at least one shape
 array_api_tests/test_data_type_functions.py::TestBroadcastShapes::test_empty
 
@@ -289,6 +287,9 @@ array_api_tests/test_searching_functions.py::test_argmin
 ## Misisng arguments
 ### Missing argument `append` `prepend`
 array_api_tests/test_utility_functions.py::test_diff_append_prepend
+## Other failures
+### AssertionError: out=False, but should be True [any()]
+array_api_tests/test_utility_functions.py::test_any
 
 # test_creation_functions.py
 ## Other failures
