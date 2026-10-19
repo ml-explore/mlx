@@ -9,18 +9,8 @@
 
 namespace mlx::core {
 
-void AsStrided::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-
-  auto& in = inputs[0];
-
-  if (!in.flags().row_contiguous) {
-    // Just ensuring that inputs[0] came from the ops which would ensure the
-    // input is row contiguous.
-    throw std::runtime_error(
-        "AsStrided must be used with row contiguous arrays only.");
-  }
-
+void AsStrided::eval(const array& in, array& out) {
+  assert(in.flags().row_contiguous);
   auto [_, row_contiguous, col_contiguous] = check_contiguity(shape_, strides_);
 
   int64_t l = 0, h = 0;

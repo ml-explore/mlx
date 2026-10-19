@@ -566,6 +566,7 @@ T array::item() {
     throw std::invalid_argument("item can only be called on arrays of size 1.");
   }
   eval();
+  // Use memcpy to read unaligned data.
   T value;
   std::memcpy(&value, data<void>(), sizeof(T));
   return value;
@@ -573,17 +574,11 @@ T array::item() {
 
 template <typename T>
 T array::item() const {
-  if (size() != 1) {
-    throw std::invalid_argument("item can only be called on arrays of size 1.");
-  }
   if (status() == Status::unscheduled) {
     throw std::invalid_argument(
         "item() const can only be called on evaled arrays");
   }
-  const_cast<array*>(this)->eval();
-  T value;
-  std::memcpy(&value, data<void>(), sizeof(T));
-  return value;
+  return const_cast<array*>(this)->item<T>();
 }
 
 template <typename It>

@@ -25,8 +25,9 @@ namespace mlx::core {
 
 void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("AsStrided::eval_gpu");
+  assert(inputs.size() == 1);
   if (inputs[0].flags().row_contiguous) {
-    eval(inputs, out);
+    eval(inputs[0], out);
   } else {
     auto copy = contiguous_copy_gpu(inputs[0], stream());
 #if defined(MLX_USE_CUDA)
@@ -34,7 +35,7 @@ void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
 #else
     metal::get_command_encoder(stream()).add_temporary(copy);
 #endif
-    eval({copy}, out);
+    eval(copy, out);
   }
 }
 
