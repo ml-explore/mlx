@@ -1475,6 +1475,77 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 elif arr_mask is not None:
                     kwargs["mask"] = arr_mask
                 out = mx.fast.scaled_dot_product_attention(q, k, v, **kwargs)
+
+                # Fused kernels return 0 for rows with no visible key (and no
+                # sink), the reference returns a uniform average. Skip them.
+                if mask_type == "bool" and not sinks:
+                    valid = ref_mask.any(axis=-1, keepdims=True)
+                    ref = mx.where(valid, ref, 0)
+                    out = mx.where(valid, out, 0)
+                self.assertTrue(mx.allclose(ref, out, atol=1e-5, rtol=1e-5))
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    def test_sdpa_window_large(self):
+        D = 128
+        scale = D**-0.5
+
+        qH = 8
+        kH = 4
+
+        for qL, kL, window, causal, sinks, mask_type in product(
+            (3, 2050),
+            (2050, 4096),
+            (1024, 2048),
+            (False, True),
+            (False, True),
+            (None, "bool"),
+        ):
+            if qL > kL or (causal and mask_type is not None):
+                continue
+            with self.subTest(
+                qL=qL,
+                kL=kL,
+                window=window,
+                causal=causal,
+                sinks=sinks,
+                mask_type=mask_type,
+            ):
+                q = mx.random.normal((2, qH, qL, D))
+                k = mx.random.normal((2, kH, kL, D))
+                v = mx.random.normal((2, kH, kL, D))
+                s = mx.random.normal((qH,)) if sinks else None
+
+                arr_mask = None
+                if mask_type == "bool":
+                    arr_mask = mx.random.uniform(shape=(2, qH, qL, kL)) < 0.7
+                    arr_mask[..., 0] = True
+                elif mask_type == "additive":
+                    arr_mask = mx.random.uniform(shape=(2, qH, qL, kL))
+
+                # Reference: the window as a boolean array mask.
+                ref_mask = make_window_mask(qL, kL, window)
+                if causal:
+                    ref_mask = ref_mask & make_causal_mask(qL, kL)
+
+                if mask_type == "bool":
+                    ref_mask = ref_mask & arr_mask
+                elif mask_type == "additive":
+                    ref_mask = mx.where(ref_mask, arr_mask, -mx.inf)
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask=ref_mask, sinks=s)
+
+                kwargs = {"scale": scale, "sinks": s, "window_size": window}
+                if causal:
+                    kwargs["mask"] = "causal"
+                elif arr_mask is not None:
+                    kwargs["mask"] = arr_mask
+                out = mx.fast.scaled_dot_product_attention(q, k, v, **kwargs)
+
+                # Fused kernels return 0 for rows with no visible key (and no
+                # sink), the reference returns a uniform average. Skip them.
+                if mask_type == "bool" and not sinks:
+                    valid = ref_mask.any(axis=-1, keepdims=True)
+                    ref = mx.where(valid, ref, 0)
+                    out = mx.where(valid, out, 0)
                 self.assertTrue(mx.allclose(ref, out, atol=1e-5, rtol=1e-5))
 
     def test_sdpa_window_size_errors(self):
