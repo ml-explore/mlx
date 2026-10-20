@@ -24,12 +24,14 @@ bool use_blocked_d512(
     bool has_arr_mask,
     bool do_causal,
     bool has_sinks,
+    int window_size,
     bool output_logsumexp,
     Stream s) {
   return s.device == Device::gpu && !metal::is_nax_available() &&
-      (q.dtype() == float16 || q.dtype() == bfloat16) && q.shape(-1) == 512 &&
-      v.shape(-1) == 512 && q.shape(2) >= 1024 && q.shape(2) <= k.shape(2) &&
-      do_causal && !has_arr_mask && !has_sinks && !output_logsumexp;
+      window_size <= 0 && (q.dtype() == float16 || q.dtype() == bfloat16) &&
+      q.shape(-1) == 512 && v.shape(-1) == 512 && q.shape(2) >= 1024 &&
+      q.shape(2) <= k.shape(2) && do_causal && !has_arr_mask && !has_sinks &&
+      !output_logsumexp;
 }
 
 void sdpa_blocked_softmax(const Stream& s, metal::Device& d, array& scores) {
@@ -210,6 +212,7 @@ void sdpa_full_self_attention_nax(
     const float scale,
     array& o,
     bool do_causal_,
+    int window_size_,
     const std::optional<array>& mask,
     const std::optional<array>& sinks,
     array* lse) {
@@ -267,6 +270,7 @@ void sdpa_full_self_attention_nax(
   const bool do_causal = do_causal_;
   const bool has_sinks = sinks.has_value();
   const bool save_lse = (lse != nullptr);
+  const int window_size = window_size_;
 
   metal::MTLFCList func_consts = {
       {&align_Q, MTL::DataType::DataTypeBool, 200},
@@ -274,7 +278,8 @@ void sdpa_full_self_attention_nax(
       {&has_mask, MTL::DataType::DataTypeBool, 300},
       {&do_causal, MTL::DataType::DataTypeBool, 301},
       {&has_sinks, MTL::DataType::DataTypeBool, 302},
-      {&save_lse, MTL::DataType::DataTypeBool, 303}};
+      {&save_lse, MTL::DataType::DataTypeBool, 303},
+      {&window_size, MTL::DataType::DataTypeInt, 304}};
 
   std::string base_name;
   concatenate(
@@ -311,7 +316,9 @@ void sdpa_full_self_attention_nax(
       "_has_sinks_",
       (has_sinks ? 't' : 'n'),
       "_save_lse_",
-      (save_lse ? 't' : 'n'));
+      (save_lse ? 't' : 'n'),
+      "_window_",
+      (window_size > 0 ? std::to_string(window_size) : "n"));
 
   auto& compute_encoder = metal::get_command_encoder(s);
 
@@ -402,6 +409,7 @@ void sdpa_full_self_attention_metal(
     const float scale,
     array& o,
     bool do_causal_,
+    int window_size_,
     const std::optional<array>& mask,
     const std::optional<array>& sinks,
     array* lse /* = nullptr */) {
@@ -421,6 +429,7 @@ void sdpa_full_self_attention_metal(
         /* const float scale = */ scale,
         /* array& o = */ o,
         /* bool do_causal_ = */ do_causal_,
+        /* int window_size_ = */ window_size_,
         /* const std::optional<array>& mask = */ mask,
         /* const std::optional<array>& sinks = */ sinks,
         /* array* lse = */ lse);
@@ -479,6 +488,7 @@ void sdpa_full_self_attention_metal(
         /* const float scale = */ scale,
         /* array& o = */ op,
         /* bool do_causal_ = */ do_causal_,
+        /* int window_size_ = */ window_size_,
         /* const std::optional<array>& mask = */ mask,
         /* const std::optional<array>& sinks = */ sinks,
         /* array* lse = */ nullptr);
@@ -521,6 +531,7 @@ void sdpa_full_self_attention_metal(
   const bool do_causal = do_causal_;
   const bool has_sinks = sinks.has_value();
   const bool save_lse = (lse != nullptr);
+  const int window_size = window_size_;
 
   metal::MTLFCList func_consts = {
       {&align_Q, MTL::DataType::DataTypeBool, 200},
@@ -528,7 +539,8 @@ void sdpa_full_self_attention_metal(
       {&has_mask, MTL::DataType::DataTypeBool, 300},
       {&do_causal, MTL::DataType::DataTypeBool, 301},
       {&has_sinks, MTL::DataType::DataTypeBool, 302},
-      {&save_lse, MTL::DataType::DataTypeBool, 303}};
+      {&save_lse, MTL::DataType::DataTypeBool, 303},
+      {&window_size, MTL::DataType::DataTypeInt, 304}};
 
   std::string base_name;
   concatenate(
@@ -565,7 +577,9 @@ void sdpa_full_self_attention_metal(
       "_has_sinks_",
       (has_sinks ? 't' : 'n'),
       "_save_lse_",
-      (save_lse ? 't' : 'n'));
+      (save_lse ? 't' : 'n'),
+      "_window_",
+      ((window_size > 0) ? std::to_string(window_size) : "n"));
 
   auto& compute_encoder = metal::get_command_encoder(s);
 
@@ -651,7 +665,7 @@ int visible_keys(int N, int qL, int window_size, bool do_causal) {
   if (window_size <= 0) {
     return N;
   }
-  int span = (do_causal || qL == 1) ? window_size : 2 * window_size;
+  int span = do_causal ? window_size : 2 * window_size;
   return std::min(N, span + qL - 1);
 }
 
@@ -966,8 +980,11 @@ std::tuple<bool, std::string> has_fused_kernel(
     return {false, "the fused kernels require a GPU (Metal) stream."};
   }
 
-  if (window_size > 0 && q.shape(2) > 8) {
-    return {false, "window attention support for Metal is NYI"};
+  if (window_size > 0 && q.shape(2) > 8 && q.shape(2) > k.shape(2)) {
+    return {
+        false,
+        "the full attention kernel with a window requires the query sequence "
+        "to be no longer than the key sequence."};
   }
   if (output_logsumexp && window_size > 0) {
     return {false, "window support for backward attention is NYI"};
@@ -1450,7 +1467,15 @@ bool ScaledDotProductAttention::use_fallback(
     return false;
   }
   if (use_blocked_d512(
-          q, k, v, has_arr_mask, do_causal, has_sinks, output_logsumexp, s)) {
+          q,
+          k,
+          v,
+          has_arr_mask,
+          do_causal,
+          has_sinks,
+          window_size,
+          output_logsumexp,
+          s)) {
     return false;
   }
   if (!has_fused) {
@@ -1662,12 +1687,13 @@ void ScaledDotProductAttention::eval_gpu(
             has_arr_mask,
             do_causal_,
             sinks.has_value(),
+            window_size_,
             lse != nullptr,
             s)) {
       sdpa_full_self_attention_blocked(s, d, q, k, v, scale_, o);
     } else {
       sdpa_full_self_attention_metal(
-          s, d, q, k, v, scale_, o, do_causal_, mask, sinks, lse);
+          s, d, q, k, v, scale_, o, do_causal_, window_size_, mask, sinks, lse);
     }
   }
 

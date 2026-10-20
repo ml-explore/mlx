@@ -8,7 +8,7 @@
 using namespace mlx::steel;
 
 ///////////////////////////////////////////////////////////////////////////////
-// GEMM kernels
+// Attention kernels
 ///////////////////////////////////////////////////////////////////////////////
 
 constant bool align_Q [[function_constant(200)]];
@@ -18,6 +18,8 @@ constant bool has_mask [[function_constant(300)]];
 constant bool do_causal [[function_constant(301)]];
 constant bool has_sinks [[function_constant(302)]];
 constant bool save_lse [[function_constant(303)]];
+constant int window_size [[function_constant(304)]];
+constant bool has_window = window_size > 0;
 
 template <typename T>
 struct TransformScale {
@@ -188,14 +190,44 @@ template <
   int kb_lim = params->NK;
   int kb_min_causal = params->NK;
 
+  // Blocks before this are ignored
+  int kb_start = 0;
+
+  // First block with no masked block edge
+  int kb_win_lo = 0;
+  // Last block with no masked block edge
+  int kb_win_hi = params->NK;
+
+  // Query positions covered by this block are [q_min, q_max)
+  const int q_max = (tid.x + 1) * BQ + params->qL_off;
+  const int q_min = max(0, int(tid.x) * BQ + params->qL_off);
+
   if (do_causal) {
-    int q_max = (tid.x + 1) * BQ + params->qL_off;
     kb_lim = (q_max + BK - 1) / BK;
     kb_lim = min(params->NK, kb_lim);
 
-    int q_min = tid.x * BQ + params->qL_off;
-    q_min = max(0, q_min);
     kb_min_causal = (q_min / BK);
+  } else if (has_window) {
+    int k_max = q_max + window_size - 1;
+    kb_lim = (k_max + BK - 1) / BK;
+    kb_lim = min(params->NK, kb_lim);
+  }
+
+  if (has_window) {
+    // The smallest k this block attends to is decided by the window
+    int k_min = max(0, q_min - window_size + 1);
+    kb_start = k_min / BK;
+
+    // Move the K and V pointers to the first key block
+    K += kb_start * BK * params->K_strides[2];
+    V += kb_start * BK * params->V_strides[2];
+
+    // All queries in the block [q_min, q_max) attend to
+    // keys [common_k_min, common_k_max)
+    auto common_k_min = max(0, q_max - window_size);
+    auto common_k_max = q_min + window_size;
+    kb_win_lo = (common_k_min + BK - 1) / BK;
+    kb_win_hi = common_k_max / BK;
   }
 
   const bool is_last_bq = int(tid.x) == (params->NQ_aligned);
@@ -206,7 +238,7 @@ template <
   const short lim_rows_k = params->kL_rem;
 
   // Loop over KV seq length
-  for (int kb = 0; kb < kb_lim; kb++) {
+  for (int kb = kb_start; kb < kb_lim; kb++) {
     const int is_last_k = (kb == (params->NK_aligned));
 
     // Do S = Q @ K.T
@@ -291,8 +323,12 @@ template <
       }
     }
 
-    // Mask out if causal
-    if (do_causal && kb >= kb_min_causal) {
+    // Mask out if causal or at the window edge
+    const bool is_causal_masked = do_causal && (kb >= kb_min_causal);
+    const bool is_win_lo_masked = has_window && (kb < kb_win_lo);
+    const bool is_win_hi_masked = has_window && !do_causal && (kb >= kb_win_hi);
+
+    if (is_causal_masked || is_win_lo_masked || is_win_hi_masked) {
       constexpr auto neg_inf = Limits<AccumType>::finite_min;
 
       const int base_row = tid.x * BQ + params->qL_off + tm;
@@ -312,7 +348,20 @@ template <
                   base_row + iq * kU + ii * stile_t::kFragRowsJump + sm;
               const auto c = base_col + ik * kU + jj + sn;
               const auto loc = ii * stile_t::kFragThrCols + jj;
-              fg[loc] = (r < c) ? neg_inf : fg[loc];
+
+              if (has_window) {
+                if (is_causal_masked) {
+                  fg[loc] = (r < c) ? neg_inf : fg[loc];
+                }
+                if (is_win_lo_masked) {
+                  fg[loc] = ((r - c) >= window_size) ? neg_inf : fg[loc];
+                }
+                if (is_win_hi_masked) {
+                  fg[loc] = ((c - r) >= window_size) ? neg_inf : fg[loc];
+                }
+              } else if (do_causal) {
+                fg[loc] = (r < c) ? neg_inf : fg[loc];
+              }
             }
           }
         }
@@ -633,14 +682,44 @@ template <
   int kb_lim = params->NK;
   int kb_min_causal = params->NK;
 
+  // Blocks before this are ignored
+  int kb_start = 0;
+
+  // First block with no masked block edge
+  int kb_win_lo = 0;
+  // Last block with no masked block edge
+  int kb_win_hi = params->NK;
+
+  // Query positions covered by this block are [q_min, q_max)
+  const int q_max = (tid.x + 1) * BQ + params->qL_off;
+  const int q_min = max(0, int(tid.x) * BQ + params->qL_off);
+
   if (do_causal) {
-    int q_max = (tid.x + 1) * BQ + params->qL_off;
     kb_lim = (q_max + BK - 1) / BK;
     kb_lim = min(params->NK, kb_lim);
 
-    int q_min = tid.x * BQ + params->qL_off;
-    q_min = max(0, q_min);
     kb_min_causal = (q_min / BK);
+  } else if (has_window) {
+    int k_max = q_max + window_size - 1;
+    kb_lim = (k_max + BK - 1) / BK;
+    kb_lim = min(params->NK, kb_lim);
+  }
+
+  if (has_window) {
+    // The smallest k this block attends to is decided by the window
+    int k_min = max(0, q_min - window_size + 1);
+    kb_start = k_min / BK;
+
+    // Move the K and V pointers to the first key block
+    K += kb_start * BK * params->K_strides[2];
+    V += kb_start * BK * params->V_strides[2];
+
+    // All queries in the block [q_min, q_max) attend to
+    // keys [common_k_min, common_k_max)
+    auto common_k_min = max(0, q_max - window_size);
+    auto common_k_max = q_min + window_size;
+    kb_win_lo = (common_k_min + BK - 1) / BK;
+    kb_win_hi = common_k_max / BK;
   }
 
   const bool is_last_q = int(tid.x) == (params->NQ_aligned);
@@ -673,7 +752,7 @@ template <
   const short sn = simd_coord.x;
 
   // Loop over KV seq length
-  for (int kb = 0; kb < kb_lim; kb++) {
+  for (int kb = kb_start; kb < kb_lim; kb++) {
     const int is_last_k = (kb == (params->NK_aligned));
 
     stile_t Stile;
@@ -761,8 +840,12 @@ template <
       }
     }
 
-    // Mask out if causal
-    if (do_causal && kb >= kb_min_causal) {
+    // Mask out if causal or at the window edge
+    const bool is_causal_masked = do_causal && (kb >= kb_min_causal);
+    const bool is_win_lo_masked = has_window && (kb < kb_win_lo);
+    const bool is_win_hi_masked = has_window && !do_causal && (kb >= kb_win_hi);
+
+    if (is_causal_masked || is_win_lo_masked || is_win_hi_masked) {
       constexpr auto neg_inf = Limits<AccumType>::finite_min;
 
       const int base_row = tid.x * BQ + params->qL_off + tm;
@@ -779,7 +862,20 @@ template <
             const auto r = base_row + ii * stile_t::kFragRowsJump + sm;
             const auto c = base_col + ik * kU + jj + sn;
             const auto loc = ii * stile_t::kFragThrCols + jj;
-            fg[loc] = (r < c) ? neg_inf : fg[loc];
+
+            if (has_window) {
+              if (is_causal_masked) {
+                fg[loc] = (r < c) ? neg_inf : fg[loc];
+              }
+              if (is_win_lo_masked) {
+                fg[loc] = ((r - c) >= window_size) ? neg_inf : fg[loc];
+              }
+              if (is_win_hi_masked) {
+                fg[loc] = ((c - r) >= window_size) ? neg_inf : fg[loc];
+              }
+            } else if (do_causal) {
+              fg[loc] = (r < c) ? neg_inf : fg[loc];
+            }
           }
         }
       }
