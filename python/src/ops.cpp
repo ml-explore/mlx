@@ -1158,19 +1158,24 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arctan2",
-      &mx::arctan2,
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return mx::arctan2(a, b, s);
+      },
       nb::arg(),
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arctan2(a: array, b: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def arctan2(a: scalar | array, b: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise inverse tangent of the ratio of two arrays.
 
         Args:
-            a (array): Input array.
-            b (array): Input array.
+            a (array or scalar): Input array or scalar.
+            b (array or scalar): Input array or scalar.
 
         Returns:
             array: The inverse tangent of the ratio of ``a`` and ``b``.
@@ -1298,12 +1303,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def degrees(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def degrees(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Convert angles from radians to degrees.
 
       Args:
-          a (array): Input array.
+          a (array or scalar): Input array.
 
       Returns:
           array: The angles in degrees.
@@ -1317,12 +1322,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def radians(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def radians(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Convert angles from degrees to radians.
 
       Args:
-          a (array): Input array.
+          a (array or scalar): Input array.
 
       Returns:
           array: The angles in radians.
@@ -2734,6 +2739,37 @@ void init_ops(nb::module_& m) {
             array: The output array with the corresponding axes reduced.
       )pbdoc");
   m.def(
+      "minmax",
+      [](const mx::array& a,
+         const IntOrVec& axis,
+         bool keepdims,
+         mx::StreamOrDevice s) -> std::tuple<mx::array, mx::array> {
+        auto axes = get_reduce_axes(axis, a.ndim());
+        return mx::minmax(a, axes, keepdims, s);
+      },
+      nb::arg(),
+      "axis"_a = nb::none(),
+      "keepdims"_a = false,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def minmax(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, *, stream: StreamOrDevice = None) -> tuple[array, array]"),
+      R"pbdoc(
+        Return the minimum and maximum over the given axes.
+
+        Equivalent to calling :func:`min` and :func:`max` separately.
+
+        Args:
+            a (array): Input array.
+            axis (int or list(int), optional): Axis or axes to reduce over.
+              If unspecified, reduce over the entire array.
+            keepdims (bool, optional): Keep reduced axes as singleton
+              dimensions. Default: ``False``.
+
+        Returns:
+            tuple(array, array): The minimum and maximum arrays, in that order.
+      )pbdoc");
+  m.def(
       "logcumsumexp",
       [](const mx::array& a,
          std::optional<int> axis,
@@ -3377,7 +3413,9 @@ void init_ops(nb::module_& m) {
   m.def(
       "broadcast_arrays",
       [](const nb::args& args, mx::StreamOrDevice s) {
-        return broadcast_arrays(nb::cast<std::vector<mx::array>>(args), s);
+        return nb::tuple(
+            nb::cast(
+                broadcast_arrays(nb::cast<std::vector<mx::array>>(args), s)));
       },
       nb::arg(),
       nb::kw_only(),

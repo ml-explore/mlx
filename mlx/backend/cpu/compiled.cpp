@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <dlfcn.h>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <list>
@@ -98,11 +99,13 @@ void* compile(
     kernel_file_name = kernel_name;
   }
 
-  auto output_dir =
-      std::filesystem::temp_directory_path() / "mlx" / version() / "cpu";
-  if (!std::filesystem::exists(output_dir)) {
-    std::filesystem::create_directories(output_dir);
-  }
+  static const std::filesystem::path output_dir = [] {
+    if (auto dir = std::getenv("MLX_CPU_CACHE_DIR"); dir && *dir) {
+      return std::filesystem::absolute(dir);
+    }
+    return std::filesystem::temp_directory_path() / "mlx" / version() / "cpu";
+  }();
+  std::filesystem::create_directories(output_dir);
 
 #ifdef _WIN32
   std::string shared_lib_name = kernel_file_name + ".dll";

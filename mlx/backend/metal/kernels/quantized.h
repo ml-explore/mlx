@@ -930,7 +930,9 @@ METAL_FUNC void qmv_fast_impl(
   // >=2-bit this is a no-op. Out-of-bounds lanes skip the qdot call entirely;
   // their result[row] stays at 0 and contributes 0 to the simd_sum below.
   if (aligned_end < in_vec_size) {
-    bool in_bounds = (aligned_end + simd_lid * values_per_thread) < in_vec_size;
+    bool in_bounds =
+        (aligned_end + static_cast<int>(simd_lid) * values_per_thread) <
+        in_vec_size;
     if (in_bounds) {
       U sum = load_vector<T, U, values_per_thread, bits>(x, x_thread);
 

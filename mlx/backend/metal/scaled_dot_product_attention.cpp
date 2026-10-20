@@ -646,7 +646,7 @@ void sdpa_full_self_attention_metal(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-void sdpa_vector(
+bool sdpa_vector(
     const Stream& s,
     metal::Device& d,
     const array& q,
@@ -700,6 +700,9 @@ void sdpa_vector(
   // Get the kernel
   auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
+  if (kernel->maxTotalThreadsPerThreadgroup() < group_dims.width) {
+    return false;
+  }
   check_kernel_threadgroup_size(kernel, group_dims, hash_name);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -734,6 +737,7 @@ void sdpa_vector(
 
   // Launch
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+  return true;
 }
 
 void sdpa_vector_2pass(
@@ -860,8 +864,8 @@ void sdpa_vector_2pass(
   // Get the kernel
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
   // M1/M2 do not have enough threads per threadgroup for default TK=4 kernel
-  bool has_tk1_variant =
-      (q.dtype() == bfloat16 && q.shape(-1) == 256 && v.shape(-1) == 256) ||
+  bool has_tk1_variant = ((q.dtype() == float16 || q.dtype() == bfloat16) &&
+                          q.shape(-1) == 256 && v.shape(-1) == 256) ||
       (q.dtype() == float32 && q.shape(-1) == v.shape(-1) &&
        (q.shape(-1) == 192 || q.shape(-1) == 256));
   if (has_tk1_variant &&
@@ -1577,8 +1581,8 @@ void ScaledDotProductAttention::eval_gpu(
     if (((devc == 'd' || devc == 's') && k.shape(2) >= 1024) ||
         (k.shape(1) < q.shape(1) && k.shape(2) >= 4096)) {
       sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
-    } else {
-      sdpa_vector(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
+    } else if (!sdpa_vector(s, d, q, k, v, o, scale_, do_causal, mask, sinks)) {
+      sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
     }
   }
 

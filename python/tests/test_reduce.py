@@ -367,6 +367,21 @@ class TestReduce(mlx_tests.MLXTestCase):
         mx.eval(out)
         self.assertTrue(mx.all(out).item())
 
+    def test_minmax(self):
+        x = mx.array([[3.0, 1.0, 4.0], [2.0, 6.0, 5.0]])
+        out = mx.minmax(x)
+        self.assertIsInstance(out, tuple)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(tuple(a.item() for a in out), (1.0, 6.0))
+        for axis in (None, 0, (0, 1)):
+            for keepdims in (False, True):
+                with self.subTest(axis=axis, keepdims=keepdims):
+                    out = mx.minmax(x, axis=axis, keepdims=keepdims)
+                    for actual, op in zip(out, (mx.min, mx.max)):
+                        expected = op(x, axis=axis, keepdims=keepdims)
+                        self.assertEqual(actual.shape, expected.shape)
+                        self.assertTrue(mx.array_equal(actual, expected))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)

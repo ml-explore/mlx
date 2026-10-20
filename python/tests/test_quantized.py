@@ -665,8 +665,10 @@ class TestQuantized(mlx_tests.MLXTestCase):
         if mx.default_device() == mx.cpu:
             self.skipTest("Covers GPU kernels only")
         K, N = 2560, 1024
+        # Keep M at or above get_qmv_batch_limit on all devices. Below it the
+        # qmv kernel runs, which dequantizes in float32 and not in the input type.
         for mode, dtype, M in product(
-            ["affine", "mxfp4"], [mx.bfloat16, mx.float16], [16, 33, 65]
+            ["affine", "mxfp4"], [mx.bfloat16, mx.float16], [25, 33, 65]
         ):
             with self.subTest(mode=mode, dtype=dtype, M=M):
                 k1, k2 = mx.random.split(mx.random.key(0))
@@ -2618,6 +2620,28 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_hat = mx.dequantize(w_q, scales, mode=mode)
         expected = mx.dequantize(w_q, mx.contiguous(scales), mode=mode)
         self.assertTrue(mx.allclose(w_hat, expected))
+
+    def test_quantized_matmul_batched_split_k(self):
+        tol = 3e-2 if mx.cuda.is_available() else 1e-3
+        K, N = 2048, 512
+        w = mx.random.normal(shape=(K, N))
+        w_q, scales, biases = mx.quantize(w, group_size=64, bits=4)
+        w_hat = mx.dequantize(w_q, scales, biases, group_size=64, bits=4)
+
+        shapes = [
+            (2, K),
+            (2, 1, K),
+            (3, 1, K),
+            (2, 1, 1, K),
+        ]
+        for shape in shapes:
+            x = mx.random.normal(shape=shape)
+            y_q = mx.quantized_matmul(
+                x, w_q, scales, biases, transpose=False, group_size=64, bits=4
+            )
+            y_hat = x @ w_hat
+            self.assertEqual(y_q.shape, y_hat.shape)
+            self.assertLess((y_q - y_hat).abs().max(), tol)
 
 
 if __name__ == "__main__":
