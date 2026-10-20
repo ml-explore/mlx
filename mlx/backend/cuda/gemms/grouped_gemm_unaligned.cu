@@ -87,9 +87,12 @@ __global__ void prepare_grouped_mm_data(
     out_lds[group] = N;
     // Fill pointers.
     auto offset = group == 0 ? 0 : cum_histo[group - 1];
-    a_ptrs[group] = a_start + offset * item_size * a_batch_stride;
-    b_ptrs[group] = b_start + group * item_size * b_batch_stride;
-    out_ptrs[group] = out_start + offset * item_size * out_batch_stride;
+    a_ptrs[group] =
+        a_start + static_cast<int64_t>(offset) * item_size * a_batch_stride;
+    b_ptrs[group] =
+        b_start + static_cast<int64_t>(group) * item_size * b_batch_stride;
+    out_ptrs[group] =
+        out_start + static_cast<int64_t>(offset) * item_size * out_batch_stride;
   }
 }
 

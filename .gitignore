@@ -12,6 +12,7 @@ __pycache__/
 
 # Distribution / packaging
 /build/
+/examples/**/build/
 python/mlx/core
 python/mlx/share
 python/mlx/include

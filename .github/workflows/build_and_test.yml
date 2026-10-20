@@ -85,7 +85,7 @@ jobs:
       matrix:
         macos-target: ['14.0', '15.0', '26.2']
         toolkit: ['cpu', 'metal', 'jit']
-    runs-on: 'macos-26-xlarge'
+    runs-on: macos-26-xlarge
     needs: check_lint
     steps:
       - uses: actions/checkout@v7
@@ -118,7 +118,7 @@ jobs:
   mac_test:
     name: Test macOS (${{ matrix.toolkit }})
     if: github.repository == 'ml-explore/mlx'
-    runs-on: [self-hosted, macos]
+    runs-on: macos-26-xlarge
     needs: mac_build
     strategy:
       fail-fast: false
@@ -143,7 +143,7 @@ jobs:
     name: Array API Tests (Metal)
     if: github.repository == 'ml-explore/mlx'
     needs: mac_build
-    runs-on: 'macos-26-xlarge'
+    runs-on: macos-26-xlarge
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup

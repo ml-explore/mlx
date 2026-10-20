@@ -8,7 +8,7 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-NB_MODULE(_ext, m) {
+NB_MODULE(mlx_sample_extensions, m) {
   m.doc() = "Sample extension for MLX";
 
   m.def(
