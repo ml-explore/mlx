@@ -80,13 +80,6 @@
   instantiate_quantized_aligned_batched(affine_qmm_t_nax, type, group_size, bits, 32, 64, 64, 2, 2, false, 1) \
   instantiate_quantized_aligned_batched(affine_qmm_t_nax, type, group_size, bits, 32, 64, 64, 2, 2, false, 0)
 
-// 16-row schedule (WM = 4, WN = 1); its double-buffered weight tile is too large
-// for float32 threadgroup memory.
-#define instantiate_quantized_rows16(type, group_size, bits) \
-  instantiate_quantized_aligned_batched(affine_qmm_t_nax, type, group_size, bits, 64, 64, 64, 4, 1, true, 1) \
-  instantiate_quantized_aligned_batched(affine_qmm_t_nax, type, group_size, bits, 64, 64, 64, 4, 1, true, 0) \
-  instantiate_quantized_aligned(affine_qmm_t_nax_splitk, type, group_size, bits, 64, 64, 64, 4, 1, true)
-
 #define instantiate_quantized_all_rhs(type, group_size, bits) \
   instantiate_gather_qmm_rhs(affine_gather_qmm_rhs_nax, affine_gather_qmm_rhs_nax_nt, type, group_size, bits, 64, 64, 64, 2, 2, true) \
   instantiate_gather_qmm_rhs(affine_gather_qmm_rhs_nax, affine_gather_qmm_rhs_nax_nn, type, group_size, bits, 64, 64, 64, 2, 2, false) \
@@ -98,14 +91,23 @@
   instantiate_quantized_all_aligned(type, group_size, bits) \
   instantiate_quantized_all_rhs(type, group_size, bits)
 
+#define instantiate_quantized_splitk(group_size, bits) \
+  instantiate_quantized_aligned(affine_qmm_t_nax_splitk, float, group_size, bits, 32, 64, 64, 2, 2, true)     \
+  instantiate_quantized_aligned(affine_qmm_t_nax_splitk, float, group_size, bits, 64, 64, 64, 2, 2, true)     \
+  instantiate_quantized_aligned(affine_qmm_t_nax_splitk, float16_t, group_size, bits, 64, 64, 64, 4, 1, true) \
+  instantiate_quantized_aligned(affine_qmm_t_nax_splitk, bfloat16_t, group_size, bits, 64, 64, 64, 4, 1, true)
+
+#define instantiate_quantized_staged(type, group_size, bits) \
+  instantiate_quantized_aligned_batched(affine_qmm_t_nax, type, group_size, bits, 64, 64, 64, 4, 1, true, 1) \
+  instantiate_quantized_aligned_batched(affine_qmm_t_nax, type, group_size, bits, 64, 64, 64, 4, 1, true, 0)
+
 #define instantiate_quantized_types(group_size, bits)       \
   instantiate_quantized_funcs(float, group_size, bits)      \
-  instantiate_quantized_aligned(affine_qmm_t_nax_splitk, float, group_size, bits, 32, 64, 64, 2, 2, true) \
-  instantiate_quantized_aligned(affine_qmm_t_nax_splitk, float, group_size, bits, 64, 64, 64, 2, 2, true) \
   instantiate_quantized_funcs(float16_t, group_size, bits)  \
   instantiate_quantized_funcs(bfloat16_t, group_size, bits) \
-  instantiate_quantized_rows16(float16_t, group_size, bits) \
-  instantiate_quantized_rows16(bfloat16_t, group_size, bits)
+  instantiate_quantized_splitk(group_size, bits)            \
+  instantiate_quantized_staged(float16_t, group_size, bits) \
+  instantiate_quantized_staged(bfloat16_t, group_size, bits)
 
 #define instantiate_quantized_groups(bits) \
   instantiate_quantized_types(128, bits)   \

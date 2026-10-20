@@ -829,14 +829,13 @@ void qvm(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-// The 16-row schedule reads activations 4 values (8 bytes) at a time.
-bool use_qmm_t_nax_rows16(
+bool use_qmm_t_nax_staged(
     const array& x,
     bool transpose,
     bool aligned_n,
     const std::string& mode) {
-  return transpose && aligned_n && mode == "affine" &&
-      (x.dtype() == float16 || x.dtype() == bfloat16) && x.offset() % 8 == 0;
+  return transpose && aligned_n && (mode == "affine") &&
+      (x.dtype() == float16 || x.dtype() == bfloat16) && (x.offset() % 8 == 0);
 }
 
 void qmm_nax(
@@ -857,21 +856,23 @@ void qmm_nax(
     const std::string& mode) {
   int B = out.size() / M / N;
 
-  bool aligned = N % 64 == 0;
-  // Transposed affine half/bfloat16 with aligned N: four simdgroups of 16 rows
-  // x 64 columns (WN = 1 selects that schedule in affine_qmm_t_nax).
-  bool rows16 = use_qmm_t_nax_rows16(x, transpose, aligned, mode);
-  int wm = rows16 ? 4 : 2;
-  int wn = rows16 ? 1 : 2;
+  int wm = 2;
+  int wn = 2;
+  MTL::Size group_dims(32, wn, wm);
   // Use smaller bm when one block covers all of M. Only qmm_t_nax has a 32-row
   // instantiation.
-  int bm = (transpose && M <= 32 && !rows16) ? 32 : 64;
+  int bm = (transpose && M <= 32) ? 32 : 64;
   int bn = 64;
   int bk = 64;
-  // A flat threadgroup runs the 16-row schedule faster than (32, 1, wm)
-  MTL::Size group_dims =
-      rows16 ? MTL::Size(32 * wm, 1, 1) : MTL::Size(32, wn, wm);
-  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
+
+  bool aligned_n = (N % 64 == 0);
+  if (use_qmm_t_nax_staged(x, transpose, aligned_n, mode)) {
+    wm = 4;
+    wn = 1;
+    bm = 64;
+    // A flat threadgroup runs the 16-row schedule faster than (32, 1, wm).
+    group_dims = MTL::Size(32 * wm, 1, 1);
+  }
 
   std::string kname;
   kname.reserve(64);
@@ -895,7 +896,7 @@ void qmm_nax(
       wm,
       "_wn",
       wn,
-      transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
+      transpose ? (aligned_n ? "_alN_true" : "_alN_false") : "",
       batched ? "_batch_1" : "_batch_0",
       global_scale ? "_hgs" : "");
   std::string template_def;
@@ -909,7 +910,7 @@ void qmm_nax(
         type_string,
         group_size,
         bits,
-        aligned,
+        aligned_n,
         batched,
         bm,
         bk,
@@ -954,7 +955,8 @@ void qmm_nax(
   compute_encoder.set_bytes(M, c++);
   add_strides_and_shapes(compute_encoder, B <= 1, x, w, scales, biases, c);
 
-  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+  compute_encoder.dispatch_threadgroups(
+      MTL::Size(ceildiv(N, bn), ceildiv(M, bm), B), group_dims);
 }
 
 void gather_qmm_nax(
@@ -1178,9 +1180,6 @@ void qmm(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-// Split-K on the NAX qmm tile, for transposed affine weights with N % 64 == 0.
-// A mid-size M covers too few (64-column x bm-row) tiles to fill the GPU, so K
-// is split until the launch has up to ~256 threadgroups.
 bool use_qmm_nax_splitk(
     const array& x,
     const std::string& mode,
@@ -1188,27 +1187,27 @@ bool use_qmm_nax_splitk(
     int N,
     int K,
     int group_size) {
-  if (!metal::is_nax_available() || mode != "affine" || N % 64 != 0 ||
-      K % 64 != 0 || K % group_size != 0 ||
-      (x.dtype() == float32 && !env::enable_tf32())) {
+  // Use split-k for transposed affine weights with aligned N and K.
+  if (!metal::is_nax_available() ||
+      (x.dtype() == float32 && !env::enable_tf32() || (mode != "affine") ||
+       (N % 64 != 0) || (K % 64 != 0) || (K % group_size != 0))) {
     return false;
   }
   // A two-way K split must fit within 256 threadgroups.
-  int bm = M <= 32 ? 32 : 64;
-  int tiles = (N / 64) * ((M + bm - 1) / bm);
-  return tiles * 2 <= 256 && K % (2 * std::max(64, group_size)) == 0;
+  int bm = (M <= 32) ? 32 : 64;
+  int tiles = (N / 64) * ceildiv(M, bm);
+  return (tiles * 2 <= 256) && (K % (2 * std::max(64, group_size)) == 0);
 }
 
-// K partitions for the NAX split-K launch over 64 x 64 output tiles: double
-// up to 4 while the grid stays within 256 threadgroups and every partition
-// keeps at least 256 columns, a whole number of 64-deep steps and
-// quantization groups.
+// K partitions for the NAX split-K launch over 64 x 64 output tiles.
 int qmm_nax_k_partitions(int M, int N, int K, int group_size) {
-  int tiles = (N / 64) * ((M + 63) / 64);
+  int tiles = (N / 64) * ceildiv(M, 64);
   int k_align = std::max(64, group_size);
   int split_k = 1;
-  while (split_k < 4 && tiles * split_k * 2 <= 256 &&
-         K % (split_k * 2 * k_align) == 0 && K / (split_k * 2) >= 256) {
+  // Double up to 4 while the grid stays within 256 threadgroups and every
+  // partition keeps at least 256 columns.
+  while ((split_k < 4) && (tiles * split_k * 2 <= 256) &&
+         (K % (split_k * 2 * k_align) == 0) && (K / (split_k * 2) >= 256)) {
     split_k *= 2;
   }
   return split_k;
@@ -1228,21 +1227,30 @@ void qmm_splitk_nax(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
-  // The staged schedule needs an 8-byte aligned activation offset.
-  if (x.dtype() != float32 && x.offset() % 8 != 0) {
+  // The staged kernel needs an 8-byte aligned activation offset.
+  auto& compute_encoder = metal::get_command_encoder(s);
+  if ((x.dtype() != float32) && (x.offset() % 8 != 0)) {
     array x_copy = contiguous_copy_gpu(x, s);
-    metal::get_command_encoder(s).add_temporary(x_copy);
+    compute_encoder.add_temporary(x_copy);
     return qmm_splitk_nax(
         x_copy, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
   }
-  bool staged = use_qmm_t_nax_rows16(x, true, true, mode);
-  int bm = !staged && M <= 32 ? 32 : 64;
+
+  int bm = (M <= 32) ? 32 : 64;
   int bn = 64;
   int bk = 64;
-  int wm = staged ? 4 : 2;
-  int wn = staged ? 1 : 2;
-  int n_tiles = N / bn;
-  int m_tiles = (M + bm - 1) / bm;
+  int wm = 2;
+  int wn = 2;
+  MTL::Size group_dims(32, wn, wm);
+
+  if (use_qmm_t_nax_staged(x, true, true, mode)) {
+    bm = 64;
+    wm = 4;
+    wn = 1;
+    // A flat threadgroup runs the 16-row schedule faster than (32, 1, wm).
+    group_dims = MTL::Size(32 * wm, 1, 1);
+  }
+
   int split_k = qmm_nax_k_partitions(M, N, K, group_size);
   if (split_k == 1) {
     return qmm_nax(
@@ -1266,7 +1274,6 @@ void qmm_splitk_nax(
   int k_partition_size = K / split_k;
   int split_k_partition_stride = M * N;
 
-  auto& compute_encoder = metal::get_command_encoder(s);
   array intermediate({split_k, M, N}, float32, nullptr, {});
   intermediate.set_data(allocator::malloc(intermediate.nbytes()));
   compute_encoder.add_temporary(intermediate);
@@ -1320,12 +1327,10 @@ void qmm_splitk_nax(
   compute_encoder.set_bytes(M, c++);
   compute_encoder.set_bytes(k_partition_size, c++);
   compute_encoder.set_bytes(split_k_partition_stride, c++);
-  MTL::Size group_dims =
-      staged ? MTL::Size(32 * wm, 1, 1) : MTL::Size(32, wn, wm);
   compute_encoder.dispatch_threadgroups(
-      MTL::Size(n_tiles, m_tiles, split_k), group_dims);
+      MTL::Size(N / bn, ceildiv(M, bm), split_k), group_dims);
 
-  // Sum the partitions and cast to the output type
+  // Sum the partitions and cast to the output type.
   auto accum_kname = "steel_gemm_splitk_accum_" + type_to_name(out) + "_" +
       type_to_name(intermediate);
   auto accum_kernel = get_steel_gemm_splitk_accum_kernel(
@@ -1353,7 +1358,7 @@ void qmm_splitk(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
-  // The split-K NAX route
+  // The split-K NAX route.
   if (biases && use_qmm_nax_splitk(x, mode, M, N, K, group_size)) {
     return qmm_splitk_nax(
         x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
@@ -2090,8 +2095,8 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // On NAX devices the NAX qmm (splitting K where that helps) also beats
   // qmv / qmv_wide from 8 rows, when the output is wide enough to fill its
   // tiles and narrow enough that a two-way K split fits in 256 threadgroups.
-  if (transpose_ && M < vector_limit && M >= 8 && M * N >= 16384 &&
-      out.size() == size_t(M) * N && inputs.size() == 4 &&
+  if (transpose_ && (M >= 8) && (M < vector_limit) && (M * N >= 16384) &&
+      (out.size() == size_t(M) * N) && (inputs.size() == 4) &&
       use_qmm_nax_splitk(x, mode, M, N, K, group_size_)) {
     qmm_splitk_nax(
         x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);

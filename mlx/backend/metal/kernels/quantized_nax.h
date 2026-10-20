@@ -1116,13 +1116,13 @@ struct QuantizedBlockLoaderStaged {
 // Weights use two threadgroup buffers with one barrier between K steps.
 template <
     typename T,
-    const int group_size,
-    const int bits,
+    int group_size,
+    int bits,
     typename U = T,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int SM = 16>
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int SM = 16>
 METAL_FUNC void qmm_t_nax_staged_impl(
     const device uint32_t* w,
     const device T* scales,
@@ -1289,15 +1289,15 @@ METAL_FUNC void qmm_t_nax_staged_impl(
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool aligned_N,
+    int group_size,
+    int bits,
+    bool aligned_N,
     typename U = T,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2>
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2>
 METAL_FUNC void qmm_t_nax_tgp_impl(
     const device uint32_t* w,
     const device T* scales,
@@ -1599,7 +1599,7 @@ template <
 
   constexpr int BK_padded = (BK + 16 / sizeof(T));
 
-  // WN == 1 selects the 16-row schedule, which double-buffers the weight tile
+  // WN == 1 selects the staged impl
   threadgroup T Ws[(WN == 1 ? 2 : 1) * BN * BK_padded];
 
   if (batched) {
@@ -1632,14 +1632,14 @@ template <
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool aligned_N,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2>
+    int group_size,
+    int bits,
+    bool aligned_N,
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2>
 [[kernel]] void affine_qmm_t_nax_splitk(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
