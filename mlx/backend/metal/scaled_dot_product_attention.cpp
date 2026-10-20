@@ -1635,14 +1635,15 @@ void ScaledDotProductAttention::eval_gpu(
     // We route to the 2 pass fused attention if
     // - The device is large and the sequence length long
     // - The sequence length is even longer and we have gqa
-    bool do_causal = do_causal_ && q.shape(2) > 1;
-    int n_keys = visible_keys(k.shape(2), q.shape(2), window_size_, do_causal);
+    bool csl = do_causal_ && q.shape(2) > 1;
+    int ws = window_size_;
+    int n_keys = visible_keys(k.shape(2), q.shape(2), ws, csl);
     char devc = d.get_architecture().back();
     if (((devc == 'd' || devc == 's') && n_keys >= 1024) ||
         (k.shape(1) < q.shape(1) && n_keys >= 4096)) {
-      sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, window_size_, mask, sinks);
-    } else if (!sdpa_vector(s, d, q, k, v, o, scale_, do_causal, window_size_, mask, sinks)) {
-      sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, window_size_, mask, sinks);
+      sdpa_vector_2pass(s, d, q, k, v, o, scale_, csl, ws, mask, sinks);
+    } else if (!sdpa_vector(s, d, q, k, v, o, scale_, csl, ws, mask, sinks)) {
+      sdpa_vector_2pass(s, d, q, k, v, o, scale_, csl, ws, mask, sinks);
     }
   }
 
