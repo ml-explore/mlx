@@ -1431,7 +1431,14 @@ inline std::optional<GemvWideConfig> gemv_wide_config(
   // Wide amortizes one matrix stream over several vectors; M == 1 has
   // nothing to amortize and stays with gemv.
   if (M <= 1 || N <= 1 || K % 4 != 0 ||
-      (out.dtype() != float16 && out.dtype() != bfloat16) || !vec4_aligned) {
+      (out.dtype() != float16 && out.dtype() != bfloat16 &&
+       out.dtype() != float32) ||
+      !vec4_aligned) {
+    return std::nullopt;
+  }
+
+  // fp32 is slower than the gemm path above 3 rows
+  if (out.dtype() == float32 && M > 3) {
     return std::nullopt;
   }
 
