@@ -304,7 +304,7 @@ void qmm_sm80_kernel(
 
   // Define layouts (mixed).
   auto dA = make_stride(k, Int<1>{}, m * k); // (dM,dK,dL)
-  auto dB = make_stride(k, Int<1>{}, n * k); // (dN,dK,dL)
+  auto dB = make_stride(k, Int<1>{}, int64_t(n) * k); // (dN,dK,dL)
   auto dC = make_stride(n, Int<1>{}, m * n); // (dM,dN,dL)
   auto S_layout = make_scales_layout<GroupSize>(n, k, l);
 
@@ -389,7 +389,7 @@ void qmm_sm80_rhs_kernel(
   // Define layouts (mixed). All gathered rows form one matrix; each run of
   // equal rhs_indices inside the row tile reuses one expert tile.
   auto dA = make_stride(k, Int<1>{}, m * k); // (dM,dK,dL)
-  auto dB = make_stride(k, Int<1>{}, n * k); // (dN,dK,dL)
+  auto dB = make_stride(k, Int<1>{}, int64_t(n) * k); // (dN,dK,dL)
   auto dC = make_stride(n, Int<1>{}, m * n); // (dM,dN,dL)
   auto S_layout = make_scales_layout<GroupSize>(n, k, group_count);
 

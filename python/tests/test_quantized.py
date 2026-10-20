@@ -2540,6 +2540,35 @@ class TestQuantized(mlx_tests.MLXTestCase):
         actual = mx.gather_qmm(x, qw, scales, sorted_indices=True, **kwargs)
         self.assertLess(mx.max(mx.abs(expected - actual)).item(), 1e-3)
 
+    @unittest.skipIf("CI" in os.environ, "Allocates too much memory for CI")
+    def test_gather_qmm_large_weights(self):
+        # Expert 2622 starts at element 2622 * 640 * 2560 of the stacked
+        # weights, which is past 2**32, so its offset needs 64 bits.
+        E, N, K = 2623, 640, 2560
+        dtype = mx.bfloat16 if (mx.default_device() == mx.gpu) else mx.float32
+        mx.random.seed(0)
+        # Every row uses expert 2622. On CUDA the three cases run qmm_sm80,
+        # qmm_naive and the sorted-RHS kernel, which needs 4 rows per expert.
+        x = (mx.random.normal((4 * E, 1, K)) / K**0.5).astype(dtype)
+        indices = mx.full(4 * E, E - 1, mx.uint32)
+        for mode, transpose in (("affine", True), ("affine", False), ("mxfp4", True)):
+            with self.subTest(mode=mode, transpose=transpose):
+                w = mx.random.normal((N, K) if transpose else (K, N)).astype(dtype)
+                w_q = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(*w_q, mode=mode)
+                # Experts 0 to 2621 are zeros.
+                w_q = [mx.pad(a[None], [(E - 1, 0), (0, 0), (0, 0)]) for a in w_q]
+                y_q = mx.gather_qmm(
+                    x,
+                    *w_q,
+                    rhs_indices=indices,
+                    transpose=transpose,
+                    mode=mode,
+                    sorted_indices=True,
+                )
+                y_hat = x @ (w_hat.T if transpose else w_hat)
+                self.assertLess((y_q - y_hat).abs().max(), 1e-1)
+
     def test_gather_qmm_grad(self):
         def gather_qmm_ref(x, w, s, b, lhs, rhs, trans, sort):
             if lhs is not None:
