@@ -318,16 +318,16 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const array& x,
+    const std::string& mode,
     int group_size,
     int bits,
-    const std::string& mode,
+    bool has_global_scale,
+    bool transpose,
     int bm,
     int bn,
     int bk,
     int wm,
-    int wn,
-    bool transpose,
-    bool has_global_scale);
+    int wn);
 
 MTL::ComputePipelineState* get_steel_gemm_fused_nax_kernel(
     metal::Device& d,
@@ -405,16 +405,16 @@ MTL::ComputePipelineState* get_gather_qmm_nax_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const array& x,
+    const std::string& mode,
     int group_size,
     int bits,
-    const std::string& mode,
+    bool has_global_scale,
+    bool transpose,
     int bm,
     int bn,
     int bk,
     int wm,
-    int wn,
-    bool transpose,
-    bool has_global_scale);
+    int wn);
 
 MTL::ComputePipelineState* get_steel_attention_kernel(
     metal::Device& d,
