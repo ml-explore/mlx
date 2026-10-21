@@ -91,6 +91,20 @@
       batched, \
       true)
 
+#define instantiate_quantized_aligned_batched_bm_bn(mode, name, type, group_size, bits, aligned, batched, bm, bn) \
+  instantiate_kernel( \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_alN_" #aligned "_batch_" #batched "_bm_" #bm "_bn_" #bn, \
+      fp_qmm_t, \
+      type, \
+      group_size, \
+      bits, \
+      aligned, \
+      batched, \
+      false, \
+      bm, \
+      32, \
+      bn)
+
 #define instantiate_quantized_quad(mode, name, type, D, batched, group_size, bits) \
   instantiate_kernel( \
       #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_d_" #D "_batch_" #batched, \
@@ -253,31 +267,17 @@
   instantiate_quantized_qmv_wrap(qmv_fast, type, nvfp4, 16, 4, 1, 2) \
   instantiate_quantized_qmv_wrap(qmv_fast, type, nvfp4, 16, 4, 0, 2)
 
-#define instantiate_quantized_qmm_t_64(type, mode, group_size, aligned, batched) \
-  instantiate_kernel( \
-      #mode "_qmm_t_" #type "_gs_" #group_size "_b_4_bm_64_bn_64_alN_" #aligned "_batch_" #batched, \
-      fp_qmm_t, \
-      type, \
-      group_size, \
-      4, \
-      aligned, \
-      batched, \
-      false, \
-      64, \
-      32, \
-      64)
-
-#define instantiate_quantized_all_qmm_t_64(type, mode, group_size) \
-  instantiate_quantized_qmm_t_64(type, mode, group_size, true, 0) \
-  instantiate_quantized_qmm_t_64(type, mode, group_size, true, 1) \
-  instantiate_quantized_qmm_t_64(type, mode, group_size, false, 0) \
-  instantiate_quantized_qmm_t_64(type, mode, group_size, false, 1)
+#define instantiate_quantized_qmm_t_bm64_bn64(type, mode, group_size, bits) \
+  instantiate_quantized_aligned_batched_bm_bn(mode, qmm_t, type, group_size, bits, true, 0, 64, 64)  \
+  instantiate_quantized_aligned_batched_bm_bn(mode, qmm_t, type, group_size, bits, true, 1, 64, 64)  \
+  instantiate_quantized_aligned_batched_bm_bn(mode, qmm_t, type, group_size, bits, false, 0, 64, 64) \
+  instantiate_quantized_aligned_batched_bm_bn(mode, qmm_t, type, group_size, bits, false, 1, 64, 64)
 
 instantiate_quantized_types(float)
 instantiate_quantized_types(bfloat16_t)
 instantiate_quantized_types(float16_t)
 instantiate_quantized_qmm_hgs(bfloat16_t)
-instantiate_quantized_all_qmm_t_64(bfloat16_t, nvfp4, 16)
-instantiate_quantized_all_qmm_t_64(float16_t, nvfp4, 16)
-instantiate_quantized_all_qmm_t_64(float16_t, mxfp4, 32)
+instantiate_quantized_qmm_t_bm64_bn64(bfloat16_t, nvfp4, 16, 4)
+instantiate_quantized_qmm_t_bm64_bn64(float16_t, nvfp4, 16, 4)
+instantiate_quantized_qmm_t_bm64_bn64(float16_t, mxfp4, 32, 4)
     // clang-format on

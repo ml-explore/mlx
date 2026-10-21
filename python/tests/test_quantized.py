@@ -750,7 +750,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     tol = 1.1
                 self.assertLess(error.item(), tol * rounding.item())
 
-    def test_qmm_fp4_half_tile(self):
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_fp4_half_loader(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("Covers GPU kernels only")
         mx.random.seed(0)

@@ -1070,13 +1070,13 @@ void gather_qmm_nax(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-// Must match use_half_tile in fp_quantized.h; only those have 64x64 tiles.
-inline bool use_half_tile(
+// Must match use_fp4_half_loader in fp_quantized.h.
+inline bool use_fp4_half_loader(
     const array& x,
     const std::string& mode,
     const std::optional<array>& global_scale,
     int bits) {
-  return mode != "affine" && bits == 4 && !global_scale &&
+  return (mode != "affine") && !global_scale && (bits == 4) &&
       (x.dtype() == float16 || (x.dtype() == bfloat16 && mode == "nvfp4"));
 }
 
@@ -1128,19 +1128,24 @@ void qmm(
   int wm = 2;
   int wn = 2;
   int bm = 32;
+  int bk = 32;
   int bn = 32;
-  bool half_tile = use_half_tile(x, mode, global_scale, bits) && transpose;
-  bool ultra = d.get_architecture().back() == 'd';
-  bool pad_free = (M + 31) / 32 % 2 == 0;
-  bool pad_ok = M > (d.get_architecture_gen() < 15 && !ultra ? 256 : 2048);
-  int tgs_64 = ((N + 63) / 64) * ((M + 63) / 64) * B;
-  int min_tgs_64 = ultra ? 1024 : 160;
-  if (half_tile && (pad_free || pad_ok) && tgs_64 >= min_tgs_64) {
-    bm = 64;
-    bn = 64;
+
+  // Tune for larger tile with Fp4HalfLoader.
+  if (use_fp4_half_loader(x, mode, global_scale, bits) && transpose) {
+    bool ultra = d.get_architecture().back() == 'd';
+    bool pad_free = (ceildiv(M, 32) % 2) == 0;
+    bool pad_ok = M > ((d.get_architecture_gen() < 15 && !ultra) ? 256 : 2048);
+    int tgs_64 = ceildiv(N, 64) * ceildiv(M, 64) * B;
+    int min_tgs_64 = ultra ? 1024 : 160;
+    if ((pad_free || pad_ok) && (tgs_64 >= min_tgs_64)) {
+      bm = 64;
+      bn = 64;
+    }
   }
+
   MTL::Size group_dims(32, wn, wm);
-  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
+  MTL::Size grid_dims(ceildiv(N, bn), ceildiv(M, bm), B);
 
   std::string kname;
   kname.reserve(64);
@@ -1155,9 +1160,9 @@ void qmm(
       group_size,
       "_b_",
       bits,
-      bm == 64 ? "_bm_64_bn_64" : "",
       transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
       batched ? "_batch_1" : "_batch_0",
+      (bm == 64 && bn == 64) ? "_bm_64_bn_64" : "",
       global_scale ? "_hgs" : "");
   std::string template_def;
   MTL::ComputePipelineState* kernel;
@@ -1174,7 +1179,7 @@ void qmm(
         batched,
         global_scale.has_value(),
         bm,
-        32,
+        bk,
         bn);
   } else {
     kernel = get_quantized_kernel_wrapped(

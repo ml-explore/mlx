@@ -348,10 +348,10 @@ struct Fp4HalfLoader {
   }
 };
 
-// nvfp4 weights are exact in half; mxfp4 scales can exceed half's range, so
-// bfloat16 inputs take the half tile only with nvfp4.
+// Use Fp4HalfLoader when dequantizing fp4 into half. Also use it for
+// dequantizing nvfp4 into bfloat16, which has no loss.
 template <typename T, int group_size, int bits, bool has_global_scale>
-inline constexpr bool use_half_tile() {
+inline constexpr bool use_fp4_half_loader() {
   return !has_global_scale &&
       ((metal::is_same_v<T, half> && bits == 4) ||
        (metal::is_same_v<T, bfloat16_t> && bits == 4 && group_size == 16));
@@ -904,7 +904,7 @@ template <
     const int BM = 32,
     const int BK = 32,
     const int BN = 32,
-    const bool half_tile>
+    typename TW>
 METAL_FUNC void fp_qmm_t_impl(
     const device uint32_t* w,
     const device uint8_t* scales,
@@ -912,7 +912,7 @@ METAL_FUNC void fp_qmm_t_impl(
     const device T* x,
     device U* y,
     threadgroup T* Xs,
-    threadgroup metal::conditional_t<half_tile, half, T>* Ws,
+    threadgroup TW* Ws,
     const constant int& K,
     const constant int& N,
     const constant int& M,
@@ -923,9 +923,6 @@ METAL_FUNC void fp_qmm_t_impl(
     uint simd_lid [[thread_index_in_simdgroup]]) {
   static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
   static_assert(BK % SIMD_SIZE == 0, "BK should be divisible by SIMD_SIZE");
-  static_assert(
-      !half_tile || (bits == 4 && !has_global_scale && sizeof(T) == 2),
-      "The half weight tile holds fp4 without a global scale");
 
   (void)lid;
 
@@ -941,8 +938,9 @@ METAL_FUNC void fp_qmm_t_impl(
       BlockMMA<T, U, BM, BN, BK, WM, WN, false, true, BK_padded, BK_padded>;
   using loader_x_t =
       mlx::steel::BlockLoader<T, BM, BK, BK_padded, 1, WM * WN * SIMD_SIZE>;
+  // Use shortcut when loading fp4 quants to half weights
   using loader_w_t = metal::conditional_t<
-      half_tile,
+      metal::is_same_v<TW, half> && (bits == 4) && !has_global_scale,
       Fp4HalfLoader<BN, BK, BK_padded, WM * WN * SIMD_SIZE, group_size>,
       QuantizedBlockLoader<
           T,
@@ -1656,11 +1654,13 @@ template <
   (void)lid;
 
   constexpr int BK_padded = (BK + 16 / sizeof(T));
-  constexpr bool half_tile =
-      use_half_tile<T, group_size, bits, has_global_scale>();
+  using TW = metal::conditional_t<
+      use_fp4_half_loader<T, group_size, bits, has_global_scale>(),
+      half,
+      T>;
 
   threadgroup T Xs[BM * BK_padded];
-  threadgroup metal::conditional_t<half_tile, half, T> Ws[BN * BK_padded];
+  threadgroup TW Ws[BN * BK_padded];
 
   if (batched) {
     adjust_matrix_offsets(
@@ -1687,8 +1687,7 @@ template <
       has_global_scale,
       BM,
       BK,
-      BN,
-      half_tile>(
+      BN>(
       w,
       scales,
       global_scale,
@@ -2016,8 +2015,7 @@ template <
       has_global_scale,
       BM,
       BK,
-      BN,
-      false>(
+      BN>(
       w,
       scales,
       global_scale,
@@ -2062,9 +2060,14 @@ template <
   constexpr int BK_padded = (BK + 16 / sizeof(T));
   constexpr int pack_factor = get_pack_factor<8, bits>();
   constexpr int bytes_per_pack = get_bytes_per_pack();
-  constexpr bool half_tile = use_half_tile<T, group_size, bits, false>();
+  using TW = metal::conditional_t<
+      use_fp4_half_loader<T, group_size, bits, /* has_global_scale */ false>(),
+      half,
+      T>;
+
   threadgroup T Xs[BM * BK_padded];
-  threadgroup metal::conditional_t<half_tile, half, T> Ws[BN * BK_padded];
+  threadgroup TW Ws[BN * BK_padded];
+
   const int k_start = tid.z * k_partition_size;
   x += k_start;
 
@@ -2073,17 +2076,7 @@ template <
   scales += k_start / group_size;
   y += tid.z * static_cast<int64_t>(split_k_partition_stride);
 
-  fp_qmm_t_impl<
-      T,
-      group_size,
-      bits,
-      aligned_N,
-      float,
-      false,
-      BM,
-      BK,
-      BN,
-      half_tile>(
+  fp_qmm_t_impl<T, group_size, bits, aligned_N, float, false, BM, BK, BN>(
       (const device uint32_t*)wl,
       scales,
       nullptr,
