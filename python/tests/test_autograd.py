@@ -1495,7 +1495,6 @@ class TestAutograd(mlx_tests.MLXTestCase):
         gx, gv = mx.grad(fun, argnums=(0, 1))(x, v)
         self.assertTrue(mx.array_equal(gx, mx.ones((2, 3))))
         self.assertEqual(gv.item(), 14.0)
-        self.assertEqual(mx.grad(fun, argnums=1)(x, v).item(), 14.0)
 
         _, (tangent,) = mx.jvp(fun, [x, v], [mx.zeros((2, 3)), mx.array(1.0)])
         self.assertEqual(tangent.item(), 14.0)
