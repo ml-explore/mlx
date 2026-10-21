@@ -685,6 +685,103 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 rounding = (y_ref.astype(dtype).astype(mx.float32) - y_ref).abs().mean()
                 self.assertLess(error.item(), 1.1 * rounding.item())
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_mid_m(self):
+        # Mid-size M with narrow outputs, where a single batch routes to the
+        # split-K and vector kernels: every split count, both row tilings and
+        # the boundaries between the routes.
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        shapes = [
+            (256, 4096),
+            (1024, 6144),
+            (2560, 1024),
+            (4096, 2048),
+        ]
+        for (K, N), M, bits, group_size, dtype in product(
+            shapes,
+            [8, 31, 33, 130],
+            [2, 3, 4, 6, 8],
+            [32, 64, 128],
+            [mx.bfloat16, mx.float16, mx.float32],
+        ):
+            if K % group_size != 0:
+                continue
+            with self.subTest(
+                K=K, N=N, M=M, bits=bits, group_size=group_size, dtype=dtype
+            ):
+                k1, k2 = mx.random.split(mx.random.key(M * K + N))
+                x = mx.random.normal((M, K), key=k1).astype(dtype)
+                w = (0.02 * mx.random.normal((N, K), key=k2)).astype(dtype)
+                wq = mx.quantize(w, group_size=group_size, bits=bits)
+                w_hat = mx.dequantize(*wq, group_size=group_size, bits=bits)
+                y_ref = x.astype(mx.float32) @ w_hat.astype(mx.float32).T
+                y = mx.quantized_matmul(
+                    x, *wq, transpose=True, group_size=group_size, bits=bits
+                )
+                self.assertEqual(y.shape, (M, N))
+                error = (y.astype(mx.float32) - y_ref).abs().mean()
+                if dtype == mx.float32:
+                    rounding = mx.array(1)
+                else:
+                    rounding = (
+                        (y_ref.astype(dtype).astype(mx.float32) - y_ref).abs().mean()
+                    )
+                # The split-K and NAX routes round once. The vector kernels
+                # (below 16384 outputs, or when K does not split in two) reach
+                # ~1.6x the output rounding.
+                splits = K % (2 * max(64, group_size)) == 0
+                tol = 1.1 if M * N >= 16384 and splits else 2.0
+                if error.item() >= tol * rounding.item():
+                    # Vector kernels can dequantize weights in float32.
+                    qw, scales, biases = wq
+                    w_hat = mx.dequantize(
+                        qw,
+                        scales.astype(mx.float32),
+                        biases.astype(mx.float32),
+                        group_size=group_size,
+                        bits=bits,
+                    )
+                    y_ref = mx.matmul(x.astype(mx.float32), w_hat.T, stream=mx.cpu)
+                    error = (y.astype(mx.float32) - y_ref).abs().mean()
+                    rounding = (
+                        (y_ref.astype(dtype).astype(mx.float32) - y_ref).abs().mean()
+                    )
+                    tol = 1.1
+                self.assertLess(error.item(), tol * rounding.item())
+
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_fp4_half_loader(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        mx.random.seed(0)
+
+        def rel_err(got, expected):
+            d = mx.abs(got.astype(mx.float32) - expected.astype(mx.float32))
+            return d.max() / mx.abs(expected.astype(mx.float32)).max()
+
+        tests = [
+            (512, 8192, 1040, ()),  # 64 x 64
+            (552, 8224, 1040, ()),  # 64 x 64, M % 64 == 40, N % 64 == 32
+            (300, 8192, 1040, (2,)),  # 64 x 64, batched w
+            (40, 1040, 1200, ()),  # 32 x 32, N % 32 == 16
+            (40, 512, 1024, ()),  # split K
+            (40, 528, 1024, ()),  # split K, N % 32 == 16
+        ]
+        modes = [("nvfp4", 16), ("mxfp4", 32)]
+        dtypes = [mx.bfloat16, mx.float16]
+        for (M, N, K, batch), (mode, group_size), dtype in product(
+            tests, modes, dtypes
+        ):
+            K -= K % group_size
+            with self.subTest(M=M, N=N, K=K, batch=batch, mode=mode, dtype=dtype):
+                w = mx.random.normal(batch + (N, K)).astype(dtype)
+                w_q, scales = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(w_q, scales, mode=mode, dtype=dtype)
+                x = (mx.random.normal(batch + (M, K)) / K**0.5).astype(dtype)
+                out = mx.quantized_matmul(x, w_q, scales, mode=mode)
+                self.assertLess(rel_err(out, x @ w_hat.swapaxes(-1, -2)), 3e-2)
+
     def test_qmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
