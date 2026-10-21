@@ -283,7 +283,13 @@ DnnGraph build_sdpa_backward_graph(
                      .set_name("sdpa_backward_cudnn")
                      .set_attn_scale(graph.scalar("Scale", SCALE, float32));
   if (do_causal) {
-    options.set_causal_mask_bottom_right(do_causal);
+    // For standart pretraining, set_causal_mask (top left mask) should be ~x1.8
+    // faster compared to bottom up
+    if (q.shape(2) == k.shape(2)) {
+      options.set_causal_mask(do_causal);
+    } else {
+      options.set_causal_mask_bottom_right(do_causal);
+    }
   }
   if (mask_arr) {
     options.set_bias(graph.tensor("BIAS", BIAS, *mask_arr));
