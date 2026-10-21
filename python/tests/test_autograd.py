@@ -1484,6 +1484,27 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertNotEqual(id(a_1), id(arrs[1]))
         self.assertEqual(id(a_2), id(arrs[2]))
 
+    def test_pad_value_grad(self):
+        x = mx.ones((2, 3))
+        v = mx.array(5.0)
+
+        def fun(x, v):
+            return mx.pad(x, pad_width=1, constant_values=v).sum()
+
+        # Padded elements: 4 * 5 - 2 * 3 = 14
+        gx, gv = mx.grad(fun, argnums=(0, 1))(x, v)
+        self.assertTrue(mx.array_equal(gx, mx.ones((2, 3))))
+        self.assertEqual(gv.item(), 14.0)
+        self.assertEqual(mx.grad(fun, argnums=1)(x, v).item(), 14.0)
+
+        _, (tangent,) = mx.jvp(fun, [x, v], [mx.zeros((2, 3)), mx.array(1.0)])
+        self.assertEqual(tangent.item(), 14.0)
+
+        # Padded elements: 1000 * 1000 - 998 * 998 = 3996
+        x = mx.zeros((998, 998), dtype=mx.bfloat16)
+        gv = mx.grad(fun, argnums=1)(x, mx.array(1.0, dtype=mx.bfloat16))
+        self.assertTrue(mx.allclose(gv.astype(mx.float32), mx.array(3996.0), rtol=1e-2))
+
     def test_conv_second_order_grad_with_padding(self):
         x = mx.random.normal((1, 4, 4, 1))
         w = mx.random.normal((1, 2, 2, 1))
