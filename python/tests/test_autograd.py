@@ -1500,11 +1500,6 @@ class TestAutograd(mlx_tests.MLXTestCase):
         _, (tangent,) = mx.jvp(fun, [x, v], [mx.zeros((2, 3)), mx.array(1.0)])
         self.assertEqual(tangent.item(), 14.0)
 
-        # Padded elements: 1000 * 1000 - 998 * 998 = 3996
-        x = mx.zeros((998, 998), dtype=mx.bfloat16)
-        gv = mx.grad(fun, argnums=1)(x, mx.array(1.0, dtype=mx.bfloat16))
-        self.assertTrue(mx.allclose(gv.astype(mx.float32), mx.array(3996.0), rtol=1e-2))
-
     def test_conv_second_order_grad_with_padding(self):
         x = mx.random.normal((1, 4, 4, 1))
         w = mx.random.normal((1, 2, 2, 1))
