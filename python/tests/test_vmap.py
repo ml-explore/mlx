@@ -494,6 +494,21 @@ class TestVmap(mlx_tests.MLXTestCase):
                 )
             )
 
+    def test_vmap_tri_inverse(self):
+        mx.random.seed(42)
+        a = mx.random.normal(shape=(3, 4, 4)) + 4 * mx.eye(4)
+
+        for upper in (False, True):
+
+            def cpu_tri_inv(x):
+                return mx.linalg.tri_inv(x, upper=upper, stream=mx.cpu)
+
+            expected = cpu_tri_inv(a)
+            out = mx.vmap(cpu_tri_inv, in_axes=(0,))(a)
+            self.assertTrue(mx.allclose(out, expected, rtol=1e-4, atol=1e-5))
+            out = mx.vmap(cpu_tri_inv, in_axes=(1,))(a.swapaxes(0, 1))
+            self.assertTrue(mx.allclose(out, expected, rtol=1e-4, atol=1e-5))
+
     def test_vmap_gather(self):
         def gather(a, idx):
             return a[idx]

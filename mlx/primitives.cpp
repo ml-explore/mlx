@@ -6376,7 +6376,9 @@ std::pair<std::vector<array>, std::vector<int>> Inverse::vmap(
     const std::vector<int>& axes) {
   auto ax = axes[0] >= 0 ? 0 : -1;
   auto a = axes[0] > 0 ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
-  return {{linalg::inv(a, stream())}, {ax}};
+  auto out =
+      tri_ ? linalg::tri_inv(a, upper_, stream()) : linalg::inv(a, stream());
+  return {{out}, {ax}};
 }
 
 std::pair<std::vector<array>, std::vector<int>> View::vmap(
