@@ -3775,7 +3775,7 @@ array gather(
   }
 
   // Broadcast and cast indices if necessary
-  auto inputs = broadcast_arrays(indices);
+  auto inputs = broadcast_arrays(indices, s);
   for (auto& idx : inputs) {
     idx = astype(idx, dtype, s);
   }
@@ -4053,7 +4053,7 @@ array scatter(
   }
 
   // Broadcast and cast indices if necessary
-  auto inputs = broadcast_arrays(indices);
+  auto inputs = broadcast_arrays(indices, s);
 
   Shape idx_shape;
   if (!inputs.empty()) {
@@ -4967,7 +4967,10 @@ array quantized_matmul(
   std::vector<array> inputs;
   if (qmode == QuantizationMode::Affine) {
     inputs = {
-        astype(x, dtype), w, astype(scales, dtype), astype(*biases, dtype)};
+        astype(x, dtype, s),
+        w,
+        astype(scales, dtype, s),
+        astype(*biases, dtype, s)};
   } else {
     inputs = {x, w, scales};
   }
@@ -5231,7 +5234,7 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
       scales = where(mask, scales, negative(scales, s), s);
       array edge = where(mask, w_min, w_max, s);
       array q0 = round(divide(edge, scales, s), s);
-      scales = where(not_equal(q0, zero, s), divide(edge, q0, s), scales);
+      scales = where(not_equal(q0, zero, s), divide(edge, q0, s), scales, s);
       biases = where(equal(q0, zero, s), zero, edge, s);
     }
 
@@ -6713,12 +6716,14 @@ array number_of_elements(
     }
     return array(inverted ? 1.0 / numel : numel, dtype);
   }
-  return stop_gradient(array(
-      Shape{},
-      dtype,
-      std::make_shared<NumberOfElements>(
-          to_stream(s), std::move(axes), inverted, dtype),
-      {a}));
+  return stop_gradient(
+      array(
+          Shape{},
+          dtype,
+          std::make_shared<NumberOfElements>(
+              to_stream(s), std::move(axes), inverted, dtype),
+          {a}),
+      s);
 }
 
 array conjugate(const array& a, StreamOrDevice s /* = {} */) {
@@ -6946,7 +6951,7 @@ array real(const array& a, StreamOrDevice s /* = {} */) {
 
 array imag(const array& a, StreamOrDevice s /* = {} */) {
   if (!issubdtype(a.dtype(), complexfloating)) {
-    return zeros_like(a);
+    return zeros_like(a, s);
   }
   return array(a.shape(), float32, std::make_shared<Imag>(to_stream(s)), {a});
 }

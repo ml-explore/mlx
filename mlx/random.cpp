@@ -461,7 +461,7 @@ array categorical(
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
   axis = get_valid_axis(axis, logits_.ndim());
-  auto logits = expand_dims(logits_, -1);
+  auto logits = expand_dims(logits_, -1, s);
   auto shape = logits.shape();
   shape.erase(shape.begin() + axis);
   shape.back() = num_samples;
