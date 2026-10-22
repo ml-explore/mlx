@@ -1512,11 +1512,11 @@ template <
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const int WK = 8,
-    const int BN = 32,
-    const int TM = 1>
+    int group_size,
+    int bits,
+    int WK = 8,
+    int BN = 32,
+    int TM = 1>
 [[kernel]] void fp_qmv_mma(
     const device uint32_t* w,
     const device uint8_t* scales,

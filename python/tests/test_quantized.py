@@ -782,6 +782,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 out = mx.quantized_matmul(x, w_q, scales, mode=mode)
                 self.assertLess(rel_err(out, x @ w_hat.swapaxes(-1, -2)), 3e-2)
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_qmm_few_rows(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("Covers GPU kernels only")
@@ -806,8 +807,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     self.assertLess(rel_err(out, x @ w_hat.T), tol)
 
             # Views at odd offsets must not reach the Metal vector loads
-            if not mx.metal.is_available():
-                continue
             x = (mx.random.normal((16 * K + 1,)) / K**0.5).astype(dtype)
             s = mx.concatenate([mx.zeros((1,), mx.uint8), scales.reshape(-1)])
             views = {
