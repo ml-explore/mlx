@@ -35,7 +35,7 @@ std::vector<array> Custom::jvp(
     if (j < argnums.size() && i == argnums[j]) {
       all_tangents.emplace_back(tangents[j++]);
     } else {
-      all_tangents.emplace_back(zeros_like(primals[i]));
+      all_tangents.emplace_back(zeros_like(primals[i], stream()));
     }
   }
   auto [_, jvps] = mlx::core::jvp(fallback_, primals, all_tangents);

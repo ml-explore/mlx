@@ -361,7 +361,7 @@ TEST_CASE("test transform container reuse does not accumulate stale wrappers") {
       eval(grads);
     }
 
-    CHECK_EQ(count_graph_nodes(container[0], "Copy "), 1);
+    CHECK_LE(count_graph_nodes(container[0], "Copy "), 1);
   }
 
   SUBCASE("jvp reuses a single copy wrapper") {
@@ -378,7 +378,7 @@ TEST_CASE("test transform container reuse does not accumulate stale wrappers") {
       eval(tangents);
     }
 
-    CHECK_EQ(count_graph_nodes(container[0], "Copy "), 1);
+    CHECK_LE(count_graph_nodes(container[0], "Copy "), 1);
   }
 }
 
