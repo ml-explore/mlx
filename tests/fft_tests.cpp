@@ -1,8 +1,11 @@
 // Copyright © 2023 Apple Inc.
 
+#include <unordered_set>
+
 #include "doctest/doctest.h"
 
 #include "mlx/mlx.h"
+#include "mlx/primitives.h"
 
 using namespace mlx::core;
 
@@ -247,6 +250,35 @@ TEST_CASE("test fft with provided shape") {
 
   y = fft::rfft(x, 3, 1);
   CHECK_EQ(y.shape(), Shape{5, 2});
+}
+
+TEST_CASE("test fft with provided shape stays on the given stream") {
+  // Every op in the graph, including the zero padding for a size larger
+  // than the axis, must run on the stream passed to the transform.
+  auto check_stream = [](const array& out, const Stream& s) {
+    std::vector<array> stack{out};
+    std::unordered_set<std::uintptr_t> seen;
+    while (!stack.empty()) {
+      auto a = stack.back();
+      stack.pop_back();
+      if (!seen.insert(a.id()).second || !a.has_primitive()) {
+        continue;
+      }
+      CHECK_EQ(a.primitive().stream(), s);
+      for (auto& in : a.inputs()) {
+        stack.push_back(in);
+      }
+    }
+  };
+
+  auto s = new_stream(default_device());
+  auto x = ones({4, 5}, float32, s);
+
+  auto norm = fft::FFTNorm::Backward;
+  check_stream(fft::rfft(x, 8, 1, norm, s), s);
+  check_stream(fft::rfft(x, 3, 1, norm, s), s);
+  check_stream(fft::fft(x, 8, 1, norm, s), s);
+  check_stream(fft::rfftn(x, {6, 8}, {0, 1}, norm, s), s);
 }
 
 TEST_CASE("test fft vmap") {
