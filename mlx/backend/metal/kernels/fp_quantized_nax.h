@@ -337,6 +337,37 @@ METAL_FUNC void fp_qmm_t_impl(
   });
 }
 
+template <typename Wtype, int group_size, int bits>
+METAL_FUNC vec<Wtype, 4> dequantize_fp_x4(uint q, uint8_t s) {
+  half2 a;
+  half2 b;
+  if constexpr (bits == 4) {
+    const uint lo = (q & 0x000f) | ((q & 0x00f0) << 12);
+    const uint hi = ((q >> 8) & 0x000f) | ((q & 0xf000) << 4);
+    a = as_type<half2>(((lo & 0x00070007) << 9) | ((lo & 0x00080008) << 12));
+    b = as_type<half2>(((hi & 0x00070007) << 9) | ((hi & 0x00080008) << 12));
+  } else {
+    const uint lo = (q & 0x000000ff) | ((q & 0x0000ff00) << 8);
+    const uint hi = ((q >> 16) & 0x000000ff) | ((q >> 8) & 0x00ff0000);
+    a = as_type<half2>(((lo & 0x00800080) << 8) | ((lo & 0x007f007f) << 7));
+    b = as_type<half2>(((hi & 0x00800080) << 8) | ((hi & 0x007f007f) << 7));
+  }
+  if constexpr (group_size == 16) {
+    const half scale = dequantize_scale<half, group_size>(s);
+    a = (a * half2(16384.0h)) * scale;
+    b = (b * half2(16384.0h)) * scale;
+    return vec<Wtype, 4>(Wtype(a.x), Wtype(a.y), Wtype(b.x), Wtype(b.y));
+  } else {
+    const float scale = dequantize_scale<float, group_size>(s) *
+        (bits == 4 ? 16384.0f : 256.0f);
+    return vec<Wtype, 4>(
+        Wtype(float(a.x) * scale),
+        Wtype(float(a.y) * scale),
+        Wtype(float(b.x) * scale),
+        Wtype(float(b.y) * scale));
+  }
+}
+
 template <
     typename T,
     const int group_size,
@@ -1048,4 +1079,149 @@ template <
       }
     });
   });
+}
+
+template <
+    typename T,
+    int group_size,
+    int bits,
+    int WK = 8,
+    int BN = 32,
+    typename Wtype = bfloat>
+[[kernel]] void fp_qmv_nax(
+    const device uint32_t* w,
+    const device uint8_t* scales,
+    const device T* x,
+    device T* y,
+    const constant int& K,
+    const constant int& N,
+    const constant int& M,
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]]) {
+  static_assert(BN % 32 == 0, "BN should be divisible by 32");
+  static_assert(
+      (group_size == 16 && bits == 4) ||
+          (group_size == 32 && (bits == 4 || bits == 8)),
+      "qmv_nax reads nvfp4, mxfp4 and mxfp8");
+
+  using Frag = BaseNAXFrag;
+  using scale_bits_t = metal::conditional_t<group_size == 16, ushort, uint8_t>;
+  constexpr int BK = 128;
+  constexpr short TK = BK / 16;
+  constexpr short TN = BN / 16;
+  constexpr int pack_factor = 8 / bits;
+  constexpr short loads = bits / 4;
+
+  const short2 coord = Frag::get_coord();
+  const short fm = coord.y;
+  const int k_lane = 8 * coord.x;
+  const int row_bytes = K / pack_factor;
+  const int row_scales = K / group_size;
+
+  const int y_col = tid.x * BN;
+  auto wl = (const device uint8_t*)w +
+      (y_col + fm) * static_cast<int64_t>(row_bytes) + k_lane / pack_factor;
+  scales +=
+      (y_col + fm) * static_cast<int64_t>(row_scales) + k_lane / group_size;
+  x += fm * static_cast<int64_t>(K) + k_lane;
+  y += y_col;
+  const bool x_rows[2] = {fm < M, fm + 8 < M};
+
+  NAXTile<float, 1, TN> Dtile;
+  Dtile.clear();
+
+  for (int k = simd_gid * BK; k < K; k += WK * BK) {
+    vec<T, 8> xs[2][4];
+    STEEL_PRAGMA_UNROLL
+    for (short r = 0; r < 2; r++) {
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < 4; i++) {
+        xs[r][i] = x_rows[r]
+            ? *(const device vec<T, 8>*)(x + r * 8 * static_cast<int64_t>(K) +
+                                         k + 8 * i)
+            : vec<T, 8>(0);
+      }
+    }
+    uint4 ws[TN][2][loads];
+    scale_bits_t ss[TN][2];
+    STEEL_PRAGMA_UNROLL
+    for (short t = 0; t < TN; t++) {
+      STEEL_PRAGMA_UNROLL
+      for (short r = 0; r < 2; r++) {
+        const int row = 16 * t + 8 * r;
+        const device uint8_t* wt =
+            wl + row * static_cast<int64_t>(row_bytes) + k / pack_factor;
+        const device uint8_t* st =
+            scales + row * static_cast<int64_t>(row_scales) + k / group_size;
+        STEEL_PRAGMA_UNROLL
+        for (short l = 0; l < loads; l++) {
+          ws[t][r][l] = *(const device uint4*)(wt + 16 * l);
+        }
+        ss[t][r] = *(const device scale_bits_t*)st;
+      }
+    }
+
+    STEEL_PRAGMA_UNROLL
+    for (short f = 0; f < TK; f++) {
+      typename Frag::template dtype_frag_t<T> a;
+      STEEL_PRAGMA_UNROLL
+      for (short r = 0; r < 2; r++) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < 4; j++) {
+          a[4 * r + j] = xs[r][f / 2][4 * (f % 2) + j];
+        }
+      }
+      typename Frag::template dtype_frag_t<Wtype> b[TN];
+      STEEL_PRAGMA_UNROLL
+      for (short t = 0; t < TN; t++) {
+        STEEL_PRAGMA_UNROLL
+        for (short r = 0; r < 2; r++) {
+          uint q;
+          if constexpr (bits == 4) {
+            q = ws[t][r][0][f / 2] >> (16 * (f % 2));
+          } else {
+            q = ws[t][r][f / 4][f % 4];
+          }
+          uint8_t s = ss[t][r];
+          if constexpr (group_size == 16) {
+            s = ss[t][r] >> (8 * (f / 4));
+          }
+          const vec<Wtype, 4> v =
+              dequantize_fp_x4<Wtype, group_size, bits>(q, s);
+          STEEL_PRAGMA_UNROLL
+          for (short j = 0; j < 4; j++) {
+            b[t][4 * r + j] = v[j];
+          }
+        }
+      }
+      STEEL_PRAGMA_UNROLL
+      for (short t = 0; t < TN; t += 2) {
+        Frag::mma(
+            Dtile.frag_at(0, t),
+            Dtile.frag_at(0, t + 1),
+            a,
+            metal::bool_constant<false>{},
+            b[t],
+            b[t + 1],
+            metal::bool_constant<true>{});
+      }
+    }
+  }
+
+  threadgroup float Ps[(WK - 1) * 16 * BN];
+  if (simd_gid > 0) {
+    Dtile.template store<float, BN, 1>(Ps + (simd_gid - 1) * 16 * BN);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (simd_gid == 0) {
+    for (int i = 0; i < WK - 1; i++) {
+      NAXTile<float, 1, TN> Ptile;
+      Ptile.template load<float, BN, 1>(Ps + i * 16 * BN);
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < Dtile.kNumFrags; j++) {
+        Dtile.val_frags[j] += Ptile.val_frags[j];
+      }
+    }
+    Dtile.store_rows(y, N, M);
+  }
 }
