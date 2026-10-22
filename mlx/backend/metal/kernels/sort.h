@@ -284,7 +284,7 @@ struct KernelMergeSort {
     out += tid.y * out_stride_segment_axis;
 
     // Copy into threadgroup memory
-    for (short i = lid.x; i < N_PER_BLOCK; i += BLOCK_THREADS) {
+    for (int i = lid.x; i < N_PER_BLOCK; i += BLOCK_THREADS) {
       tgp_vals[i] = i < size_sorted_axis ? inp[i * in_stride_sorted_axis]
                                          : ValT(CompareOp::init);
       if (ARG_SORT) {
@@ -460,7 +460,7 @@ struct KernelMultiBlockMergeSort {
     int base_idx = tid.x * N_PER_BLOCK;
 
     // Copy into threadgroup memory
-    for (short i = lid.x; i < N_PER_BLOCK; i += BLOCK_THREADS) {
+    for (int i = lid.x; i < N_PER_BLOCK; i += BLOCK_THREADS) {
       int idx = base_idx + i;
       tgp_vals[i] = idx < size_sorted_axis ? inp[idx * stride_sorted_axis]
                                            : ValT(CompareOp::init);
