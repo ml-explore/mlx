@@ -26,6 +26,13 @@ General
    on supported hardware. The default is ``1``. Set it to ``0`` to keep these
    operations in full ``float32`` precision. See :doc:`precision`.
 
+.. envvar:: MLX_QMM_INT8
+
+   Run affine quantized matmuls on 8-bit integer weights and activations on
+   supported hardware. The default is ``0``. Set it to ``1``, ``4`` or ``2``
+   to enable it, from most to least precise. Other values are ignored. See
+   :doc:`precision`.
+
 Distributed
 -----------
 

@@ -1048,6 +1048,147 @@ void qmm_nax(
       MTL::Size(ceildiv(N, bn), ceildiv(M, bm), B), group_dims);
 }
 
+// x @ w.T with int8 weights and int8 activations
+void qmm_nax_i8(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    int x_span,
+    metal::Device& d,
+    const Stream& s) {
+  // Same tiling as qmm_nax
+  int wm = 2;
+  int wn = 2;
+  int bm = 64;
+  int bn = 64;
+  int bk = 64;
+  int M_pad = ((M + bm - 1) / bm) * bm;
+  int n_blocks = K / bk;
+
+  // x_span is 0 for one scale per row of x, or the number of blocks that
+  // share an exponent. The blocks of a row must divide into such groups.
+  if (x_span > 1 && n_blocks % x_span != 0) {
+    x_span = 1;
+  }
+
+  // The scale of x can be halved max_exp times for a block. With all the
+  // other blocks of the row at the row scale the int32 sum does not overflow.
+  int max_exp = 0;
+  if (x_span > 0) {
+    // INT32_MAX / (64 * 127 * 127)
+    constexpr int budget = 2080;
+    while (max_exp < 7 && (n_blocks - 1) * (2 << max_exp) + 1 <= budget) {
+      max_exp++;
+    }
+  }
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+  auto make_temporary = [&compute_encoder](Shape shape, Dtype dtype) {
+    array t(std::move(shape), dtype, nullptr, {});
+    t.set_data(allocator::malloc(t.nbytes()));
+    compute_encoder.add_temporary(t);
+    return t;
+  };
+  array x8 = make_temporary({M_pad, K}, int8);
+  array x_scale = make_temporary({M}, float32);
+  array x_exp = make_temporary({M_pad, n_blocks + 1}, uint8);
+  array w_scale = make_temporary({N}, float32);
+  array w_inv = make_temporary({N}, float32);
+
+  std::string type_string = get_type_string(x.dtype());
+  auto get_kernel = [&d](const std::string& kname, std::string template_def) {
+    return get_qmm_nax_kernel(d, kname, template_def, "affine");
+  };
+
+  {
+    std::string kname;
+    concatenate(kname, "affine_qmm_i8_row_scales_", type_string, "_b_", bits);
+    auto kernel = get_kernel(
+        kname,
+        get_template_definition(
+            kname, "affine_qmm_i8_row_scales", type_string, bits));
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(scales, 0);
+    compute_encoder.set_input_array(biases, 1);
+    compute_encoder.set_output_array(w_scale, 2);
+    compute_encoder.set_output_array(w_inv, 3);
+    int K_g = K / group_size;
+    compute_encoder.set_bytes(K_g, 4);
+    MTL::Size grid_dims(N, 1, 1);
+    MTL::Size group_dims(
+        std::min<size_t>(N, kernel->maxTotalThreadsPerThreadgroup()), 1, 1);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+  }
+
+  {
+    std::string kname;
+    concatenate(kname, "affine_qmm_i8_quantize_x_", type_string);
+    auto kernel = get_kernel(
+        kname,
+        get_template_definition(
+            kname, "affine_qmm_i8_quantize_x", type_string));
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(x, 0);
+    compute_encoder.set_output_array(x8, 1);
+    compute_encoder.set_output_array(x_scale, 2);
+    compute_encoder.set_output_array(x_exp, 3);
+    compute_encoder.set_bytes(K, 4);
+    compute_encoder.set_bytes(M, 5);
+    compute_encoder.set_bytes(max_exp, 6);
+    compute_encoder.set_bytes(x_span, 7);
+    MTL::Size group_dims(n_blocks, 1, 1);
+    MTL::Size grid_dims(1, M_pad, 1);
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+  }
+
+  {
+    std::string kname;
+    kname.reserve(64);
+    concatenate(
+        kname,
+        "affine_qmm_t_nax_i8_",
+        type_string,
+        "_gs_",
+        group_size,
+        "_b_",
+        bits,
+        "_xs_",
+        x_span);
+    auto kernel = get_kernel(
+        kname,
+        get_template_definition(
+            kname,
+            "affine_qmm_t_nax_i8",
+            type_string,
+            group_size,
+            bits,
+            x_span));
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(w, 0);
+    compute_encoder.set_input_array(scales, 1);
+    compute_encoder.set_input_array(biases, 2);
+    compute_encoder.set_input_array(w_inv, 3);
+    compute_encoder.set_input_array(w_scale, 4);
+    compute_encoder.set_input_array(x8, 5);
+    compute_encoder.set_input_array(x_scale, 6);
+    compute_encoder.set_output_array(out, 7);
+    compute_encoder.set_input_array(x_exp, 8);
+    compute_encoder.set_bytes(K, 9);
+    compute_encoder.set_bytes(N, 10);
+    compute_encoder.set_bytes(M, 11);
+    MTL::Size group_dims(32, wn, wm);
+    MTL::Size grid_dims((N + bn - 1) / bn, M_pad / bm, 1);
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+  }
+}
+
 void gather_qmm_nax(
     const array& x,
     const array& w,
@@ -2211,6 +2352,28 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int K = x.shape(-1);
   int M = non_batched ? x.size() / K : x.shape(-2);
   int N = out.shape(-1);
+
+  // The int8 qmm needs 2 bits or more, K / 64 threads per row and tiles of 64
+  // rows
+  if (compute_8bit_ && transpose_ && mode_ == QuantizationMode::Affine &&
+      biases && bits_ > 1 && non_batched && metal::is_nax_available() &&
+      K % 64 == 0 && K / 64 <= 1024 && M >= 64) {
+    qmm_nax_i8(
+        x,
+        w,
+        scales,
+        *biases,
+        out,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        compute_8bit_ == 2 ? 0 : (compute_8bit_ == 4 ? 4 : 1),
+        d,
+        s);
+    return;
+  }
 
   int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
   auto mode = quantization_mode_to_string(mode_);

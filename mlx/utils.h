@@ -227,6 +227,11 @@ inline bool enable_tf32() {
   return enable_tf32_;
 }
 
+// Not cached, each quantized matmul reads it when it is built
+inline int qmm_int8() {
+  return get_var("MLX_QMM_INT8", 0);
+}
+
 inline int nccl_timeout(int default_value) {
   static int nccl_timeout = get_var("MLX_NCCL_TIMEOUT", default_value);
   return nccl_timeout;
