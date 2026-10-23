@@ -133,8 +133,9 @@
   instantiate_quantized_quad(affine_qmv_quad, type, group_size, bits, 128, 1)  \
   instantiate_quantized_quad(affine_qmv_quad, type, group_size, bits, 128, 0)
 
-// vecs_per_tg (input-vector tile) 2..5; affine uses k_lanes=8 (more rows per
-// simdgroup) where the fp path uses 16.
+// vecs_per_tg (input-vector tile) 2..8; affine uses k_lanes=8 (more rows per
+// simdgroup) where the fp path uses 16. The affine kernel holds every streamed
+// vector in registers and spills above 8.
 #define instantiate_quantized_wide_wrap(name, type, group_size, bits, vecs_per_tg, k_lanes) \
   instantiate_quantized_wide(name, type, group_size, bits, vecs_per_tg, k_lanes, 0)         \
   instantiate_quantized_wide(name, type, group_size, bits, vecs_per_tg, k_lanes, 1)
@@ -143,7 +144,10 @@
   instantiate_quantized_wide_wrap(affine_qmv_wide, type, group_size, bits, 2, 8) \
   instantiate_quantized_wide_wrap(affine_qmv_wide, type, group_size, bits, 3, 8) \
   instantiate_quantized_wide_wrap(affine_qmv_wide, type, group_size, bits, 4, 8) \
-  instantiate_quantized_wide_wrap(affine_qmv_wide, type, group_size, bits, 5, 8)
+  instantiate_quantized_wide_wrap(affine_qmv_wide, type, group_size, bits, 5, 8) \
+  instantiate_quantized_wide_wrap(affine_qmv_wide, type, group_size, bits, 6, 8) \
+  instantiate_quantized_wide_wrap(affine_qmv_wide, type, group_size, bits, 7, 8) \
+  instantiate_quantized_wide_wrap(affine_qmv_wide, type, group_size, bits, 8, 8)
 
 #define instantiate_quantized_all_splitk(type, group_size, bits)   \
   instantiate_quantized_split_k(affine_qvm_split_k, type, group_size, bits, 8)   \
