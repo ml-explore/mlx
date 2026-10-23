@@ -309,8 +309,11 @@ std::pair<Dtype, Dtype> remap_reduce_types(
       default:
         break;
     }
-    if (in.dtype().size() == 1) {
+    if (in.dtype() == bool_) {
       return {bool_, bool_};
+    } else if (in.dtype().size() == 1) {
+      // A Metal bool must hold 0 or 1, so read int8 and uint8 as int8.
+      return {int8, bool_};
     } else if (in.dtype().size() == 2) {
       return {int16, bool_};
     } else if (in.dtype().size() == 4) {
