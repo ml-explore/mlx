@@ -183,7 +183,8 @@
 #define instantiate_quantized_types(group_size, bits)       \
   instantiate_quantized_funcs(float, group_size, bits)      \
   instantiate_quantized_funcs(float16_t, group_size, bits)  \
-  instantiate_quantized_funcs(bfloat16_t, group_size, bits)
+  instantiate_quantized_funcs(bfloat16_t, group_size, bits) \
+  instantiate_gather_qmm_rhs(affine_gather_qmm_rhs, affine_gather_qmm_rhs_nt, float16_t, group_size, bits, 32, 64, 32, 2, 2, true)
 
 #define instantiate_quantized_groups(bits) \
   instantiate_quantized_types(128, bits)   \
