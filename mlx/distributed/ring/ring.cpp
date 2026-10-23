@@ -80,7 +80,10 @@ class SocketThread {
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
   }
   ~SocketThread() {
-    stop_ = true;
+    {
+      std::unique_lock lock(queue_mutex_);
+      stop_ = true;
+    }
     condition_.notify_all();
     worker_.join();
     int flags = fcntl(fd_, F_GETFL, 0);
@@ -151,6 +154,8 @@ class SocketThread {
     bool delete_recv = false;
     bool delete_send = false;
     while (true) {
+      SocketTask* recv_task = nullptr;
+      SocketTask* send_task = nullptr;
       {
         std::unique_lock lock(queue_mutex_);
 
@@ -175,10 +180,17 @@ class SocketThread {
             return;
           }
         }
+
+        if (!recvs_.empty()) {
+          recv_task = &recvs_.front();
+        }
+        if (!sends_.empty()) {
+          send_task = &sends_.front();
+        }
       }
 
-      if (!recvs_.empty()) {
-        auto& task = recvs_.front();
+      if (recv_task) {
+        auto& task = *recv_task;
         ssize_t r =
             ::recv(fd_, task.buffer, std::min(task.size, MAX_IO_BYTES), 0);
         if (r > 0) {
@@ -195,8 +207,8 @@ class SocketThread {
               true, "Receiving from socket", fd_, "failed with errno", errno);
         }
       }
-      if (!sends_.empty()) {
-        auto& task = sends_.front();
+      if (send_task) {
+        auto& task = *send_task;
         ssize_t r =
             ::send(fd_, task.buffer, std::min(task.size, MAX_IO_BYTES), 0);
         if (r > 0) {
@@ -218,6 +230,7 @@ class SocketThread {
         // Throw exception in invoker's thread.
         auto error = std::make_exception_ptr(
             std::runtime_error("[ring] connection to a peer was lost"));
+        std::unique_lock lock(queue_mutex_);
         for (auto& task : recvs_) {
           task.promise.set_exception(error);
         }
