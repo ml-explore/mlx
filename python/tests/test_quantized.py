@@ -134,6 +134,12 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_hat = mx.dequantize(w_q, scales, mode="mxfp8")
         self.assertTrue(mx.all(w_hat == 0))
 
+        # test 0xFF scale (E8M0 NaN scale per OCP microscaling spec)
+        nan_scales = mx.full(scales.shape, 0xFF, dtype=mx.uint8)
+        for dev in [mx.cpu, mx.gpu]:
+            w_nan = mx.dequantize(w_q, nan_scales, mode="mxfp8", stream=dev)
+            self.assertTrue(mx.isnan(w_nan).all().item())
+
     def test_mxfp8_block_scale_does_not_saturate(self):
         # E4M3 has three mantissa bits, so an in-range element loses at most
         # half a step, 6.25%. More than that means the block scale rounded
