@@ -148,9 +148,12 @@ struct ReadWriter {
   METAL_FUNC void load(scalar_T scale) const thread {
     size_t batch_idx = size_t(elem.x * grid.y) * n;
     short tg_idx = elem.y * grid.z + elem.z;
+    // The last threadgroup can hold fewer than grid.y rows, so bound the copy
+    // by the rows actually present rather than the full tile.
+    short tile_size = (threads_per_tg / grid.z) * n;
     // Keep each thread's sequential access at 128 bits where possible.
     constexpr int read_width = 16 / sizeof(in_T);
-    short max_full_index = grid.y * n - read_width;
+    short max_full_index = tile_size - read_width;
     short full_width_reads = elems_per_thread / read_width;
     for (short e = 0; e < full_width_reads; e++) {
       short index = read_width * tg_idx + read_width * threads_per_tg * e;
@@ -160,7 +163,7 @@ struct ReadWriter {
         buf[index + r] = post_in(in[batch_idx + index + r]) * scale;
       }
     }
-    short max_index = grid.y * n - 1;
+    short max_index = tile_size - 1;
     for (short r = 0; r < elems_per_thread % read_width; r++) {
       short index = tg_idx + r * threads_per_tg +
           read_width * threads_per_tg * full_width_reads;
@@ -176,8 +179,10 @@ struct ReadWriter {
   METAL_FUNC void write() const thread {
     size_t batch_idx = size_t(elem.x * grid.y) * n;
     short tg_idx = elem.y * grid.z + elem.z;
+    // See load(): bound the copy by the rows present in this threadgroup.
+    short tile_size = (threads_per_tg / grid.z) * n;
     constexpr int read_width = 16 / sizeof(out_T);
-    short max_full_index = grid.y * n - read_width;
+    short max_full_index = tile_size - read_width;
     short full_width_reads = elems_per_thread / read_width;
     for (short e = 0; e < full_width_reads; e++) {
       short index = read_width * tg_idx + read_width * threads_per_tg * e;
@@ -187,7 +192,7 @@ struct ReadWriter {
         out[batch_idx + index + r] = pre_out(buf[index + r]);
       }
     }
-    short max_index = grid.y * n - 1;
+    short max_index = tile_size - 1;
     for (short r = 0; r < elems_per_thread % read_width; r++) {
       short index = tg_idx + r * threads_per_tg +
           read_width * threads_per_tg * full_width_reads;
