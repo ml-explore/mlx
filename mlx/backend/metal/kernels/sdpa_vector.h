@@ -11,6 +11,16 @@ constant bool bool_mask [[function_constant(23)]];
 constant bool float_mask [[function_constant(24)]];
 constant bool has_sinks [[function_constant(25)]];
 constant int blocks [[function_constant(26)]];
+constant int window_size [[function_constant(27)]];
+constant bool has_window = window_size > 0;
+
+// Visible keys [lo, hi) of the query at position pos
+METAL_FUNC int2 window_range(int pos, int N) {
+  int lo = max(0, pos - window_size + 1);
+  int hi = do_causal ? (pos + 1) : (pos + window_size);
+  hi = min(N, hi);
+  return int2(lo, hi);
+}
 
 template <typename T, int D, int V = D>
 [[kernel]] void sdpa_vector(
@@ -81,6 +91,26 @@ template <typename T, int D, int V = D>
 
   out += o_offset * V + simd_gid * v_per_thread;
 
+  // Restrict the keys to the window
+  int lo = 0;
+  int hi = N;
+  if (has_window) {
+    // Offset = kL - qL = N - tpg.y
+    auto range = window_range(N - int(tpg.y) + int(q_seq_idx), N);
+    lo = range.x;
+    hi = range.y;
+
+    // Move all arrays ahead by lo
+    keys += lo * k_seq_stride;
+    values += lo * v_seq_stride;
+    if (bool_mask) {
+      bmask += lo * mask_kv_seq_stride;
+    }
+    if (float_mask) {
+      fmask += lo * mask_kv_seq_stride;
+    }
+  }
+
   // Read the query and 0 the output accumulator
   for (int i = 0; i < qk_per_thread; i++) {
     q[i] = static_cast<U>(scale) * queries[i];
@@ -96,15 +126,18 @@ template <typename T, int D, int V = D>
     sum_exp_score = 1;
   }
 
-  // For each key
-  for (int i = simd_gid; i < N; i += BN) {
+  // For each key in valid range
+  for (int i = lo + simd_gid; i < hi; i += BN) {
     bool use_key = true;
     if (do_causal) {
       use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
-    } else if (bool_mask) {
-      use_key = bmask[0];
+    }
+
+    // Allow causal and array masking at the same time
+    if (bool_mask) {
+      use_key = use_key && bmask[0];
     } else if (float_mask) {
-      use_key = (fmask[0] >= Limits<T>::finite_min);
+      use_key = use_key && (fmask[0] >= Limits<T>::finite_min);
     }
     if (use_key) {
       // Read the key
@@ -267,6 +300,45 @@ template <typename T, int D, int V = D, int TK = 4>
 
   // For each key
   int i = block_idx;
+
+  // Prepare for windows
+  int lo = 0;
+  int hi = N;
+
+  if (has_window) {
+    // The earliest valid key falls in the valid window for
+    // q_seq_idx = 0 -> pos = N - q_seq_len
+    // This is uniform across block ids
+    const int min_valid_key = max(0, N - q_seq_len - window_size + 1);
+
+    // We find if we can uniformly skip over some iterations of
+    // the loop over keys for all blocks
+    const int itr_sz = blocks * TK;
+
+    if (min_valid_key > itr_sz) {
+      const int min_valid_off = (min_valid_key / itr_sz) * itr_sz;
+
+      // Move the loop index up
+      i += min_valid_off;
+
+      // Move the buffer offsets up
+      keys += min_valid_off * k_seq_stride;
+      values += min_valid_off * v_seq_stride;
+      if (bool_mask) {
+        bmask += min_valid_off * mask_kv_seq_stride;
+      }
+      if (float_mask) {
+        fmask += min_valid_off * mask_kv_seq_stride;
+      }
+    }
+
+    // We set lo and hi for the specific q_seq_idx
+    auto range = window_range(N - q_seq_len + int(q_seq_idx), N);
+    lo = range.x;
+    hi = range.y;
+  }
+
+  // For each key
   for (; i + (TK - 1) * blocks < N; i += blocks * TK) {
     // Prefetch: issue all TK K/V loads first so the HW can overlap them.
     T k_reg[TK][qk_per_thread];
@@ -287,13 +359,19 @@ template <typename T, int D, int V = D, int TK = 4>
     for (int t = 0; t < TK; t++) {
       int ii = i + t * blocks;
       bool use_key = true;
-      if (do_causal) {
+      if (has_window) {
+        use_key = (ii >= lo) && (ii < hi);
+      } else if (do_causal) {
         use_key = ii <= (N - q_seq_len + int(q_seq_idx));
-      } else if (bool_mask) {
-        use_key = bmask[t * stride_mask_tok];
-      } else if (float_mask) {
-        use_key = (fmask[t * stride_mask_tok] >= Limits<T>::finite_min);
       }
+
+      if (bool_mask) {
+        use_key = use_key && bmask[t * stride_mask_tok];
+      } else if (float_mask) {
+        use_key =
+            use_key && (fmask[t * stride_mask_tok] >= Limits<T>::finite_min);
+      }
+
       if (use_key) {
         U score = 0;
         for (int j = 0; j < qk_per_thread; j++) {
@@ -328,12 +406,16 @@ template <typename T, int D, int V = D, int TK = 4>
   // Tail (fewer than TK remaining keys)
   for (; i < N; i += blocks) {
     bool use_key = true;
-    if (do_causal) {
+    if (has_window) {
+      use_key = (i >= lo) && (i < hi);
+    } else if (do_causal) {
       use_key = i <= (N - q_seq_len + int(q_seq_idx));
-    } else if (bool_mask) {
-      use_key = bmask[0];
+    }
+
+    if (bool_mask) {
+      use_key = use_key && bmask[0];
     } else if (float_mask) {
-      use_key = (fmask[0] >= Limits<T>::finite_min);
+      use_key = use_key && (fmask[0] >= Limits<T>::finite_min);
     }
     if (use_key) {
       // Compute the i-th score

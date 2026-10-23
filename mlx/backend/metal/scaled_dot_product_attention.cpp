@@ -24,12 +24,14 @@ bool use_blocked_d512(
     bool has_arr_mask,
     bool do_causal,
     bool has_sinks,
+    int window_size,
     bool output_logsumexp,
     Stream s) {
   return s.device == Device::gpu && !metal::is_nax_available() &&
-      (q.dtype() == float16 || q.dtype() == bfloat16) && q.shape(-1) == 512 &&
-      v.shape(-1) == 512 && q.shape(2) >= 1024 && q.shape(2) <= k.shape(2) &&
-      do_causal && !has_arr_mask && !has_sinks && !output_logsumexp;
+      window_size <= 0 && (q.dtype() == float16 || q.dtype() == bfloat16) &&
+      q.shape(-1) == 512 && v.shape(-1) == 512 && q.shape(2) >= 1024 &&
+      q.shape(2) <= k.shape(2) && do_causal && !has_arr_mask && !has_sinks &&
+      !output_logsumexp;
 }
 
 void sdpa_blocked_softmax(const Stream& s, metal::Device& d, array& scores) {
@@ -210,6 +212,7 @@ void sdpa_full_self_attention_nax(
     const float scale,
     array& o,
     bool do_causal_,
+    int window_size_,
     const std::optional<array>& mask,
     const std::optional<array>& sinks,
     array* lse) {
@@ -267,6 +270,7 @@ void sdpa_full_self_attention_nax(
   const bool do_causal = do_causal_;
   const bool has_sinks = sinks.has_value();
   const bool save_lse = (lse != nullptr);
+  const int window_size = window_size_;
 
   metal::MTLFCList func_consts = {
       {&align_Q, MTL::DataType::DataTypeBool, 200},
@@ -274,7 +278,8 @@ void sdpa_full_self_attention_nax(
       {&has_mask, MTL::DataType::DataTypeBool, 300},
       {&do_causal, MTL::DataType::DataTypeBool, 301},
       {&has_sinks, MTL::DataType::DataTypeBool, 302},
-      {&save_lse, MTL::DataType::DataTypeBool, 303}};
+      {&save_lse, MTL::DataType::DataTypeBool, 303},
+      {&window_size, MTL::DataType::DataTypeInt, 304}};
 
   std::string base_name;
   concatenate(
@@ -311,7 +316,9 @@ void sdpa_full_self_attention_nax(
       "_has_sinks_",
       (has_sinks ? 't' : 'n'),
       "_save_lse_",
-      (save_lse ? 't' : 'n'));
+      (save_lse ? 't' : 'n'),
+      "_window_",
+      (window_size > 0 ? std::to_string(window_size) : "n"));
 
   auto& compute_encoder = metal::get_command_encoder(s);
 
@@ -402,6 +409,7 @@ void sdpa_full_self_attention_metal(
     const float scale,
     array& o,
     bool do_causal_,
+    int window_size_,
     const std::optional<array>& mask,
     const std::optional<array>& sinks,
     array* lse /* = nullptr */) {
@@ -421,6 +429,7 @@ void sdpa_full_self_attention_metal(
         /* const float scale = */ scale,
         /* array& o = */ o,
         /* bool do_causal_ = */ do_causal_,
+        /* int window_size_ = */ window_size_,
         /* const std::optional<array>& mask = */ mask,
         /* const std::optional<array>& sinks = */ sinks,
         /* array* lse = */ lse);
@@ -479,6 +488,7 @@ void sdpa_full_self_attention_metal(
         /* const float scale = */ scale,
         /* array& o = */ op,
         /* bool do_causal_ = */ do_causal_,
+        /* int window_size_ = */ window_size_,
         /* const std::optional<array>& mask = */ mask,
         /* const std::optional<array>& sinks = */ sinks,
         /* array* lse = */ nullptr);
@@ -521,6 +531,7 @@ void sdpa_full_self_attention_metal(
   const bool do_causal = do_causal_;
   const bool has_sinks = sinks.has_value();
   const bool save_lse = (lse != nullptr);
+  const int window_size = window_size_;
 
   metal::MTLFCList func_consts = {
       {&align_Q, MTL::DataType::DataTypeBool, 200},
@@ -528,7 +539,8 @@ void sdpa_full_self_attention_metal(
       {&has_mask, MTL::DataType::DataTypeBool, 300},
       {&do_causal, MTL::DataType::DataTypeBool, 301},
       {&has_sinks, MTL::DataType::DataTypeBool, 302},
-      {&save_lse, MTL::DataType::DataTypeBool, 303}};
+      {&save_lse, MTL::DataType::DataTypeBool, 303},
+      {&window_size, MTL::DataType::DataTypeInt, 304}};
 
   std::string base_name;
   concatenate(
@@ -565,7 +577,9 @@ void sdpa_full_self_attention_metal(
       "_has_sinks_",
       (has_sinks ? 't' : 'n'),
       "_save_lse_",
-      (save_lse ? 't' : 'n'));
+      (save_lse ? 't' : 'n'),
+      "_window_",
+      ((window_size > 0) ? std::to_string(window_size) : "n"));
 
   auto& compute_encoder = metal::get_command_encoder(s);
 
@@ -646,6 +660,15 @@ void sdpa_full_self_attention_metal(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+// Upper bound on the number of keys one query reads
+int visible_keys(int N, int qL, int window_size, bool do_causal) {
+  if (window_size <= 0) {
+    return N;
+  }
+  int span = do_causal ? window_size : 2 * window_size;
+  return std::min(N, span + qL - 1);
+}
+
 bool sdpa_vector(
     const Stream& s,
     metal::Device& d,
@@ -655,6 +678,7 @@ bool sdpa_vector(
     array& out,
     float scale,
     bool do_causal,
+    int window_size,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
   // Set the kernel name
@@ -690,12 +714,14 @@ bool sdpa_vector(
       {&bool_mask, MTL::DataType::DataTypeBool, 23},
       {&float_mask, MTL::DataType::DataTypeBool, 24},
       {&has_sinks, MTL::DataType::DataTypeBool, 25},
+      {&window_size, MTL::DataType::DataTypeInt, 27},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? (bool_mask ? "_boolmask" : "_floatmask") : "_nomask";
   hash_name += query_transposed ? "_qt" : "_qnt";
   hash_name += do_causal ? "_c" : "_nc";
   hash_name += has_sinks ? "_sinks" : "_nosinks";
+  hash_name += window_size > 0 ? "_w" + std::to_string(window_size) : "_nw";
 
   // Get the kernel
   auto& compute_encoder = metal::get_command_encoder(s);
@@ -749,6 +775,7 @@ void sdpa_vector_2pass(
     array& out,
     float scale,
     bool do_causal,
+    int window_size,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
   // Set the kernel name
@@ -759,7 +786,7 @@ void sdpa_vector_2pass(
   bool gqa_dims =
       (gqa_factor == 8 && (q.shape(-1) == 64 || q.shape(-1) == 128)) ||
       ((gqa_factor == 12 || gqa_factor == 16) && q.shape(-1) == 128);
-  if (!mask && !sinks && q.shape(2) == 1 &&
+  if (!mask && !sinks && window_size <= 0 && q.shape(2) == 1 &&
       q.shape(1) == gqa_factor * k.shape(1) && q.shape(-1) == v.shape(-1) &&
       gqa_dims && k.shape(2) >= 8192) {
     kname += "_gqa_";
@@ -777,15 +804,17 @@ void sdpa_vector_2pass(
 
   char devc = d.get_architecture().back();
   int N = k.shape(2);
+  // Choose the blocks from the keys inside the window
+  int n_keys = visible_keys(N, q.shape(2), window_size, do_causal);
   int blocks;
   if (devc == 's') {
     blocks = 64;
-    if (N > 1024 && n_simds > 4) {
-      if (N <= 8192) {
+    if (n_keys > 1024 && n_simds > 4) {
+      if (n_keys <= 8192) {
         blocks = 128;
-      } else if (N <= 32768) {
+      } else if (n_keys <= 32768) {
         blocks = 256;
-      } else if (N <= 65536) {
+      } else if (n_keys <= 65536) {
         blocks = 512;
       } else {
         blocks = 1024;
@@ -793,12 +822,12 @@ void sdpa_vector_2pass(
     }
   } else if (devc == 'd') {
     blocks = 128;
-    if (n_simds <= 2 && N > 8192) {
+    if (n_simds <= 2 && n_keys > 8192) {
       blocks = 256;
     } else if (n_simds >= 6) {
-      if (N >= 16384 && N < 65536) {
+      if (n_keys >= 16384 && n_keys < 65536) {
         blocks = 512;
-      } else if (N >= 65536) {
+      } else if (n_keys >= 65536) {
         blocks = 1024;
       }
     }
@@ -853,6 +882,7 @@ void sdpa_vector_2pass(
       {&float_mask, MTL::DataType::DataTypeBool, 24},
       {&has_sinks, MTL::DataType::DataTypeBool, 25},
       {&blocks, MTL::DataType::DataTypeInt, 26},
+      {&window_size, MTL::DataType::DataTypeInt, 27},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? (bool_mask ? "_boolmask" : "_floatmask") : "_nomask";
@@ -860,6 +890,7 @@ void sdpa_vector_2pass(
   hash_name += do_causal ? "_c" : "_nc";
   hash_name += has_sinks ? "_sinks_" : "_nosinks_";
   hash_name += std::to_string(blocks);
+  hash_name += window_size > 0 ? "_w" + std::to_string(window_size) : "_nw";
 
   // Get the kernel
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
@@ -942,10 +973,21 @@ std::tuple<bool, std::string> has_fused_kernel(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    int window_size,
     bool output_logsumexp,
     Stream s) {
   if (s.device != Device::gpu) {
     return {false, "the fused kernels require a GPU (Metal) stream."};
+  }
+
+  if (window_size > 0 && q.shape(2) > 8 && q.shape(2) > k.shape(2)) {
+    return {
+        false,
+        "the full attention kernel with a window requires the query sequence "
+        "to be no longer than the key sequence."};
+  }
+  if (output_logsumexp && window_size > 0) {
+    return {false, "window support for backward attention is NYI"};
   }
 
   if (output_logsumexp && has_arr_mask) {
@@ -1399,12 +1441,21 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_arr_mask,
     bool do_causal,
     bool has_sinks,
+    int window_size,
     bool is_training,
     bool output_logsumexp,
     bool force_fused,
     Stream s) {
   auto [has_fused, reason] = has_fused_kernel(
-      q, k, v, has_mask, has_arr_mask, do_causal, output_logsumexp, s);
+      q,
+      k,
+      v,
+      has_mask,
+      has_arr_mask,
+      do_causal,
+      window_size,
+      output_logsumexp,
+      s);
   if (force_fused) {
     if (!has_fused) {
       std::ostringstream msg;
@@ -1416,7 +1467,15 @@ bool ScaledDotProductAttention::use_fallback(
     return false;
   }
   if (use_blocked_d512(
-          q, k, v, has_arr_mask, do_causal, has_sinks, output_logsumexp, s)) {
+          q,
+          k,
+          v,
+          has_arr_mask,
+          do_causal,
+          has_sinks,
+          window_size,
+          output_logsumexp,
+          s)) {
     return false;
   }
   if (!has_fused) {
@@ -1576,13 +1635,15 @@ void ScaledDotProductAttention::eval_gpu(
     // We route to the 2 pass fused attention if
     // - The device is large and the sequence length long
     // - The sequence length is even longer and we have gqa
-    bool do_causal = do_causal_ && q.shape(2) > 1;
+    bool csl = do_causal_ && q.shape(2) > 1;
+    int ws = window_size_;
+    int n_keys = visible_keys(k.shape(2), q.shape(2), ws, csl);
     char devc = d.get_architecture().back();
-    if (((devc == 'd' || devc == 's') && k.shape(2) >= 1024) ||
-        (k.shape(1) < q.shape(1) && k.shape(2) >= 4096)) {
-      sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
-    } else if (!sdpa_vector(s, d, q, k, v, o, scale_, do_causal, mask, sinks)) {
-      sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
+    if (((devc == 'd' || devc == 's') && n_keys >= 1024) ||
+        (k.shape(1) < q.shape(1) && n_keys >= 4096)) {
+      sdpa_vector_2pass(s, d, q, k, v, o, scale_, csl, ws, mask, sinks);
+    } else if (!sdpa_vector(s, d, q, k, v, o, scale_, csl, ws, mask, sinks)) {
+      sdpa_vector_2pass(s, d, q, k, v, o, scale_, csl, ws, mask, sinks);
     }
   }
 
@@ -1627,12 +1688,13 @@ void ScaledDotProductAttention::eval_gpu(
             has_arr_mask,
             do_causal_,
             sinks.has_value(),
+            window_size_,
             lse != nullptr,
             s)) {
       sdpa_full_self_attention_blocked(s, d, q, k, v, scale_, o);
     } else {
       sdpa_full_self_attention_metal(
-          s, d, q, k, v, scale_, o, do_causal_, mask, sinks, lse);
+          s, d, q, k, v, scale_, o, do_causal_, window_size_, mask, sinks, lse);
     }
   }
 

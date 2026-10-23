@@ -716,6 +716,7 @@ array scaled_dot_product_attention(
     const array& keys,
     const array& values,
     const float scale,
+    int window_size /* = -1 */,
     const std::string& mask_mode /* = "" */,
     std::optional<array> mask_arr /* = {} */,
     const std::optional<array>& sinks /* = {} */,
@@ -729,6 +730,14 @@ array scaled_dot_product_attention(
       throw std::invalid_argument(msg.str());
     }
   }
+  if (window_size == 0 || window_size < -1) {
+    std::ostringstream msg;
+    msg << "[scaled_dot_product_attention] Invalid window_size " << window_size
+        << ". window_size must be positive or -1 for no window.";
+    throw std::invalid_argument(msg.str());
+  }
+  bool has_window = window_size > 0;
+
   // Check valid mask
   if (mask_mode != "" && mask_mode != "causal" && mask_mode != "array") {
     std::ostringstream msg;
@@ -820,6 +829,7 @@ array scaled_dot_product_attention(
                    n_q_heads,
                    n_kv_heads,
                    do_causal,
+                   window_size,
                    has_sinks,
                    has_arr_mask,
                    s](const std::vector<array>& inputs) {
@@ -833,10 +843,10 @@ array scaled_dot_product_attention(
       v = expand_dims(v, 2, s);
     }
     auto scores = matmul(q, swapaxes(k, -1, -2, s), s);
-    if (has_arr_mask || do_causal) {
+    if (has_arr_mask || do_causal || window_size > 0) {
       // Mask must be broadcast-compatible with [B, n_q_heads, L_q, L_kv]
       auto make_or_fetch_mask = [&]() {
-        if (do_causal) {
+        if (do_causal || window_size > 0) {
           int kL = k.shape(-2);
           int qL = q.shape(-2);
           int offset = kL - qL;
@@ -844,11 +854,36 @@ array scaled_dot_product_attention(
           auto k_idx = arange(0, kL, s);
           q_idx = expand_dims(q_idx, 1, s);
           k_idx = expand_dims(k_idx, 0, s);
+
+          if (window_size > 0) {
+            auto dist = abs(subtract(q_idx, k_idx, s), s);
+            auto window_mask = less(dist, array(window_size, dist.dtype()), s);
+
+            if (do_causal) {
+              auto causal_mask = greater_equal(q_idx, k_idx, s);
+              window_mask = logical_and(window_mask, causal_mask, s);
+            }
+
+            return window_mask;
+          }
+
           return greater_equal(q_idx, k_idx, s);
         }
         return inputs[3];
       };
       auto mask = make_or_fetch_mask();
+
+      // If we have an array mask on top of a built mask
+      if ((do_causal || window_size > 0) && has_arr_mask) {
+        auto arr_mask = inputs[3];
+
+        if (arr_mask.dtype() == bool_) {
+          mask = logical_and(mask, arr_mask, s);
+        } else {
+          auto minarr = array(finfo(scores.dtype()).min, scores.dtype());
+          mask = where(mask, arr_mask, minarr, s);
+        }
+      }
 
       if (n_repeats > 1 && mask.ndim() >= 3) {
         if (mask.shape(-3) == 1) {
@@ -935,6 +970,7 @@ array scaled_dot_product_attention(
           has_arr_mask,
           do_causal,
           has_sinks,
+          window_size,
           is_training,
           output_logsumexp,
           force_fused,
@@ -956,6 +992,7 @@ array scaled_dot_product_attention(
         scale,
         do_causal,
         has_sinks,
+        window_size,
         output_logsumexp,
         force_fused);
     if (output_logsumexp) {
@@ -1026,6 +1063,7 @@ bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
       static_cast<const ScaledDotProductAttention&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
       has_sinks_ == a_other.has_sinks_ &&
+      window_size_ == a_other.window_size_ &&
       output_logsumexp_ == a_other.output_logsumexp_ &&
       force_fused_ == a_other.force_fused_;
 }
