@@ -684,3 +684,65 @@ template <typename T, int D>
     }
   }
 }
+
+template <typename T, int D>
+[[kernel]] void sdpa_split_reduce(
+    const device float* partials [[buffer(0)]],
+    const device float* sums [[buffer(1)]],
+    const device float* maxs [[buffer(2)]],
+    device T* out [[buffer(3)]],
+    const constant int& blocks [[buffer(4)]],
+    const constant int64_t* out_strides [[buffer(5)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 tpg [[threadgroups_per_grid]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  constexpr int BN = 32;
+  constexpr int elem_per_thread = (D + BN - 1) / BN;
+  constexpr bool full_lanes = D % BN == 0;
+  const int lane_elems = full_lanes
+      ? elem_per_thread
+      : clamp(D - int(simd_lid) * elem_per_thread, 0, elem_per_thread);
+
+  typedef float U;
+
+  const int q_seq_idx = tid.x;
+  const int head_idx = tid.y;
+  const int batch_idx = tid.z;
+  const int64_t row =
+      (int64_t(batch_idx) * tpg.y + head_idx) * tpg.x + q_seq_idx;
+  partials += row * blocks * D + simd_lid * elem_per_thread;
+  sums += row * blocks;
+  maxs += row * blocks;
+  out += batch_idx * out_strides[0] + head_idx * out_strides[1] +
+      q_seq_idx * out_strides[2] + simd_lid * elem_per_thread;
+
+  U max_score = Limits<U>::finite_min;
+  for (int b = simd_lid; b < blocks; b += BN) {
+    max_score = max(max_score, maxs[b]);
+  }
+  max_score = simd_max(max_score);
+
+  U sum_exp_score = 0;
+  for (int b = simd_lid; b < blocks; b += BN) {
+    sum_exp_score += fast::exp(maxs[b] - max_score) * sums[b];
+  }
+  sum_exp_score = simd_sum(sum_exp_score);
+
+  U o[elem_per_thread] = {0};
+  for (int b = 0; b < blocks; b++) {
+    U factor = fast::exp(maxs[b] - max_score);
+    for (int i = 0; i < elem_per_thread; i++) {
+      if (full_lanes || i < lane_elems) {
+        o[i] += factor * static_cast<U>(partials[i]);
+      }
+    }
+    partials += D;
+  }
+
+  U scale = sum_exp_score == 0 ? 0 : 1 / sum_exp_score;
+  for (int i = 0; i < elem_per_thread; i++) {
+    if (full_lanes || i < lane_elems) {
+      out[i] = static_cast<T>(o[i] * scale);
+    }
+  }
+}
