@@ -2586,6 +2586,14 @@ class TestOps(mlx_tests.MLXTestCase):
         y = mx.pad(x, ((0, 0), (0, 13)))
         self.assertEqual(y[-1].tolist(), [1, 2, 3] + [0] * 13)
 
+    def test_concatenate_large_offsets(self):
+        # Row 2**27 of the output starts at offset 2**31
+        rows = 2**27 + 1
+        x = mx.broadcast_to(mx.array([[1, 2, 3]], mx.uint8), (rows, 3))
+        y = mx.broadcast_to(mx.array([[4] * 13], mx.uint8), (rows, 13))
+        z = mx.concatenate([x, y], axis=1)
+        self.assertEqual(z[-1].tolist(), [1, 2, 3] + [4] * 13)
+
     def test_where(self):
         self.assertCmpNumpy([True, mx.array([[1, 2], [3, 4]]), 1], mx.where, np.where)
         self.assertCmpNumpy([True, 1, mx.array([[1, 2], [3, 4]])], mx.where, np.where)

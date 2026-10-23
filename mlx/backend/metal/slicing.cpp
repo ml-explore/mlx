@@ -3,6 +3,7 @@
 #include <numeric>
 
 #include "mlx/backend/common/compiled.h"
+#include "mlx/backend/common/slicing.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/gpu/slicing.h"
 #include "mlx/backend/metal/device.h"
@@ -25,19 +26,17 @@ void concatenate_gpu(
 
   out.set_data(allocator::malloc(out.nbytes()));
 
-  auto strides = out.strides();
-  auto flags = out.flags();
-  flags.row_contiguous = false;
-  flags.col_contiguous = false;
-  flags.contiguous = false;
   auto& d = metal::device(s.device);
   auto& compute_encoder = metal::get_command_encoder(s);
   auto concurrent_ctx = compute_encoder.start_concurrent();
+  Shape start(out.ndim(), 0);
   for (int i = 0; i < inputs.size(); i++) {
+    // Build the destination view with slice() so its data_size is the span it
+    // reaches, not its element count; the copy kernel selection relies on it
+    // to switch to 64-bit indexing once the view extends past 2^31 elements.
     array out_slice(inputs[i].shape(), out.dtype(), nullptr, {});
-    size_t data_offset = strides[axis] * sizes[i];
-    out_slice.copy_shared_buffer(
-        out, strides, flags, out_slice.size(), data_offset);
+    start[axis] = sizes[i];
+    slice(out, out_slice, start, Shape(out.ndim(), 1));
     copy_gpu_inplace(inputs[i], out_slice, CopyType::GeneralGeneral, s);
   }
 }
