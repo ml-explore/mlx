@@ -57,6 +57,12 @@ void append_indices_arg(
   args.append(std::move(indices_strides));
 }
 
+// The 64-bit path must cover both the logical size and the span reachable
+// through the strides (views) or a smaller span (broadcast arrays).
+inline bool exceeds_int32(const array& a) {
+  return a.size() > INT32_MAX || a.data_size() > INT32_MAX;
+}
+
 } // namespace
 
 void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -75,11 +81,16 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   Dtype idx_dtype = nidx > 0 ? inputs[1].dtype() : int32;
   int32_t idx_ndim = nidx > 0 ? inputs[1].ndim() : 0;
 
-  bool large = (nidx > 0 && inputs[1].size() > INT32_MAX) ||
-      (src.size() > INT32_MAX) || (out.size() > INT32_MAX);
-
   uint32_t slice_size = std::accumulate(
       slice_sizes_.begin(), slice_sizes_.end(), 1, std::multiplies<uint32_t>());
+
+  bool large_index = false;
+  for (int i = 1; i <= nidx; ++i) {
+    large_index |= exceeds_int32(inputs[i]);
+  }
+  bool large_src = exceeds_int32(src);
+  bool large_out = out.size() > INT32_MAX;
+  bool large = large_index || large_src || large_out;
 
   std::string module_name = fmt::format(
       "gather_{}_{}_{}",
@@ -164,8 +175,13 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   Dtype idx_dtype = nidx > 0 ? inputs[1].dtype() : int32;
   int32_t idx_ndim = nidx > 0 ? inputs[1].ndim() : 0;
 
-  bool large = (nidx > 0 && inputs[1].size() > INT32_MAX) ||
-      (upd.size() > INT32_MAX) || (out.size() > INT32_MAX);
+  bool large_out = out.size() > INT32_MAX;
+  bool large_idx = false;
+  for (int i = 1; i <= nidx; ++i) {
+    large_idx |= exceeds_int32(inputs[i]);
+  }
+  bool large_upd = exceeds_int32(upd);
+  bool large = large_out || large_idx || large_upd;
 
   int32_t upd_post_idx_size = std::accumulate(
       upd.shape().begin() + idx_ndim,
@@ -256,7 +272,7 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  bool large = idx.size() > INT32_MAX || src.size() > INT32_MAX;
+  bool large = exceeds_int32(idx) || exceeds_int32(src);
 
   std::string module_name = fmt::format(
       "gather_axis_{}_{}",
@@ -357,7 +373,8 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  bool large = idx.size() > INT32_MAX || src.size() > INT32_MAX;
+  bool large =
+      exceeds_int32(idx) || src.size() > INT32_MAX || exceeds_int32(upd);
 
   const char* op = reduce_type_ == ScatterAxis::Sum ? "Sum" : "Assign";
   std::string module_name = fmt::format(
@@ -623,7 +640,7 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool upd_contiguous = upd.flags().row_contiguous;
   bool upd_scalar = upd.data_size() == 1;
   bool out_contiguous = rc;
-  bool large = upd.size() > INT32_MAX;
+  bool large = exceeds_int32(upd);
   std::string module_name =
       fmt::format("slice_update_{}_{}", op_name, dtype_to_string(out.dtype()));
 

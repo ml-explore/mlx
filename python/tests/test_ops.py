@@ -1663,7 +1663,9 @@ class TestOps(mlx_tests.MLXTestCase):
         # INT32_MAX elements through its strides; indexing ops must use 64-bit
         # offsets for the source/update span.
         if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
             return
+
         rows, stride, cols = 2**20, 2**11 + 64, 16
         a = (mx.arange(rows) % 251 + 1).astype(mx.uint8)[:, None] + mx.zeros(
             (1, stride), mx.uint8
@@ -1686,13 +1688,11 @@ class TestOps(mlx_tests.MLXTestCase):
         t[:, :] = v
         mx.eval(t)
         self.assertTrue(mx.array_equal(t[ids], expected))
-        del t
 
         # Scatter with the strided view as the update array.
         t = mx.zeros((rows, cols), mx.uint8).at[mx.arange(rows)].add(v)
         mx.eval(t)
         self.assertTrue(mx.array_equal(t[ids], expected))
-        del t
 
     def test_along_axis_invalid_axis(self):
         # Negative out of bounds axes used to slip past the bounds check
