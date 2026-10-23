@@ -22,15 +22,18 @@ get_2d_grid_dims(const Shape& shape, const Strides& strides, size_t divisor);
 
 // Metal silently truncates a grid dimension past UINT32_MAX threads, so a
 // launch of n_groups threadgroups along x is split into several dispatches
-// that each fit. bind(first_group) is called before every dispatch to set the
-// buffer offsets of that slice. The slice size is kept a multiple of 16 groups
-// so those offsets stay aligned.
+// that each fit. bind(first_group) is called before every dispatch to set
+// whatever that slice needs, such as buffer offsets or a starting index. The
+// slice size is kept a multiple of 16 groups so buffer offsets stay aligned.
+// grid_y and grid_z are passed through unchanged to every dispatch.
 template <typename F>
 void dispatch_threadgroups_in_slices(
     metal::CommandEncoder& compute_encoder,
     int64_t n_groups,
     size_t group_size,
-    F&& bind) {
+    F&& bind,
+    size_t grid_y = 1,
+    size_t grid_z = 1) {
   const int64_t max_groups =
       static_cast<int64_t>(UINT32_MAX / group_size) & ~int64_t(15);
   const MTL::Size group_dims(group_size, 1, 1);
@@ -38,7 +41,7 @@ void dispatch_threadgroups_in_slices(
     const int64_t groups = std::min(max_groups, n_groups - start);
     bind(start);
     compute_encoder.dispatch_threads(
-        MTL::Size(groups * group_size, 1, 1), group_dims);
+        MTL::Size(groups * group_size, grid_y, grid_z), group_dims);
   }
 }
 
