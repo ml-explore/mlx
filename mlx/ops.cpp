@@ -3913,8 +3913,9 @@ array take(const array& a, int index, int axis, StreamOrDevice s /* = {} */) {
         "[take] Cannot do a non-empty take from an array with zero elements.");
   }
 
-  // Handle negative axis
+  // Handle negative axis and index
   axis = axis < 0 ? a.ndim() + axis : axis;
+  index = index < 0 ? a.shape(axis) + index : index;
 
   Shape starts(a.ndim(), 0);
   Shape stops = a.shape();
