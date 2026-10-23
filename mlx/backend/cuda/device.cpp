@@ -232,16 +232,25 @@ void CommandEncoder::set_input_array(const array& arr) {
   bytes_in_graph_ += arr.data_size();
   auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
   active_deps_.push_back(id);
+#ifndef NDEBUG
+  if (arr.data_shared_ptr()->is_owned()) {
+    registered_data_ptrs_.push_back(gpu_ptr<void>(arr));
+  }
+#endif
 }
 
 void CommandEncoder::set_output_array(const array& arr) {
   if (!use_cuda_graphs()) {
     return;
   }
-
   auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
   active_deps_.push_back(id);
   active_outputs_.push_back(id);
+#ifndef NDEBUG
+  if (arr.data_shared_ptr()->is_owned()) {
+    registered_data_ptrs_.push_back(gpu_ptr<void>(arr));
+  }
+#endif
 }
 
 void CommandEncoder::add_kernel_node_raw(
@@ -501,6 +510,19 @@ void CommandEncoder::synchronize() {
   f.wait();
 }
 
+#ifndef NDEBUG
+void CommandEncoder::verify_graph(const char* primitive_name) {
+  if (allocator::allocator().has_invalid_memory(registered_data_ptrs_)) {
+    throw std::runtime_error(
+        fmt::format(
+            "There are invalid memory registered when calling {}::eval_gpu, "
+            "which is a bug that corrupts the graph, and usually caused by "
+            "temporary arrays not registered with \"add_temporary\" method.",
+            primitive_name));
+  }
+}
+#endif
+
 void CommandEncoder::commit_impl() {
   if (!temporaries_.empty()) {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
@@ -579,6 +601,9 @@ void CommandEncoder::clear_graph_state() {
   active_deps_.clear();
   active_outputs_.clear();
   concurrent_nodes_.clear();
+#ifndef NDEBUG
+  registered_data_ptrs_.clear();
+#endif
   is_graph_updatable_ = true;
 }
 

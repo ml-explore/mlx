@@ -134,9 +134,13 @@ class TestStream(mlx_tests.MLXTestCase):
 
         def on_worker():
             def gen():
-                with mx.stream(mx.new_stream(mx.default_device())):
-                    yield 1
-                    yield 2
+                try:
+                    with mx.stream(mx.new_stream(mx.default_device())):
+                        yield 1
+                        yield 2
+                except Exception:
+                    # Exception is ignored on purpose.
+                    pass
 
             g = gen()
             next(g)

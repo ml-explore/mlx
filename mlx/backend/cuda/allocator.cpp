@@ -251,6 +251,9 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
   if (buf->device >= 0 && buf->device != device) {
     move_to_unified_memory(*buf, stream);
   }
+#ifndef NDEBUG
+  track_allocation(buf->data, size);
+#endif
   return Buffer{buf};
 }
 
@@ -267,6 +270,10 @@ void CudaAllocator::free(Buffer buffer) {
     delete buf;
     return;
   }
+
+#ifndef NDEBUG
+  untrack_allocation(buf->data);
+#endif
 
   std::unique_lock lock(mutex_);
   active_memory_ -= buf->size;
@@ -301,6 +308,9 @@ void CudaAllocator::move_to_unified_memory(
     CHECK_CUDA_ERROR(cudaMemcpy(data, buf.data, buf.size, kind));
     free_async(buf);
   }
+#ifndef NDEBUG
+  swap_allocation(buf.data, data);
+#endif
   buf.data = data;
   buf.device = -1;
 }
