@@ -1620,6 +1620,9 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(out, mx.array([4, 5, 6, 7])))
         out = mx.take(a, 1, axis=1)
         self.assertTrue(mx.array_equal(out, mx.array([1, 5])))
+        out = mx.take(a, -1, axis=0)
+        self.assertTrue(mx.array_equal(out, mx.array([4, 5, 6, 7])))
+        self.assertEqual(mx.take(a, -1).item(), 7)
 
         # Take with multi-dim scalar preserves dims
         out = mx.take(a, mx.array(1), axis=0)
@@ -1654,6 +1657,42 @@ class TestOps(mlx_tests.MLXTestCase):
             out_np = np.take_along_axis(a_np, idx_np.reshape(shape), axis=ax)
             out_mlx = mx.take_along_axis(a_mlx, mx.reshape(idx_mlx, shape), axis=ax)
             self.assertTrue(np.array_equal(out_np, np.array(out_mlx)))
+
+    def test_indexing_large_strided_view(self):
+        # A strided view whose logical size fits int32 can still reach past
+        # INT32_MAX elements through its strides; indexing ops must use 64-bit
+        # offsets for the source/update span.
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+            return
+
+        rows, stride, cols = 2**20, 2**11 + 64, 16
+        a = (mx.arange(rows) % 251 + 1).astype(mx.uint8)[:, None] + mx.zeros(
+            (1, stride), mx.uint8
+        )
+        mx.eval(a)
+        v = a[:, :cols]
+
+        boundary = (2**31 - 1) // stride
+        ids = mx.array([0, boundary + 1, boundary + 3, rows - 1])
+        expected = (ids.astype(mx.uint32) % 251 + 1).astype(mx.uint8)
+        expected = mx.broadcast_to(expected[:, None], (ids.size, cols))
+
+        self.assertTrue(mx.array_equal(mx.take(v, ids, axis=0), expected))
+
+        idx = mx.broadcast_to(ids[:, None], (ids.size, cols))
+        self.assertTrue(mx.array_equal(mx.take_along_axis(v, idx, axis=0), expected))
+
+        # Slice update writing the strided view into a contiguous target.
+        t = mx.zeros((rows, cols), mx.uint8)
+        t[:, :] = v
+        mx.eval(t)
+        self.assertTrue(mx.array_equal(t[ids], expected))
+
+        # Scatter with the strided view as the update array.
+        t = mx.zeros((rows, cols), mx.uint8).at[mx.arange(rows)].add(v)
+        mx.eval(t)
+        self.assertTrue(mx.array_equal(t[ids], expected))
 
     def test_along_axis_invalid_axis(self):
         # Negative out of bounds axes used to slip past the bounds check
@@ -2539,6 +2578,13 @@ class TestOps(mlx_tests.MLXTestCase):
 
         _, df = mx.vjp(f, [a_fwd], [a_bwd])
         self.assertTrue(mx.allclose(a_bwd[4:-2, 2:-4], df[0]).item())
+
+    def test_pad_large_offsets(self):
+        # Row 2**27 of the output starts at offset 2**31
+        rows = 2**27 + 1
+        x = mx.broadcast_to(mx.array([[1, 2, 3]], mx.uint8), (rows, 3))
+        y = mx.pad(x, ((0, 0), (0, 13)))
+        self.assertEqual(y[-1].tolist(), [1, 2, 3] + [0] * 13)
 
     def test_where(self):
         self.assertCmpNumpy([True, mx.array([[1, 2], [3, 4]]), 1], mx.where, np.where)
