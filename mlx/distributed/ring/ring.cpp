@@ -154,11 +154,6 @@ class SocketThread {
     bool delete_recv = false;
     bool delete_send = false;
     while (true) {
-      // The tasks at the front of the queues. They are only looked up while
-      // holding the lock, since send() and recv() append to the queues from
-      // other threads. Appending to a std::list does not move its elements
-      // and only this thread removes them, so the pointers stay valid after
-      // the lock is released.
       SocketTask* recv_task = nullptr;
       SocketTask* send_task = nullptr;
       {
