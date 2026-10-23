@@ -5610,8 +5610,10 @@ array fp_dequantize(
           : array(1.0f, out_type);
       scales = multiply(from_fp8(scales, out_type, s), inv_scale_enc, s);
     } else {
+      auto nan_mask = equal(scales, array(uint8_t(0xFF), scales.dtype()), s);
       scales = subtract(astype(scales, out_type, s), array(127, out_type), s);
       scales = power(array(2.0f, out_type), scales, s);
+      scales = where(nan_mask, array(NAN, out_type), scales, s);
     }
     return {reshape(multiply(out, scales, s), wshape, s)};
   };
