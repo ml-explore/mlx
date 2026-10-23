@@ -220,9 +220,9 @@ CUTE_DEVICE void gemm_sm70_mainloop(
 template <bool KMajor>
 inline constexpr auto make_matrix_stride(int m, int k) {
   if constexpr (KMajor) {
-    return cute::make_stride(k, cute::Int<1>{}, m * k);
+    return cute::make_stride(k, cute::Int<1>{}, int64_t(m) * k);
   } else {
-    return cute::make_stride(cute::Int<1>{}, m, m * k);
+    return cute::make_stride(cute::Int<1>{}, m, int64_t(m) * k);
   }
 }
 
