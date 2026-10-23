@@ -13,13 +13,9 @@
 namespace mlx::core {
 
 /**
- * \defgroup ops Core array operations
- * @{
+ * A 1D array of numbers starting at `start` (optional), stopping at stop,
+ * stepping by `step` (optional).
  */
-
-/**
- * A 1D array of numbers starting at `start` (optional),
- * stopping at stop, stepping by `step` (optional). */
 MLX_API array arange(
     double start,
     double stop,
@@ -570,8 +566,10 @@ MLX_API array allclose(
     bool equal_nan = false,
     StreamOrDevice s = {});
 
-/** Returns a boolean array where two arrays are element-wise equal within the
- * specified tolerance. */
+/**
+ * Returns a boolean array where two arrays are element-wise equal within the
+ * specified tolerance.
+ */
 MLX_API array isclose(
     const array& a,
     const array& b,
@@ -581,9 +579,9 @@ MLX_API array isclose(
     StreamOrDevice s = {});
 
 /**
- *  Reduces the input along the given axes. An output value is true
- *  if all the corresponding inputs are true.
- **/
+ * Reduces the input along the given axes. An output value is true
+ * if all the corresponding inputs are true.
+ */
 MLX_API array
 all(const array& a,
     const std::vector<int>& axes,
@@ -591,9 +589,9 @@ all(const array& a,
     StreamOrDevice s = {});
 
 /**
- *  Reduces the input along the given axis. An output value is true
- *  if all the corresponding inputs are true.
- **/
+ * Reduces the input along the given axis. An output value is true
+ * if all the corresponding inputs are true.
+ */
 MLX_API array
 all(const array& a, int axis, bool keepdims = false, StreamOrDevice s = {});
 
@@ -604,9 +602,9 @@ inline array any(const array& a, StreamOrDevice s = {}) {
 }
 
 /**
- *  Reduces the input along the given axes. An output value is true
- *  if any of the corresponding inputs are true.
- **/
+ * Reduces the input along the given axes. An output value is true
+ * if any of the corresponding inputs are true.
+ */
 MLX_API array
 any(const array& a,
     const std::vector<int>& axes,
@@ -614,9 +612,9 @@ any(const array& a,
     StreamOrDevice s = {});
 
 /**
- *  Reduces the input along the given axis. An output value is true
- *  if any of the corresponding inputs are true.
- **/
+ * Reduces the input along the given axis. An output value is true
+ * if any of the corresponding inputs are true.
+ */
 MLX_API array
 any(const array& a, int axis, bool keepdims = false, StreamOrDevice s = {});
 
@@ -692,8 +690,7 @@ inline array var(const array& a, StreamOrDevice s = {}) {
   return var(a, false, 0, to_stream(s));
 }
 
-/** Computes the variance of the elements of an array along the given
- * axes */
+/** Computes the variance of the elements of an array along the given axes. */
 MLX_API array
 var(const array& a,
     const std::vector<int>& axes,
@@ -701,8 +698,7 @@ var(const array& a,
     int ddof = 0,
     StreamOrDevice s = {});
 
-/** Computes the variance of the elements of an array along the given
- * axis */
+/** Computes the variance of the elements of an array along the given axis. */
 MLX_API array
 var(const array& a,
     int axis,
@@ -717,8 +713,10 @@ inline array std(const array& a, StreamOrDevice s = {}) {
   return std(a, false, 0, to_stream(s));
 }
 
-/** Computes the standard deviation of the elements of an array along the given
- * axes */
+/**
+ * Computes the standard deviation of the elements of an array along the given
+ * axes.
+ */
 MLX_API array
 std(const array& a,
     const std::vector<int>& axes,
@@ -726,8 +724,10 @@ std(const array& a,
     int ddof = 0,
     StreamOrDevice s = {});
 
-/** Computes the standard deviation of the elements of an array along the given
- * axis */
+/**
+ * Computes the standard deviation of the elements of an array along the given
+ * axes.
+ */
 MLX_API array
 std(const array& a,
     int axis,
@@ -862,26 +862,26 @@ MLX_API array argsort(const array& a, int axis, StreamOrDevice s = {});
 /**
  * Returns a partitioned copy of the flattened array
  * such that the smaller kth elements are first.
- **/
+ */
 MLX_API array partition(const array& a, int kth, StreamOrDevice s = {});
 
 /**
  * Returns a partitioned copy of the array along a given axis
  * such that the smaller kth elements are first.
- **/
+ */
 MLX_API array
 partition(const array& a, int kth, int axis, StreamOrDevice s = {});
 
 /**
  * Returns indices that partition the flattened array
  * such that the smaller kth elements are first.
- **/
+ */
 MLX_API array argpartition(const array& a, int kth, StreamOrDevice s = {});
 
 /**
  * Returns indices that partition the array along a given axis
  * such that the smaller kth elements are first.
- **/
+ */
 MLX_API array
 argpartition(const array& a, int kth, int axis, StreamOrDevice s = {});
 
@@ -1204,7 +1204,8 @@ MLX_API array scatter_add_axis(
     int axis,
     StreamOrDevice s = {});
 
-/** Scatter updates to the given indices.
+/**
+ * Scatter updates to the given indices.
  *
  * The parameters ``indices`` and ``axes`` determine the locations of ``a``
  * that are updated with the values in ``updates``. Assuming 1-d ``indices``
@@ -1858,7 +1859,5 @@ MLX_API array imag(const array& a, StreamOrDevice s = {});
 /* Ensure the array's underlying memory is contiguous. */
 MLX_API array
 contiguous(const array& a, bool allow_col_major = false, StreamOrDevice s = {});
-
-/** @} */
 
 } // namespace mlx::core
