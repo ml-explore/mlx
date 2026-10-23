@@ -3392,8 +3392,6 @@ std::vector<array> Pad::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  assert(argnums.size() == 1 && argnums[0] == 0);
-
   auto& cotan = cotangents[0];
   Shape start(cotan.ndim(), 0);
   auto stop = cotan.shape();
@@ -3404,25 +3402,44 @@ std::vector<array> Pad::vjp(
     stop[ax] -= high_pad_size_[i];
   }
 
-  auto out = slice(cotan, start, stop, stream());
+  auto interior = slice(cotan, start, stop, stream());
 
-  return {out};
+  auto value_grad = [&]() {
+    // Sum only the padded positions, a difference of sums cancels in fp16
+    auto padded = slice_update(
+        cotan, zeros_like(interior, stream()), start, stop, stream());
+    return reshape(sum(padded, false, stream()), primals[1].shape(), stream());
+  };
+
+  if (argnums == std::vector<int>{0}) {
+    return {interior};
+  }
+  if (argnums == std::vector<int>{1}) {
+    return {value_grad()};
+  }
+  assert((argnums == std::vector<int>{0, 1}));
+  return {interior, value_grad()};
 }
 
 std::vector<array> Pad::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  assert(argnums.size() == 1 && argnums[0] == 0);
+  assert(tangents.size() == argnums.size());
 
-  return {
-      pad(tangents[0],
-          axes_,
-          low_pad_size_,
-          high_pad_size_,
-          array(0, tangents[0].dtype()),
-          "constant",
-          stream())};
+  auto pad_tangent = [&](const array& a, const array& v) {
+    return pad(
+        a, axes_, low_pad_size_, high_pad_size_, v, "constant", stream());
+  };
+
+  if (argnums == std::vector<int>{0}) {
+    return {pad_tangent(tangents[0], zeros_like(primals[1], stream()))};
+  }
+  if (argnums == std::vector<int>{1}) {
+    return {pad_tangent(zeros_like(primals[0], stream()), tangents[0])};
+  }
+  assert((argnums == std::vector<int>{0, 1}));
+  return {pad_tangent(tangents[0], tangents[1])};
 }
 
 std::pair<std::vector<array>, std::vector<int>> Pad::vmap(
