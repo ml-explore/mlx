@@ -180,20 +180,20 @@ mx::array cpu_nd_array_to_mlx(
 // Try to adopt a CPU host buffer as an mlx array without copying. On unified
 // memory the host pointer is GPU-addressable, so we wrap it directly via the
 // allocator instead of copying. The bytes are reinterpreted rather than
-// converted, so the source element width must already match the destination
-// dtype. The source ndarray is kept alive for the lifetime of the returned
-// array.
+// converted, so the source dtype must already match the destination dtype.
+// The source ndarray is kept alive for the lifetime of the returned array.
 //
 // Returns std::nullopt when the buffer cannot be adopted (no Metal backend,
-// dtype width mismatch, a pointer not aligned to the item size, or a pointer
+// dtype mismatch, a pointer not aligned to the item size, or a pointer
 // the platform will not wrap), so the caller can fall back to a copy or raise.
 std::optional<mx::array> cpu_nd_array_to_mlx_no_copy(
     nb::ndarray<nb::ro> nd_array,
     const mx::Shape& shape,
+    mx::Dtype src_dtype,
     mx::Dtype dst_dtype) {
   // GPU kernels need aligned data
   auto ptr = reinterpret_cast<uintptr_t>(nd_array.data());
-  if (!mx::metal::is_available() ||
+  if (!mx::metal::is_available() || src_dtype != dst_dtype ||
       nd_array.itemsize() != mx::size_of(dst_dtype) ||
       ptr % nd_array.itemsize() != 0) {
     return std::nullopt;
@@ -293,8 +293,8 @@ mx::array nd_array_to_mlx(
       // zero-copy adoption of the host buffer first. A copy is passed by value
       // so the source is preserved for the fallback below.
       if (!copy.value_or(false)) {
-        if (auto out =
-                cpu_nd_array_to_mlx_no_copy(nd_array, shape, dst_dtype)) {
+        if (auto out = cpu_nd_array_to_mlx_no_copy(
+                nd_array, shape, src_mlx_dtype, dst_dtype)) {
           return *out;
         }
         if (no_copy) {
