@@ -38,6 +38,12 @@ std::pair<std::string, std::string> make_index_args(
   return {idx_args.str(), idx_arr.str()};
 }
 
+// The 64-bit path must cover both the logical size and the span reachable
+// through the strides (views) or a smaller span (broadcast arrays).
+inline bool exceeds_int32(const array& a) {
+  return a.size() > INT32_MAX || a.data_size() > INT32_MAX;
+}
+
 template <typename T>
 inline std::string make_op(typename T::ReduceType r, const std::string& dt) {
   switch (r) {
@@ -78,8 +84,11 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     slice_size *= s;
   }
 
-  bool large_index = nidx && inputs[1].size() > INT32_MAX;
-  bool large_src = src.size() > INT32_MAX;
+  bool large_index = false;
+  for (int i = 1; i <= nidx; ++i) {
+    large_index |= exceeds_int32(inputs[i]);
+  }
+  bool large_src = exceeds_int32(src);
   bool large_out = out.size() > INT32_MAX;
   bool large = large_index || large_src || large_out;
 
@@ -302,8 +311,11 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   auto upd_contig = upd.flags().row_contiguous;
   bool large_out = out.size() > INT32_MAX;
-  bool large_idx = nidx && (inputs[1].size() > INT32_MAX);
-  bool large_upd = upd.size() > INT32_MAX;
+  bool large_idx = false;
+  for (int i = 1; i <= nidx; ++i) {
+    large_idx |= exceeds_int32(inputs[i]);
+  }
+  bool large_upd = exceeds_int32(upd);
   bool large = large_out || large_idx || large_upd;
   std::string kernel_name = fmt::format(
       "scatter{0}{1}_{2}_{3}_{4}_nwork{5}_{6}",
@@ -426,7 +438,7 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   size_t ndim = src.ndim();
 
-  bool large = idx.size() > INT32_MAX || src.size() > INT32_MAX;
+  bool large = exceeds_int32(idx) || exceeds_int32(src);
 
   std::string kernel_name = fmt::format(
       "gather_axis{0}{1}_{2}",
@@ -526,7 +538,8 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   size_t ndim = src.ndim();
 
-  bool large = idx.size() > INT32_MAX || src.size() > INT32_MAX;
+  bool large =
+      exceeds_int32(idx) || src.size() > INT32_MAX || exceeds_int32(upd);
 
   std::string op_name;
   switch (reduce_type_) {
@@ -789,7 +802,7 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto [ds, rc, cc] = check_contiguity(shape, strides[1]);
   bool out_contiguous = rc;
-  bool large = upd.size() > INT32_MAX;
+  bool large = exceeds_int32(upd);
   std::string kernel_name = fmt::format(
       "slice_update_{0}_{1}{2}_{3}_{4}_{5}_nw{6}_nd{7}",
       op_name,
