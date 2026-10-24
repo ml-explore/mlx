@@ -1,5 +1,6 @@
 include CMakeLists.txt
 include mlx.pc.in
+include _build_backend/backend.py
 recursive-include mlx *
 include cmake/*
 include python/src/*

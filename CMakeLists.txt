@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.26)
 
 if(NOT MLX_VERSION)
   file(STRINGS "mlx/version.h" _mlx_h_version REGEX "^#define MLX_VERSION_.*$")
@@ -393,6 +393,22 @@ if(MLX_BUILD_PYTHON_BINDINGS)
     Python 3.10
     COMPONENTS Interpreter Development.Module
     REQUIRED)
+  execute_process(
+    COMMAND
+      "${Python_EXECUTABLE}" -c
+      "import sysconfig; print('ON' if sysconfig.get_config_var('Py_GIL_DISABLED') else 'OFF')"
+    RESULT_VARIABLE _mlx_python_gil_result
+    OUTPUT_VARIABLE MLX_PYTHON_FREE_THREADED
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(NOT _mlx_python_gil_result EQUAL 0)
+    message(FATAL_ERROR "Failed to determine whether Python is free-threaded.")
+  endif()
+  if(NOT MLX_PYTHON_FREE_THREADED)
+    find_package(
+      Python 3.10
+      COMPONENTS Development.SABIModule
+      REQUIRED)
+  endif()
   FetchContent_Declare(
     nanobind
     GIT_REPOSITORY https://github.com/wjakob/nanobind.git
