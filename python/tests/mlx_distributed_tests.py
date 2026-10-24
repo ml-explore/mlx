@@ -148,6 +148,37 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
             self.assertTrue(mx.allclose(y, y2, atol=self.atol, rtol=self.rtol))
             self.assertTrue(mx.allclose(y[part], y1))
 
+            # Integer segments count inputs, not packed words
+            slin3 = shard_linear(qlin, "sharded-to-all", segments=[512])
+            step = 512 // world.size()
+            lo = world.rank() * step
+            x_part = mx.concatenate(
+                [x[:, lo : lo + step], x[:, 512 + lo : 512 + lo + step]], axis=1
+            )
+            self.assertTrue(
+                mx.allclose(y, slin3(x_part), atol=self.atol, rtol=self.rtol)
+            )
+
+            # A segment must split into whole quantization groups
+            with self.assertRaises(ValueError):
+                shard_linear(qlin, "sharded-to-all", segments=[528])
+
+            # Boundaries stay exact when the input size is not a power of two
+            step1, step2 = 15 * 64, 7 * 64
+            seg = step1 * world.size()
+            dims = seg + step2 * world.size()
+            qlin2 = nn.Linear(dims, 32).to_quantized()
+            slin4 = shard_linear(qlin2, "sharded-to-all", segments=[seg])
+            x2 = mx.random.normal((4, dims))
+            lo1 = world.rank() * step1
+            lo2 = seg + world.rank() * step2
+            x2_part = mx.concatenate(
+                [x2[:, lo1 : lo1 + step1], x2[:, lo2 : lo2 + step2]], axis=1
+            )
+            self.assertTrue(
+                mx.allclose(qlin2(x2), slin4(x2_part), atol=self.atol, rtol=self.rtol)
+            )
+
             # Test non-affine quantization modes (mxfp8)
             qlin_mxfp8 = lin.to_quantized(group_size=32, bits=8, mode="mxfp8")
             self.assertEqual(qlin_mxfp8.mode, "mxfp8")
@@ -264,6 +295,14 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
                 rtol=self.rtol,
             )
         )
+
+    def test_sharded_to_all_bias(self):
+        # The bias is added after the sum, so all ranks must hold the same bias
+        world = mx.distributed.init()
+        mx.random.seed(world.rank())
+        layer = nn.ShardedToAllLinear(16, 4)
+        biases = mx.distributed.all_gather(layer.bias[None])
+        self.assertTrue(mx.all(biases == biases[0]).item())
 
     def test_shard_predicate(self):
         mx.random.seed(0xF0F0F0F0)
@@ -388,3 +427,24 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
         # The factory must be callable.
         with self.assertRaises(TypeError):
             mx.distributed.init(backend="jaccl", all_gather_factory="not_callable")
+
+    def test_shard_inplace_quantized_segments(self):
+        # Integer segments count inputs, not packed words
+        mx.random.seed(0xF0F0F0F0)
+        world = mx.distributed.init()
+        step = 512 // world.size()
+        lo = world.rank() * step
+        x = mx.random.normal((4, 1024))
+        x_part = mx.concatenate(
+            [x[:, lo : lo + step], x[:, 512 + lo : 512 + lo + step]], axis=1
+        )
+        qlin = nn.Linear(1024, 32, bias=False).to_quantized()
+        y = qlin(x)
+        shard_inplace(qlin, "sharded-to-all", segments=[512])
+        y_part = mx.distributed.all_sum(qlin(x_part))
+        self.assertTrue(mx.allclose(y, y_part, atol=self.atol, rtol=self.rtol))
+
+        # A segment must split into whole quantization groups
+        with self.assertRaises(ValueError):
+            qlin = nn.Linear(1024, 32).to_quantized()
+            shard_inplace(qlin, "sharded-to-all", segments=[528])
