@@ -837,25 +837,41 @@ void nd_fft_op(
     bool inverse,
     bool real,
     const Stream& s) {
+  // Skip identity transforms so temporaries cannot alias the input or output.
+  std::vector<size_t> filtered_axes;
+  for (auto axis : axes) {
+    if (in.shape(axis) != 1 || (real && axis == axes.back())) {
+      filtered_axes.push_back(axis);
+    }
+  }
+  if (filtered_axes.empty()) {
+    out.copy_shared_buffer(in);
+    return;
+  }
+  if (filtered_axes.size() == 1) {
+    fft_op(in, out, filtered_axes[0], inverse, real, /*inplace=*/false, s);
+    return;
+  }
+
   // Perform ND FFT on GPU as a series of 1D FFTs
   auto temp_shape = inverse ? in.shape() : out.shape();
   std::vector<array> temp_arrs;
   temp_arrs.emplace_back(temp_shape, complex64, nullptr, std::vector<array>{});
-  if (axes.size() > 2) {
+  if (filtered_axes.size() > 2) {
     temp_arrs.emplace_back(
         temp_shape, complex64, nullptr, std::vector<array>{});
   }
-  for (int i = axes.size() - 1; i >= 0; i--) {
-    int reverse_index = axes.size() - i - 1;
+  for (int i = filtered_axes.size() - 1; i >= 0; i--) {
+    int reverse_index = filtered_axes.size() - i - 1;
     // For 5D and above, we don't want to reallocate our two temporary arrays
     bool inplace = reverse_index >= 3 && i != 0;
     // Opposite order for fft vs ifft
     int index = inverse ? reverse_index : i;
-    size_t axis = axes[index];
+    size_t axis = filtered_axes[index];
     // Mirror np.fft.(i)rfftn and perform a real transform
     // only on the final axis.
-    bool step_real = (real && index == axes.size() - 1);
-    const array& in_arr = i == axes.size() - 1 ? in : temp_arrs[i % 2];
+    bool step_real = (real && index == filtered_axes.size() - 1);
+    const array& in_arr = i == filtered_axes.size() - 1 ? in : temp_arrs[i % 2];
     array& out_arr = i == 0 ? out : temp_arrs[1 - i % 2];
     fft_op(in_arr, out_arr, axis, inverse, step_real, inplace, s);
   }
