@@ -22,12 +22,18 @@
 //    distribution.
 #pragma once
 
+#include <algorithm>
+#include <atomic>
+#include <concepts>
 #include <condition_variable>
+#include <exception>
 #include <functional>
 #include <future>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <ranges>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -135,34 +141,38 @@ inline void ThreadPool::start_threads(size_t threads) {
 }
 
 // Run fn(lw) for each wire, the first n_wires - 1 on the pool and the last
-// inline, then wait for the pool calls before returning.
-template <typename Fn>
+// inline. Wait for all of them, then rethrow the first failure.
+template <std::invocable<int> Fn>
 void dispatch_wires(ThreadPool* pool, int n_wires, Fn&& fn) {
-  if (n_wires <= 1 || pool == nullptr) {
-    for (int lw = 0; lw < n_wires; lw++) {
-      fn(lw);
-    }
+  if (n_wires <= 1 || !pool) {
+    std::ranges::for_each(
+        std::views::iota(0, std::max(n_wires, 0)), std::ref(fn));
     return;
   }
 
+  std::atomic<bool> failed{false};
+  std::exception_ptr first_error;
+  auto run = [&failed, &first_error, &fn](int lw) {
+    try {
+      fn(lw);
+    } catch (...) {
+      if (!failed.exchange(true)) {
+        first_error = std::current_exception();
+      }
+    }
+  };
+
   std::vector<std::future<void>> futures;
   futures.reserve(n_wires - 1);
-  for (int lw = 0; lw < n_wires - 1; lw++) {
-    futures.emplace_back(pool->enqueue(fn, lw));
-  }
+  std::ranges::transform(
+      std::views::iota(0, n_wires - 1),
+      std::back_inserter(futures),
+      [pool, &run](int lw) { return pool->enqueue(run, lw); });
+  run(n_wires - 1);
+  std::ranges::for_each(futures, [](std::future<void>& f) { f.wait(); });
 
-  // Wait for the pool calls even if the inline one throws, so they never
-  // outlive this frame.
-  try {
-    fn(n_wires - 1);
-  } catch (...) {
-    for (auto& f : futures) {
-      f.wait();
-    }
-    throw;
-  }
-  for (auto& f : futures) {
-    f.wait();
+  if (first_error) {
+    std::rethrow_exception(first_error);
   }
 }
 

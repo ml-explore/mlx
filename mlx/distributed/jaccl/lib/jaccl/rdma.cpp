@@ -56,6 +56,7 @@ IBVWrapper::IBVWrapper() {
 
   LOAD_SYMBOL(ibv_query_port, query_port);
   LOAD_SYMBOL(ibv_query_gid, query_gid);
+  LOAD_SYMBOL(ibv_query_qp, query_qp);
   LOAD_SYMBOL(ibv_modify_qp, modify_qp);
   LOAD_SYMBOL(ibv_reg_mr, reg_mr);
   LOAD_SYMBOL(ibv_dereg_mr, dereg_mr);
@@ -123,6 +124,10 @@ Connection::Connection(Connection&& c) : Connection(nullptr) {
   std::swap(completion_queue, c.completion_queue);
   std::swap(queue_pair, c.queue_pair);
   std::swap(src, c.src);
+  std::swap(failure_, c.failure_);
+  std::swap(empty_polls_, c.empty_polls_);
+  std::swap(stall_start_, c.stall_start_);
+  std::swap(last_query_, c.last_query_);
 }
 
 Connection::~Connection() {
@@ -137,6 +142,34 @@ Connection::~Connection() {
   }
   if (ctx != nullptr) {
     ibv().close_device(ctx);
+  }
+}
+
+void Connection::check_stalled() const {
+  throw_if_failed();
+  auto now = std::chrono::steady_clock::now();
+  if (empty_polls_ == STALL_CHECK_POLLS) {
+    stall_start_ = last_query_ = now;
+  } else if (now - last_query_ >= STALL_QUERY_INTERVAL) {
+    last_query_ = now;
+    check_queue_pair();
+  }
+}
+
+void Connection::check_stall_end() const {
+  if (std::chrono::steady_clock::now() - stall_start_ >= STALL_WAKE_QUERY) {
+    check_queue_pair();
+  }
+}
+
+void Connection::check_queue_pair() const {
+  ibv_qp_attr attr = {};
+  ibv_qp_init_attr init_attr = {};
+  if (ibv().query_qp(queue_pair, &attr, IBV_QP_STATE, &init_attr)) {
+    return;
+  }
+  if (attr.qp_state == IBV_QPS_ERR || attr.qp_state == IBV_QPS_SQE) {
+    fail("Queue pair is in error state");
   }
 }
 
