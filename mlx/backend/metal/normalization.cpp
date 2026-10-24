@@ -50,7 +50,7 @@ void RMSNorm::eval_gpu(
   const array& w = inputs[1];
 
   auto axis_size = static_cast<uint32_t>(x.shape().back());
-  int n_rows = x.data_size() / axis_size;
+  int64_t n_rows = x.data_size() / axis_size;
 
   const int simd_size = 32;
   const int n_reads = RMS_N_READS;
@@ -64,31 +64,28 @@ void RMSNorm::eval_gpu(
   {
     auto kernel = d.get_kernel(op_name);
 
-    MTL::Size grid_dims, group_dims;
+    size_t threadgroup_size;
     if (axis_size <= looped_limit) {
       size_t threadgroup_needed = (axis_size + n_reads - 1) / n_reads;
       size_t simds_needed = (threadgroup_needed + simd_size - 1) / simd_size;
-      size_t threadgroup_size = simd_size * simds_needed;
+      threadgroup_size = simd_size * simds_needed;
       assert(threadgroup_size <= kernel->maxTotalThreadsPerThreadgroup());
-      size_t n_threads = n_rows * threadgroup_size;
-      grid_dims = MTL::Size(n_threads, 1, 1);
-      group_dims = MTL::Size(threadgroup_size, 1, 1);
     } else {
-      size_t threadgroup_size = kernel->maxTotalThreadsPerThreadgroup();
-      size_t n_threads = n_rows * threadgroup_size;
-      grid_dims = MTL::Size(n_threads, 1, 1);
-      group_dims = MTL::Size(threadgroup_size, 1, 1);
+      threadgroup_size = kernel->maxTotalThreadsPerThreadgroup();
     }
 
     uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(x, 0);
     compute_encoder.set_input_array(w, 1);
-    compute_encoder.set_output_array(out, 2);
     compute_encoder.set_bytes(eps_, 3);
     compute_encoder.set_bytes(axis_size, 4);
     compute_encoder.set_bytes(w_stride, 5);
-    compute_encoder.dispatch_threads(grid_dims, group_dims);
+    const int64_t row_bytes = int64_t(axis_size) * x.itemsize();
+    dispatch_threadgroups_in_slices(
+        compute_encoder, n_rows, threadgroup_size, [&](int64_t row) {
+          compute_encoder.set_input_array(x, 0, row * row_bytes);
+          compute_encoder.set_output_array(out, 2, row * row_bytes);
+        });
   }
 }
 
@@ -171,37 +168,41 @@ void RMSNormVJP::eval_gpu(
   {
     auto kernel = d.get_kernel(op_name, hash_name, func_consts);
 
-    MTL::Size grid_dims, group_dims;
+    uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(w, 1);
+    compute_encoder.set_bytes(eps_, 5);
+    compute_encoder.set_bytes(axis_size, 6);
+    compute_encoder.set_bytes(w_stride, 7);
     if (axis_size <= looped_limit) {
       size_t threadgroup_needed = (axis_size + n_reads - 1) / n_reads;
       size_t simds_needed = (threadgroup_needed + simd_size - 1) / simd_size;
       size_t threadgroup_size = simd_size * simds_needed;
       assert(threadgroup_size <= kernel->maxTotalThreadsPerThreadgroup());
-      size_t n_threads = n_groups * threadgroup_size;
-      grid_dims = MTL::Size(n_threads, 1, 1);
-      group_dims = MTL::Size(threadgroup_size, 1, 1);
-    } else {
-      size_t threadgroup_size = kernel->maxTotalThreadsPerThreadgroup();
-      size_t n_threads = n_rows * threadgroup_size;
-      grid_dims = MTL::Size(n_threads, 1, 1);
-      group_dims = MTL::Size(threadgroup_size, 1, 1);
-    }
-
-    uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
-    compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(x, 0);
-    compute_encoder.set_input_array(w, 1);
-    compute_encoder.set_input_array(g, 2);
-    compute_encoder.set_output_array(gx, 3);
-    compute_encoder.set_output_array(gw_temp, 4);
-    compute_encoder.set_bytes(eps_, 5);
-    compute_encoder.set_bytes(axis_size, 6);
-    compute_encoder.set_bytes(w_stride, 7);
-    if (axis_size <= looped_limit) {
+      // At most target_groups threadgroups, so the grid always fits.
+      compute_encoder.set_input_array(x, 0);
+      compute_encoder.set_input_array(g, 2);
+      compute_encoder.set_output_array(gx, 3);
+      compute_encoder.set_output_array(gw_temp, 4);
       compute_encoder.set_bytes(static_cast<uint32_t>(n_rows), 8);
       compute_encoder.set_bytes(rows_per_group, 9);
+      compute_encoder.dispatch_threads(
+          MTL::Size(n_groups * threadgroup_size, 1, 1),
+          MTL::Size(threadgroup_size, 1, 1));
+    } else {
+      size_t threadgroup_size = kernel->maxTotalThreadsPerThreadgroup();
+      auto offset = [axis_size](const array& a, int64_t row) {
+        return row * axis_size * a.itemsize();
+      };
+      dispatch_threadgroups_in_slices(
+          compute_encoder, n_rows, threadgroup_size, [&](int64_t row) {
+            compute_encoder.set_input_array(x, 0, offset(x, row));
+            compute_encoder.set_input_array(g, 2, offset(g, row));
+            compute_encoder.set_output_array(gx, 3, offset(gx, row));
+            compute_encoder.set_output_array(
+                gw_temp, 4, has_w ? offset(gw_temp, row) : 0);
+          });
     }
-    compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 
   if (has_w) {
@@ -253,7 +254,7 @@ void LayerNorm::eval_gpu(
   const array& b = inputs[2];
 
   auto axis_size = static_cast<uint32_t>(x.shape().back());
-  int n_rows = x.data_size() / axis_size;
+  int64_t n_rows = x.data_size() / axis_size;
 
   int simd_size = 32;
   int n_reads = 8;
@@ -268,11 +269,11 @@ void LayerNorm::eval_gpu(
   {
     auto kernel = d.get_kernel(op_name);
 
-    MTL::Size grid_dims, group_dims;
+    size_t threadgroup_size;
     if (axis_size <= looped_limit) {
       size_t threadgroup_needed = (axis_size + n_reads - 1) / n_reads;
       size_t simds_needed = (threadgroup_needed + simd_size - 1) / simd_size;
-      size_t threadgroup_size = simd_size * simds_needed;
+      threadgroup_size = simd_size * simds_needed;
       if (threadgroup_size > kernel->maxTotalThreadsPerThreadgroup()) {
         std::ostringstream msg;
         msg << "[layer_norm] Threadgroup size " << threadgroup_size
@@ -280,28 +281,25 @@ void LayerNorm::eval_gpu(
             << kernel->maxTotalThreadsPerThreadgroup();
         throw std::runtime_error(msg.str());
       }
-      size_t n_threads = n_rows * threadgroup_size;
-      grid_dims = MTL::Size(n_threads, 1, 1);
-      group_dims = MTL::Size(threadgroup_size, 1, 1);
     } else {
-      size_t threadgroup_size = kernel->maxTotalThreadsPerThreadgroup();
-      size_t n_threads = n_rows * threadgroup_size;
-      grid_dims = MTL::Size(n_threads, 1, 1);
-      group_dims = MTL::Size(threadgroup_size, 1, 1);
+      threadgroup_size = kernel->maxTotalThreadsPerThreadgroup();
     }
 
     uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
     uint32_t b_stride = (b.ndim() == 1) ? b.strides()[0] : 0;
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(x, 0);
     compute_encoder.set_input_array(w, 1);
     compute_encoder.set_input_array(b, 2);
-    compute_encoder.set_output_array(out, 3);
     compute_encoder.set_bytes(eps_, 4);
     compute_encoder.set_bytes(axis_size, 5);
     compute_encoder.set_bytes(w_stride, 6);
     compute_encoder.set_bytes(b_stride, 7);
-    compute_encoder.dispatch_threads(grid_dims, group_dims);
+    const int64_t row_bytes = int64_t(axis_size) * x.itemsize();
+    dispatch_threadgroups_in_slices(
+        compute_encoder, n_rows, threadgroup_size, [&](int64_t row) {
+          compute_encoder.set_input_array(x, 0, row * row_bytes);
+          compute_encoder.set_output_array(out, 3, row * row_bytes);
+        });
   }
 }
 
@@ -394,11 +392,11 @@ void LayerNormVJP::eval_gpu(
   {
     auto kernel = d.get_kernel(op_name, hash_name, func_consts);
 
-    MTL::Size grid_dims, group_dims;
+    size_t threadgroup_size;
     if (axis_size <= looped_limit) {
       size_t threadgroup_needed = (axis_size + n_reads - 1) / n_reads;
       size_t simds_needed = (threadgroup_needed + simd_size - 1) / simd_size;
-      size_t threadgroup_size = simd_size * simds_needed;
+      threadgroup_size = simd_size * simds_needed;
       if (threadgroup_size > kernel->maxTotalThreadsPerThreadgroup()) {
         std::ostringstream msg;
         msg << "[vjp_layer_norm] Threadgroup size " << threadgroup_size
@@ -406,27 +404,27 @@ void LayerNormVJP::eval_gpu(
             << kernel->maxTotalThreadsPerThreadgroup();
         throw std::runtime_error(msg.str());
       }
-      size_t n_threads = n_rows * threadgroup_size;
-      grid_dims = MTL::Size(n_threads, 1, 1);
-      group_dims = MTL::Size(threadgroup_size, 1, 1);
     } else {
-      size_t threadgroup_size = kernel->maxTotalThreadsPerThreadgroup();
-      size_t n_threads = n_rows * threadgroup_size;
-      grid_dims = MTL::Size(n_threads, 1, 1);
-      group_dims = MTL::Size(threadgroup_size, 1, 1);
+      threadgroup_size = kernel->maxTotalThreadsPerThreadgroup();
     }
 
     uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(x, 0);
     compute_encoder.set_input_array(w, 1);
-    compute_encoder.set_input_array(g, 2);
-    compute_encoder.set_output_array(gx, 3);
-    compute_encoder.set_output_array(gw_temp, 4);
     compute_encoder.set_bytes(eps_, 5);
     compute_encoder.set_bytes(axis_size, 6);
     compute_encoder.set_bytes(w_stride, 7);
-    compute_encoder.dispatch_threads(grid_dims, group_dims);
+    auto offset = [axis_size](const array& a, int64_t row) {
+      return row * axis_size * a.itemsize();
+    };
+    dispatch_threadgroups_in_slices(
+        compute_encoder, n_rows, threadgroup_size, [&](int64_t row) {
+          compute_encoder.set_input_array(x, 0, offset(x, row));
+          compute_encoder.set_input_array(g, 2, offset(g, row));
+          compute_encoder.set_output_array(gx, 3, offset(gx, row));
+          compute_encoder.set_output_array(
+              gw_temp, 4, has_w ? offset(gw_temp, row) : 0);
+        });
   }
 
   if (has_w) {
