@@ -245,6 +245,53 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 self.assertTrue(dtype == out.dtype, msg="Out " + msg)
                 self.assertTrue(hf.dtype == mx.float32, msg="State " + msg)
 
+    def test_gated_delta_half_precision_decay_near_one(self):
+        # A decay close to 1 needs more mantissa than a 16-bit type has: in
+        # bfloat16, 0.9995 rounds to 1.0 or 0.9961. With 16-bit q, k and v the
+        # gates must still reach the kernel as float32, so the result has to
+        # match the same call on float32 inputs of the same values.
+        B, Hk, Hv, T, Dk, Dv = (1, 16, 48, 257, 128, 128)
+        mx.random.seed(7)
+        q = mx.random.normal(shape=(B, T, Hk, Dk)) * Dk**-0.5
+        k = mx.random.normal(shape=(B, T, Hk, Dk))
+        k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
+        v = mx.random.normal(shape=(B, T, Hv, Dv))
+        g = mx.exp(-mx.random.uniform(low=1e-4, high=1e-2, shape=(B, T, Hv)))
+        b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
+        h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
+
+        def rel(a, b):
+            a = a.astype(mx.float32)
+            b = b.astype(mx.float32)
+            return (mx.linalg.norm(a - b) / mx.linalg.norm(b)).item()
+
+        streams = [mx.cpu] + ([mx.gpu] if mx.metal.is_available() else [])
+        chunk = os.environ.get("GATED_DELTA_CHUNK")
+        try:
+            for dtype in [mx.bfloat16, mx.float16]:
+                qh, kh, vh = (x.astype(dtype) for x in (q, k, v))
+                qf, kf, vf = (x.astype(mx.float32) for x in (qh, kh, vh))
+                for stream in streams:
+                    for c in ["0", "8", "16"]:
+                        os.environ["GATED_DELTA_CHUNK"] = c
+                        out_ref, hf_ref = mx.fast.gated_delta_update(
+                            qf, kf, vf, g, b, initial_state=h0, stream=stream
+                        )
+                        out, hf = mx.fast.gated_delta_update(
+                            qh, kh, vh, g, b, initial_state=h0, stream=stream
+                        )
+                        msg = f"{dtype} {stream} GATED_DELTA_CHUNK={c}"
+                        self.assertEqual(out.dtype, dtype, msg=msg)
+                        self.assertLess(rel(hf, hf_ref), 1e-4, msg="State " + msg)
+                        self.assertLess(rel(out, out_ref), 1e-2, msg="Out " + msg)
+                        if stream == mx.cpu:
+                            break
+        finally:
+            if chunk is None:
+                os.environ.pop("GATED_DELTA_CHUNK", None)
+            else:
+                os.environ["GATED_DELTA_CHUNK"] = chunk
+
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_sequential(self):
         os.environ["GATED_DELTA_CHUNK"] = "0"
