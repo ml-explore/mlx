@@ -163,7 +163,8 @@ TCPSocket TCPSocket::connect(
     const address_t& addr,
     int num_retries,
     int wait,
-    std::function<void(int, int)> cb) {
+    std::function<void(int, int)> cb,
+    const address_t* source) {
   int sock, success;
 
   // Attempt to connect `num_retries` times with exponential backoff.
@@ -172,6 +173,13 @@ TCPSocket TCPSocket::connect(
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
       throw_socket_error(tag, "Couldn't create socket to connect");
+    }
+
+    if (source != nullptr && bind(sock, source->get(), source->len) < 0) {
+      int error = errno;
+      close(sock);
+      errno = error;
+      throw_socket_error(tag, "Couldn't bind socket to connect");
     }
 
     success = ::connect(sock, addr.get(), addr.len);
