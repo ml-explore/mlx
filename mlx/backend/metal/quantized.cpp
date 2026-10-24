@@ -289,10 +289,8 @@ void quantize_impl(
       "_gs_",
       group_size,
       "_b_",
-      bits);
-  if (!has_biases) {
-    concatenate(kname, "_hgs_", has_global_scale ? "true" : "false");
-  }
+      bits,
+      has_global_scale ? "_hgs_1" : "_hgs_0");
   auto kernel = get_quantized_kernel_wrapped(
       d,
       kname,
@@ -363,8 +361,7 @@ void fp_quantize_dequantize(
       group_size,
       "_b_",
       bits,
-      "_hgs_",
-      global_scale ? "true" : "false");
+      global_scale ? "_hgs_1" : "_hgs_0");
   auto kernel = get_quantized_kernel_wrapped(
       d,
       kname,
@@ -504,9 +501,9 @@ void qmv(
       group_size,
       "_b_",
       bits,
+      global_scale ? "_hgs_1" : "_hgs_0",
       B > 1 ? "_batch_1" : "_batch_0",
       partial_rows ? "_pr_1" : "_pr_0",
-      global_scale ? "_hgs_1" : "_hgs_0",
       "_r_",
       results_per_simdgroup);
   auto kernel = get_quantized_kernel_wrapped(
@@ -517,9 +514,9 @@ void qmv(
       type_string,
       group_size,
       bits,
+      global_scale.has_value(),
       B > 1,
       partial_rows,
-      global_scale.has_value(),
       results_per_simdgroup);
 
   auto& compute_encoder = metal::get_command_encoder(s);
@@ -693,9 +690,9 @@ void qmv_mma(
       group_size,
       "_b_",
       bits,
-      "_wk",
+      "_wk_",
       wk,
-      "_bn",
+      "_bn_",
       bn);
   MTL::ComputePipelineState* kernel;
   if (nax) {
@@ -703,7 +700,7 @@ void qmv_mma(
         d, kname, "qmv_nax", mode, type_string, group_size, bits, wk, bn);
   } else {
     int tm = M > 8 ? 2 : 1;
-    concatenate(kname, "_tm", tm);
+    concatenate(kname, "_tm_", tm);
     kernel = get_quantized_kernel_wrapped(
         d, kname, "qmv_mma", mode, type_string, group_size, bits, wk, bn, tm);
   }
@@ -721,7 +718,7 @@ void qmv_mma(
       MTL::Size(N / bn, 1, 1), MTL::Size(32, wk, 1));
 }
 
-void qvm_split_k(
+void qvm_splitk(
     array x,
     const array& w,
     const array& scales,
@@ -801,7 +798,7 @@ void qvm_split_k(
   kname.reserve(64);
   concatenate(
       kname,
-      mode + "_qvm_split_k_",
+      mode + "_qvm_splitk_",
       type_string,
       "_gs_",
       group_size,
@@ -812,7 +809,7 @@ void qvm_split_k(
 
   // Encode and dispatch kernel
   auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "qvm_split_k", mode, type_string, group_size, bits, split_k);
+      d, kname, "qvm_splitk", mode, type_string, group_size, bits, split_k);
 
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -886,8 +883,8 @@ void qvm(
       group_size,
       "_b_",
       bits,
-      B > 1 ? "_batch_1" : "_batch_0",
-      global_scale ? "_hgs" : "");
+      global_scale ? "_hgs_1" : "_hgs_0",
+      B > 1 ? "_batch_1" : "_batch_0");
   auto kernel = get_quantized_kernel_wrapped(
       d,
       kname,
@@ -896,8 +893,8 @@ void qvm(
       type_string,
       group_size,
       bits,
-      B > 1,
-      global_scale.has_value());
+      global_scale.has_value(),
+      B > 1);
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -954,7 +951,7 @@ void qmm_nax(
   int bn = 64;
   int bk = 64;
 
-  bool aligned_n = (N % 64 == 0);
+  bool aligned_n = transpose && (N % bn == 0);
   if (use_qmm_t_nax_staged(x, transpose, aligned_n, mode)) {
     wm = 4;
     wn = 1;
@@ -975,54 +972,34 @@ void qmm_nax(
       group_size,
       "_b_",
       bits,
-      "_bm",
-      bm,
-      "_bn",
-      bn,
-      "_bk",
-      bk,
-      "_wm",
-      wm,
-      "_wn",
-      wn,
-      transpose ? (aligned_n ? "_alN_true" : "_alN_false") : "",
+      global_scale ? "_hgs_1" : "_hgs_0",
+      aligned_n ? "_alN_1" : "_alN_0",
       batched ? "_batch_1" : "_batch_0",
-      global_scale ? "_hgs" : "");
+      "_bm_",
+      bm,
+      "_bn_",
+      bn,
+      "_wm_",
+      wm,
+      "_wn_",
+      wn);
   std::string template_def;
-  MTL::ComputePipelineState* kernel;
-  if (transpose) {
-    kernel = get_qmm_nax_kernel_wrapped(
-        d,
-        kname,
-        "qmm_t_nax",
-        mode,
-        type_string,
-        group_size,
-        bits,
-        aligned_n,
-        batched,
-        bm,
-        bk,
-        bn,
-        wm,
-        wn,
-        global_scale.has_value());
-  } else {
-    kernel = get_qmm_nax_kernel_wrapped(
-        d,
-        kname,
-        "qmm_n_nax",
-        mode,
-        type_string,
-        group_size,
-        bits,
-        batched,
-        bm,
-        bk,
-        bn,
-        wm,
-        wn);
-  }
+  MTL::ComputePipelineState* kernel = get_qmm_nax_kernel_wrapped(
+      d,
+      kname,
+      transpose ? "qmm_t_nax" : "qmm_n_nax",
+      mode,
+      type_string,
+      group_size,
+      bits,
+      global_scale.has_value(),
+      aligned_n,
+      batched,
+      bm,
+      bk,
+      bn,
+      wm,
+      wn);
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -1080,7 +1057,7 @@ void gather_qmm_nax(
 
   std::string kname;
   kname.reserve(64);
-  bool aligned = N % 64 == 0;
+  bool aligned_n = transpose && (N % bn == 0);
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
@@ -1090,50 +1067,33 @@ void gather_qmm_nax(
       group_size,
       "_b_",
       bits,
-      "_bm",
+      global_scale ? "_hgs_1" : "_hgs_0",
+      aligned_n ? "_alN_1" : "_alN_0",
+      "_batch_0",
+      "_bm_",
       bm,
-      "_bn",
+      "_bn_",
       bn,
-      "_bk",
-      bk,
-      "_wm",
+      "_wm_",
       wm,
-      "_wn",
-      wn,
-      transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
-      global_scale ? "_hgs" : "");
-  MTL::ComputePipelineState* kernel;
-  if (transpose) {
-    kernel = get_qmm_nax_kernel_wrapped(
-        d,
-        kname,
-        "gather_qmm_t_nax",
-        mode,
-        type_string,
-        group_size,
-        bits,
-        aligned,
-        bm,
-        bk,
-        bn,
-        wm,
-        wn,
-        global_scale.has_value());
-  } else {
-    kernel = get_qmm_nax_kernel_wrapped(
-        d,
-        kname,
-        "gather_qmm_n_nax",
-        mode,
-        type_string,
-        group_size,
-        bits,
-        bm,
-        bk,
-        bn,
-        wm,
-        wn);
-  }
+      "_wn_",
+      wn);
+  MTL::ComputePipelineState* kernel = get_qmm_nax_kernel_wrapped(
+      d,
+      kname,
+      transpose ? "gather_qmm_t_nax" : "gather_qmm_n_nax",
+      mode,
+      type_string,
+      group_size,
+      bits,
+      global_scale.has_value(),
+      aligned_n,
+      false, // batch
+      bm,
+      bk,
+      bn,
+      wm,
+      wn);
 
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -1238,7 +1198,7 @@ void qmm(
 
   std::string kname;
   kname.reserve(64);
-  bool aligned = N % bn == 0;
+  bool aligned_n = transpose && (N % bn == 0);
   bool batched = B > 1;
   std::string type_string = get_type_string(x.dtype());
   concatenate(
@@ -1249,31 +1209,28 @@ void qmm(
       group_size,
       "_b_",
       bits,
-      transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
+      global_scale ? "_hgs_1" : "_hgs_0",
+      aligned_n ? "_alN_1" : "_alN_0",
       batched ? "_batch_1" : "_batch_0",
-      (bm == 64 && bn == 64) ? "_bm_64_bn_64" : "",
-      global_scale ? "_hgs" : "");
+      "_bm_",
+      bm,
+      "_bn_",
+      bm);
   std::string template_def;
-  MTL::ComputePipelineState* kernel;
-  if (transpose) {
-    kernel = get_quantized_kernel_wrapped(
-        d,
-        kname,
-        "qmm_t",
-        mode,
-        type_string,
-        group_size,
-        bits,
-        aligned,
-        batched,
-        global_scale.has_value(),
-        bm,
-        bk,
-        bn);
-  } else {
-    kernel = get_quantized_kernel_wrapped(
-        d, kname, "qmm_n", mode, type_string, group_size, bits, batched);
-  }
+  MTL::ComputePipelineState* kernel = get_quantized_kernel_wrapped(
+      d,
+      kname,
+      transpose ? "qmm_t" : "qmm_n",
+      mode,
+      type_string,
+      group_size,
+      bits,
+      global_scale.has_value(),
+      aligned_n,
+      batched,
+      bm,
+      bk,
+      bn);
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -1411,17 +1368,15 @@ void qmm_splitk_nax(
       group_size,
       "_b_",
       bits,
-      "_bm",
+      "_hgs_0_alN_1_batch_0",
+      "_bm_",
       bm,
-      "_bn",
+      "_bn_",
       bn,
-      "_bk",
-      bk,
-      "_wm",
+      "_wm_",
       wm,
-      "_wn",
-      wn,
-      "_alN_true");
+      "_wn_",
+      wn);
   auto kernel = get_qmm_nax_kernel_wrapped(
       d,
       kname,
@@ -1430,7 +1385,9 @@ void qmm_splitk_nax(
       type_string,
       group_size,
       bits,
-      true,
+      false, // has_global_scale
+      true, // aligned_n
+      false, // batch
       bm,
       bk,
       bn,
@@ -1550,9 +1507,23 @@ void qmm_splitk(
       group_size,
       "_b_",
       bits,
-      aligned ? "_alN_true" : "_alN_false");
+      "_hgs_0",
+      aligned ? "_alN_1" : "_alN_0",
+      "_batch_0_bm_32_bn_32");
   auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "qmm_t_splitk", mode, type_string, group_size, bits, aligned);
+      d,
+      kname,
+      "qmm_t_splitk",
+      mode,
+      type_string,
+      group_size,
+      bits,
+      false, // has_global_scale
+      aligned,
+      false, // batched
+      bm,
+      32, // bk
+      bn);
 
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -1637,7 +1608,7 @@ void gather_qmm(
 
   std::string kname;
   kname.reserve(64);
-  bool aligned = N % 32 == 0;
+  bool aligned_n = transpose && (N % bn == 0);
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
@@ -1647,31 +1618,27 @@ void gather_qmm(
       group_size,
       "_b_",
       bits,
-      transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
-      global_scale ? "_hgs" : "");
-  MTL::ComputePipelineState* kernel;
-  if (transpose) {
-    kernel = get_quantized_kernel_wrapped(
-        d,
-        kname,
-        "gather_qmm_t",
-        mode,
-        type_string,
-        group_size,
-        bits,
-        aligned,
-        global_scale.has_value());
-  } else {
-    kernel = get_quantized_kernel_wrapped(
-        d,
-        kname,
-        "gather_qmm_n",
-        mode,
-        type_string,
-        group_size,
-        bits,
-        global_scale.has_value());
-  }
+      global_scale ? "_hgs_1" : "_hgs_0",
+      aligned_n ? "_alN_1" : "_alN_0",
+      "_batch_0",
+      "_bm_",
+      bm,
+      "_bn_",
+      bn);
+  MTL::ComputePipelineState* kernel = get_quantized_kernel_wrapped(
+      d,
+      kname,
+      transpose ? "gather_qmm_t" : "gather_qmm_n",
+      mode,
+      type_string,
+      group_size,
+      bits,
+      global_scale.has_value(),
+      aligned_n,
+      false, // batched
+      bm,
+      32, // bk
+      bn);
 
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -1733,7 +1700,7 @@ void gather_qmv(
       group_size,
       "_b_",
       bits,
-      global_scale ? "_hgs" : "");
+      global_scale ? "_hgs_1" : "_hgs_0");
 
   auto kernel = get_quantized_kernel_wrapped(
       d,
@@ -1804,7 +1771,7 @@ void gather_qvm(
       group_size,
       "_b_",
       bits,
-      global_scale ? "_hgs" : "");
+      global_scale ? "_hgs_1" : "_hgs_0");
   auto kernel = get_quantized_kernel_wrapped(
       d,
       kname,
@@ -1902,24 +1869,18 @@ void gather_qmm_rhs_nax(
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
-      mode +
-          (transpose ? "_gather_qmm_rhs_nax_nt_" : "_gather_qmm_rhs_nax_nn_"),
+      mode + "_gather_qmm_rhs_nax_",
       type_string,
       "_gs_",
       group_size,
       "_b_",
       bits,
+      global_scale ? "_hgs_1" : "_hgs_0",
+      transpose ? "_t_1" : "_t_0",
       "_bm_",
       bm,
       "_bn_",
-      bn,
-      "_bk_",
-      bk,
-      "_wm_",
-      wm,
-      "_wn_",
-      wn,
-      global_scale ? "_hgs" : "");
+      bn);
 
   metal::MTLFCList func_consts = {
       {&align_N, MTL::DataType::DataTypeBool, 201},
@@ -1947,16 +1908,16 @@ void gather_qmm_rhs_nax(
       hash_name,
       func_consts,
       x,
+      mode,
       group_size,
       bits,
-      mode,
+      global_scale.has_value(),
+      transpose,
       bm,
       bn,
       bk,
       wm,
-      wn,
-      transpose,
-      global_scale.has_value());
+      wn);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   MTL::Size group_dims(32, wn, wm);
@@ -1998,7 +1959,7 @@ void gather_qmm_rhs(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string mode) {
+    const std::string& mode) {
   if (metal::is_nax_available() &&
       (env::enable_tf32() || x_.dtype() != float32)) {
     return gather_qmm_rhs_nax(
@@ -2067,23 +2028,14 @@ void gather_qmm_rhs(
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
-      mode + (transpose ? "_gather_qmm_rhs_nt_" : "_gather_qmm_rhs_nn_"),
+      mode + "_gather_qmm_rhs_",
       type_string,
       "_gs_",
       group_size,
       "_b_",
       bits,
-      "_bm_",
-      bm,
-      "_bn_",
-      bn,
-      "_bk_",
-      bk,
-      "_wm_",
-      wm,
-      "_wn_",
-      wn,
-      global_scale ? "_hgs" : "");
+      global_scale ? "_hgs_1" : "_hgs_0",
+      transpose ? "_t_1" : "_t_0");
 
   metal::MTLFCList func_consts = {
       {&align_N, MTL::DataType::DataTypeBool, 201},
@@ -2111,16 +2063,16 @@ void gather_qmm_rhs(
       hash_name,
       func_consts,
       x,
+      mode,
       group_size,
       bits,
-      mode,
+      global_scale.has_value(),
+      transpose,
       bm,
       bn,
       bk,
       wm,
-      wn,
-      transpose,
-      global_scale.has_value());
+      wn);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   MTL::Size group_dims(32, wn, wm);
@@ -2298,7 +2250,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   // Qvm with large dimension so route to a split K kernel for more parallelism
-  qvm_split_k(
+  qvm_splitk(
       x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
   return;
 }
