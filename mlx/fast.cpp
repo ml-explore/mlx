@@ -1096,8 +1096,10 @@ std::vector<array> gated_delta_update(
   auto q = astype(queries, out_dtype, s);
   auto k = astype(keys, out_dtype, s);
   auto v = astype(values, out_dtype, s);
-  auto g = astype(gates, out_dtype, s);
-  auto beta = astype(beta_, out_dtype, s);
+  // The decay sits close to 1, where a 16-bit type has too few mantissa
+  // bits, so gates and beta stay float32 regardless of the type of q.
+  auto g = astype(gates, float32, s);
+  auto beta = astype(beta_, float32, s);
 
   int B = q.shape(0);
   int T = q.shape(1);
