@@ -184,6 +184,16 @@ class TestDeviceInfo(mlx_tests.MLXTestCase):
             self.assertTrue(len(info["device_name"]) > 0)
             self.assertIn("architecture", info)
 
+    def test_cuda_get_arch_list(self):
+        arch_list = mx.cuda.get_arch_list()
+        self.assertIsInstance(arch_list, list)
+        if not mx.cuda.is_available() or mx.device_count(mx.gpu) == 0:
+            self.assertEqual(arch_list, [])
+            return
+        self.assertTrue(arch_list)
+        for arch in arch_list:
+            self.assertRegex(arch, r"^(sm|compute)_[0-9]+[af]?$")
+
     def test_device_info_default(self):
         info = mx.device_info()
         self.assertIsInstance(info, dict)

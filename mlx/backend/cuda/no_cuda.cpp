@@ -11,6 +11,10 @@ bool is_available() {
   return false;
 }
 
+std::vector<std::string> get_arch_list() {
+  return {};
+}
+
 } // namespace cu
 
 namespace fast {
