@@ -22,3 +22,17 @@ repos:
       args: [--fix]
     - id: ruff-format
       types_or: [python, pyi]
+- repo: local
+  hooks:
+    - id: check-stream-args
+      name: check stream arguments
+      entry: python .github/scripts/check_stream_args.py
+      language: python
+      files: ^(mlx/.*\.(cpp|h)|\.github/scripts/check_stream_args\.py)$
+      pass_filenames: false
+    - id: check-stream-args-self-test
+      name: check stream arguments (self-test)
+      entry: python .github/scripts/check_stream_args.py --self-test
+      language: python
+      files: ^\.github/scripts/check_stream_args\.py$
+      pass_filenames: false

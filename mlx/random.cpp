@@ -18,8 +18,8 @@ void KeySequence::seed(uint64_t seed) {
   key_ = key((seed));
 }
 
-array KeySequence::next() {
-  auto out = split(key_);
+array KeySequence::next(StreamOrDevice s) {
+  auto out = split(key_, s);
   key_ = out.first;
   return out.second;
 }
@@ -43,7 +43,7 @@ array bits(
     throw std::invalid_argument("[bits] Negative dimensions not allowed.");
   }
 
-  auto key = key_ ? *key_ : KeySequence::default_().next();
+  auto key = key_ ? *key_ : KeySequence::default_().next(s);
   if (key.dtype() != uint32) {
     std::ostringstream msg;
     msg << "[bits] Expected key type uint32 but received " << key.dtype()
@@ -474,7 +474,7 @@ array categorical(
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
   axis = get_valid_axis(axis, logits_.ndim());
-  auto logits = expand_dims(logits_, -1);
+  auto logits = expand_dims(logits_, -1, s);
   auto shape = logits.shape();
   shape.erase(shape.begin() + axis);
   shape.back() = num_samples;

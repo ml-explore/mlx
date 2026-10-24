@@ -35,7 +35,7 @@ std::vector<array> Custom::jvp(
     if (j < argnums.size() && i == argnums[j]) {
       all_tangents.emplace_back(tangents[j++]);
     } else {
-      all_tangents.emplace_back(zeros_like(primals[i]));
+      all_tangents.emplace_back(zeros_like(primals[i], stream()));
     }
   }
   auto [_, jvps] = mlx::core::jvp(fallback_, primals, all_tangents);
@@ -405,7 +405,7 @@ std::vector<array> LayerNorm::vjp(
     auto mu = multiply(sumx, norm, s);
     auto mu2 = multiply(sumx2, norm, s);
     auto var = subtract(mu2, square(mu, s), s);
-    auto n = rsqrt(add(var, array(eps, x.dtype()), s));
+    auto n = rsqrt(add(var, array(eps, x.dtype()), s), s);
     auto n3 = power(n, array(3, x.dtype()), s);
     auto x_c = subtract(x, mu, s);
 
