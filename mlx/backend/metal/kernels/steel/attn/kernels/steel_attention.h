@@ -5,7 +5,7 @@
 using namespace mlx::steel;
 
 ///////////////////////////////////////////////////////////////////////////////
-// GEMM kernels
+// Attention kernels
 ///////////////////////////////////////////////////////////////////////////////
 
 constant bool align_Q [[function_constant(200)]];
@@ -15,6 +15,15 @@ constant bool has_mask [[function_constant(300)]];
 constant bool do_causal [[function_constant(301)]];
 constant bool has_sinks [[function_constant(302)]];
 constant bool save_lse [[function_constant(303)]];
+constant int window_size [[function_constant(304)]];
+constant bool has_window = window_size > 0;
+
+// True if the key at position c is hidden from the query at position r
+METAL_FUNC bool window_masked(int r, int c) {
+  return (do_causal && r < c) ||
+      (has_window &&
+       ((r - c) >= window_size || (!do_causal && (c - r) >= window_size)));
+}
 
 struct MaxOp {
   template <typename T>
@@ -114,6 +123,49 @@ template <
   if (has_mask) {
     mask += tidl.z * mask_params->M_strides[0] + // Batch
         tidl.y * mask_params->M_strides[1]; // Head
+  }
+
+  int kb_lim = params->NK;
+  int kb_min_causal = params->NK;
+
+  // Blocks before this are ignored
+  int kb_start = 0;
+
+  // First block with no masked block edge
+  int kb_win_lo = 0;
+  // Last block with no masked block edge
+  int kb_win_hi = params->NK;
+
+  // Query positions covered by this block are [q_min, q_max)
+  const int q_max = (tid.x + 1) * BQ + params->qL_off;
+  const int q_min = max(0, int(tid.x) * BQ + params->qL_off);
+
+  if (do_causal) {
+    kb_lim = (q_max + BK - 1) / BK;
+    kb_lim = min(params->NK, kb_lim);
+
+    kb_min_causal = (q_min / BK);
+  } else if (has_window) {
+    int k_max = q_max + window_size - 1;
+    kb_lim = (k_max + BK - 1) / BK;
+    kb_lim = min(params->NK, kb_lim);
+  }
+
+  if (has_window) {
+    // The smallest k this block attends to is decided by the window
+    int k_min = max(0, q_min - window_size + 1);
+    kb_start = k_min / BK;
+
+    // Move the K and V pointers to the first key block
+    K += kb_start * BK * params->K_strides[2];
+    V += kb_start * BK * params->V_strides[2];
+
+    // All queries in the block [q_min, q_max) attend to
+    // keys [common_k_min, common_k_max)
+    auto common_k_min = max(0, q_max - window_size);
+    auto common_k_max = q_min + window_size;
+    kb_win_lo = (common_k_min + BK - 1) / BK;
+    kb_win_hi = common_k_max / BK;
   }
 
   // Prepare threadgroup memory
@@ -279,21 +331,8 @@ template <
     }
   }
 
-  int kb_lim = params->NK;
-  int kb_min_causal = params->NK;
-
-  if (do_causal) {
-    int q_max = (tid.x + 1) * BQ + params->qL_off;
-    kb_lim = (q_max + BK - 1) / BK;
-    kb_lim = min(params->NK, kb_lim);
-
-    int q_min = tid.x * BQ + params->qL_off;
-    q_min = max(0, q_min);
-    kb_min_causal = (q_min / BK);
-  }
-
   // Loop over KV seq length
-  for (int kb = 0; kb < kb_lim; kb++) {
+  for (int kb = kb_start; kb < kb_lim; kb++) {
     // Load K block and apply scale
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (!align_K && kb == (params->NK_aligned)) {
@@ -382,8 +421,12 @@ template <
       }
     }
 
-    // Mask out if causal
-    if (do_causal && kb >= kb_min_causal) {
+    // Mask out if causal or at the window edge
+    const bool is_causal_masked = do_causal && (kb >= kb_min_causal);
+    const bool is_win_lo_masked = has_window && (kb < kb_win_lo);
+    const bool is_win_hi_masked = has_window && !do_causal && (kb >= kb_win_hi);
+
+    if (is_causal_masked || is_win_lo_masked || is_win_hi_masked) {
       using stile_t = decltype(Stile);
       using selem_t = typename stile_t::elem_type;
       constexpr auto neg_inf = Limits<selem_t>::finite_min;
@@ -397,8 +440,14 @@ template <
           const int col_pos = kb * BK + sn + (j * stile_t::kFragCols);
           STEEL_PRAGMA_UNROLL
           for (short jj = 0; jj < stile_t::MMAFrag_t::kElemCols; jj++) {
-            if (row_pos < (col_pos + jj)) {
-              Stile.frag_at(i, j)[jj] = neg_inf;
+            if (has_window) {
+              if (window_masked(row_pos, (col_pos + jj))) {
+                Stile.frag_at(i, j)[jj] = neg_inf;
+              }
+            } else if (do_causal) {
+              if (row_pos < (col_pos + jj)) {
+                Stile.frag_at(i, j)[jj] = neg_inf;
+              }
             }
           }
         }

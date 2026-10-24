@@ -200,6 +200,47 @@ class TestFFT(mlx_tests.MLXTestCase):
                         mx.allclose(output, expected, atol=atol, rtol=1e-4).item()
                     )
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_fft_partial_threadgroup_bounds(self):
+        # When the batch does not fill the last threadgroup, the GPU FFT must
+        # not read or write past the end of its input or output buffers.
+        # Allocating and freeing a buffer of the output size right before the
+        # FFT lets the output reuse it, with `victim` placed right behind it.
+        # Clearing the cache first keeps buffers left by earlier tests from
+        # changing that placement.
+        rng = np.random.default_rng(0)
+        cases = (
+            (mx.fft.fft, (5, 41)),
+            (mx.fft.ifft, (5, 41)),
+        )
+        expected = np.arange(1000, 1441, dtype=np.int32)
+        for transform, shape in cases:
+            with (
+                self.subTest(transform=transform.__name__, shape=shape),
+                mx.stream(mx.gpu),
+            ):
+                x_np = (
+                    rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+                ).astype(np.complex64)
+                x = mx.array(x_np)
+                mx.eval(x)
+                outputs = []
+                for _ in range(10):
+                    mx.clear_cache()
+                    hole = mx.zeros(shape, mx.complex64)
+                    mx.eval(hole)
+                    victim = mx.array(expected)
+                    mx.eval(victim)
+                    del hole
+                    y = transform(x)
+                    mx.eval(y)
+                    outputs.append(y)
+                    np.testing.assert_array_equal(np.array(victim), expected)
+                np_transform = getattr(np.fft, transform.__name__)
+                np.testing.assert_allclose(
+                    np.array(outputs[-1]), np_transform(x_np), atol=1e-3, rtol=1e-4
+                )
+
     @unittest.skip("Too slow for CI but useful for local testing.")
     def test_fft_exhaustive(self):
         nums = range(2, 4097)
