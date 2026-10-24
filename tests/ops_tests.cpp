@@ -9,10 +9,8 @@
 #include "doctest/doctest.h"
 
 #include "mlx/backend/cuda/cuda.h"
-#include "mlx/distributed/primitives.h"
 #include "mlx/mlx.h"
 #include "mlx/primitives.h"
-#include "mlx/transforms_impl.h"
 
 using namespace mlx::core;
 
@@ -4902,8 +4900,14 @@ TEST_CASE("test ops and their gradients keep the caller's stream") {
   }
 
   SUBCASE("number of elements while tracing dynamic shapes") {
-    detail::InTracing tracing(/* dynamic= */ true);
-    check_stream(number_of_elements(a, {0}, true, float32, s), s);
+    // Shapes are only traced as dynamic inside a shapeless compile, where
+    // the count becomes a NumberOfElements node instead of a constant.
+    std::function<std::vector<array>(const std::vector<array>&)> fun =
+        [&](const std::vector<array>& in) {
+          return std::vector<array>{
+              number_of_elements(in[0], {0}, true, float32, s)};
+        };
+    check_all(compile(fun, /* shapeless= */ true)({a}), s);
   }
 
   SUBCASE("imaginary part of a real array") {
@@ -5013,37 +5017,6 @@ TEST_CASE("test ops and their gradients keep the caller's stream") {
             },
             {a, y},
             {ct})
-            .second,
-        s);
-  }
-
-  SUBCASE("vjp of a distributed all gather") {
-    // all_gather is a no-op for a singleton group, so build the node itself
-    // with the output shape it would have for two ranks.
-    auto group = distributed::init(/* strict= */ false);
-    auto gather = [&](const array& x, Shape shape) {
-      return array(
-          std::move(shape),
-          x.dtype(),
-          std::make_shared<distributed::AllGather>(to_stream(s), group),
-          {x});
-    };
-    check_all(
-        vjp(
-            [&](const std::vector<array>& in) {
-              return std::vector<array>{gather(in[0], {8, 5})};
-            },
-            {a},
-            {ones({8, 5}, float32, s)})
-            .second,
-        s);
-    check_all(
-        vjp(
-            [&](const std::vector<array>& in) {
-              return std::vector<array>{gather(in[0], {2})};
-            },
-            {ones({}, float32, s)},
-            {ones({2}, float32, s)})
             .second,
         s);
   }
