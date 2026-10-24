@@ -1218,6 +1218,58 @@ class TestConv(mlx_tests.MLXTestCase):
             self.assertEqual(grad.shape, x.shape)
             self.assertTrue(mx.allclose(grad, expected, atol=1e-4, rtol=1e-4))
 
+    def test_input_dilation_grad(self):
+        def dilate(x, dilation):
+            shape = [(n - 1) * d + 1 for n, d in zip(x.shape[1:-1], dilation)]
+            idx = (slice(None),) + tuple(slice(None, None, d) for d in dilation)
+            return mx.zeros([x.shape[0], *shape, x.shape[-1]]).at[idx].add(x)
+
+        def conv_loss(x, w, stride, padding, dilation):
+            out = mx.conv_general(
+                x, w, stride=stride, padding=padding, input_dilation=dilation
+            )
+            return mx.sum(out * out)
+
+        def dilated_loss(x, w, stride, padding, dilation):
+            out = mx.conv_general(
+                dilate(x, dilation), w, stride=stride, padding=padding
+            )
+            return mx.sum(out * out)
+
+        for in_shape, w_shape, stride, padding, dilation in [
+            ((1, 5, 1), (1, 1, 1), (1,), ([0], [1]), (2,)),
+            ((1, 5, 1), (1, 1, 1), (1,), ([1], [0]), (2,)),
+            ((1, 5, 1), (1, 2, 1), (2,), ([0], [0]), (2,)),
+            ((1, 5, 1), (1, 3, 1), (2,), ([1], [0]), (3,)),
+            ((1, 6, 2), (3, 2, 2), (1,), ([4], [3]), (3,)),
+            ((1, 3, 1), (1, 1, 1), (2,), ([2], [1]), (2,)),
+            ((1, 3, 1), (1, 3, 1), (3,), ([0], [0]), (2,)),
+            ((2, 5, 4, 3), (4, 2, 3, 3), (2, 1), ([1, 0], [0, 2]), (2, 3)),
+            (
+                (1, 3, 4, 3, 2),
+                (2, 2, 2, 2, 2),
+                (1, 2, 1),
+                ([0, 1, 0], [1, 0, 2]),
+                (2, 2, 3),
+            ),
+        ]:
+            x = mx.random.normal(in_shape)
+            w = mx.random.normal(w_shape)
+            args = (stride, padding, dilation)
+            out = mx.conv_general(
+                x, w, stride=stride, padding=padding, input_dilation=dilation
+            )
+            expected = mx.conv_general(
+                dilate(x, dilation), w, stride=stride, padding=padding
+            )
+            self.assertEqual(out.shape, expected.shape)
+            self.assertTrue(mx.allclose(out, expected, atol=1e-4, rtol=1e-4))
+            expected = mx.grad(dilated_loss, argnums=(0, 1))(x, w, *args)
+            grads = mx.grad(conv_loss, argnums=(0, 1))(x, w, *args)
+            for grad, exp in zip(grads, expected):
+                self.assertEqual(grad.shape, exp.shape)
+                self.assertTrue(mx.allclose(grad, exp, atol=1e-4, rtol=1e-4))
+
     @unittest.skipIf(mx.cuda.is_available() and "CI" in os.environ, "flaky in CI")
     def test_conv_1d_with_2d(self):
         x = mx.random.uniform(shape=(2, 10, 16))
