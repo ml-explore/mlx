@@ -235,9 +235,10 @@ struct GEMVKernel {
       MLX_MTL_PRAGMA_UNROLL
       for (int tm = 0; tm < TM; tm++) {
         if (kDoAxpby) {
-          out_vec[out_row + tm] =
-              static_cast<T>(alpha) * static_cast<T>(result[tm]) +
-              static_cast<T>(beta) * bias[(out_row + tm) * bias_stride];
+          out_vec[out_row + tm] = static_cast<T>(
+              static_cast<AccT>(alpha) * result[tm] +
+              static_cast<AccT>(beta) *
+                  static_cast<AccT>(bias[(out_row + tm) * bias_stride]));
         } else {
           out_vec[out_row + tm] = static_cast<T>(result[tm]);
         }
@@ -422,9 +423,10 @@ struct GEMVTKernel {
       MLX_MTL_PRAGMA_UNROLL
       for (int j = 0; j < TN; j++) {
         if (kDoAxpby) {
-          out_vec[out_col + j] =
-              static_cast<T>(alpha) * static_cast<T>(result[j]) +
-              static_cast<T>(beta) * bias[(out_col + j) * bias_stride];
+          out_vec[out_col + j] = static_cast<T>(
+              static_cast<AccT>(alpha) * result[j] +
+              static_cast<AccT>(beta) *
+                  static_cast<AccT>(bias[(out_col + j) * bias_stride]));
         } else {
           out_vec[out_col + j] = static_cast<T>(result[j]);
         }
