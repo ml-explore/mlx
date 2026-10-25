@@ -614,8 +614,8 @@ class TestFast(mlx_tests.MLXTestCase):
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_cross_entropy_grad_non_contiguous(self):
-        # The sliced input plus its contiguous copy is over the 50 Mi element
-        # command buffer limit, so the consumer runs in the next buffer.
+        # The sliced input and its copy exceed the default command buffer limit
+        # (40 or 50 Mi elements), so the consumer runs in the next command buffer.
         B, L, V = 32, 129, 8192
         logits = mx.random.normal(shape=(B, L, V)).astype(mx.bfloat16)
         targets = mx.random.randint(0, V, shape=(B, L))
