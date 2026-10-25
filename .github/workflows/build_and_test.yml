@@ -23,6 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pre-commit/action@v3.0.1
+      - name: Test check_stream_args.py
+        shell: bash
+        run: python .github/scripts/check_stream_args.py --self-test
 
   build_and_test:
     name: ${{ matrix.os }} (${{ matrix.toolkit }}, ${{ matrix.arch }})

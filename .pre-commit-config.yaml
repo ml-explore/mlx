@@ -1,15 +1,15 @@
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
-    -   id: check-yaml
-    # -   id: end-of-file-fixer
-    # -   id: trailing-whitespace
--   repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v21.1.8
-    hooks:
-    -   id: clang-format
-        files: \.(h|cpp)$
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v6.0.0
+  hooks:
+    - id: check-yaml
+    # - id: end-of-file-fixer
+    # - id: trailing-whitespace
+- repo: https://github.com/pre-commit/mirrors-clang-format
+  rev: v21.1.8
+  hooks:
+    - id: clang-format
+      files: \.(h|cpp)$
 - repo: https://github.com/cheshirekow/cmake-format-precommit
   rev: v0.6.13
   hooks:
@@ -22,3 +22,11 @@ repos:
       args: [--fix]
     - id: ruff-format
       types_or: [python, pyi]
+- repo: local
+  hooks:
+    - id: check-stream-args
+      name: check stream arguments
+      entry: python .github/scripts/check_stream_args.py
+      language: python
+      files: ^(mlx/.*\.(cpp|h)|\.github/scripts/check_stream_args\.py)$
+      pass_filenames: false
