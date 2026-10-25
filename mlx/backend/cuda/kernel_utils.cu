@@ -5,6 +5,16 @@
 
 namespace mlx::core {
 
+namespace cu {
+
+__global__ void noop() {}
+
+void* get_noop_kernel_ptr() {
+  return reinterpret_cast<void*>(&noop);
+}
+
+} // namespace cu
+
 dim3 get_block_dims(int dim0, int dim1, int dim2, int pow2) {
   Dims dims = get_block_dims_common(dim0, dim1, dim2, pow2);
   return dim3(std::get<0>(dims), std::get<1>(dims), std::get<2>(dims));

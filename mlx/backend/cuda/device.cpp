@@ -12,7 +12,8 @@
 
 namespace mlx::core::cu {
 
-void* graph_root_kernel_ptr();
+// Defined in kernel_utils.cu
+void* get_noop_kernel_ptr();
 
 namespace {
 
@@ -159,7 +160,7 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
     }
   }
   active_deps_.clear();
-  if (single_root_ && deps.empty()) {
+  if (force_single_root_ && deps.empty()) {
     for (auto& node : nodes) {
       roots_.push_back(node.node);
     }
@@ -214,12 +215,13 @@ CommandEncoder::CommandEncoder(Device& d)
       stream_(d),
       graph_(d),
       worker_(std::make_shared<Worker>(d)),
-      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {
+      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400),
+      // DGX Spark / RTX Spark run memory-bound kernels slower in graphs that
+      // have several root nodes.
+      force_single_root_(
+          d.compute_capability_major() == 12 &&
+          d.compute_capability_minor() == 1) {
   std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits(d);
-  // DGX Spark / RTX Spark run memory-bound kernels slower in graphs that
-  // have several root nodes.
-  single_root_ =
-      d.compute_capability_major() == 12 && d.compute_capability_minor() == 1;
   worker_->start();
 }
 
@@ -520,7 +522,7 @@ void CommandEncoder::commit_impl() {
     // Give a graph with several roots a single no-op root.
     if (roots_.size() > 1) {
       cudaKernelNodeParams params = {};
-      params.func = graph_root_kernel_ptr();
+      params.func = get_noop_kernel_ptr();
       params.gridDim = dim3(1);
       params.blockDim = dim3(1);
       cudaGraphNode_t root;
