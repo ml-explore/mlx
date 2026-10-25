@@ -17,11 +17,24 @@ namespace mlx::core {
 
 template <typename IdxT>
 inline size_t offset_neg_idx(IdxT idx, size_t size) {
-  return (idx < 0) ? idx + size : idx;
+  if (idx < 0) {
+    auto i = static_cast<int64_t>(idx);
+    if (i < -static_cast<int64_t>(size)) {
+      throw std::runtime_error("[indexing] Index out of bounds.");
+    }
+    return static_cast<size_t>(i + static_cast<int64_t>(size));
+  }
+  if (static_cast<size_t>(idx) >= size) {
+    throw std::runtime_error("[indexing] Index out of bounds.");
+  }
+  return static_cast<size_t>(idx);
 }
 
 template <>
-inline size_t offset_neg_idx(uint32_t idx, size_t) {
+inline size_t offset_neg_idx(uint32_t idx, size_t size) {
+  if (idx >= size) {
+    throw std::runtime_error("[indexing] Index out of bounds.");
+  }
   return idx;
 }
 

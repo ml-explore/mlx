@@ -4848,3 +4848,18 @@ TEST_CASE("roll and tile shape overflow") {
   auto rolled = roll(x, -2147483647 - 1);
   CHECK(array_equal(rolled, x).item<bool>());
 }
+
+TEST_CASE("test scatter oob index throws") {
+  auto out = zeros({4}, float32);
+  auto inds = array({6}, int32);        // out-of-bounds index >= shape
+  auto updates = ones({1, 1}, float32);
+  auto r = scatter(out, inds, updates, 0);
+  CHECK_THROWS_AS(eval(r), std::runtime_error);
+}
+
+TEST_CASE("test gather oob index throws") {
+  auto w = ones({1000, 64}, float32);
+  auto idx = array({5000}, int32);      // out-of-bounds index >= 1000
+  auto r = gather(w, idx, 0, {1, 64});
+  CHECK_THROWS_AS(eval(r), std::runtime_error);
+}
