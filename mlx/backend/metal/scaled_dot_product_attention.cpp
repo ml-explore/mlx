@@ -429,180 +429,6 @@ void sdpa_full_self_attention_nax(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-void sdpa_split(
-    const Stream& s,
-    metal::Device& d,
-    const array& q,
-    const array& k,
-    const array& v,
-    const float scale,
-    array& o,
-    bool do_causal) {
-  using namespace mlx::steel;
-
-  int B = q.shape(0);
-  int H = q.shape(1);
-  int kvH = k.shape(1);
-  int gqa_factor = H / kvH;
-  int qL = q.shape(2);
-  int kL = k.shape(2);
-
-  const char devc = d.get_architecture().back();
-  int bk = 32;
-  int bd = q.shape(-1);
-  const bool nax = use_nax_split(q);
-  int bq = nax ? 16 : 32;
-  int wm = nax ? 1 : 4;
-  int wn = nax ? (bd == 256 ? 2 : 1) : (bd >= 128 ? 2 : 1);
-  int target_tgs = nax ? 320 : 160;
-
-  if (!nax && bd == 256) {
-    const bool before_m3 = d.get_architecture_gen() < 15;
-    const bool ultra = devc == 'd';
-    if (q.dtype() == float32) {
-      bk = 16;
-    } else if (gqa_factor * qL <= 48 && kL >= 8192) {
-      bq = 48;
-      wm = 6;
-      wn = (before_m3 && q.dtype() == bfloat16) ? 2 : 1;
-      target_tgs = (before_m3 && ultra) ? 320 : 160;
-    } else if (kL >= 1024 && !(before_m3 && ultra)) {
-      bk = 16;
-    }
-  }
-  // Base GPUs fill with half as many threadgroups.
-  if (devc == 'g' || devc == 'p') {
-    target_tgs /= 2;
-  }
-
-  int row_groups = (gqa_factor * qL + bq - 1) / bq;
-
-  const int NK = (kL + bk - 1) / bk;
-  const int NK_aligned = kL / bk;
-
-  int current_tgs = B * kvH * row_groups;
-  int blocks = std::max(1, target_tgs / current_tgs);
-  int split_blocks = (NK + blocks - 1) / blocks;
-  blocks = (NK + split_blocks - 1) / split_blocks;
-
-  array partials({B, H, qL, blocks, bd}, float32, nullptr, {});
-  array sums({B, H, qL, blocks}, float32, nullptr, {});
-  array maxs({B, H, qL, blocks}, float32, nullptr, {});
-  partials.set_data(allocator::malloc(partials.nbytes()));
-  sums.set_data(allocator::malloc(sums.nbytes()));
-  maxs.set_data(allocator::malloc(maxs.nbytes()));
-  auto& compute_encoder = metal::get_command_encoder(s);
-  compute_encoder.add_temporary(partials);
-  compute_encoder.add_temporary(sums);
-  compute_encoder.add_temporary(maxs);
-
-  const bool align_K = (kL % bk) == 0;
-  metal::MTLFCList func_consts = {
-      {&align_K, MTL::DataType::DataTypeBool, 201},
-      {&do_causal, MTL::DataType::DataTypeBool, 301}};
-
-  std::string base_name;
-  if (nax) {
-    concatenate(
-        base_name,
-        "steel_attention_split_",
-        type_to_name(q),
-        "_bk",
-        bk,
-        "_bd",
-        bd,
-        "_wn",
-        wn);
-  } else {
-    concatenate(
-        base_name,
-        "steel_attention_split_",
-        type_to_name(q),
-        "_bq",
-        bq,
-        "_bk",
-        bk,
-        "_bd",
-        bd,
-        "_wm",
-        wm,
-        "_wn",
-        wn);
-  }
-  std::string hash_name;
-  concatenate(
-      hash_name,
-      base_name,
-      "_align_K_",
-      (align_K ? 't' : 'n'),
-      "_do_causal_",
-      (do_causal ? 't' : 'n'));
-
-  auto kernel = nax
-      ? get_steel_attention_nax_split_kernel(
-            d, base_name, hash_name, func_consts, q, bk, bd, wn)
-      : get_steel_attention_split_kernel(
-            d, base_name, hash_name, func_consts, q, bq, bk, bd, wm, wn);
-  compute_encoder.set_compute_pipeline_state(kernel);
-
-  AttnParams params{
-      /* int B = */ B,
-      /* int H = */ H,
-      /* int D = */ bd,
-
-      /* int qL = */ qL,
-      /* int kL = */ kL,
-
-      /* int gqa_factor = */ gqa_factor,
-      /* float scale = */ scale,
-
-      /* int NQ = */ 1,
-      /* int NK = */ NK,
-
-      /* int NQ_aligned = */ 0,
-      /* int NK_aligned = */ NK_aligned,
-
-      /* int qL_rem = */ qL,
-      /* int kL_rem = */ (kL - NK_aligned * bk),
-      /* int qL_off = */ (kL - qL),
-
-      /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
-      /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
-      /* int64_t V_strides[3] = */ {v.strides(0), v.strides(1), v.strides(2)},
-      /* int64_t O_strides[3] = */ {o.strides(0), o.strides(1), o.strides(2)}};
-
-  compute_encoder.set_input_array(q, 0);
-  compute_encoder.set_input_array(k, 1);
-  compute_encoder.set_input_array(v, 2);
-  compute_encoder.set_output_array(partials, 3);
-  compute_encoder.set_output_array(sums, 4);
-  compute_encoder.set_output_array(maxs, 5);
-  compute_encoder.set_bytes(params, 6);
-  compute_encoder.set_bytes(split_blocks, 7);
-
-  MTL::Size grid_dims = MTL::Size(blocks * row_groups, kvH, B);
-  MTL::Size group_dims = MTL::Size(32, wm * wn, 1);
-  check_kernel_threadgroup_size(kernel, group_dims, hash_name);
-  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
-
-  std::string kname;
-  concatenate(kname, "sdpa_split_reduce_", get_type_string(q.dtype()), "_", bd);
-  kernel = d.get_kernel(kname);
-  compute_encoder.set_compute_pipeline_state(kernel);
-
-  compute_encoder.set_input_array(partials, 0);
-  compute_encoder.set_input_array(sums, 1);
-  compute_encoder.set_input_array(maxs, 2);
-  compute_encoder.set_output_array(o, 3);
-  compute_encoder.set_bytes(blocks, 4);
-  compute_encoder.set_vector_bytes(o.strides(), 3, 5);
-
-  grid_dims = MTL::Size(qL, H, B);
-  group_dims = MTL::Size(32, 1, 1);
-  check_kernel_threadgroup_size(kernel, group_dims, kname);
-  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
-}
-
 void sdpa_full_self_attention_metal(
     const Stream& s,
     metal::Device& d,
@@ -1169,6 +995,180 @@ void sdpa_vector_2pass(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void sdpa_split(
+    const Stream& s,
+    metal::Device& d,
+    const array& q,
+    const array& k,
+    const array& v,
+    const float scale,
+    array& o,
+    bool do_causal) {
+  using namespace mlx::steel;
+
+  int B = q.shape(0);
+  int H = q.shape(1);
+  int kvH = k.shape(1);
+  int gqa_factor = H / kvH;
+  int qL = q.shape(2);
+  int kL = k.shape(2);
+
+  const char devc = d.get_architecture().back();
+  int bk = 32;
+  int bd = q.shape(-1);
+  const bool nax = use_nax_split(q);
+  int bq = nax ? 16 : 32;
+  int wm = nax ? 1 : 4;
+  int wn = nax ? (bd == 256 ? 2 : 1) : (bd >= 128 ? 2 : 1);
+  int target_tgs = nax ? 320 : 160;
+
+  if (!nax && bd == 256) {
+    const bool before_m3 = d.get_architecture_gen() < 15;
+    const bool ultra = devc == 'd';
+    if (q.dtype() == float32) {
+      bk = 16;
+    } else if (gqa_factor * qL <= 48 && kL >= 8192) {
+      bq = 48;
+      wm = 6;
+      wn = (before_m3 && q.dtype() == bfloat16) ? 2 : 1;
+      target_tgs = (before_m3 && ultra) ? 320 : 160;
+    } else if (kL >= 1024 && !(before_m3 && ultra)) {
+      bk = 16;
+    }
+  }
+  // Base GPUs fill with half as many threadgroups.
+  if (devc == 'g' || devc == 'p') {
+    target_tgs /= 2;
+  }
+
+  int row_groups = (gqa_factor * qL + bq - 1) / bq;
+
+  const int NK = (kL + bk - 1) / bk;
+  const int NK_aligned = kL / bk;
+
+  int current_tgs = B * kvH * row_groups;
+  int blocks = std::max(1, target_tgs / current_tgs);
+  int split_blocks = (NK + blocks - 1) / blocks;
+  blocks = (NK + split_blocks - 1) / split_blocks;
+
+  array partials({B, H, qL, blocks, bd}, float32, nullptr, {});
+  array sums({B, H, qL, blocks}, float32, nullptr, {});
+  array maxs({B, H, qL, blocks}, float32, nullptr, {});
+  partials.set_data(allocator::malloc(partials.nbytes()));
+  sums.set_data(allocator::malloc(sums.nbytes()));
+  maxs.set_data(allocator::malloc(maxs.nbytes()));
+  auto& compute_encoder = metal::get_command_encoder(s);
+  compute_encoder.add_temporary(partials);
+  compute_encoder.add_temporary(sums);
+  compute_encoder.add_temporary(maxs);
+
+  const bool align_K = (kL % bk) == 0;
+  metal::MTLFCList func_consts = {
+      {&align_K, MTL::DataType::DataTypeBool, 201},
+      {&do_causal, MTL::DataType::DataTypeBool, 301}};
+
+  std::string base_name;
+  if (nax) {
+    concatenate(
+        base_name,
+        "steel_attention_split_",
+        type_to_name(q),
+        "_bk",
+        bk,
+        "_bd",
+        bd,
+        "_wn",
+        wn);
+  } else {
+    concatenate(
+        base_name,
+        "steel_attention_split_",
+        type_to_name(q),
+        "_bq",
+        bq,
+        "_bk",
+        bk,
+        "_bd",
+        bd,
+        "_wm",
+        wm,
+        "_wn",
+        wn);
+  }
+  std::string hash_name;
+  concatenate(
+      hash_name,
+      base_name,
+      "_align_K_",
+      (align_K ? 't' : 'n'),
+      "_do_causal_",
+      (do_causal ? 't' : 'n'));
+
+  auto kernel = nax
+      ? get_steel_attention_split_nax_kernel(
+            d, base_name, hash_name, func_consts, q, bk, bd, wn)
+      : get_steel_attention_split_kernel(
+            d, base_name, hash_name, func_consts, q, bq, bk, bd, wm, wn);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  AttnParams params{
+      /* int B = */ B,
+      /* int H = */ H,
+      /* int D = */ bd,
+
+      /* int qL = */ qL,
+      /* int kL = */ kL,
+
+      /* int gqa_factor = */ gqa_factor,
+      /* float scale = */ scale,
+
+      /* int NQ = */ 1,
+      /* int NK = */ NK,
+
+      /* int NQ_aligned = */ 0,
+      /* int NK_aligned = */ NK_aligned,
+
+      /* int qL_rem = */ qL,
+      /* int kL_rem = */ (kL - NK_aligned * bk),
+      /* int qL_off = */ (kL - qL),
+
+      /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
+      /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
+      /* int64_t V_strides[3] = */ {v.strides(0), v.strides(1), v.strides(2)},
+      /* int64_t O_strides[3] = */ {o.strides(0), o.strides(1), o.strides(2)}};
+
+  compute_encoder.set_input_array(q, 0);
+  compute_encoder.set_input_array(k, 1);
+  compute_encoder.set_input_array(v, 2);
+  compute_encoder.set_output_array(partials, 3);
+  compute_encoder.set_output_array(sums, 4);
+  compute_encoder.set_output_array(maxs, 5);
+  compute_encoder.set_bytes(params, 6);
+  compute_encoder.set_bytes(split_blocks, 7);
+
+  MTL::Size grid_dims = MTL::Size(blocks * row_groups, kvH, B);
+  MTL::Size group_dims = MTL::Size(32, wm * wn, 1);
+  check_kernel_threadgroup_size(kernel, group_dims, hash_name);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+
+  std::string kname;
+  concatenate(kname, "sdpa_split_reduce_", get_type_string(q.dtype()), "_", bd);
+  kernel = d.get_kernel(kname);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  compute_encoder.set_input_array(partials, 0);
+  compute_encoder.set_input_array(sums, 1);
+  compute_encoder.set_input_array(maxs, 2);
+  compute_encoder.set_output_array(o, 3);
+  compute_encoder.set_bytes(blocks, 4);
+  compute_encoder.set_vector_bytes(o.strides(), 3, 5);
+
+  grid_dims = MTL::Size(qL, H, B);
+  group_dims = MTL::Size(32, 1, 1);
+  check_kernel_threadgroup_size(kernel, group_dims, kname);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 std::tuple<bool, std::string> has_fused_kernel(
     const array& q,
     const array& k,
@@ -1238,17 +1238,6 @@ std::tuple<bool, std::string> has_fused_kernel(
       return {false, msg.str()};
     }
   } else {
-    if (use_split(
-            q,
-            k,
-            v,
-            has_arr_mask,
-            has_sinks,
-            window_size,
-            output_logsumexp,
-            s)) {
-      return {true, ""};
-    }
     const bool supported_head_dim =
         (query_head_dim == value_head_dim &&
          (query_head_dim == 64 || query_head_dim == 96 ||
@@ -1271,7 +1260,9 @@ std::tuple<bool, std::string> has_fused_kernel(
           << ".";
       return {false, msg.str()};
     }
-    if (query_sequence_length * gqa_factor > 32) {
+    bool has_split_kernel = use_split(
+        q, k, v, has_arr_mask, has_sinks, window_size, output_logsumexp, s);
+    if (!has_split_kernel && query_sequence_length * gqa_factor > 32) {
       msg << "the vector attention kernel requires the query length times "
           << "the GQA factor to be at most 32; got query length "
           << query_sequence_length << " and GQA factor " << gqa_factor << ".";
@@ -1735,13 +1726,17 @@ bool ScaledDotProductAttention::use_fallback(
   }
 
   // Unfused path is faster for following shapes.
+  // Full attention:
   if (query_sequence_length > 8) {
     return query_head_dim == 192 || query_head_dim == 256;
-  } else {
-    const int rows = query_sequence_length * (q.shape(1) / k.shape(1));
-    return query_head_dim == value_head_dim && query_head_dim == 192 &&
-        rows <= 32;
   }
+  // Split attention:
+  const int rows = query_sequence_length * (q.shape(1) / k.shape(1));
+  if (rows > 32 && rows <= 128) {
+    return false;
+  }
+  // Vector attention:
+  return query_head_dim == value_head_dim && query_head_dim == 192;
 }
 
 bool ScaledDotProductAttention::supports_bool_mask() {

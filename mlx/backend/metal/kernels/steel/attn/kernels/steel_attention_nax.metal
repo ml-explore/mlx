@@ -40,7 +40,7 @@ instantiate_attn_mask_helper(float32, float);
 #define instantiate_attn_split(tname, dtype, bk, bd, wn)             \
   instantiate_kernel(                                                \
       "steel_attention_split_" #tname "_bk" #bk "_bd" #bd "_wn" #wn, \
-  attention_nax_split, dtype, bk, bd, wn, float)
+  attention_split_nax, dtype, bk, bd, wn, float)
 
 #define instantiate_attn_split_helper(tname, dtype) \
     instantiate_attn_split(tname, dtype, 32, 64, 1)  \

@@ -1056,7 +1056,7 @@ template <
     int BD,
     int WN,
     typename AccumType = float>
-[[kernel, max_total_threads_per_threadgroup(WN * 32)]] void attention_nax_split(
+[[kernel, max_total_threads_per_threadgroup(WN * 32)]] void attention_split_nax(
     const device T* Q [[buffer(0)]],
     const device T* K [[buffer(1)]],
     const device T* V [[buffer(2)]],

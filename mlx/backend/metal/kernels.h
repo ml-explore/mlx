@@ -430,18 +430,6 @@ MTL::ComputePipelineState* get_steel_attention_kernel(
     int wn,
     const array& m);
 
-MTL::ComputePipelineState* get_steel_attention_split_kernel(
-    metal::Device& d,
-    const std::string& kernel_name,
-    const std::string& hash_name,
-    const metal::MTLFCList& func_consts,
-    const array& q,
-    int bq,
-    int bk,
-    int bd,
-    int wm,
-    int wn);
-
 MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -457,7 +445,19 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     const array& m,
     bool split_d);
 
-MTL::ComputePipelineState* get_steel_attention_nax_split_kernel(
+MTL::ComputePipelineState* get_steel_attention_split_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& q,
+    int bq,
+    int bk,
+    int bd,
+    int wm,
+    int wn);
+
+MTL::ComputePipelineState* get_steel_attention_split_nax_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const std::string& hash_name,

@@ -511,20 +511,6 @@ MTL::ComputePipelineState* get_steel_attention_kernel(
   return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
-MTL::ComputePipelineState* get_steel_attention_split_kernel(
-    metal::Device& d,
-    const std::string& kernel_name,
-    const std::string& hash_name,
-    const metal::MTLFCList& func_consts,
-    const array&,
-    int,
-    int,
-    int,
-    int,
-    int) {
-  return d.get_kernel(kernel_name, hash_name, func_consts);
-}
-
 MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -542,7 +528,21 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
   return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
-MTL::ComputePipelineState* get_steel_attention_nax_split_kernel(
+MTL::ComputePipelineState* get_steel_attention_split_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array&,
+    int,
+    int,
+    int,
+    int,
+    int) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_steel_attention_split_nax_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const std::string& hash_name,

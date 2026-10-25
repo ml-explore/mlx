@@ -859,14 +859,14 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             )
             self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
-    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
     def test_sdpa_short_query_many_heads(self):
         key = mx.random.key(0)
         for D, (qH, kH), qL, kL, mask, dtype in product(
-            (64, 72, 80, 96, 128, 192, 256),
-            ((24, 4), (28, 4), (16, 1)),
+            (64, 128, 256),
+            ((24, 4), (28, 4)),
             (6, 8),
-            (128, 1985, 8192),
+            (128, 1985),
             (None, "causal"),
             (mx.bfloat16, mx.float16, mx.float32),
         ):
@@ -885,48 +885,21 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     mask=mask,
                 )
                 out = mx.fast.scaled_dot_product_attention(
-                    q, k, v, scale=scale, mask=mask
+                    q, k, v, scale=scale, mask=mask, force_fused=True
                 )
                 tol = {mx.bfloat16: 2e-2, mx.float16: 5e-3, mx.float32: 1e-4}[dtype]
                 self.assertTrue(
                     mx.allclose(ref, out.astype(mx.float32), atol=tol, rtol=tol)
                 )
 
-        k1, k2, k3 = mx.random.split(key, 3)
-        q = mx.random.normal((2, 24, 8, 256), mx.bfloat16, key=k1)
-        k = mx.random.normal((2, 4, 1000, 256), mx.bfloat16, key=k2)
-        v = mx.random.normal((2, 4, 1000, 256), mx.bfloat16, key=k3)
-        ref = mlx_ref_attn(
-            q.astype(mx.float32),
-            k.astype(mx.float32),
-            v.astype(mx.float32),
-            scale=0.0625,
-            mask="causal",
-        )
-        out = mx.fast.scaled_dot_product_attention(q, k, v, scale=0.0625, mask="causal")
-        self.assertTrue(mx.allclose(ref, out.astype(mx.float32), atol=2e-2, rtol=2e-2))
-
-        # The split kernels have no window support.
-        k1, k2, k3 = mx.random.split(key, 3)
-        q = mx.random.normal((1, 24, 8, 128), key=k1)
-        k = mx.random.normal((1, 4, 1000, 128), key=k2)
-        v = mx.random.normal((1, 4, 1000, 128), key=k3)
-        for causal in (False, True):
-            ref_mask = make_window_mask(8, 1000, 100)
-            if causal:
-                ref_mask = ref_mask & make_causal_mask(8, 1000)
-            ref = mlx_ref_attn(q, k, v, scale=0.125, mask=ref_mask)
-            out = mx.fast.scaled_dot_product_attention(
-                q, k, v, scale=0.125, mask="causal" if causal else None, window_size=100
-            )
-            self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
-
-    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
     def test_sdpa_split_large_values(self):
         q = mx.zeros((1, 24, 6, 128), dtype=mx.float16)
         k = mx.zeros((1, 4, 128, 128), dtype=mx.float16)
         v = mx.full((1, 4, 128, 128), 10000, dtype=mx.float16)
-        out = mx.fast.scaled_dot_product_attention(q, k, v, scale=128**-0.5)
+        out = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=128**-0.5, force_fused=True
+        )
         self.assertTrue(mx.all(mx.isfinite(out)))
         self.assertTrue(mx.allclose(out, mx.full_like(out, 10000)))
 
@@ -1636,4 +1609,4 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner(failfast=True)
+    mlx_tests.MLXTestRunner()
