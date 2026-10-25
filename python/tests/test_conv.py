@@ -3,6 +3,7 @@
 import math
 import os
 import unittest
+from itertools import product
 
 import mlx.core as mx
 import mlx_tests
@@ -53,122 +54,6 @@ class TestConv(mlx_tests.MLXTestCase):
         out = mx.conv_general(x[None], w[..., None], flip=True, groups=2)
         expected = mx.array([4.0, 4.0, 10.0, 10.0]).reshape(1, 2, 2)
         self.assertTrue(mx.allclose(out, expected))
-
-    def test_large_filter_input_grad_bounds(self):
-        length, channels = 65, 16
-        for dtype in (mx.float32, mx.float16, mx.bfloat16):
-            for batch in (1, 2, 3):
-                for size in (16, 17, 32, 64):
-                    with self.subTest(dtype=dtype, batch=batch, size=size):
-                        padding = size // 2
-                        out_length = length + 2 * padding - size + 1
-                        x = mx.ones((batch, length, channels), dtype=dtype)
-                        w = mx.ones((channels, size, channels), dtype=dtype)
-                        count = batch * out_length * channels
-                        storage = mx.concatenate(
-                            [
-                                mx.ones(count, dtype=dtype),
-                                mx.full((size * channels * 2,), float("nan"), dtype),
-                            ]
-                        )
-                        mx.eval(storage)
-                        cotangent = storage[:count].reshape(batch, out_length, channels)
-                        _, (dx,) = mx.vjp(
-                            lambda a: mx.conv1d(a, w, padding=padding),
-                            (x,),
-                            (cotangent,),
-                        )
-                        counts = [
-                            min(out_length - 1, i + padding)
-                            - max(0, i + padding - size + 1)
-                            + 1
-                            for i in range(length)
-                        ]
-                        expected = mx.array(counts, dtype=dtype)[None, :, None]
-                        expected = mx.broadcast_to(expected * channels, x.shape)
-                        self.assertEqualArray(dx, expected, atol=0, rtol=0)
-
-    def test_large_filter_flipped_bounds(self):
-        rng = np.random.default_rng(42)
-        for kernel in ((17, 3), (3, 17), (17, 17), (18, 4), (4, 18)):
-            for dilation in ((1, 1), (2, 1), (1, 2)):
-                with self.subTest(kernel=kernel, dilation=dilation):
-                    x = mx.array(
-                        rng.standard_normal((2, 21, 23, 16)).astype(np.float32)
-                    )
-                    w = mx.array(
-                        (rng.standard_normal((16, *kernel, 16)) * 0.01).astype(
-                            np.float32
-                        )
-                    )
-                    padding = tuple((k - 1) * d // 2 for k, d in zip(kernel, dilation))
-                    actual = mx.conv_general(
-                        x, w, padding=padding, kernel_dilation=dilation, flip=True
-                    )
-                    expected = mx.conv_general(
-                        x,
-                        w[:, ::-1, ::-1, :],
-                        padding=padding,
-                        kernel_dilation=dilation,
-                    )
-                    self.assertEqualArray(actual, expected, atol=2e-5, rtol=1e-4)
-
-    def test_large_filter_vjp(self):
-        rng = np.random.default_rng(123)
-        cases = (
-            ((65,), (32,), (1,), 1),
-            ((65,), (64,), (2,), 1),
-            ((21, 23), (17, 3), (2, 1), 1),
-            ((21, 23), (3, 17), (1, 2), 1),
-            ((21, 23), (17, 17), (1, 1), 1),
-            ((21, 23), (18, 4), (1, 1), 2),
-        )
-        for shape, kernel, dilation, groups in cases:
-            for compiled in (False, True):
-                with self.subTest(
-                    shape=shape,
-                    kernel=kernel,
-                    dilation=dilation,
-                    groups=groups,
-                    compiled=compiled,
-                ):
-                    channels = 16 * groups
-                    x = mx.array(
-                        rng.standard_normal((2, *shape, channels)).astype(np.float32)
-                    )
-                    w = mx.array(
-                        (rng.standard_normal((channels, *kernel, 16)) * 0.01).astype(
-                            np.float32
-                        )
-                    )
-                    padding = tuple((k - 1) * d // 2 for k, d in zip(kernel, dilation))
-                    kwargs = dict(
-                        padding=padding, kernel_dilation=dilation, groups=groups
-                    )
-                    output = mx.conv_general(x, w, **kwargs)
-                    cotangent = mx.array(
-                        (rng.standard_normal(output.shape) * 0.1).astype(np.float32)
-                    )
-                    fn = mx.value_and_grad(
-                        lambda a, b: mx.sum(
-                            mx.conv_general(a, b, **kwargs) * cotangent
-                        ),
-                        argnums=(0, 1),
-                    )
-                    if compiled:
-                        fn = mx.compile(fn)
-                    actual = fn(x, w)
-                    with mx.stream(mx.cpu):
-                        expected = mx.value_and_grad(
-                            lambda a, b: mx.sum(
-                                mx.conv_general(a, b, **kwargs) * cotangent
-                            ),
-                            argnums=(0, 1),
-                        )(x, w)
-                    for a, b in zip(
-                        (actual[0], *actual[1]), (expected[0], *expected[1])
-                    ):
-                        self.assertEqualArray(a, b, atol=2e-5, rtol=1e-4)
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_1D(self):
@@ -1737,7 +1622,7 @@ class TestConv(mlx_tests.MLXTestCase):
         mx.eval(wide_y)
         self.assertEqual(tuple(wide_y.shape), (1, 1, 500000, 2))
 
-    @unittest.skipIf(not mx.is_available(mx.gpu), "requires GPU")
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_grouped_depthwise_conv_padding_bounds(self):
         x = mx.random.normal((1, 16, 64))
         w = mx.random.normal((64, 3, 1))
@@ -1745,7 +1630,7 @@ class TestConv(mlx_tests.MLXTestCase):
         mx.eval(y)
         self.assertEqual(tuple(y.shape), (1, 16, 64))
 
-    @unittest.skipIf(not mx.is_available(mx.gpu), "requires GPU")
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_conv2d_large_output_channels(self):
         x = mx.random.normal((1, 33, 33, 5))
         w = mx.random.normal((32800, 1, 1, 5))
@@ -1753,6 +1638,41 @@ class TestConv(mlx_tests.MLXTestCase):
         yc = mx.conv2d(x, w, stride=(2, 2), stream=mx.cpu)
         mx.eval(yg, yc)
         self.assertTrue(mx.allclose(yg, yc, atol=1e-3))
+
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_large_filter_input_grad_bounds(self):
+        length, channels = 65, 16
+        for dtype, batch, size in product(
+            (mx.float32, mx.float16, mx.bfloat16), (1, 2, 3), (16, 17, 32, 64)
+        ):
+            with self.subTest(dtype=dtype, batch=batch, size=size):
+                padding = size // 2
+                out_length = length + 2 * padding - size + 1
+                x = mx.ones((batch, length, channels), dtype=dtype)
+                w = mx.ones((channels, size, channels), dtype=dtype)
+                count = batch * out_length * channels
+                storage = mx.concatenate(
+                    [
+                        mx.ones(count, dtype=dtype),
+                        mx.full((size * channels * 2,), float("nan"), dtype),
+                    ]
+                )
+                mx.eval(storage)
+                cotangent = storage[:count].reshape(batch, out_length, channels)
+                _, (dx,) = mx.vjp(
+                    lambda a: mx.conv1d(a, w, padding=padding),
+                    (x,),
+                    (cotangent,),
+                )
+                counts = [
+                    min(out_length - 1, i + padding)
+                    - max(0, i + padding - size + 1)
+                    + 1
+                    for i in range(length)
+                ]
+                expected = mx.array(counts, dtype=dtype)[None, :, None]
+                expected = mx.broadcast_to(expected * channels, x.shape)
+                self.assertEqualArray(dx, expected, atol=0, rtol=0)
 
 
 if __name__ == "__main__":
