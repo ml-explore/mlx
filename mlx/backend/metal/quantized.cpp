@@ -2057,6 +2057,12 @@ void gather_qmm_rhs(
   int E = w.size() / w.shape(-1) / w.shape(-2);
   int bm = 16, bn = 32, bk = 32;
   int wm = 1, wn = 2;
+  if (d.get_architecture_gen() == 13 && mode == "affine" && transpose &&
+      x.dtype() == float16 && M / E >= (K < 1024 ? 64 : 8)) {
+    bm = 32;
+    bn = 64;
+    wm = 2;
+  }
 
   const bool align_N = (N % bn) == 0;
   const bool align_K = (K % bk) == 0;
