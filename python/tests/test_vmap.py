@@ -447,6 +447,29 @@ class TestVmap(mlx_tests.MLXTestCase):
         expected = mx.stack([static(src[i], u[i]) for i in range(3)])
         self.assertTrue(mx.array_equal(out, expected))
 
+    def test_vmap_divmod(self):
+        x = mx.array([[5.5, -3.25, 7.0], [-7.5, 0.5, 2.0]])
+        y = mx.array([[2.0, 1.5, -2.5], [-2.0, 4.0, 3.0]])
+
+        out = mx.vmap(mx.divmod)(x, y)
+        self.assertEqual(len(out), 2)
+        for i in range(2):
+            self.assertEqual(out[i].shape, (2, 3))
+            self.assertTrue(mx.array_equal(out[i], mx.divmod(x, y)[i]))
+
+        out = mx.vmap(mx.divmod, in_axes=(1, None))(x, y[:, 0])
+        expected = mx.divmod(x.T, y[:, 0])
+        for o, e in zip(out, expected):
+            self.assertTrue(mx.array_equal(o, e))
+
+        out = mx.vmap(mx.divmod, in_axes=(None, 1), out_axes=[1, 0])(x[:, 0], y)
+        expected = mx.divmod(x[:, 0], y.T)
+        self.assertTrue(mx.array_equal(out[0], expected[0].T))
+        self.assertTrue(mx.array_equal(out[1], expected[1]))
+
+        out = mx.vmap(lambda a, b: mx.divmod(a, b)[1])(x, y)
+        self.assertTrue(mx.array_equal(out, mx.remainder(x, y)))
+
     def test_vmap_svd(self):
         a = mx.random.uniform(shape=(3, 4, 2))
 
