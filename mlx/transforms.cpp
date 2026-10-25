@@ -26,36 +26,40 @@ static constexpr int MAX_ACTIVE_TASKS = 10;
 
 namespace {
 
-// The stream of the first array that has a primitive, else the default.
-StreamOrDevice graph_stream(
-    const std::vector<array>& arrays,
-    const std::vector<array>& more) {
-  for (auto* group : {&arrays, &more}) {
-    for (auto& a : *group) {
-      if (a.has_primitive()) {
-        return a.primitive().stream();
-      }
+// Get the stream of the first array that has a primitive, else the default.
+StreamOrDevice find_stream(const std::vector<array>& arrays) {
+  for (auto& a : arrays) {
+    if (a.has_primitive()) {
+      return a.primitive().stream();
     }
   }
-  return {};
+  return std::monostate{};
 }
 
-// Create a tracer copy of a primal for use in vjp/jvp. If the primal is a
-// stale Copy from a previous transform call (not an active tracer), peel it
-// off to prevent copy-chain accumulation when containers feed tracers back.
-array make_tracer(const array& p, StreamOrDevice fallback) {
+StreamOrDevice find_stream(
+    const std::vector<array>& arrays1,
+    const std::vector<array>& arrays2) {
+  auto s = find_stream(arrays1);
+  if (!std::holds_alternative<std::monostate>(s)) {
+    return s;
+  }
+  return find_stream(arrays2);
+}
+
+array make_tracer(const array& p, StreamOrDevice fallback_stream) {
+  // A computed primal only needs its own identity: share its buffer so the
+  // trace adds no node and no stream for it. An active tracer from an enclosing
+  // transform still needs the Copy below to link the traces.
   if (!p.is_tracer() && !p.has_primitive() && p.is_available()) {
-    // A computed primal only needs its own identity: share its buffer so
-    // the trace adds no node and no stream for it. An active tracer from an
-    // enclosing transform still needs the Copy below to link the traces.
     array out(p.shape(), p.dtype(), nullptr, {});
     out.copy_shared_buffer(p);
     out.set_status(array::Status::available);
     out.set_tracer(true);
     return out;
   }
-  auto s =
-      p.has_primitive() ? StreamOrDevice(p.primitive().stream()) : fallback;
+  // If the primal is a stale Copy from a previous transform call (not an active
+  // tracer), peel it off to prevent copy-chain accumulation when containers
+  // feed tracers back.
   auto source = p;
   if (!p.is_tracer() && p.has_primitive() && !p.inputs().empty()) {
     auto& prim = p.primitive();
@@ -63,6 +67,9 @@ array make_tracer(const array& p, StreamOrDevice fallback) {
       source = p.inputs()[0];
     }
   }
+  // Create a tracer copy of a primal for use in vjp/jvp.
+  auto s = p.has_primitive() ? StreamOrDevice(p.primitive().stream())
+                             : fallback_stream;
   auto out = copy(source, s);
   out.set_tracer(true);
   return out;
@@ -428,10 +435,10 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
   detail::InTracing in_tracing{false, true};
 
   // Make tracers from given primals
-  auto fallback = graph_stream(primals, cotans);
+  auto fallback_stream = find_stream(primals, cotans);
   std::vector<array> primals_;
   for (auto& p : primals) {
-    primals_.push_back(make_tracer(p, fallback));
+    primals_.push_back(make_tracer(p, fallback_stream));
   }
 
   // Pass tracer primals through the function
@@ -590,7 +597,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     } else {
       auto s = primal.has_primitive()
           ? StreamOrDevice(primal.primitive().stream())
-          : fallback;
+          : fallback_stream;
       vjps.push_back(zeros_like(primal, s));
     }
   }
@@ -635,10 +642,10 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     }
   }
 
-  auto fallback = graph_stream(primals, tangents);
+  auto fallback_stream = find_stream(primals, tangents);
   std::vector<array> primals_;
   for (auto& p : primals) {
-    primals_.push_back(make_tracer(p, fallback));
+    primals_.push_back(make_tracer(p, fallback_stream));
   }
   auto outputs = fun(primals_);
 
@@ -952,11 +959,10 @@ std::vector<array> vmap_replace(
   // in the right place
   std::vector<array> outputs;
   for (int i = 0; i < s_outputs.size(); ++i) {
-    // Fix-ups run on the stream of the traced op that made the output.
-    StreamOrDevice s = s_outputs[i].has_primitive()
-        ? StreamOrDevice(s_outputs[i].primitive().stream())
-        : StreamOrDevice{};
-    if (auto map_it = tmap.find(s_outputs[i].id()); map_it != tmap.end()) {
+    auto& s_out = s_outputs[i];
+    StreamOrDevice s =
+        s_out.has_primitive() ? s_out.primitive().stream() : StreamOrDevice{};
+    if (auto map_it = tmap.find(s_out.id()); map_it != tmap.end()) {
       auto& [out, vdim] = map_it->second;
       if (vdim != out_axes[i]) {
         if (out_axes[i] >= out.ndim()) {
@@ -1065,16 +1071,7 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_function(
     // Compute the outputs
     auto outputs = fun(args);
 
-    // Compute the stream from the first output that has one, before
-    // stop_gradient replaces the outputs with new nodes.
-    std::optional<Stream> found;
-    for (auto& out : outputs) {
-      if (out.has_primitive()) {
-        found = out.primitive().stream();
-        break;
-      }
-    }
-    Stream s = found ? *found : default_stream(default_device());
+    StreamOrDevice s = find_stream(outputs);
     for (auto& out : outputs) {
       out = stop_gradient(out, s);
     }

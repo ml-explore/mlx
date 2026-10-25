@@ -101,6 +101,9 @@ TEST_CASE("test new stream in threads") {
 }
 
 TEST_CASE("test graph built in another thread evaluates on this thread") {
+  if (!metal::is_available()) {
+    return;
+  }
   auto s = new_thread_unsafe_stream(default_device());
   // Reach the scheduler from this thread first. The core treats the first
   // thread that does so as the main thread, and clear_streams() on that

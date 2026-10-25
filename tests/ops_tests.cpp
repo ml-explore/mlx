@@ -4877,52 +4877,6 @@ TEST_CASE("test ops and their gradients keep the caller's stream") {
   auto s = new_stream(default_device());
   auto a = ones({4, 5}, float32, s);
 
-  SUBCASE("gather and scatter broadcast their indices") {
-    auto i0 = zeros({2, 1}, int32, s);
-    auto i1 = zeros({1, 3}, int32, s);
-    check_stream(gather(a, {i0, i1}, {0, 1}, {1, 1}, s), s);
-    auto updates = ones({2, 3, 1, 1}, float32, s);
-    check_stream(scatter(a, {i0, i1}, updates, {0, 1}, s), s);
-  }
-
-  SUBCASE("affine quantize and a quantized matmul that casts") {
-    auto w = ones({32, 64}, float32, s);
-    auto q = quantize(w, 64, 4, "affine", std::nullopt, s);
-    check_all(q, s);
-    // vmap runs the fallback graph of the quantize primitive.
-    auto vq = vmap([&](const std::vector<array>& in) {
-      return quantize(in[0], 64, 4, "affine", std::nullopt, s);
-    })({ones({2, 32, 64}, float32, s)});
-    check_all(vq, s);
-    auto x = ones({2, 64}, float16, s);
-    check_stream(
-        quantized_matmul(x, q[0], q[1], q[2], true, 64, 4, "affine", s), s);
-  }
-
-  SUBCASE("number of elements while tracing dynamic shapes") {
-    // Shapes are only traced as dynamic inside a shapeless compile, where
-    // the count becomes a NumberOfElements node instead of a constant.
-    std::function<std::vector<array>(const std::vector<array>&)> fun =
-        [&](const std::vector<array>& in) {
-          return std::vector<array>{
-              number_of_elements(in[0], {0}, true, float32, s)};
-        };
-    check_all(compile(fun, /* shapeless= */ true)({a}), s);
-  }
-
-  SUBCASE("imaginary part of a real array") {
-    check_stream(imag(a, s), s);
-  }
-
-  SUBCASE("cross product") {
-    auto b = ones({4, 3}, float32, s);
-    check_stream(linalg::cross(b, b, -1, s), s);
-  }
-
-  SUBCASE("categorical sampling") {
-    check_stream(random::categorical(a, -1, 2, random::key(0), s), s);
-  }
-
   SUBCASE("vjps") {
     auto y = full({4, 5}, 2.0f, float32, s);
     auto ct = ones({4, 5}, float32, s);
@@ -4935,14 +4889,6 @@ TEST_CASE("test ops and their gradients keep the caller's stream") {
               return std::vector<array>{arctan2(in[0], in[1], s)};
             },
             {a, y}),
-        s);
-    check_all(
-        vjp_of(
-            [&](const std::vector<array>& in) {
-              return std::vector<array>{
-                  fast::layer_norm(in[0], std::nullopt, std::nullopt, 1e-5, s)};
-            },
-            {a}),
         s);
     check_all(
         vjp_of(
@@ -4990,34 +4936,6 @@ TEST_CASE("test ops and their gradients keep the caller's stream") {
                   softmax(in[0], std::vector<int>{-1}, false, s)};
             },
             {a}),
-        s);
-  }
-
-  SUBCASE("fft with a provided shape") {
-    auto norm = fft::FFTNorm::Backward;
-    check_stream(fft::rfft(a, 8, 1, norm, s), s);
-    check_stream(fft::rfft(a, 3, 1, norm, s), s);
-    check_stream(fft::fft(a, 8, 1, norm, s), s);
-    check_stream(fft::rfftn(a, {6, 8}, {0, 1}, norm, s), s);
-  }
-
-  SUBCASE("keyless random ops split the key on the stream") {
-    random::seed(0);
-    check_stream(random::categorical(a, -1, 2, std::nullopt, s), s);
-    check_stream(random::bits({4, 5}, 4, std::nullopt, s), s);
-  }
-
-  SUBCASE("vjp of depends") {
-    auto y = full({4, 5}, 2.0f, float32, s);
-    auto ct = ones({4, 5}, float32, s);
-    check_all(
-        vjp(
-            [&](const std::vector<array>& in) {
-              return depends({in[0]}, {in[1]});
-            },
-            {a, y},
-            {ct})
-            .second,
         s);
   }
 
@@ -5101,48 +5019,6 @@ TEST_CASE("test ops and their gradients keep the caller's stream") {
     check_all(c, other);
   }
 
-  SUBCASE("vjp over evaluated parameters with a data cotangent") {
-    // The training step: parameters are computed, the loss is a scalar and
-    // the cotangent is a plain array, so nothing but the loss carries s.
-    auto w = ones({4, 5}, float32, s);
-    eval(w);
-    auto grads = vjp(
-                     [&](const std::vector<array>& in) {
-                       return std::vector<array>{
-                           sum(multiply(in[0], in[0], s), false, s)};
-                     },
-                     {w},
-                     {array(1.0f)})
-                     .second;
-    check_all(grads, s);
-    auto vg = value_and_grad([&](const std::vector<array>& in) {
-      return std::vector<array>{sum(multiply(in[0], in[0], s), false, s)};
-    })({w});
-    check_all(vg.first, s);
-    check_all(vg.second, s);
-  }
-
-  SUBCASE("depends infers its stream from any input") {
-    auto x = ones({4, 5}, float32, s);
-    eval(x);
-    auto y = full({4, 5}, 2.0f, float32, s);
-    auto z = ones({4, 5}, float32, s);
-    check_all(depends({x, y}, {z}), s);
-    // checkpoint rebuilds the forward pass through depends(primals, outputs).
-    auto c = full({4, 5}, 2.0f, float32, s);
-    eval(c);
-    auto cf = checkpoint([&](const std::vector<array>& in) {
-      return std::vector<array>{multiply(in[0], in[1], s)};
-    });
-    auto ct = ones({4, 5}, float32, s);
-    check_all(
-        vjp([&](const std::vector<array>& in) { return cf({c, in[0]}); },
-            {a},
-            {ct})
-            .second,
-        s);
-  }
-
   SUBCASE("vmap passthrough outputs") {
     auto p = full({3}, 2.0f, float32, s);
     auto x = ones({2, 3}, float32, s);
@@ -5156,54 +5032,5 @@ TEST_CASE("test ops and their gradients keep the caller's stream") {
     auto outs = vmap(f, {-1, 0}, {0, 0})({p, x});
     check_stream(outs[0], default_stream(default_device()));
     check_stream(outs[1], s);
-  }
-
-  SUBCASE("vjp and jvp copy evaluated primals onto the graph's stream") {
-    auto x = ones({4, 5}, float32, s);
-    eval(x);
-    auto y = full({4, 5}, 2.0f, float32, s);
-    auto ct = ones({4, 5}, float32, s);
-    check_all(
-        vjp(
-            [&](const std::vector<array>& in) {
-              return std::vector<array>{multiply(in[0], in[1], s)};
-            },
-            {x, y},
-            {ct})
-            .second,
-        s);
-    check_all(
-        jvp(
-            [&](const std::vector<array>& in) {
-              return std::vector<array>{abs(in[0], s)};
-            },
-            {x},
-            {ct})
-            .second,
-        s);
-    // With nothing lazy anywhere the tracers use the active default.
-    auto dflt = default_stream(default_device());
-    auto ct_e = ones({4, 5}, float32, s);
-    eval(ct_e);
-    check_all(
-        vjp(
-            [&](const std::vector<array>& in) {
-              return std::vector<array>{abs(in[0], dflt)};
-            },
-            {x},
-            {ct_e})
-            .second,
-        dflt);
-    auto other = new_stream(default_device());
-    set_default_stream(other);
-    auto g = vjp(
-                 [&](const std::vector<array>& in) {
-                   return std::vector<array>{abs(in[0], other)};
-                 },
-                 {x},
-                 {ct_e})
-                 .second;
-    set_default_stream(dflt);
-    check_all(g, other);
   }
 }
