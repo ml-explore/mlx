@@ -859,6 +859,50 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             )
             self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_short_query_many_heads(self):
+        key = mx.random.key(0)
+        for D, (qH, kH), qL, kL, mask, dtype in product(
+            (64, 128, 256),
+            ((24, 4), (28, 4)),
+            (6, 8),
+            (128, 1985),
+            (None, "causal"),
+            (mx.bfloat16, mx.float16, mx.float32),
+        ):
+            with self.subTest(D=D, qH=qH, kH=kH, qL=qL, kL=kL, mask=mask, dtype=dtype):
+                key, k1, k2 = mx.random.split(key, 3)
+                q = mx.random.normal((1, qL, qH, D), dtype, key=k1).swapaxes(1, 2)
+                cache = mx.random.normal((2, 1, kH, kL + 64, D), dtype, key=k2)
+                k = cache[0, :, :, :kL]
+                v = cache[1, :, :, :kL]
+                scale = D**-0.5
+                ref = mlx_ref_attn(
+                    q.astype(mx.float32),
+                    k.astype(mx.float32),
+                    v.astype(mx.float32),
+                    scale=scale,
+                    mask=mask,
+                )
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask=mask, force_fused=True
+                )
+                tol = {mx.bfloat16: 2e-2, mx.float16: 5e-3, mx.float32: 1e-4}[dtype]
+                self.assertTrue(
+                    mx.allclose(ref, out.astype(mx.float32), atol=tol, rtol=tol)
+                )
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_split_large_values(self):
+        q = mx.zeros((1, 24, 6, 128), dtype=mx.float16)
+        k = mx.zeros((1, 4, 128, 128), dtype=mx.float16)
+        v = mx.full((1, 4, 128, 128), 10000, dtype=mx.float16)
+        out = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=128**-0.5, force_fused=True
+        )
+        self.assertTrue(mx.all(mx.isfinite(out)))
+        self.assertTrue(mx.allclose(out, mx.full_like(out, 10000)))
+
     @unittest.skip("Different head and value dims is not enabled")
     def test_sdpa_vector_value_dims(self):
         D = 192
@@ -1348,7 +1392,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 q, k, v, scale=72**-0.5, force_fused=True
             )
         with self.assertRaisesRegex(ValueError, "GQA factor to be at most 32"):
-            q, k, v = make_qkv(8, 128, 64, qH=8, kH=1)
+            q, k, v = make_qkv(8, 128, 64, qH=32, kH=1)
             mx.fast.scaled_dot_product_attention(
                 q, k, v, scale=64**-0.5, force_fused=True
             )
@@ -1565,4 +1609,4 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner(failfast=True)
+    mlx_tests.MLXTestRunner()
