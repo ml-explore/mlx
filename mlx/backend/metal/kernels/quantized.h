@@ -2755,7 +2755,7 @@ template <typename T, int group_size, int bits, bool has_global_scale = false>
 
   float w_thread[values_per_reduce];
   float w_min = Limits<T>::max;
-  float w_max = 0;
+  float w_max = -Limits<T>::max;
 
 #pragma clang loop unroll(full)
   for (int i = 0; i < values_per_reduce; i++) {

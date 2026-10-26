@@ -55,6 +55,27 @@ class TestQuantized(mlx_tests.MLXTestCase):
             dq_gpu = mx.dequantize(wq_s, scales_s, biases_s, **quant, stream=mx.gpu)
             self.assertTrue(mx.abs(dq_cpu - dq_gpu).max().item() < 1e-6)
 
+    def test_affine_quantize_signed_groups(self):
+        if mx.default_device() == mx.gpu and mx.cuda.is_available():
+            self.skipTest("This regression targets the Metal kernel.")
+        for gs, bits in product([32, 64, 128], [1, 2, 3, 4, 5, 6, 8]):
+            n_bins = (1 << bits) - 1
+            grid = [i % (n_bins + 1) for i in range(gs)]
+            grid[-1] = n_bins
+            groups = [
+                [v - 2 * n_bins for v in grid],
+                [2 * n_bins - v for v in grid],
+                [v - (1 << (bits - 1)) for v in grid],
+                [-2] * gs,
+                [0] * gs,
+            ]
+            with self.subTest(gs=gs, bits=bits):
+                w = mx.array(groups, dtype=mx.float32)
+                wq, scales, biases = mx.quantize(w, group_size=gs, bits=bits)
+                restored = mx.dequantize(wq, scales, biases, gs, bits)
+                # These integer grids have unit spacing in the quantized range.
+                self.assertLess(mx.max(mx.abs(w - restored)).item(), 1e-5)
+
     def test_mxfp4_quantize_dequantize(self):
         lut = mx.array(
             [
