@@ -41,6 +41,42 @@ TEST_CASE("test save_safetensors") {
   CHECK(array_equal(test2, ones({2, 2})).item<bool>());
 }
 
+// True if a failed save left its temporary file next to `file_path`.
+bool has_leftover_temp_file(const std::string& file_path) {
+  auto path = std::filesystem::path(file_path);
+  auto prefix = path.filename().string() + ".tmp";
+  for (auto& entry : std::filesystem::directory_iterator(path.parent_path())) {
+    if (entry.path().filename().string().rfind(prefix, 0) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+TEST_CASE("test failed save_safetensors keeps the existing file") {
+  std::string file_path = get_temp_file("test_failed_save.safetensors");
+  save_safetensors(file_path, {{"a", ones({4})}});
+  {
+    // Safetensors has no float64, so this fails after the file is opened.
+    StreamContext sc(Device::cpu);
+    CHECK_THROWS(
+        save_safetensors(file_path, {{"a", astype(ones({4}), float64)}}));
+  }
+  CHECK(array_equal(load_safetensors(file_path).first.at("a"), ones({4}))
+            .item<bool>());
+  CHECK_FALSE(has_leftover_temp_file(file_path));
+}
+
+TEST_CASE("test failed save_gguf keeps the existing file") {
+  std::string file_path = get_temp_file("test_failed_save.gguf");
+  save_gguf(file_path, {{"a", ones({4})}});
+  // The metadata is rejected after the file is created.
+  CHECK_THROWS(save_gguf(file_path, {{"a", ones({4})}}, {{"m", ones({2, 2})}}));
+  CHECK(
+      array_equal(load_gguf(file_path).first.at("a"), ones({4})).item<bool>());
+  CHECK_FALSE(has_leftover_temp_file(file_path));
+}
+
 // Helper to write a raw safetensors file from a JSON header and data buffer
 void write_raw_safetensors(
     const std::string& path,

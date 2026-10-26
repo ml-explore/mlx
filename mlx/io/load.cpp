@@ -2,8 +2,10 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <limits>
+#include <random>
 #include <sstream>
 #include <thread>
 
@@ -228,7 +230,9 @@ void save(std::string file, array a) {
     file += ".npy";
 
   // Serialize array
-  save(std::make_shared<io::FileWriter>(std::move(file)), a);
+  io::write_and_replace(file, [&a](const std::string& path) {
+    save(std::make_shared<io::FileWriter>(path), a);
+  });
 }
 
 /** Load array from reader in .npy format */
@@ -386,6 +390,33 @@ std::shared_ptr<ThreadPool> acquire_batch_pool() {
 }
 
 } // namespace
+
+void write_and_replace(
+    const std::string& file,
+    const std::function<void(const std::string&)>& write) {
+  namespace fs = std::filesystem;
+
+  // Replace the file a symlink points to, not the symlink.
+  std::error_code error;
+  auto target = fs::canonical(file, error);
+  bool exists = !error;
+  if (!exists) {
+    target = file;
+  }
+
+  // A unique name, so concurrent saves to the same file do not share it.
+  auto tmp = target.string() + ".tmp" + std::to_string(std::random_device{}());
+  try {
+    write(tmp);
+    if (exists) {
+      fs::permissions(tmp, fs::status(target).permissions());
+    }
+    fs::rename(tmp, target);
+  } catch (...) {
+    fs::remove(tmp, error);
+    throw;
+  }
+}
 
 ThreadPool& thread_pool() {
   // Leak - see Scheduler singleton comment in scheduler.cpp.
