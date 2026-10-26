@@ -35,7 +35,7 @@ check_transpose(cu::CommandEncoder& enc, const Stream& s, const array& arr) {
 std::tuple<bool, int64_t, array>
 ensure_batch_contiguous(const array& x, cu::CommandEncoder& encoder, Stream s) {
   if (x.flags().row_contiguous) {
-    return std::make_tuple(false, x.strides(-2), x);
+    return std::make_tuple(false, x.shape(-1), x);
   }
 
   bool rc = true;
