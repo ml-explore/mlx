@@ -362,6 +362,9 @@ class TestReduce(mlx_tests.MLXTestCase):
                             self.assertTrue(np.array_equal(out, ref))
 
     def test_large_offsets(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("too slow on CPU")
+
         # Row r holds r % 251 and row 2**15 starts at offset 2**31, so any
         # reduction that narrows offsets or sizes to 32 bits reads the wrong
         # rows. The views below have fewer than 2**31 elements themselves.

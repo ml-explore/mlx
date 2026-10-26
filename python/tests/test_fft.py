@@ -2,6 +2,7 @@
 
 import itertools
 import unittest
+import warnings
 
 import mlx.core as mx
 import mlx_tests
@@ -594,18 +595,20 @@ class TestFFT(mlx_tests.MLXTestCase):
                 norm=norm,
                 onesided=one,
             )
-            z_pt = torch.stft(
-                torch.tensor(x_np),
-                n_fft=n_fft,
-                hop_length=hop,
-                win_length=win_len,
-                window=win_pt,
-                center=center,
-                pad_mode="replicate" if pad_mode == "edge" else pad_mode,
-                normalized=(norm == "ortho"),
-                onesided=one,
-                return_complex=True,
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                z_pt = torch.stft(
+                    torch.tensor(x_np),
+                    n_fft=n_fft,
+                    hop_length=hop,
+                    win_length=win_len,
+                    window=win_pt,
+                    center=center,
+                    pad_mode="replicate" if pad_mode == "edge" else pad_mode,
+                    normalized=(norm == "ortho"),
+                    onesided=one,
+                    return_complex=True,
+                )
             np.testing.assert_allclose(
                 np.array(z_mx), z_pt.numpy(), atol=1e-4, rtol=1e-4
             )
@@ -647,16 +650,18 @@ class TestFFT(mlx_tests.MLXTestCase):
                 onesided=one,
                 length=length,
             )
-            y_pt = torch.istft(
-                torch.tensor(np.array(z)),
-                n_fft=n_fft,
-                hop_length=hop,
-                window=win_pt,
-                center=center,
-                normalized=(norm == "ortho"),
-                onesided=one,
-                length=length,
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                y_pt = torch.istft(
+                    torch.tensor(np.array(z)),
+                    n_fft=n_fft,
+                    hop_length=hop,
+                    window=win_pt,
+                    center=center,
+                    normalized=(norm == "ortho"),
+                    onesided=one,
+                    length=length,
+                )
             np.testing.assert_allclose(
                 np.array(y_mx), y_pt.numpy(), atol=1e-4, rtol=1e-4
             )
