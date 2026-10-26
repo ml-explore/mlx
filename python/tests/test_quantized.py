@@ -56,9 +56,9 @@ class TestQuantized(mlx_tests.MLXTestCase):
             self.assertTrue(mx.abs(dq_cpu - dq_gpu).max().item() < 1e-6)
 
     def test_affine_quantize_signed_groups(self):
-        if mx.default_device() == mx.gpu and mx.cuda.is_available():
-            self.skipTest("This regression targets the Metal kernel.")
         for gs, bits in product([32, 64, 128], [1, 2, 3, 4, 5, 6, 8]):
+            if bits == 1 and mx.default_device() == mx.gpu and mx.cuda.is_available():
+                continue
             n_bins = (1 << bits) - 1
             grid = [i % (n_bins + 1) for i in range(gs)]
             grid[-1] = n_bins
