@@ -46,20 +46,4 @@ const char* cudnn_bin_dir() {
 #endif
 }
 
-// Get the dir of the DLLs installed by the nvidia python package |name|,
-// relative to site-packages/nvidia.
-std::string python_package_bin_subdir(const char* name) {
-#if MLX_CUDA_VERSION_MAJOR < 13
-  return std::string(name) + "/bin";
-#elif MLX_CUDA_VERSION_MAJOR < 14
-  // The CUDA 13 packages put all DLLs in the same dir.
-  return "cu13/bin/x86_64";
-#else
-  static_assert(
-      false,
-      "Please find out the dir of DLLs under site-packages/nvidia "
-      "and add it in this function.");
-#endif
-}
-
 } // namespace mlx::core::cu

@@ -83,9 +83,6 @@ target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:mlx_dirs>)
 target_compile_definitions(
   mlx_dirs
   PUBLIC _SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING)
-# The layout of the nvidia python packages depends on the CUDA version.
-target_compile_definitions(
-  mlx_dirs PRIVATE MLX_CUDA_VERSION_MAJOR=${CUDAToolkit_VERSION_MAJOR})
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/binary)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
