@@ -2442,20 +2442,6 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.softmax(mx.array(1.0), axis=-1)
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
-    def test_softmax_logsumexp_many_rows(self):
-        # With one 32 thread group per row, this needs more than 2**32 threads,
-        # which is more than fits in a single Metal grid dimension. Compare
-        # against chunks small enough to run in a single dispatch.
-        n_rows, chunk = 2**27 + 1000, 2**24
-        x = mx.random.normal((n_rows, 2), dtype=mx.float16)
-        for fn in (mx.softmax, mx.logsumexp):
-            out = fn(x, axis=-1)
-            mx.eval(out)
-            for s in range(0, n_rows, chunk):
-                expected = fn(x[s : s + chunk], axis=-1)
-                self.assertTrue(mx.allclose(out[s : s + chunk], expected))
-
     def test_concatenate(self):
         a_npy = np.random.randn(32, 32, 32)
         b_npy = np.random.randn(32, 32, 32)

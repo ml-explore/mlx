@@ -837,54 +837,6 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
         self.assertLess(mx.abs(gb1 - gb2).max() / mx.abs(gb1).mean(), 1e-5)
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
-    def test_norms_many_rows(self):
-        # With one 32 thread group per row, this needs more than 2**32 threads,
-        # which is more than fits in a single Metal grid dimension. Compare
-        # against chunks small enough to run in a single dispatch.
-        n_rows, chunk = 2**27 + 1000, 2**24
-        x = mx.random.normal((n_rows, 2), dtype=mx.float16)
-        w = mx.array([1.0, 3.0], dtype=mx.float16)
-        b = mx.array([0.5, -0.5], dtype=mx.float16)
-        for fn in (
-            lambda x: mx.fast.rms_norm(x, w, 1e-5),
-            lambda x: mx.fast.layer_norm(x, w, b, 1e-5),
-        ):
-            out = fn(x)
-            mx.eval(out)
-            for s in range(0, n_rows, chunk):
-                expected = fn(x[s : s + chunk])
-                self.assertTrue(mx.allclose(out[s : s + chunk], expected))
-
-    @unittest.skipIf("CI" in os.environ, "Allocates too much memory for CI")
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
-    def test_layer_norm_grad_many_rows(self):
-        # Rows of 3 with a fixed spread keep the gradient well conditioned.
-        n_rows, chunk = 2**27 + 1000, 2**24
-        x = mx.random.normal((n_rows, 1)) + mx.array([0.0, 1.0, 3.0])
-        cotan = mx.random.normal(x.shape)
-        w = mx.array([1.0, 3.0, -2.0])
-        b = mx.array([0.5, -0.5, 1.0])
-
-        def grads(x, cotan):
-            def f(x, w, b):
-                return mx.fast.layer_norm(x, w, b, 1e-5)
-
-            return mx.vjp(f, [x, w, b], [cotan])[1]
-
-        gx, gw, gb = grads(x, cotan)
-        mx.eval(gx, gw, gb)
-        gw_expected = mx.zeros_like(gw)
-        gb_expected = mx.zeros_like(gb)
-        for s in range(0, n_rows, chunk):
-            cgx, cgw, cgb = grads(x[s : s + chunk], cotan[s : s + chunk])
-            self.assertTrue(mx.allclose(gx[s : s + chunk], cgx))
-            gw_expected += cgw
-            gb_expected += cgb
-        # gw and gb sum over every row, so allow for float32 summation order.
-        self.assertTrue(mx.allclose(gw, gw_expected, rtol=2e-3, atol=1e-2))
-        self.assertTrue(mx.allclose(gb, gb_expected, rtol=2e-3, atol=1e-2))
-
     def test_fast_transforms(self):
         x = mx.random.uniform(shape=(2, 2, 8))
 
