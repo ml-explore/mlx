@@ -579,7 +579,7 @@ template <
       BLOCK_THREADS,
       N_PER_THREAD>;
 
-  block_partitions += tid.y * tgp_dims.x;
+  block_partitions += tid.y * (n_blocks + 1);
   dev_vals += int64_t(tid.y) * size_sorted_axis;
   dev_idxs += int64_t(tid.y) * size_sorted_axis;
 
