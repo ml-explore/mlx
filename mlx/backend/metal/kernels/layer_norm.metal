@@ -73,7 +73,7 @@ template <typename T, int N_READS = 8>
 
   // Compute some variables for reading writing etc
   const bool safe = lid * N_READS + N_READS <= axis_size;
-  const int n = axis_size - lid * N_READS;
+  const int n = max(int(axis_size) - int(lid * N_READS), 0);
 
   // Read the inputs
   if (safe) {
@@ -235,7 +235,7 @@ template <typename T, int N_READS = 8>
 
   // Compute some variables for reading writing etc
   const bool safe = lid * N_READS + N_READS <= axis_size;
-  const int n = axis_size - lid * N_READS;
+  const int n = max(int(axis_size) - int(lid * N_READS), 0);
 
   // Read the inputs
   if (safe) {
