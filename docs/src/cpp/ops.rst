@@ -3,5 +3,4 @@
 Operations
 ==========
 
-.. doxygengroup:: ops
-   :content-only:
+.. cpp:autodoc:: ops.h

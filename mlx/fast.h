@@ -11,12 +11,14 @@
 
 namespace mlx::core::fast {
 
+/** Fused root-mean-square normalization. */
 MLX_API array rms_norm(
     const array& x,
     const std::optional<array>& weight,
     float eps,
     StreamOrDevice s = {});
 
+/** Fused layer normalization. */
 MLX_API array layer_norm(
     const array& x,
     const std::optional<array>& weight,
@@ -28,6 +30,7 @@ MLX_API array layer_norm(
 MLX_API array
 cross_entropy(const array& logits, const array& targets, StreamOrDevice s = {});
 
+/** Applies rotary position embeddings with a scalar offset. */
 MLX_API array rope(
     const array& x,
     int dims,
@@ -38,6 +41,7 @@ MLX_API array rope(
     const std::optional<array>& freqs = std::nullopt,
     StreamOrDevice s = {});
 
+/** Applies rotary position embeddings with per-token offsets. */
 MLX_API array rope(
     const array& x,
     int dims,
@@ -61,6 +65,7 @@ MLX_API array scaled_dot_product_attention(
     bool force_fused = false,
     StreamOrDevice s = {});
 
+/** Updates recurrent state with the gated delta rule. */
 MLX_API std::vector<array> gated_delta_update(
     const array& queries,
     const array& keys,
@@ -85,6 +90,7 @@ using CustomKernelFunction = std::function<std::vector<array>(
     bool,
     StreamOrDevice)>;
 
+/** Creates a callable for a custom Metal kernel. */
 MLX_API CustomKernelFunction metal_kernel(
     const std::string& name,
     const std::vector<std::string>& input_names,
@@ -95,6 +101,7 @@ MLX_API CustomKernelFunction metal_kernel(
     bool atomic_outputs = false,
     const CompileOptions& compile_options = {});
 
+/** Creates a callable for a custom CUDA kernel. */
 MLX_API CustomKernelFunction cuda_kernel(
     const std::string& name,
     const std::vector<std::string>& input_names,
@@ -104,6 +111,8 @@ MLX_API CustomKernelFunction cuda_kernel(
     bool ensure_row_contiguous = true,
     int shared_memory = 0);
 
+/** Runs a precompiled CUDA kernel with the given inputs and launch parameters.
+ */
 MLX_API std::vector<array> precompiled_cuda_kernel(
     const std::string& name,
     const std::string& compiled_source,

@@ -88,6 +88,7 @@ are the CPU and GPU.
    :maxdepth: 1
 
    cpp/ops
+   cpp/fast
 
 .. toctree::
    :caption: Further Reading

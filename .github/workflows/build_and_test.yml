@@ -191,7 +191,6 @@ jobs:
 
   build_documentation:
     name: Build Documentation
-    if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-22.04
     needs: check_lint
     steps:
