@@ -1120,7 +1120,8 @@ void qmm_nax_i8(
     compute_encoder.set_bytes(M, 5);
     compute_encoder.set_bytes(max_exp, 6);
     compute_encoder.set_bytes(x_span, 7);
-    MTL::Size group_dims(n_blocks, 1, 1);
+    // Whole SIMD groups: the kernel reduces across them
+    MTL::Size group_dims(((n_blocks + 31) / 32) * 32, 1, 1);
     MTL::Size grid_dims(1, M_pad, 1);
     compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
   }

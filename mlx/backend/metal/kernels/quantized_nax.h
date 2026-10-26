@@ -2203,6 +2203,8 @@ template <typename T, const int bits>
 
 // Quantize each row of x to int8, one threadgroup per row. A block of 64 has
 // the row scale / 2^e, one e per x_span blocks. Output [M/64][K/64][64][64].
+// One thread per block; the threadgroup is rounded up to whole SIMD groups and
+// the threads past the last block only take part in the reductions.
 template <typename T>
 [[kernel]] void affine_qmm_i8_quantize_x(
     const device T* x [[buffer(0)]],
@@ -2225,6 +2227,7 @@ template <typename T>
 
   const int row = tid.y;
   const int n_blocks = K / BK;
+  const bool active = lid < uint(n_blocks);
   const size_t tile = size_t(row / BM) * n_blocks + lid;
   device char4* q = (device char4*)(x8 + (tile * BM + row % BM) * BK);
 
@@ -2233,12 +2236,14 @@ template <typename T>
   x_exp += size_t(row) * (n_blocks + 1);
 
   if (row >= M) {
-    for (int i = 0; i < BK / 4; i++) {
-      q[i] = char4(0);
-    }
-    x_exp[lid + 1] = 0;
-    if (lid == 0) {
-      x_exp[0] = 0;
+    if (active) {
+      for (int i = 0; i < BK / 4; i++) {
+        q[i] = char4(0);
+      }
+      x_exp[lid + 1] = 0;
+      if (lid == 0) {
+        x_exp[0] = 0;
+      }
     }
     return;
   }
@@ -2247,9 +2252,11 @@ template <typename T>
 
   float vals[BK];
   float block_max = 0.0f;
-  for (int i = 0; i < BK; i++) {
-    vals[i] = float(x[i]);
-    block_max = max(block_max, fabs(vals[i]));
+  if (active) {
+    for (int i = 0; i < BK; i++) {
+      vals[i] = float(x[i]);
+      block_max = max(block_max, fabs(vals[i]));
+    }
   }
   const float simd_row_max = simd_max(block_max);
   if (simd_lid == 0) {
@@ -2274,6 +2281,10 @@ template <typename T>
     shared[32] = max(row_max * (1.0f / 127.0f), 1e-12f);
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  if (!active) {
+    return;
+  }
 
   const float sx = shared[32];
   const float inv = 1.0f / sx;
