@@ -423,8 +423,8 @@ template <
     typename T,
     int group_size,
     int bits,
+    bool has_global_scale,
     bool partial_rows = false,
-    bool has_global_scale = false,
     int results_per_simdgroup = 4>
 METAL_FUNC void fp_qmv_fast_impl(
     const device uint32_t* w,
@@ -896,14 +896,14 @@ METAL_FUNC void fp_qvm_impl(
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool aligned_N,
+    int group_size,
+    int bits,
+    bool has_global_scale,
+    bool aligned_N,
     typename U = T,
-    const bool has_global_scale = false,
-    const int BM = 32,
-    const int BK = 32,
-    const int BN = 32,
+    int BM = 32,
+    int BK = 32,
+    int BN = 32,
     typename TW>
 METAL_FUNC void fp_qmm_t_impl(
     const device uint32_t* w,
@@ -1054,7 +1054,7 @@ template <
     typename T,
     int group_size,
     int bits,
-    bool has_global_scale = false,
+    bool has_global_scale, // unimplemented
     int BM = 32,
     int BK = 32,
     int BN = 32>
@@ -1351,9 +1351,9 @@ template <
     typename T,
     int group_size,
     int bits,
+    bool has_global_scale,
     bool batched,
     bool partial_rows = false,
-    bool has_global_scale = false,
     int results_per_simdgroup = 4>
 [[kernel]] void fp_qmv_fast(
     const device uint32_t* w,
@@ -1394,8 +1394,8 @@ template <
       T,
       group_size,
       bits,
-      partial_rows,
       has_global_scale,
+      partial_rows,
       results_per_simdgroup>(
       w,
       scales,
@@ -1413,9 +1413,9 @@ template <
     typename T,
     int group_size,
     int bits,
+    bool has_global_scale,
     bool batched,
-    bool partial_rows = false,
-    bool has_global_scale = false,
+    bool partial_rows = false, // unused
     int results_per_simdgroup = 4>
 [[kernel]] void fp_qmv(
     const device uint32_t* w,
@@ -1709,8 +1709,8 @@ template <
     typename T,
     int group_size,
     int bits,
-    bool batched,
-    bool has_global_scale = false>
+    bool has_global_scale,
+    bool batched>
 [[kernel]] void fp_qvm(
     const device uint32_t* w,
     const device uint8_t* scales,
@@ -1761,7 +1761,7 @@ template <
 }
 
 template <typename T, const int group_size, int bits, int split_k = 32>
-[[kernel]] void fp_qvm_split_k(
+[[kernel]] void fp_qvm_splitk(
     const device uint32_t* w,
     const device uint8_t* scales,
     const device T* x,
@@ -1820,9 +1820,9 @@ template <
     typename T,
     int group_size,
     int bits,
+    bool has_global_scale,
     bool aligned_N,
     bool batched,
-    bool has_global_scale = false,
     int BM = 32,
     int BK = 32,
     int BN = 32>
@@ -1877,9 +1877,9 @@ template <
       T,
       group_size,
       bits,
+      has_global_scale,
       aligned_N,
       T,
-      has_global_scale,
       BM,
       BK,
       BN>(
@@ -1904,8 +1904,9 @@ template <
     typename T,
     int group_size,
     int bits,
+    bool has_global_scale, // unimplemented
+    bool aligned_N, // unused
     bool batched,
-    bool has_global_scale = false,
     int BM = 32,
     int BK = 32,
     int BN = 32>
@@ -2004,7 +2005,7 @@ template <typename T, int group_size, int bits, bool has_global_scale = false>
       w_strides,
       s_strides,
       tid);
-  fp_qmv_fast_impl<T, group_size, bits, false, has_global_scale>(
+  fp_qmv_fast_impl<T, group_size, bits, has_global_scale, false>(
       w,
       scales,
       global_scale,
@@ -2140,13 +2141,14 @@ template <typename T, int group_size, int bits, bool has_global_scale = false>
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool aligned_N,
-    const bool has_global_scale = false,
-    const int BM = 32,
-    const int BK = 32,
-    const int BN = 32>
+    int group_size,
+    int bits,
+    bool has_global_scale,
+    bool aligned_N,
+    bool batched, // unused
+    int BM = 32,
+    int BK = 32,
+    int BN = 32>
 [[kernel]] void fp_gather_qmm_t(
     const device uint32_t* w,
     const device uint8_t* scales,
@@ -2205,9 +2207,9 @@ template <
       T,
       group_size,
       bits,
+      has_global_scale,
       aligned_N,
       T,
-      has_global_scale,
       BM,
       BK,
       BN>(
@@ -2230,12 +2232,14 @@ template <
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool aligned_N,
-    const int BM = 32,
-    const int BK = 32,
-    const int BN = 32>
+    int group_size,
+    int bits,
+    bool has_global_scale, // unimplemented
+    bool aligned_N,
+    bool batched, // unused
+    int BM = 32,
+    int BK = 32,
+    int BN = 32>
 [[kernel]] void fp_qmm_t_splitk(
     const device uint32_t* w [[buffer(0)]],
     const device uint8_t* scales [[buffer(1)]],
@@ -2271,7 +2275,7 @@ template <
   scales += k_start / group_size;
   y += tid.z * static_cast<int64_t>(split_k_partition_stride);
 
-  fp_qmm_t_impl<T, group_size, bits, aligned_N, float, false, BM, BK, BN>(
+  fp_qmm_t_impl<T, group_size, bits, false, aligned_N, float, BM, BK, BN>(
       (const device uint32_t*)wl,
       scales,
       nullptr,
@@ -2293,7 +2297,9 @@ template <
     typename T,
     int group_size,
     int bits,
-    bool has_global_scale = false,
+    bool has_global_scale, // unimplemented
+    bool aligned_N, // unused
+    bool batched, // unused
     int BM = 32,
     int BK = 32,
     int BN = 32>
@@ -2373,13 +2379,13 @@ template <
     typename T,
     int group_size,
     int bits,
-    int BM,
-    int BN,
-    int BK,
-    int WM,
-    int WN,
+    bool has_global_scale,
     bool transpose,
-    bool has_global_scale = false>
+    int BM = 16,
+    int BN = 32,
+    int BK = 32,
+    int WM = 1,
+    int WN = 2>
 [[kernel]] void fp_gather_qmm_rhs(
     const device T* x,
     const device uint32_t* w,

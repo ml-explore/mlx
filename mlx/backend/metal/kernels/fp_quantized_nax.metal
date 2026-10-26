@@ -7,134 +7,109 @@
 #include "mlx/backend/metal/kernels/steel/gemm/nax.h"
 #include "mlx/backend/metal/kernels/fp_quantized_nax.h"
 
+///////////////////////////////////////////////////////////////////////////////
+// fp_qmm_t_nax, fp_gather_qmm_t_nax
+///////////////////////////////////////////////////////////////////////////////
 
-#define instantiate_quantized_batched(mode, name, type, bm, bn, bk, wm, wn, batched, group_size, bits) \
-  instantiate_kernel( \
-      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn "_batch_" #batched, \
-      fp_ ## name,  \
-      type,         \
-      group_size,           \
-      bits,            \
-      batched)
+#define instantiate_qmm(name, type, mode, group_size, bits, has_global_scale, aligned_n, batch, bm, bn) \
+  instantiate_kernel(   \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_hgs_" #has_global_scale "_alN_" #aligned_n "_batch_" #batch "_bm_" #bm "_bn_" #bn "_wm_2_wn_2", \
+      fp_ ##name,       \
+      type,             \
+      group_size,       \
+      bits,             \
+      has_global_scale, \
+      aligned_n,        \
+      batch,            \
+      bm,               \
+      64,               \
+      bn,               \
+      2,                \
+      2)
 
-#define instantiate_quantized_aligned(mode, name, type, bm, bn, bk, wm, wn, aligned, group_size, bits) \
-  instantiate_kernel( \
-      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn "_alN_" #aligned, \
-      fp_ ## name, \
-      type,        \
-      group_size,          \
-      bits,           \
-      aligned, bm, bk, bn, wm, wn) \
-  instantiate_kernel( \
-      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn "_alN_" #aligned "_hgs", \
-      fp_ ## name, \
-      type,        \
-      group_size,          \
-      bits,           \
-      aligned, bm, bk, bn, wm, wn, true)
+#define instantiate_qmm_aligned(name, type, mode, group_size, bits, has_global_scale, bm, bn) \
+  instantiate_qmm(name, type, mode, group_size, bits, has_global_scale, 0, 0, bm, bn)         \
+  instantiate_qmm(name, type, mode, group_size, bits, has_global_scale, 1, 0, bm, bn)
 
-#define instantiate_quantized_aligned_batched(mode, name, type, bm, bn, bk, wm, wn, aligned, batched, group_size, bits) \
-  instantiate_kernel( \
-      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn "_alN_" #aligned "_batch_" #batched, \
-      fp_ ## name,    \
-      type,    \
-      group_size,      \
-      bits,       \
-      aligned, \
-      batched, bm, bk, bn, wm, wn)
+#define instantiate_qmm_aligned_batched(name, type, mode, group_size, bits, has_global_scale, bm, bn) \
+  instantiate_qmm(name, type, mode, group_size, bits, has_global_scale, 0, 0, bm, bn)                 \
+  instantiate_qmm(name, type, mode, group_size, bits, has_global_scale, 0, 1, bm, bn)                 \
+  instantiate_qmm(name, type, mode, group_size, bits, has_global_scale, 1, 0, bm, bn)                 \
+  instantiate_qmm(name, type, mode, group_size, bits, has_global_scale, 1, 1, bm, bn)
 
-#define instantiate_quantized_aligned_batched_hgs(mode, name, type, bm, bn, bk, wm, wn, aligned, batched, group_size, bits) \
-  instantiate_kernel( \
-      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn "_alN_" #aligned "_batch_" #batched "_hgs", \
-      fp_ ## name,    \
-      type,    \
-      group_size,      \
-      bits,       \
-      aligned, \
-      batched, bm, bk, bn, wm, wn, true)
+#define instantiate_qmm_all(type, mode, group_size, bits, has_global_scale)                          \
+  instantiate_qmm_aligned_batched(qmm_t_nax, type, mode, group_size, bits, has_global_scale, 64, 64) \
+  instantiate_qmm_aligned_batched(qmm_t_nax, type, mode, group_size, bits, has_global_scale, 32, 64) \
+  instantiate_qmm_aligned(gather_qmm_t_nax, type, mode, group_size, bits, has_global_scale, 64, 64)
 
-#define instantiate_gather_qmm_rhs(func, name, type, bm, bn, bk, wm, wn, transpose, mode, group_size, bits) \
-  instantiate_kernel( \
-      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_bm_" #bm "_bn_" #bn "_bk_" #bk "_wm_" #wm "_wn_" #wn, \
-      func,    \
-      type,    \
-      group_size,      \
-      bits,       \
-      bm,      \
-      bn,      \
-      bk,      \
-      wm,      \
-      wn,      \
-      transpose) \
-  instantiate_kernel( \
-      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_bm_" #bm "_bn_" #bn "_bk_" #bk "_wm_" #wm "_wn_" #wn "_hgs", \
-      func,    \
-      type,    \
-      group_size,      \
-      bits,       \
-      bm,      \
-      bn,      \
-      bk,      \
-      wm,      \
-      wn,      \
-      transpose, \
-      true)
+///////////////////////////////////////////////////////////////////////////////
+// fp_gather_qmm_rhs_nax
+///////////////////////////////////////////////////////////////////////////////
 
+#define instantiate_grouped_qmm(name, type, mode, group_size, bits, has_global_scale, transpose, bm, bn) \
+  instantiate_kernel(   \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_hgs_" #has_global_scale "_t_" #transpose "_bm_" #bm "_bn_" #bn, \
+      fp_ ## name,      \
+      type,             \
+      group_size,       \
+      bits,             \
+      has_global_scale, \
+      transpose,        \
+      bm,               \
+      bn,               \
+      64,               \
+      2,                \
+      2)
 
-#define instantiate_quantized_all_aligned(type, mode, group_size, bits) \
-  instantiate_quantized_aligned(mode, gather_qmm_t_nax, type, 64, 64, 64, 2, 2, true, group_size, bits)      \
-  instantiate_quantized_aligned(mode, gather_qmm_t_nax, type, 64, 64, 64, 2, 2, false, group_size, bits)     \
-  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 64, 64, 64, 2, 2, true, 1, group_size, bits)  \
-  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 64, 64, 64, 2, 2, true, 0, group_size, bits)  \
-  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 64, 64, 64, 2, 2, false, 1, group_size, bits) \
-  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 64, 64, 64, 2, 2, false, 0, group_size, bits) \
-  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 32, 64, 64, 2, 2, true, 1, group_size, bits)  \
-  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 32, 64, 64, 2, 2, true, 0, group_size, bits)  \
-  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 32, 64, 64, 2, 2, false, 1, group_size, bits) \
-  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 32, 64, 64, 2, 2, false, 0, group_size, bits)
+#define instantiate_grouped_qmm_all(type, mode, group_size, bits, has_global_scale)                      \
+  instantiate_grouped_qmm(gather_qmm_rhs_nax, type, mode, group_size, bits, has_global_scale, 0, 32, 64) \
+  instantiate_grouped_qmm(gather_qmm_rhs_nax, type, mode, group_size, bits, has_global_scale, 0, 64, 64) \
+  instantiate_grouped_qmm(gather_qmm_rhs_nax, type, mode, group_size, bits, has_global_scale, 1, 32, 64) \
+  instantiate_grouped_qmm(gather_qmm_rhs_nax, type, mode, group_size, bits, has_global_scale, 1, 64, 64)
 
-#define instantiate_quantized_qmm_hgs(type) \
-  instantiate_quantized_aligned_batched_hgs(nvfp4, qmm_t_nax, type, 64, 64, 64, 2, 2, true, 0, 16, 4)  \
-  instantiate_quantized_aligned_batched_hgs(nvfp4, qmm_t_nax, type, 64, 64, 64, 2, 2, false, 0, 16, 4) \
-  instantiate_quantized_aligned_batched_hgs(nvfp4, qmm_t_nax, type, 32, 64, 64, 2, 2, true, 0, 16, 4)  \
-  instantiate_quantized_aligned_batched_hgs(nvfp4, qmm_t_nax, type, 32, 64, 64, 2, 2, false, 0, 16, 4)
+///////////////////////////////////////////////////////////////////////////////
+// fp_qmv_nax
+///////////////////////////////////////////////////////////////////////////////
 
-
-#define instantiate_quantized_all_rhs(type, mode, group_size, bits) \
-  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs_nax, gather_qmm_rhs_nax_nt, type, 64, 64, 64, 2, 2, true, mode, group_size, bits) \
-  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs_nax, gather_qmm_rhs_nax_nn, type, 64, 64, 64, 2, 2, false, mode, group_size, bits) \
-  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs_nax, gather_qmm_rhs_nax_nt, type, 32, 64, 64, 2, 2, true, mode, group_size, bits) \
-  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs_nax, gather_qmm_rhs_nax_nn, type, 32, 64, 64, 2, 2, false, mode, group_size, bits)
-
-#define instantiate_quantized_modes(type, mode, group_size, bits) \
-  instantiate_quantized_all_aligned(type, mode, group_size, bits) \
-  instantiate_quantized_all_rhs(type, mode, group_size, bits)
-
-#define instantiate_quantized_types(type) \
-  instantiate_quantized_modes(type, nvfp4, 16, 4) \
-  instantiate_quantized_modes(type, mxfp8, 32, 8) \
-  instantiate_quantized_modes(type, mxfp4, 32, 4)
-
-#define instantiate_qmv_nax(type, mode, group_size, bits, wk, bn) \
-  instantiate_kernel( \
-      #mode "_qmv_nax_" #type "_gs_" #group_size "_b_" #bits "_wk" #wk "_bn" #bn, \
-      fp_qmv_nax, \
-      type, \
-      group_size, \
-      bits, \
-      wk, \
+#define instantiate_qmv_nax(name, type, mode, group_size, bits, has_global_scale, wk, bn) \
+  instantiate_kernel(   \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_wk_" #wk "_bn_" #bn, \
+      fp_ ## name,      \
+      type,             \
+      group_size,       \
+      bits,             \
+      wk,               \
       bn)
 
-#define instantiate_qmv_nax_modes(type) \
-  instantiate_qmv_nax(type, nvfp4, 16, 4, 8, 32) \
-  instantiate_qmv_nax(type, mxfp8, 32, 8, 8, 32) \
-  instantiate_qmv_nax(type, mxfp4, 32, 4, 8, 32)
+#define instantiate_qmv_nax_all_missing_global_scale(type, mode, group_size, bits) \
+  instantiate_qmv_nax(qmv_nax, type, mode, group_size, bits, 0, 8, 32)
 
-instantiate_quantized_types(float)
-instantiate_quantized_types(bfloat16_t)
-instantiate_quantized_types(float16_t)
-instantiate_quantized_qmm_hgs(bfloat16_t)
-instantiate_qmv_nax_modes(float)
-instantiate_qmv_nax_modes(bfloat16_t)
-instantiate_qmv_nax_modes(float16_t)
-    // clang-format on
+///////////////////////////////////////////////////////////////////////////////
+// Instantiation
+///////////////////////////////////////////////////////////////////////////////
+
+#define instantiate_quantized_all(type, mode, group_size, bits, has_global_scale) \
+  instantiate_qmm_all(type, mode, group_size, bits, has_global_scale)             \
+  instantiate_grouped_qmm_all(type, mode, group_size, bits, has_global_scale)     \
+
+#define instantiate_quantized_all_missing_global_scale(type, mode, group_size, bits) \
+  instantiate_qmv_nax_all_missing_global_scale(type, mode, group_size, bits)
+
+#define instantiate_quantized_all_quants(type)            \
+  instantiate_quantized_all(type, mxfp4, 32, 4, 0) \
+  instantiate_quantized_all(type, mxfp8, 32, 8, 0) \
+  instantiate_quantized_all(type, nvfp4, 16, 4, 0) \
+  instantiate_quantized_all(type, nvfp4, 16, 4, 1)
+
+#define instantiate_quantized_all_quants_no_global_scale(type)       \
+  instantiate_quantized_all_missing_global_scale(type, mxfp4, 32, 4) \
+  instantiate_quantized_all_missing_global_scale(type, mxfp8, 32, 8) \
+  instantiate_quantized_all_missing_global_scale(type, nvfp4, 16, 4)
+
+instantiate_quantized_all_quants(float)
+instantiate_quantized_all_quants(float16_t)
+instantiate_quantized_all_quants(bfloat16_t)
+instantiate_quantized_all_quants_no_global_scale(float)
+instantiate_quantized_all_quants_no_global_scale(float16_t)
+instantiate_quantized_all_quants_no_global_scale(bfloat16_t)
+// clang-format on
