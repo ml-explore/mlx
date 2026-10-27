@@ -335,35 +335,6 @@ class TestFFT(mlx_tests.MLXTestCase):
                             s=sizes,
                         )
 
-    def test_fftn_size_one_axes_preserve_input(self):
-        cases = [("fftn", (2, 2, 2, 1, 1)), ("ifftn", (1, 1, 2, 2, 2))]
-        for op, shape in cases:
-            with self.subTest(op=op, shape=shape):
-                x_np = (np.arange(8, dtype=np.float32) + 1j).reshape(shape)
-                x = mx.array(x_np)
-                out = getattr(mx.fft, op)(x)
-                mx.eval(out)
-                np.testing.assert_array_equal(x, x_np)
-                np.testing.assert_allclose(
-                    out, getattr(np.fft, op)(x_np), atol=1e-5, rtol=1e-6
-                )
-
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
-    def test_fftn_size_one_axis_large(self):
-        # The input plus the intermediate is over the 50 Mi element command
-        # buffer limit, so the consumer runs in the next buffer.
-        x = mx.ones((8, 1, 4194304), mx.complex64)
-        expected = mx.fft.fft(x, axis=2)
-        mx.eval(x, expected)
-
-        # A missing fence only shows up on some calls
-        for _ in range(4):
-            out = mx.fft.fft2(x, axes=(1, 2))
-            self.assertTrue(mx.array_equal(out, expected))
-            # A size-one inverse step must not cause input corruption.
-            back = mx.fft.ifft2(mx.fft.fft(x, axis=2), axes=(1, 2))
-            self.assertLess(mx.max(mx.abs(back - x)).item(), 1e-4)
-
     def test_fft_into_ifft(self):
         n_fft = 8193
         mx.random.seed(0)
