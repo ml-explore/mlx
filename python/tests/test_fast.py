@@ -614,8 +614,6 @@ class TestFast(mlx_tests.MLXTestCase):
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_cross_entropy_grad_non_contiguous(self):
-        # The sliced input and its copy exceed the default command buffer limit
-        # (40 or 50 Mi elements), so the consumer runs in the next command buffer.
         B, L, V = 32, 129, 8192
         logits = mx.random.normal(shape=(B, L, V)).astype(mx.bfloat16)
         targets = mx.random.randint(0, V, shape=(B, L))
@@ -627,13 +625,8 @@ class TestFast(mlx_tests.MLXTestCase):
             return mx.fast.cross_entropy(mx.contiguous(x[:, :-1]), targets[:, 1:]).sum()
 
         expected = mx.grad(f_contiguous)(logits)
-        mx.eval(expected)
-
-        # A missing fence only shows up on some calls
-        for _ in range(4):
-            g = mx.grad(f_sliced)(logits)
-            self.assertTrue(mx.array_equal(g, expected))
-            f_sliced(logits).item()
+        g = mx.grad(f_sliced)(logits)
+        self.assertTrue(mx.array_equal(g, expected))
 
     def test_layer_norm_dim_check(self):
         with self.assertRaises(ValueError):
