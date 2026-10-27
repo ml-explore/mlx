@@ -1,6 +1,8 @@
 // Copyright © 2023-2026 Apple Inc.
 #include <algorithm>
 #include <cerrno>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -8,8 +10,8 @@
 #include <random>
 #include <sstream>
 #include <thread>
+#include <vector>
 
-// Used by pread implementation.
 #ifdef _WIN32
 #include <windows.h>
 #endif // _WIN32
@@ -140,7 +142,87 @@ int64_t pread(int fd, void* buf, uint64_t size, uint64_t offset) {
 
   return bytes_read;
 }
+
+// Share delete access, so that a save can replace the file while it is open.
+int open_for_read(const std::string& file_path) {
+  HANDLE file = CreateFileA(
+      file_path.c_str(),
+      GENERIC_READ,
+      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+      nullptr,
+      OPEN_EXISTING,
+      FILE_ATTRIBUTE_NORMAL,
+      nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
+    return -1;
+  }
+  int fd =
+      _open_osfhandle(reinterpret_cast<intptr_t>(file), _O_RDONLY | _O_BINARY);
+  if (fd < 0) {
+    CloseHandle(file);
+  }
+  return fd;
+}
+
+#if NTDDI_VERSION >= NTDDI_WIN10_RS1
+// MoveFileExW, which fs::rename uses, cannot replace a file that is open.
+// A rename with POSIX semantics can, if all open handles share delete access.
+bool posix_rename(
+    const std::filesystem::path& from,
+    const std::filesystem::path& to) {
+  HANDLE file = CreateFileW(
+      from.c_str(),
+      DELETE,
+      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+      nullptr,
+      OPEN_EXISTING,
+      FILE_ATTRIBUTE_NORMAL,
+      nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
+    return false;
+  }
+  std::error_code error;
+  auto target = std::filesystem::absolute(to, error);
+  if (error) {
+    CloseHandle(file);
+    return false;
+  }
+  std::wstring name = target.wstring();
+  auto name_size = static_cast<DWORD>(name.size() * sizeof(wchar_t));
+  std::vector<char> buffer(
+      offsetof(FILE_RENAME_INFO, FileName) + name_size + sizeof(wchar_t));
+  auto info = reinterpret_cast<FILE_RENAME_INFO*>(buffer.data());
+  info->Flags =
+      FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+  info->RootDirectory = nullptr;
+  info->FileNameLength = name_size;
+  std::memcpy(info->FileName, name.c_str(), name_size + sizeof(wchar_t));
+  bool renamed =
+      SetFileInformationByHandle(
+          file, FileRenameInfoEx, info, static_cast<DWORD>(buffer.size())) != 0;
+  CloseHandle(file);
+  return renamed;
+}
 #endif
+#else
+int open_for_read(const std::string& file_path) {
+  return open(file_path.c_str(), O_RDONLY | O_BINARY);
+}
+#endif
+
+// Rename `from` over `to`, replacing `to` if it exists.
+void replace_file(
+    const std::filesystem::path& from,
+    const std::filesystem::path& to) {
+#ifdef _WIN32
+#if NTDDI_VERSION >= NTDDI_WIN10_RS1
+  if (posix_rename(from, to)) {
+    return;
+  }
+#endif
+#endif
+  std::filesystem::rename(from, to);
+}
 
 } // namespace
 
@@ -411,7 +493,7 @@ void write_and_replace(
     if (exists) {
       fs::permissions(tmp, fs::status(target).permissions());
     }
-    fs::rename(tmp, target);
+    replace_file(tmp, target);
   } catch (...) {
     fs::remove(tmp, error);
     throw;
@@ -423,6 +505,9 @@ ThreadPool& thread_pool() {
   static ThreadPool* pool_ = new ThreadPool{4};
   return *pool_;
 }
+
+ParallelFileReader::ParallelFileReader(std::string file_path)
+    : fd_(open_for_read(file_path)), label_(std::move(file_path)) {}
 
 ThreadPool& ParallelFileReader::thread_pool() {
   std::call_once(pool_once_, [this]() { pool_ = acquire_batch_pool(); });

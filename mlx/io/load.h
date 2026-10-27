@@ -71,9 +71,7 @@ class Writer {
 
 class ParallelFileReader : public Reader {
  public:
-  explicit ParallelFileReader(std::string file_path)
-      : fd_(open(file_path.c_str(), O_RDONLY | O_BINARY)),
-        label_(std::move(file_path)) {}
+  explicit ParallelFileReader(std::string file_path);
 
   ~ParallelFileReader() override {
     close(fd_);

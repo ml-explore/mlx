@@ -160,6 +160,15 @@ class TestLoad(mlx_tests.MLXTestCase):
         out = mx.load(save_file, stream=mx.cpu)
         self.assertTrue(np.array_equal(np.array(out), 3 * np.ones((4, 4))))
 
+    def test_save_over_unevaluated_load(self):
+        # The unevaluated array keeps the old file open during the save.
+        save_file = os.path.join(self.test_dir, "replace.safetensors")
+        mx.save_safetensors(save_file, {"a": mx.ones((4,))})
+        old = mx.load(save_file)["a"]
+        mx.save_safetensors(save_file, {"a": mx.zeros((4,))})
+        self.assertTrue(mx.array_equal(old, mx.ones((4,))))
+        self.assertTrue(mx.array_equal(mx.load(save_file)["a"], mx.zeros((4,))))
+
     def test_failed_save_safetensors_keeps_the_existing_file(self):
         save_dir = os.path.join(self.test_dir, "failed_safetensors")
         os.mkdir(save_dir)
