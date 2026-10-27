@@ -173,6 +173,60 @@ array gather_mm_grad(
   }
 }
 
+bool is_transposed_matrix(const array& x) {
+  if (x.ndim() < 2) {
+    return false;
+  }
+  if (x.is_available()) {
+    return x.strides(-2) == 1 && x.strides(-1) == x.shape(-2) &&
+        x.shape(-1) > 1;
+  }
+  if (!x.has_primitive()) {
+    return false;
+  }
+  auto t = dynamic_cast<const Transpose*>(&x.primitive());
+  if (t == nullptr) {
+    return false;
+  }
+  auto axes = t->state();
+  int n = axes.size();
+  for (int i = 0; i < n - 2; ++i) {
+    if (axes[i] != i) {
+      return false;
+    }
+  }
+  return axes[n - 2] == n - 1 && axes[n - 1] == n - 2;
+}
+array matmul_vjp_a(
+    const array& cotan,
+    const array& a,
+    const array& b,
+    const std::vector<int>& reorder,
+    Stream s) {
+  if (is_transposed_matrix(a)) {
+    // (b.conj() @ cotan.T).T
+    return transpose(
+        matmul(conjugate(b, s), transpose(cotan, reorder, s), s), reorder, s);
+  }
+  // M X N * (K X N).T -> M X K
+  return matmul(cotan, transpose(conjugate(b, s), reorder, s), s);
+}
+
+array matmul_vjp_b(
+    const array& cotan,
+    const array& a,
+    const array& b,
+    const std::vector<int>& reorder,
+    Stream s) {
+  if (is_transposed_matrix(b)) {
+    // (cotan.T @ a.conj()).T
+    return transpose(
+        matmul(transpose(cotan, reorder, s), conjugate(a, s), s), reorder, s);
+  }
+  // (M X K).T * M X N -> K X N
+  return matmul(transpose(conjugate(a, s), reorder, s), cotan, s);
+}
+
 } // namespace
 
 std::vector<array> Primitive::jvp(
@@ -290,23 +344,21 @@ std::vector<array> AddMM::vjp(
   std::iter_swap(reorder.end() - 1, reorder.end() - 2);
   for (auto arg : argnums) {
     if (arg == 0) {
-      // M X N * (K X N).T -> M X K
       auto cotan_scaled = cotan;
       if (alpha_ != 1.) {
         auto alpha_arr = array(alpha_, cotan.dtype());
         cotan_scaled = (multiply(alpha_arr, cotan_scaled, stream()));
       }
-      vjps.push_back(matmul(
-          cotan_scaled, transpose(primals[1], reorder, stream()), stream()));
+      vjps.push_back(matmul_vjp_a(
+          cotan_scaled, primals[0], primals[1], reorder, stream()));
     } else if (arg == 1) {
-      // (M X K).T * M X N -> K X N
       auto cotan_scaled = cotan;
       if (alpha_ != 1.) {
         auto alpha_arr = array(alpha_, cotan.dtype());
         cotan_scaled = (multiply(alpha_arr, cotan_scaled, stream()));
       }
-      vjps.push_back(matmul(
-          transpose(primals[0], reorder, stream()), cotan_scaled, stream()));
+      vjps.push_back(matmul_vjp_b(
+          cotan_scaled, primals[0], primals[1], reorder, stream()));
     } else {
       auto cotan_scaled = cotan;
       if (beta_ != 1.) {
@@ -3095,17 +3147,11 @@ std::vector<array> Matmul::vjp(
   std::iter_swap(reorder.end() - 1, reorder.end() - 2);
   auto& s = stream();
 
-  auto complex_transpose = [&](const array& x) {
-    return transpose(conjugate(x, s), reorder, s);
-  };
-
   for (auto arg : argnums) {
     if (arg == 0) {
-      // M X N * (K X N).T -> M X K
-      vjps.push_back(matmul(cotan, complex_transpose(primals[1]), s));
+      vjps.push_back(matmul_vjp_a(cotan, primals[0], primals[1], reorder, s));
     } else {
-      // (M X K).T * M X N -> K X N
-      vjps.push_back(matmul(complex_transpose(primals[0]), cotan, s));
+      vjps.push_back(matmul_vjp_b(cotan, primals[0], primals[1], reorder, s));
     }
   }
   return vjps;
