@@ -12,7 +12,7 @@ runs:
   steps:
     - name: Install tests dependencies
       shell: bash
-      run: uv pip install tensorflow
+      run: uv pip install pytest pytest-xdist tensorflow
 
     - name: Run tests
       shell: bash
@@ -47,7 +47,11 @@ runs:
           echo "::endgroup::"
 
           echo "::group::Run Python tests"
-          uv run python/tests/run.py -v
+          if ${{ inputs.toolkit == 'cpu' }} ; then
+            uv run pytest --durations=10 -n 4 || uv run pytest --last-failed
+          else
+            uv run pytest --durations=10
+          fi
           echo "::endgroup::"
 
           if ${{ inputs.toolkit != 'cpu' }} ; then
