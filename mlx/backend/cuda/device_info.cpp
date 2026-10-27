@@ -6,7 +6,6 @@
 #include <cuda_runtime.h>
 #include <dlfcn.h>
 
-#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <variant>
@@ -229,20 +228,7 @@ bool is_available() {
 }
 
 std::vector<std::string> get_arch_list() {
-  int count = 0;
-  if (cudaGetDeviceCount(&count) != cudaSuccess) {
-    cudaGetLastError();
-    return {};
-  }
-  if (count == 0) {
-    return {};
-  }
-  std::vector<std::string> arch_list;
-  std::istringstream archs(MLX_CUDA_ARCH_LIST);
-  for (std::string arch; std::getline(archs, arch, ',');) {
-    arch_list.push_back(std::move(arch));
-  }
-  return arch_list;
+  return {MLX_CUDA_ARCH_LIST};
 }
 
 } // namespace cu

@@ -18,7 +18,6 @@ void init_cuda(nb::module_& m) {
       R"pbdoc(
       Check if the CUDA back-end is available.
       )pbdoc");
-
   cuda.def(
       "get_arch_list",
       &mx::cu::get_arch_list,
@@ -29,7 +28,7 @@ void init_cuda(nb::module_& m) {
       notation, for example ``["sm_80", "sm_120a", "compute_120"]``.
 
       Returns:
-          list(str): The compiled architectures, or an empty list if no
-          CUDA device can be used.
+          list(str): The compiled architectures, or an empty list if CUDA
+          backend is not enabled.
       )pbdoc");
 }
