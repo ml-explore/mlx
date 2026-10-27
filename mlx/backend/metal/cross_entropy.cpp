@@ -84,9 +84,9 @@ void CrossEntropyVJP::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   assert(inputs.size() == 4);
-  auto& in_pre = inputs[0];
-  auto& out = outputs[0];
-  if (in_pre.size() == 0) {
+  array in = inputs[0];
+  array& out = outputs[0];
+  if (in.size() == 0) {
     throw std::invalid_argument("[cross_entropy] Received empty array.");
   }
 
@@ -94,8 +94,11 @@ void CrossEntropyVJP::eval_gpu(
   auto& d = metal::device(s.device);
   auto& compute_encoder = metal::get_command_encoder(s);
 
-  bool donate_in = in_pre.is_donatable() || !in_pre.flags().row_contiguous;
-  auto in = ensure_row_contiguous(in_pre, compute_encoder, s);
+  bool donate_in = in.is_donatable();
+  if (!in.flags().row_contiguous) {
+    in = contiguous_copy_gpu(in, s);
+    donate_in = true;
+  }
   auto targets = ensure_row_contiguous(inputs[1], compute_encoder, s);
   auto loss = ensure_row_contiguous(inputs[2], compute_encoder, s);
   auto cotan = ensure_row_contiguous(inputs[3], compute_encoder, s);
