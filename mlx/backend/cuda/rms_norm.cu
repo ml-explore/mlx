@@ -128,6 +128,58 @@ __global__ void rms_norm_small(
   }
 }
 
+template <typename T, int GROUP_DIM, int GROUPS, bool ALIGNED, int N_READS = 8>
+__global__ void rms_norm_rows(
+    const T* x,
+    const T* w,
+    T* out,
+    float eps,
+    uint32_t axis_size,
+    uint32_t n_rows,
+    int64_t w_stride) {
+  auto block = cg::this_thread_block();
+  auto group = cg::tiled_partition<GROUP_DIM>(block);
+
+  int64_t row = static_cast<int64_t>(blockIdx.x) * GROUPS +
+      static_cast<int64_t>(group.meta_group_rank());
+  if (row >= n_rows) {
+    return;
+  }
+  x += row * axis_size;
+  out += row * axis_size;
+
+  auto index = group.thread_rank();
+  AlignedVector<T, N_READS> xn;
+  AlignedVector<T, N_READS> wn;
+  if constexpr (ALIGNED) {
+    xn = unsafe_load_vector<N_READS>(x, index);
+    wn = unsafe_load_vector<N_READS>(w, index);
+  } else {
+    xn = load_vector<N_READS>(x, index, axis_size, T(0));
+    wn = load_vector<N_READS>(w, index, axis_size, w_stride, T(0));
+  }
+
+  float normalizer = 0;
+#pragma unroll
+  for (int j = 0; j < N_READS; ++j) {
+    float t = static_cast<float>(xn[j]);
+    normalizer += t * t;
+  }
+  normalizer = cg::reduce(group, normalizer, cg::plus<float>{});
+  normalizer = rsqrt(normalizer / axis_size + eps);
+
+#pragma unroll
+  for (int j = 0; j < N_READS; j++) {
+    float y = static_cast<float>(xn[j]) * normalizer;
+    xn[j] = wn[j] * static_cast<T>(y);
+  }
+  if constexpr (ALIGNED) {
+    unsafe_store_vector<N_READS>(out, index, xn);
+  } else {
+    store_vector<N_READS>(out, index, xn, axis_size);
+  }
+}
+
 // TODO: load x to the shared memory and reload from shared memory after the
 // reduction
 template <typename T, int BLOCK_DIM, int N_READS = 4>
@@ -241,6 +293,84 @@ __global__ void rms_norm_vjp_small_fallback(
   if constexpr (HAS_W) {
     store_vector<N_READS>(gw, index, wn, axis_size);
   }
+}
+
+template <typename T, int GROUP_DIM, int GROUPS, bool ALIGNED, int N_READS = 8>
+__global__ void rms_norm_vjp_rows(
+    const T* x,
+    const T* w,
+    const T* g,
+    T* gx,
+    float* gw, // one fp32 partial per group
+    float eps,
+    int32_t axis_size,
+    int32_t n_rows,
+    int64_t w_stride) {
+  auto block = cg::this_thread_block();
+  auto group = cg::tiled_partition<GROUP_DIM>(block);
+
+  const int64_t group_id = static_cast<int64_t>(blockIdx.x) * GROUPS +
+      static_cast<int64_t>(group.meta_group_rank());
+  const int64_t n_groups = static_cast<int64_t>(gridDim.x) * GROUPS;
+  auto index = group.thread_rank();
+
+  AlignedVector<T, N_READS> wn;
+  if constexpr (ALIGNED) {
+    wn = unsafe_load_vector<N_READS>(w, index);
+  } else {
+    wn = load_vector<N_READS>(w, index, axis_size, w_stride, T(0));
+  }
+  AlignedVector<float, N_READS> gw_group;
+#pragma unroll
+  for (int k = 0; k < N_READS; k++) {
+    gw_group[k] = 0.f;
+  }
+
+  for (int64_t row = group_id; row < n_rows; row += n_groups) {
+    const T* x_row = x + row * axis_size;
+    const T* g_row = g + row * axis_size;
+    T* gx_row = gx + row * axis_size;
+    AlignedVector<T, N_READS> xn;
+    AlignedVector<T, N_READS> gn;
+    if constexpr (ALIGNED) {
+      xn = unsafe_load_vector<N_READS>(x_row, index);
+      gn = unsafe_load_vector<N_READS>(g_row, index);
+    } else {
+      xn = load_vector<N_READS>(x_row, index, axis_size, T(0));
+      gn = load_vector<N_READS>(g_row, index, axis_size, T(0));
+    }
+
+    float2 factors = {};
+#pragma unroll
+    for (int k = 0; k < N_READS; k++) {
+      float t = static_cast<float>(xn[k]);
+      float wi = wn[k];
+      float gi = gn[k];
+      float wg = wi * gi;
+      factors = plus_f2(factors, {wg * t, t * t});
+    }
+    factors = cg::reduce(group, factors, plus_f2);
+    float meangwx = factors.x / axis_size;
+    float normalizer = rsqrt(factors.y / axis_size + eps);
+    float normalizer3 = normalizer * normalizer * normalizer;
+
+#pragma unroll
+    for (int k = 0; k < N_READS; k++) {
+      float xi = static_cast<float>(xn[k]);
+      float wi = wn[k];
+      float gi = gn[k];
+      gw_group[k] += gi * xi * normalizer;
+      xn[k] = static_cast<T>(normalizer * wi * gi - xi * meangwx * normalizer3);
+    }
+    if constexpr (ALIGNED) {
+      unsafe_store_vector<N_READS>(gx_row, index, xn);
+    } else {
+      store_vector<N_READS>(gx_row, index, xn, axis_size);
+    }
+  }
+
+  // Groups that got no rows store zeros
+  store_vector<N_READS>(gw + group_id * axis_size, index, gw_group, axis_size);
 }
 
 template <typename T, bool HAS_W, int BLOCK_SIZE, int N_CHUNKS, int N_READS = 8>
@@ -499,6 +629,17 @@ void dispatch_group_dim(int axis_size, F&& f) {
   }
 }
 
+template <int n_per_thread, typename F>
+void dispatch_rows_group_dim(int axis_size, F&& f) {
+  if (axis_size <= n_per_thread * 8) {
+    f(std::integral_constant<int, 8>{}, std::integral_constant<int, 16>{});
+  } else if (axis_size <= n_per_thread * 16) {
+    f(std::integral_constant<int, 16>{}, std::integral_constant<int, 8>{});
+  } else {
+    f(std::integral_constant<int, 32>{}, std::integral_constant<int, 4>{});
+  }
+}
+
 template <int BLOCK_SIZE, typename F>
 void dispatch_chunks(int n_chunks, F&& f) {
   auto block_size = std::integral_constant<int, BLOCK_SIZE>{};
@@ -582,7 +723,31 @@ void RMSNorm::eval_gpu(
   dispatch_float_types(out.dtype(), "rms_norm", [&](auto type_tag) {
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     constexpr int N_READS = 16 / sizeof(DataType);
-    if (axis_size <= N_READS * 128 * 8) {
+    if (axis_size <= N_READS * WARP_SIZE) {
+      dispatch_rows_group_dim<
+          N_READS>(axis_size, [&](auto group_dim, auto groups_per_block) {
+        constexpr int GROUP_DIM = group_dim();
+        constexpr int GROUPS = groups_per_block();
+        bool aligned = (axis_size == N_READS * GROUP_DIM) && (w_stride == 1) &&
+            (reinterpret_cast<uintptr_t>(gpu_ptr<DataType>(x)) % 16 == 0) &&
+            (reinterpret_cast<uintptr_t>(gpu_ptr<DataType>(w)) % 16 == 0) &&
+            (reinterpret_cast<uintptr_t>(gpu_ptr<DataType>(out)) % 16 == 0);
+        auto kernel = aligned
+            ? cu::rms_norm_rows<DataType, GROUP_DIM, GROUPS, true, N_READS>
+            : cu::rms_norm_rows<DataType, GROUP_DIM, GROUPS, false, N_READS>;
+        encoder.add_kernel_node(
+            kernel,
+            (n_rows + GROUPS - 1) / GROUPS,
+            GROUP_DIM * GROUPS,
+            gpu_ptr<DataType>(x),
+            gpu_ptr<DataType>(w),
+            gpu_ptr<DataType>(out),
+            eps_,
+            axis_size,
+            n_rows,
+            w_stride);
+      });
+    } else if (axis_size <= N_READS * 128 * 8) {
       dispatch_num_chunks<
           N_READS>(axis_size, [&](auto block_size, auto n_chunks) {
         constexpr int BLOCK_SIZE = block_size();
@@ -722,7 +887,77 @@ void RMSNormVJP::eval_gpu(
 
   bool handled = false;
 
-  if (has_w && cu::device(s.device).compute_capability_major() >= 8) {
+  // Sums the fp32 dw partials of the persistent kernels into gw
+  auto reduce_gw_partials = [&](const array& gw_temp) {
+    ReductionPlan plan(
+        ReductionOpType::ContiguousStridedReduce,
+        {gw_temp.shape(0)},
+        {axis_size});
+    if (gw.dtype() == float32) {
+      col_reduce(encoder, gw_temp, gw, Reduce::ReduceType::Sum, {0}, plan);
+    } else {
+      array gw_f32({axis_size}, float32, nullptr, {});
+      col_reduce(encoder, gw_temp, gw_f32, Reduce::ReduceType::Sum, {0}, plan);
+      encoder.add_temporary(gw_f32);
+      copy_gpu(gw_f32, gw, CopyType::General, s);
+    }
+  };
+
+  if (has_w) {
+    dispatch_float_types(gx.dtype(), "rms_norm_vjp", [&](auto type_tag) {
+      using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+      constexpr int N_READS = 16 / sizeof(DataType);
+      if (axis_size > N_READS * WARP_SIZE) {
+        return;
+      }
+      dispatch_rows_group_dim<
+          N_READS>(axis_size, [&](auto group_dim, auto groups_per_block) {
+        constexpr int GROUP_DIM = group_dim();
+        constexpr int GROUPS = groups_per_block();
+        auto is_aligned = [](const array& a) {
+          return reinterpret_cast<uintptr_t>(gpu_ptr<DataType>(a)) % 16 == 0;
+        };
+        bool aligned = (axis_size == N_READS * GROUP_DIM) && (w_stride == 1) &&
+            is_aligned(x) && is_aligned(w) && is_aligned(g) && is_aligned(gx);
+        auto kernel = aligned
+            ? cu::rms_norm_vjp_rows<DataType, GROUP_DIM, GROUPS, true, N_READS>
+            : cu::rms_norm_vjp_rows<
+                  DataType,
+                  GROUP_DIM,
+                  GROUPS,
+                  false,
+                  N_READS>;
+        int num_blocks = rmsnorm_vjp_num_blocks(
+            kernel, s, GROUP_DIM * GROUPS, 0, (n_rows + GROUPS - 1) / GROUPS);
+        array gw_temp({num_blocks * GROUPS, axis_size}, float32, nullptr, {});
+        gw_temp.set_data(cu::malloc_async(gw_temp.nbytes(), encoder));
+        encoder.add_temporary(gw_temp);
+        encoder.set_input_array(x);
+        encoder.set_input_array(w);
+        encoder.set_input_array(g);
+        encoder.set_output_array(gx);
+        encoder.set_output_array(gw_temp);
+        encoder.add_kernel_node(
+            kernel,
+            num_blocks,
+            GROUP_DIM * GROUPS,
+            gpu_ptr<DataType>(x),
+            gpu_ptr<DataType>(w),
+            gpu_ptr<DataType>(g),
+            gpu_ptr<DataType>(gx),
+            gpu_ptr<float>(gw_temp),
+            eps_,
+            axis_size,
+            n_rows,
+            w_stride);
+        reduce_gw_partials(gw_temp);
+        handled = true;
+      });
+    });
+  }
+
+  if (!handled && has_w &&
+      cu::device(s.device).compute_capability_major() >= 8) {
     dispatch_float_types(gx.dtype(), "rms_norm_vjp", [&](auto type_tag) {
       using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
       constexpr int N_READS = 16 / sizeof(DataType);
@@ -782,21 +1017,7 @@ void RMSNormVJP::eval_gpu(
                 axis_size,
                 n_rows,
                 w_stride);
-
-            ReductionPlan plan(
-                ReductionOpType::ContiguousStridedReduce,
-                {num_blocks},
-                {axis_size});
-            if (gw.dtype() == float32) {
-              col_reduce(
-                  encoder, gw_temp, gw, Reduce::ReduceType::Sum, {0}, plan);
-            } else {
-              array gw_f32({axis_size}, float32, nullptr, {});
-              col_reduce(
-                  encoder, gw_temp, gw_f32, Reduce::ReduceType::Sum, {0}, plan);
-              encoder.add_temporary(gw_f32);
-              copy_gpu(gw_f32, gw, CopyType::General, s);
-            }
+            reduce_gw_partials(gw_temp);
             handled = true;
           });
     });
