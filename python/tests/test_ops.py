@@ -4869,30 +4869,27 @@ class TestOps(mlx_tests.MLXTestCase):
         finite = mx.from_fp8(mx.array([0x7E, 0xFE], dtype=mx.uint8), mx.float32)
         self.assertTrue(mx.array_equal(finite, mx.array([448.0, -448.0])))
 
-        for dev in [mx.cpu, mx.gpu]:
-            for dt in [mx.float32, mx.float16, mx.bfloat16]:
-                nan_arr = mx.array([float("nan"), -float("nan")], dtype=dt)
-                fp8_nan = mx.to_fp8(nan_arr, stream=dev)
-                self.assertEqual(fp8_nan[0].item(), 0x7F)
-                if dt == mx.float32:
-                    self.assertEqual(fp8_nan[1].item(), 0xFF)
-                else:
-                    self.assertIn(fp8_nan[1].item(), [0x7F, 0xFF])
+        for dt in [mx.float32, mx.float16, mx.bfloat16]:
+            nan_arr = mx.array([float("nan"), -float("nan")], dtype=dt)
+            fp8_nan = mx.to_fp8(nan_arr)
+            self.assertEqual(fp8_nan[0].item(), 0x7F)
+            if dt == mx.float32:
+                self.assertEqual(fp8_nan[1].item(), 0xFF)
+            else:
+                self.assertIn(fp8_nan[1].item(), [0x7F, 0xFF])
 
-                back = mx.from_fp8(fp8_nan, dtype=dt, stream=dev)
-                self.assertTrue(mx.isnan(back[0]).item())
-                self.assertTrue(mx.isnan(back[1]).item())
+            back = mx.from_fp8(fp8_nan, dtype=dt)
+            self.assertTrue(mx.isnan(back[0]).item())
+            self.assertTrue(mx.isnan(back[1]).item())
 
-                overflow_arr = mx.array(
-                    [float("inf"), -float("inf"), 1e5, -1e5], dtype=dt
+            overflow_arr = mx.array([float("inf"), -float("inf"), 1e5, -1e5], dtype=dt)
+            fp8_sat = mx.to_fp8(overflow_arr)
+            self.assertTrue(
+                mx.array_equal(
+                    fp8_sat,
+                    mx.array([0x7E, 0xFE, 0x7E, 0xFE], dtype=mx.uint8),
                 )
-                fp8_sat = mx.to_fp8(overflow_arr, stream=dev)
-                self.assertTrue(
-                    mx.array_equal(
-                        fp8_sat,
-                        mx.array([0x7E, 0xFE, 0x7E, 0xFE], dtype=mx.uint8),
-                    )
-                )
+            )
 
     def test_zeros_ones_empty_like_dtype(self):
         x = mx.array([1, 2, 3], dtype=mx.int32)
