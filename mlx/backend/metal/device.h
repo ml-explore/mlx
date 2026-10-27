@@ -100,6 +100,12 @@ class MLX_API CommandEncoder {
   bool needs_commit() const;
   void commit(std::function<void()> completion = nullptr);
   void synchronize();
+#ifndef NDEBUG
+  void verify_graph(
+      const char* primitive_name,
+      const std::vector<array>& inputs,
+      const std::vector<array>& outputs);
+#endif
 
   MTL::CommandBuffer* get_command_buffer() const {
     return buffer_.get();
@@ -143,6 +149,9 @@ class MLX_API CommandEncoder {
   std::unordered_set<MTL::Resource*> concurrent_outputs_;
   std::unordered_set<const void*> all_inputs_;
   std::unordered_set<const void*> all_outputs_;
+#ifndef NDEBUG
+  std::vector<void*> registered_data_ptrs_;
+#endif
 
   // A map of prior command encoder outputs to their corresponding fence.
   std::unordered_map<const void*, NS::SharedPtr<MTL::Fence>> prev_ce_outputs_;
@@ -166,7 +175,7 @@ class MLX_API Device {
   int get_architecture_gen() const {
     return arch_gen_;
   }
-  std::tuple<int, int> get_max_ops_mb_per_buffer() const {
+  std::tuple<int, int> get_default_max_ops_mb_per_buffer() const {
     return std::make_tuple(max_ops_per_buffer_, max_mb_per_buffer_);
   }
 

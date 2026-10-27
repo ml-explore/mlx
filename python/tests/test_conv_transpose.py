@@ -836,10 +836,10 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     np.random.seed(0)
                     x = mx.array(np.random.normal(size=in_shape).astype(np.float32))
                     w = mx.array(np.random.normal(size=wt_shape).astype(np.float32))
-                    with mlx_tests.scoped_env(MLX_CONV_UNFOLD_TILE_ROWS=None):
+                    with mx.config.scoped_update(MLX_CONV_UNFOLD_TILE_ROWS=0):
                         untiled = conv(x, w, **kwargs)
                         mx.eval(untiled)
-                    with mlx_tests.scoped_env(MLX_CONV_UNFOLD_TILE_ROWS=str(tile_rows)):
+                    with mx.config.scoped_update(MLX_CONV_UNFOLD_TILE_ROWS=tile_rows):
                         tiled = conv(x, w, **kwargs)
                         mx.eval(tiled)
                     self.assertTrue(np.allclose(untiled, tiled, atol=1e-4))

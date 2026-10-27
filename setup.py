@@ -290,6 +290,14 @@ if __name__ == "__main__":
             "torch>=2.9",
             "typing_extensions",
         ],
+        "docs": [
+            "sphinx",
+            "sphinx-book-theme",
+            "sphinx-copybutton",
+            "clang",
+            "libclang",
+            "hawkmoth",
+        ],
     }
     entry_points = {
         "console_scripts": [

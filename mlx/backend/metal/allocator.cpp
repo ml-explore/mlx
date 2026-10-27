@@ -172,7 +172,11 @@ Buffer MetalAllocator::malloc(size_t size) {
         get_cache_memory() - max_pool_size_);
   }
 
-  return Buffer{static_cast<void*>(buf)};
+  Buffer buffer(static_cast<void*>(buf));
+#ifndef NDEBUG
+  track_allocation(buffer.raw_ptr(), size);
+#endif
+  return buffer;
 }
 
 void MetalAllocator::clear_cache() {
@@ -185,6 +189,11 @@ void MetalAllocator::free(Buffer buffer) {
   if (buf == nullptr) {
     return;
   }
+
+#ifndef NDEBUG
+  untrack_allocation(buffer.raw_ptr());
+#endif
+
   std::unique_lock lk(mutex_);
   active_memory_ -= buf->length();
   if (get_cache_memory() < max_pool_size_) {
