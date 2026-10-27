@@ -315,6 +315,26 @@ class TestFFT(mlx_tests.MLXTestCase):
         out_np = np.abs(np.fft.fft(np.tile(np.reshape(np.array(b_np), (1, 4)), (4, 1))))
         np.testing.assert_allclose(out_mx, out_np, atol=1e-5, rtol=1e-5)
 
+    def test_fftn_size_one_axes(self):
+        shapes = [(4, 1, 8), (1, 8), (8, 1), (1, 1, 8), (2, 1, 3, 1), (1, 1, 1)]
+        for shape in shapes:
+            r = np.arange(np.prod(shape), dtype=np.float32).reshape(shape) + 1
+            c = r + 1j * r
+            for axes in [tuple(range(len(shape))), tuple(reversed(range(len(shape))))]:
+                sizes = tuple(shape[axis] for axis in axes)
+                for op in ["fftn", "ifftn", "rfftn", "irfftn"]:
+                    with self.subTest(shape=shape, axes=axes, op=op):
+                        x = r if op == "rfftn" else c
+                        if op == "irfftn":
+                            x = np.fft.rfftn(r, axes=axes)
+                        self.check_mx_np(
+                            getattr(mx.fft, op),
+                            getattr(np.fft, op),
+                            x,
+                            axes=axes,
+                            s=sizes,
+                        )
+
     def test_fft_into_ifft(self):
         n_fft = 8193
         mx.random.seed(0)
