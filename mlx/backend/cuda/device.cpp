@@ -18,7 +18,7 @@ void* get_noop_kernel_ptr();
 namespace {
 
 bool use_cuda_graphs() {
-  static bool use_graphs = env::get_var("MLX_USE_CUDA_GRAPHS", true);
+  static bool use_graphs = config::get("MLX_USE_CUDA_GRAPHS", true);
   return use_graphs;
 }
 

@@ -213,7 +213,7 @@ inline void bootstrap_unique_id(
     memcpy(&serv.sin_addr, he->h_addr_list[0], he->h_length);
     serv.sin_port = htons(port);
 
-    const int timeout_ms = env::nccl_timeout(nccl_timeout);
+    const int timeout_ms = config::get("MLX_NCCL_TIMEOUT", nccl_timeout);
     bool connected = false;
 
     const char* dbg = std::getenv("NCCL_DEBUG");
