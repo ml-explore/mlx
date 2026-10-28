@@ -1276,10 +1276,14 @@ bool use_qmm_nax_splitk(const array& x, int M, int N, int K, int group_size) {
 int qmm_nax_k_partitions(int M, int N, int K, int group_size) {
   int tiles = (N / 64) * ceildiv(M, 64);
   int k_align = std::max(64, group_size);
+  // About 6 threadgroups per GPU core, more for long K, at most 256.
+  int cores = metal::gpu_core_count();
+  int max_tgs =
+      cores > 0 ? std::min(256, 6 * cores * std::max(K, 2048) / 2048) : 256;
   int split_k = 1;
-  // Double up to 4 while the grid stays within 256 threadgroups and every
+  // Double up to 4 while the grid stays within max_tgs threadgroups and every
   // partition keeps at least 256 columns.
-  while ((split_k < 4) && (tiles * split_k * 2 <= 256) &&
+  while ((split_k < 4) && (tiles * split_k * 2 <= max_tgs) &&
          (K % (split_k * 2 * k_align) == 0) && (K / (split_k * 2) >= 256)) {
     split_k *= 2;
   }
