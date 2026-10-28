@@ -871,6 +871,53 @@ class TestBlas(mlx_tests.MLXTestCase):
             expected = 0.5 * (a @ b) + 2.0 * c
             self.assertTrue(mx.allclose(out, expected, rtol=tol, atol=tol))
 
+    def test_addmm_cuda_reduction_precision(self):
+        if mx.default_device() == mx.cpu or not mx.cuda.is_available():
+            self.skipTest("requires CUDA")
+
+        # Large K and a small output favor split-K algorithms.
+        M, K, N = 16, 4096, 16
+        for dtype in (mx.float32, mx.float16, mx.bfloat16, mx.float32, mx.float16):
+            eps = 2**-10 if dtype == mx.float16 else 2**-7
+            cases = [([1, eps / 2], eps / 2, 1.0, 1.0)]
+            if dtype == mx.float16:
+                cases.append(([32768, 32768], 0.0, 0.5, 0.0))
+            for values, bias, alpha, beta in cases:
+                # The dot products and scaled results are exact in float32.
+                expected = alpha * sum(values) + beta * bias
+                a_np = np.zeros((M, K), dtype=np.float32)
+                a_np[:, :2] = values
+                b_np = np.ones((K, N), dtype=np.float32)
+                for ta, tb in (
+                    (False, False),
+                    (False, True),
+                    (True, False),
+                    (True, True),
+                ):
+                    with self.subTest(
+                        dtype=str(dtype), transpose=(ta, tb), values=values
+                    ):
+                        a = mx.array(a_np.T.copy() if ta else a_np, dtype=dtype)
+                        b = mx.array(b_np.T.copy() if tb else b_np, dtype=dtype)
+                        a, b = (a.T if ta else a), (b.T if tb else b)
+                        c = mx.array(np.full((M, 2 * N), bias), dtype=dtype)[:, ::2]
+                        ref = mx.full((M, N), expected, dtype=dtype)
+                        self.assertEqualArray(
+                            mx.addmm(c, a, b, alpha, beta), ref, atol=0, rtol=0
+                        )
+                        self.assertEqualArray(
+                            mx.addmm(
+                                mx.stack([c, -c]),
+                                mx.stack([a, -a]),
+                                mx.stack([b, b]),
+                                alpha,
+                                beta,
+                            ),
+                            mx.stack([ref, -ref]),
+                            atol=0,
+                            rtol=0,
+                        )
+
     def test_wide_addmm(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("requires GPU")

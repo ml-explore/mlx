@@ -46,36 +46,54 @@ auto& cublas_handles_cache() {
     ~CublasHandles() {
       if (handle) {
         CHECK_CUBLAS_ERROR(cublasLtDestroy(handle));
+      }
+      if (pref) {
         CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceDestroy(pref));
+      }
+      if (pref_compute) {
+        CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceDestroy(pref_compute));
       }
     }
     cublasLtHandle_t handle{nullptr};
     cublasLtMatmulPreference_t pref{nullptr};
+    cublasLtMatmulPreference_t pref_compute{nullptr};
   };
   static thread_local std::vector<CublasHandles> cache(gpu::device_count());
   return cache;
 }
 
-auto get_cublas_handles(cu::Device& device) {
+auto get_cublas_handles(cu::Device& device, cudaDataType_t output_type) {
   auto& storage = cublas_handles_cache().at(device.cuda_device());
   if (!storage.handle) {
-    // Create cublasLt handle.
     device.make_current();
     CHECK_CUBLAS_ERROR(cublasLtCreate(&storage.handle));
+  }
+  bool narrow_output = output_type == CUDA_R_16F || output_type == CUDA_R_16BF;
+  // GEMMs retain these pointers, so cached preferences must stay immutable.
+  auto& pref = narrow_output ? storage.pref_compute : storage.pref;
+  if (!pref) {
     // The recommended cublas workspace size is 4 MiB for pre-Hopper and 32
     // MiB for Hopper+:
     // https://docs.nvidia.com/cuda/cublas/#cublassetworkspace
     uint64_t MiB = 1024 * 1024;
     uint64_t workspace_size =
         device.compute_capability_major() >= 9 ? 32 * MiB : 4 * MiB;
-    CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceCreate(&storage.pref));
+    CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceCreate(&pref));
     CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceSetAttribute(
-        storage.pref,
+        pref,
         CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES,
         &workspace_size,
         sizeof(uint64_t)));
+    if (narrow_output) {
+      uint32_t reduction_scheme_mask = CUBLASLT_REDUCTION_SCHEME_COMPUTE_TYPE;
+      CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceSetAttribute(
+          pref,
+          CUBLASLT_MATMUL_PREF_REDUCTION_SCHEME_MASK,
+          &reduction_scheme_mask,
+          sizeof(reduction_scheme_mask)));
+    }
   }
-  return std::make_tuple(storage.handle, storage.pref);
+  return std::make_tuple(storage.handle, pref);
 }
 
 } // namespace
@@ -120,7 +138,7 @@ void CublasMatmulBase::init_base(
   M_ = a_rows;
   N_ = b_cols;
   scale_type_ = scale_type;
-  std::tie(handle_, pref_) = get_cublas_handles(device);
+  std::tie(handle_, pref_) = get_cublas_handles(device, output_type);
   heuristic_.state = CUBLAS_STATUS_NOT_INITIALIZED;
 
   CHECK_CUBLAS_ERROR(
