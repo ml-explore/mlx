@@ -1,7 +1,6 @@
 import argparse
 import csv
 import itertools
-import os
 import time
 
 import mlx.core as mx
@@ -71,28 +70,24 @@ def benchmark_shape(B, T, Hk, Hv, Dk, Dv, chunk_sizes):
     shape_str = f"B={B} T={T} Hk={Hk} Hv={Hv} Dk={Dk} Dv={Dv}"
     denom = N_iter_bench * N_iter_func
 
-    os.environ["GATED_DELTA_CHUNK"] = "0"
-    mx.eval(*mx.fast.gated_delta_update(q, k, v, g, b, initial_state=h0))
-    ms_seq = (
-        bench(do_kernel_bench, mx.fast.gated_delta_update, q, k, v, g, b, h0)
-        / denom
-        * 1e3
-    )
+    with mx.config.scoped_update(MLX_GATED_DELTA_CHUNK=0):
+        mx.eval(*mx.fast.gated_delta_update(q, k, v, g, b, initial_state=h0))
+        ms_seq = (
+            bench(do_kernel_bench, mx.fast.gated_delta_update, q, k, v, g, b, h0)
+            / denom
+            * 1e3
+        )
 
     speedups = []
     for C in (c for c in chunk_sizes if c != 0):
-        try:
-            os.environ["GATED_DELTA_CHUNK"] = str(C)
+        with mx.config.scoped_update(MLX_GATED_DELTA_CHUNK=C):
             mx.eval(*mx.fast.gated_delta_update(q, k, v, g, b, initial_state=h0))
             ms_c = (
                 bench(do_kernel_bench, mx.fast.gated_delta_update, q, k, v, g, b, h0)
                 / denom
                 * 1e3
             )
-            speedups.append(ms_seq / ms_c if ms_c > 0 else float("nan"))
-        except Exception as ex:
-            print(f"  chunk {C} failed: {ex}")
-            speedups.append(float("nan"))
+        speedups.append(ms_seq / ms_c if ms_c > 0 else float("nan"))
 
     return shape_str, f"{ms_seq:.3f}", speedups, ms_seq
 
@@ -154,23 +149,23 @@ def benchmark_variants_shape(B, T, Hk, Hv, Dk, Dv, do_backward, variants):
         runner = do_kernel_bench
 
     def time_one(variant):
-        os.environ["GATED_DELTA_VJP_FALLBACK"] = "1" if variant == "fallback" else "0"
-        C = "16" if variant == "nax" else "0"
+        config = {}
+        if variant == "fallback":
+            config["MLX_GATED_DELTA_FALLBACK"] = 1
+            config["MLX_GATED_DELTA_VJP_FALLBACK"] = 1
+        C = 16 if variant == "nax" else 0
         if do_backward:
-            os.environ["GATED_DELTA_CHUNK"] = "16"
-            os.environ["GATED_DELTA_CHUNK_VJP"] = C
+            config["MLX_GATED_DELTA_CHUNK"] = 16
+            config["MLX_GATED_DELTA_CHUNK_VJP"] = C
         else:
-            os.environ["GATED_DELTA_CHUNK"] = C
-        mx.eval(*fn(q, k, v, g, b, h0))
-        return bench(runner, fn, q, k, v, g, b, h0) / denom * 1e3
+            config["MLX_GATED_DELTA_CHUNK"] = C
+        with mx.config.scoped_update(**config):
+            mx.eval(*fn(q, k, v, g, b, h0))
+            return bench(runner, fn, q, k, v, g, b, h0) / denom * 1e3
 
     times = []
     for variant in variants:
-        try:
-            times.append(time_one(variant))
-        except Exception as ex:
-            print(f"  {variant} failed: {ex}")
-            times.append(float("nan"))
+        times.append(time_one(variant))
     mx.clear_cache()
     return times
 
@@ -186,9 +181,11 @@ def run_variants_benchmark(run_full, do_backward=False, do_fallback=False):
         Ts = [8, 32, 64, 128, 256, 512]
     Hks, Hvs, Dks, Dvs = [16], [32], [128], [128]
 
-    variants = ["seq", "nax"]
+    variants = ["seq"]
+    if mx.metal.is_available():
+        variants.append("nax")
     if do_fallback:
-        variants = ["fallback"] + variants
+        variants.insert(0, "fallback")
 
     headers = ["B", "T", "Hk", "Hv", "Dk", "Dv"]
     headers += [f"{v} (ms)" for v in variants]
@@ -203,15 +200,7 @@ def run_variants_benchmark(run_full, do_backward=False, do_fallback=False):
     print("-" * sum(col_widths))
 
     for B, T, Hk, Hv, Dk, Dv in itertools.product(Bs, Ts, Hks, Hvs, Dks, Dvs):
-        try:
-            times = benchmark_variants_shape(
-                B, T, Hk, Hv, Dk, Dv, do_backward, variants
-            )
-        except Exception as ex:
-            print(f"  B={B} T={T} failed: {ex}")
-            mx.clear_cache()
-            continue
-
+        times = benchmark_variants_shape(B, T, Hk, Hv, Dk, Dv, do_backward, variants)
         base = times[0]
         row = [f"{B}", f"{T}", f"{Hk}", f"{Hv}", f"{Dk}", f"{Dv}"]
         row += [f"{t:.3f}" for t in times]
@@ -225,7 +214,9 @@ if __name__ == "__main__":
     parser.add_argument("--full", "-f", action="store_true")
     parser.add_argument("--csv", "-c", action="store_true")
     parser.add_argument("--csv_out", "-co", default="benchmark_results.csv")
-    parser.add_argument("--fallback", "-fb", action="store_true")
+    parser.add_argument(
+        "--fallback", "-fb", action="store_true", default=mx.cuda.is_available()
+    )
     parser.add_argument("--backward", "-bw", action="store_true")
     args = parser.parse_args()
 

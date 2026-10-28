@@ -1,5 +1,6 @@
 // Copyright © 2026 Apple Inc.
-#include <sstream>
+
+#include <fmt/format.h>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/gpu/copy.h"
@@ -15,14 +16,14 @@ namespace mlx::core::fast {
 namespace {
 
 inline int gated_delta_chunk_size(int T) {
-  const bool nax = metal::is_nax_available();
-  const int C = config::get("GATED_DELTA_CHUNK", T > 8 ? (nax ? 16 : 8) : 1);
+  bool nax = metal::is_nax_available();
+  int C = config::get("MLX_GATED_DELTA_CHUNK", T > 8 ? (nax ? 16 : 8) : 1);
   return (C == 16 && !nax) ? 8 : C;
 }
 
 inline int gated_delta_chunk_size_vjp() {
-  const bool nax = metal::is_nax_available();
-  return nax ? config::get("GATED_DELTA_CHUNK_VJP", 16) : 1;
+  bool nax = metal::is_nax_available();
+  return nax ? config::get("MLX_GATED_DELTA_CHUNK_VJP", 16) : 1;
 }
 
 inline int gated_delta_ckpt(int chunk) {
@@ -66,11 +67,11 @@ array scratch_alloc(Shape shape, Dtype dt, const Stream& s) {
 } // namespace
 
 bool GatedDeltaUpdate::use_fallback(
-    const int Hk,
-    const int Dk,
-    const int Hv,
-    const int Dv,
-    const bool has_mask,
+    int Hk,
+    int Dk,
+    int Hv,
+    int Dv,
+    bool has_mask,
     Stream s) {
   if (s.device == Device::cpu) {
     return true;
@@ -108,9 +109,8 @@ void GatedDeltaUpdate::eval_gpu(
   int C = vectorized_g ? 1 : gated_delta_chunk_size(T);
   const int ckpt = gated_delta_ckpt(C);
 
-  std::string suffix = get_type_string(q.dtype()) + "_" + std::to_string(Dk) +
-      "_" + std::to_string(Dv) + "_" + std::to_string(Hk) + "_" +
-      std::to_string(Hv);
+  std::string suffix =
+      fmt::format("{}_{}_{}_{}_{}", get_type_string(q.dtype()), Dk, Dv, Hk, Hv);
 
   auto& compute_encoder = metal::get_command_encoder(s);
 
@@ -134,8 +134,8 @@ void GatedDeltaUpdate::eval_gpu(
 
   switch (C) {
     case 16: {
-      std::string base_name = "gated_delta_fused_nax_" + suffix + "_" +
-          std::to_string(C) + "_" + std::to_string(ckpt);
+      std::string base_name =
+          fmt::format("gated_delta_fused_nax_{}_{}_{}", suffix, C, ckpt);
 
       auto delta_kernel = get_gated_delta_nax_kernel(
           d, base_name, base_name, func_consts, q, Dk, Dv, Hk, Hv, C, ckpt);
@@ -161,7 +161,7 @@ void GatedDeltaUpdate::eval_gpu(
     }
     case 8: {
       std::string base_name =
-          "gated_delta_fused_chunk_" + suffix + "_" + std::to_string(C);
+          fmt::format("gated_delta_fused_chunk_{}_{}", suffix, C);
 
       auto delta_kernel =
           get_gated_delta_kernel(d, base_name, base_name, func_consts);
@@ -187,7 +187,7 @@ void GatedDeltaUpdate::eval_gpu(
       // Ckpt is a template parameter now, so even the inference path has to
       // name one; it just never stores.
       std::string base_name =
-          "seq_gated_delta_" + suffix + "_" + std::to_string(ckpt);
+          fmt::format("seq_gated_delta_{}_{}", suffix, ckpt);
 
       auto delta_kernel = get_gated_delta_kernel(
           d,
@@ -225,15 +225,12 @@ void GatedDeltaUpdate::eval_gpu(
 // BACKWARD PASS STUFF //
 /////////////////////////
 bool GatedDeltaUpdateVJP::use_fallback(
-    const int Hk,
-    const int Dk,
-    const int Hv,
-    const int Dv,
+    int Hk,
+    int Dk,
+    int Hv,
+    int Dv,
     Stream s) {
   if (s.device == Device::cpu) {
-    return true;
-  }
-  if (config::get("GATED_DELTA_VJP_FALLBACK", 0) != 0) {
     return true;
   }
   return !supported_gated_delta_shape(Hk, Dk, Hv, Dv);
@@ -325,9 +322,8 @@ void GatedDeltaUpdateVJP::eval_gpu(
   array y_scratch = scratch_alloc({B, T, Hv, Dv}, q.dtype(), s);
   array hf_scratch = scratch_alloc({B, Hv, Dv, Dk}, float32, s);
 
-  std::string suffix = get_type_string(q.dtype()) + "_" + std::to_string(Dk) +
-      "_" + std::to_string(Dv) + "_" + std::to_string(Hk) + "_" +
-      std::to_string(Hv);
+  std::string suffix =
+      fmt::format("{}_{}_{}_{}_{}", get_type_string(q.dtype()), Dk, Dv, Hk, Hv);
 
   bool save_state = true;
   metal::MTLFCList save_consts = {
@@ -341,17 +337,17 @@ void GatedDeltaUpdateVJP::eval_gpu(
 
   switch (C) {
     case 16: {
-      const std::string ckpt_suffix =
-          "_" + std::to_string(C) + "_" + std::to_string(ckpt);
+      const std::string ckpt_suffix = fmt::format("_{}_{}", C, ckpt);
 
       // Forward save pass.
       {
-        std::string base_name = "gated_delta_fused_nax_" + suffix + ckpt_suffix;
+        std::string base_name =
+            fmt::format("gated_delta_fused_nax_{}{}", suffix, ckpt_suffix);
 
         auto delta_kernel = get_gated_delta_nax_kernel(
             d,
             base_name,
-            base_name + "_save",
+            fmt::format("{}_save", base_name),
             save_consts,
             q,
             Dk,
@@ -382,7 +378,7 @@ void GatedDeltaUpdateVJP::eval_gpu(
 
       {
         std::string base_name =
-            "gated_delta_vjp_fused_nax_" + suffix + ckpt_suffix;
+            fmt::format("gated_delta_vjp_fused_nax_{}{}", suffix, ckpt_suffix);
 
         auto delta_kernel = get_gated_delta_vjp_nax_kernel(
             d,
@@ -426,8 +422,8 @@ void GatedDeltaUpdateVJP::eval_gpu(
       {
         int n_total = B * Hv;
 
-        std::string base_name = "gated_delta_dgamma_to_dg_" +
-            get_type_string(q.dtype()) + "_" + std::to_string(C);
+        std::string base_name = fmt::format(
+            "gated_delta_dgamma_to_dg_{}_{}", get_type_string(q.dtype()), C);
 
         auto dgamma_kernel = get_gated_delta_vjp_nax_kernel(
             d,
@@ -458,10 +454,11 @@ void GatedDeltaUpdateVJP::eval_gpu(
     }
     case 1:
     case 0: {
-      const std::string ckpt_suffix = "_" + std::to_string(ckpt);
+      const std::string ckpt_suffix = fmt::format("_{}", ckpt);
 
       {
-        std::string base_name = "seq_gated_delta_" + suffix + ckpt_suffix;
+        std::string base_name =
+            fmt::format("seq_gated_delta_{}{}", suffix, ckpt_suffix);
 
         auto delta_kernel = get_gated_delta_kernel(
             d,
@@ -487,7 +484,8 @@ void GatedDeltaUpdateVJP::eval_gpu(
       }
 
       {
-        std::string base_name = "seq_gated_delta_vjp_" + suffix + ckpt_suffix;
+        std::string base_name =
+            fmt::format("seq_gated_delta_vjp_{}{}", suffix, ckpt_suffix);
 
         auto delta_kernel = get_gated_delta_vjp_kernel(
             d,
