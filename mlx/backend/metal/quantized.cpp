@@ -919,8 +919,8 @@ bool use_qmm_t_nax_staged(
     const array& x,
     bool transpose,
     bool aligned_n,
-    const std::string& mode) {
-  return transpose && aligned_n && (mode == "affine") &&
+    bool has_global_scale) {
+  return transpose && aligned_n && !has_global_scale &&
       (x.dtype() == float16 || x.dtype() == bfloat16) && (x.offset() % 8 == 0);
 }
 
@@ -952,7 +952,7 @@ void qmm_nax(
   int bk = 64;
 
   bool aligned_n = transpose && (N % bn == 0);
-  if (use_qmm_t_nax_staged(x, transpose, aligned_n, mode)) {
+  if (use_qmm_t_nax_staged(x, transpose, aligned_n, global_scale.has_value())) {
     wm = 4;
     wn = 1;
     bm = 64;
@@ -1312,7 +1312,7 @@ void qmm_splitk_nax(
   int wn = 2;
   MTL::Size group_dims(32, wn, wm);
 
-  if (use_qmm_t_nax_staged(x, true, true, mode)) {
+  if (use_qmm_t_nax_staged(x, true, true, false)) {
     bm = 64;
     wm = 4;
     wn = 1;
