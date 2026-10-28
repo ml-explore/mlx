@@ -23,6 +23,7 @@
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/dtype_utils.h"
+#include "mlx/stream.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::distributed::nccl {
@@ -318,7 +319,18 @@ class NCCLGroup : public GroupImpl {
       : rank_(rank), size_(size), comm_(std::move(comm)) {}
 
   Stream communication_stream(StreamOrDevice s) override {
-    return to_stream(s, Device::gpu);
+    static bool enabled = env::get_var("MLX_NCCL_COMM_STREAM", 1);
+    if (!enabled || !std::holds_alternative<std::monostate>(s)) {
+      return to_stream(s, Device::gpu);
+    }
+    static Stream comm = [] {
+      auto stream = new_stream(Device::gpu);
+      int least, greatest;
+      CHECK_CUDA(cudaDeviceGetStreamPriorityRange(&least, &greatest));
+      cu::set_stream_priority(stream, greatest);
+      return stream;
+    }();
+    return comm;
   }
 
   int rank() override {

@@ -202,9 +202,9 @@ std::pair<int, int> get_graph_limits(Device& d) {
   return {env::max_ops_per_buffer(ops), env::max_mb_per_buffer(mb)};
 }
 
-CommandEncoder::CommandEncoder(Device& d)
+CommandEncoder::CommandEncoder(Device& d, int priority)
     : device_(d),
-      stream_(d),
+      stream_(d, priority),
       graph_(d),
       worker_(std::make_shared<Worker>(d)),
       graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {
@@ -613,6 +613,13 @@ CommandEncoder& get_command_encoder(Stream s) {
     }
   }
   return it->second;
+}
+
+void set_stream_priority(Stream s, int priority) {
+  auto& encoders = get_command_encoders();
+  auto& d = device(s.device);
+  encoders.erase(s.index);
+  encoders.try_emplace(s.index, d, priority);
 }
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders() {

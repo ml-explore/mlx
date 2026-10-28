@@ -33,7 +33,7 @@ class GroupImpl {
 };
 
 /* Define the MLX stream that the communication should happen in. */
-Stream communication_stream(Group group, StreamOrDevice s = {});
+MLX_API Stream communication_stream(Group group, StreamOrDevice s = {});
 
 /* Perform an all reduce sum operation */
 void all_sum(Group group, const array& input, array& output, Stream stream);

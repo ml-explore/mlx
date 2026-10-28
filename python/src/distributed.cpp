@@ -8,6 +8,7 @@
 #include <nanobind/stl/vector.h>
 
 #include "mlx/distributed/distributed.h"
+#include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/ops.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
@@ -157,6 +158,32 @@ void init_distributed(nb::module_& parent_module) {
 
         Returns:
           Group: The group representing all the launched processes.
+      )pbdoc");
+
+  m.def(
+      "communication_stream",
+      [](std::optional<mx::distributed::Group> group) {
+        return mx::distributed::detail::communication_stream(
+            group.has_value() ? group.value() : mx::distributed::init());
+      },
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      nb::sig(
+          "def communication_stream(*, group: Group | None = None) -> Stream"),
+      R"pbdoc(
+        The stream the collectives of ``group`` run on when no ``stream`` is
+        given.
+
+        With the NCCL backend this is a dedicated high priority GPU stream
+        (set ``MLX_NCCL_COMM_STREAM=0`` to use the default stream), so work
+        put on it, e.g. packing the input of an ``all_gather``, runs beside
+        the computation instead of between it.
+
+        Args:
+          group (Group, optional): The group. Defaults to the global group.
+
+        Returns:
+          Stream: The communication stream.
       )pbdoc");
 
   m.def(

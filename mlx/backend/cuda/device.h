@@ -33,7 +33,7 @@ class MLX_API CommandEncoder {
     CommandEncoder& enc;
   };
 
-  explicit CommandEncoder(Device& d);
+  explicit CommandEncoder(Device& d, int priority = 0);
   ~CommandEncoder();
 
   CommandEncoder(const CommandEncoder&) = delete;
@@ -213,6 +213,7 @@ class MLX_API Device {
 MLX_API Device& device(int cuda_device);
 MLX_API Device& device(mlx::core::Device d);
 MLX_API CommandEncoder& get_command_encoder(Stream s);
+MLX_API void set_stream_priority(Stream s, int priority);
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders();
 std::unordered_map<int, CommandEncoder>& get_global_command_encoders();

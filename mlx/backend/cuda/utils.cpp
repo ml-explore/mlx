@@ -76,9 +76,15 @@ void CudaGraphExec::instantiate(cudaGraph_t graph) {
   CHECK_CUDA_ERROR(cudaGraphInstantiate(&handle_, graph, nullptr, nullptr, 0));
 }
 
-CudaStream::CudaStream(cu::Device& device) {
+CudaStream::CudaStream(cu::Device& device, int priority) {
   device.make_current();
-  CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&handle_, cudaStreamNonBlocking));
+  if (priority == 0) {
+    CHECK_CUDA_ERROR(
+        cudaStreamCreateWithFlags(&handle_, cudaStreamNonBlocking));
+  } else {
+    CHECK_CUDA_ERROR(cudaStreamCreateWithPriority(
+        &handle_, cudaStreamNonBlocking, priority));
+  }
 }
 
 void* allocate_workspace(cu::CommandEncoder& encoder, size_t workspace_size) {
