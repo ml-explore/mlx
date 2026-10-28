@@ -327,7 +327,7 @@ class NCCLGroup : public GroupImpl {
       auto stream = new_stream(Device::gpu);
       int least, greatest;
       CHECK_CUDA(cudaDeviceGetStreamPriorityRange(&least, &greatest));
-      cu::set_stream_priority(stream, greatest);
+      cu::set_stream_options(stream, greatest, false);
       return stream;
     }();
     return comm;

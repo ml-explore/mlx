@@ -70,7 +70,7 @@ void Device::make_current() {
 
 CommandEncoder::CaptureContext::CaptureContext(CommandEncoder& enc) : enc(enc) {
   enc.device().make_current();
-  if (!use_cuda_graphs()) {
+  if (!enc.use_graphs_) {
     return;
   }
   CHECK_CUDA_ERROR(
@@ -78,7 +78,7 @@ CommandEncoder::CaptureContext::CaptureContext(CommandEncoder& enc) : enc(enc) {
 }
 
 CommandEncoder::CaptureContext::~CaptureContext() {
-  if (!use_cuda_graphs()) {
+  if (!enc.use_graphs_) {
     enc.node_count_++;
     return;
   }
@@ -97,7 +97,7 @@ CommandEncoder::ConcurrentContext::ConcurrentContext(CommandEncoder& enc)
 
 CommandEncoder::ConcurrentContext::~ConcurrentContext() {
   enc.in_concurrent_ = false;
-  if (!use_cuda_graphs()) {
+  if (!enc.use_graphs_) {
     return;
   }
 
@@ -202,12 +202,13 @@ std::pair<int, int> get_graph_limits(Device& d) {
   return {env::max_ops_per_buffer(ops), env::max_mb_per_buffer(mb)};
 }
 
-CommandEncoder::CommandEncoder(Device& d, int priority)
+CommandEncoder::CommandEncoder(Device& d, int priority, bool use_graphs)
     : device_(d),
       stream_(d, priority),
       graph_(d),
       worker_(std::make_shared<Worker>(d)),
       graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {
+  use_graphs_ = use_graphs && use_cuda_graphs();
   std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits(d);
   worker_->start();
 }
@@ -226,7 +227,7 @@ void CommandEncoder::add_completed_handler(std::function<void()> task) {
 }
 
 void CommandEncoder::set_input_array(const array& arr) {
-  if (!use_cuda_graphs()) {
+  if (!use_graphs_) {
     return;
   }
   bytes_in_graph_ += arr.data_size();
@@ -235,7 +236,7 @@ void CommandEncoder::set_input_array(const array& arr) {
 }
 
 void CommandEncoder::set_output_array(const array& arr) {
-  if (!use_cuda_graphs()) {
+  if (!use_graphs_) {
     return;
   }
 
@@ -254,7 +255,7 @@ void CommandEncoder::add_kernel_node_raw(
   bool use_cluster = !is_empty_dim(cluster_dim);
   assert(!use_cluster || device_.compute_capability_major() >= 9);
 
-  if (!use_cuda_graphs()) {
+  if (!use_graphs_) {
     node_count_++;
     cudaLaunchConfig_t config = {};
     config.gridDim = grid_dim;
@@ -301,7 +302,7 @@ void CommandEncoder::add_kernel_node_raw(
   bool use_cluster = !is_empty_dim(cluster_dim);
   assert(!use_cluster || device_.compute_capability_major() >= 9);
 
-  if (!use_cuda_graphs()) {
+  if (!use_graphs_) {
     node_count_++;
     CUlaunchConfig config = {};
     config.gridDimX = grid_dim.x;
@@ -426,7 +427,7 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
 }
 
 void CommandEncoder::add_graph_node(cudaGraph_t child) {
-  if (!use_cuda_graphs()) {
+  if (!use_graphs_) {
     node_count_++;
     CudaGraphExec graph_exec;
     graph_exec.instantiate(child);
@@ -445,7 +446,7 @@ void CommandEncoder::add_graph_node(
     cudaGraph_t child,
     const std::string& subgraph_key,
     bool is_updatable) {
-  if (!use_cuda_graphs()) {
+  if (!use_graphs_) {
     node_count_++;
     CudaGraphExec graph_exec;
     graph_exec.instantiate(child);
@@ -505,7 +506,7 @@ void CommandEncoder::commit_impl() {
   if (!temporaries_.empty()) {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
   }
-  if (use_cuda_graphs() && node_count_ > 0) {
+  if (use_graphs_ && node_count_ > 0) {
     if (!from_nodes_.empty()) {
 #if CUDART_VERSION >= 13000
       CHECK_CUDA_ERROR(cudaGraphAddDependencies(
@@ -615,11 +616,11 @@ CommandEncoder& get_command_encoder(Stream s) {
   return it->second;
 }
 
-void set_stream_priority(Stream s, int priority) {
+void set_stream_options(Stream s, int priority, bool use_graphs) {
   auto& encoders = get_command_encoders();
   auto& d = device(s.device);
   encoders.erase(s.index);
-  encoders.try_emplace(s.index, d, priority);
+  encoders.try_emplace(s.index, d, priority, use_graphs);
 }
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders() {

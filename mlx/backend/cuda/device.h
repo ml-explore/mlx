@@ -33,7 +33,7 @@ class MLX_API CommandEncoder {
     CommandEncoder& enc;
   };
 
-  explicit CommandEncoder(Device& d, int priority = 0);
+  explicit CommandEncoder(Device& d, int priority = 0, bool use_graphs = true);
   ~CommandEncoder();
 
   CommandEncoder(const CommandEncoder&) = delete;
@@ -161,6 +161,7 @@ class MLX_API CommandEncoder {
   std::unordered_map<std::uintptr_t, GraphNode> node_map_;
   size_t bytes_in_graph_{0};
   bool is_graph_updatable_{true};
+  bool use_graphs_{true};
   int max_ops_per_graph_;
   int max_mb_per_graph_;
 };
@@ -213,7 +214,7 @@ class MLX_API Device {
 MLX_API Device& device(int cuda_device);
 MLX_API Device& device(mlx::core::Device d);
 MLX_API CommandEncoder& get_command_encoder(Stream s);
-MLX_API void set_stream_priority(Stream s, int priority);
+MLX_API void set_stream_options(Stream s, int priority, bool use_graphs);
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders();
 std::unordered_map<int, CommandEncoder>& get_global_command_encoders();
