@@ -200,17 +200,19 @@ template <
     int BN = 64,
     int WM = 2,
     int WN = 2,
-    typename Wtype = bfloat>
+    typename Wtype = bfloat,
+    typename U = T>
 METAL_FUNC void fp_qmm_t_impl(
     const device uint32_t* w,
     const device uint8_t* scales,
     const device float* global_scale,
     const device T* x,
-    device T* y,
+    device U* y,
     threadgroup Wtype* Ws,
     const constant int& K,
     const constant int& N,
     const constant int& M,
+    const constant int& K_eff,
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -284,7 +286,7 @@ METAL_FUNC void fp_qmm_t_impl(
 
   dispatch_bool(!is_unaligned_sm, [&](auto kAlignedM) {
     dispatch_bool(aligned_N || !is_unaligned_bn, [&](auto kAlignedN) {
-      for (int k = 0; k < K; k += BK) {
+      for (int k = 0; k < K_eff; k += BK) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         if constexpr (kAlignedN.value) {
           loader_w.load_unsafe();
@@ -648,7 +650,89 @@ template <
       WM,
       WN,
       Wtype>(
-      w, scales, global_scale, x, y, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
+      w,
+      scales,
+      global_scale,
+      x,
+      y,
+      Ws,
+      K,
+      N,
+      M,
+      K,
+      tid,
+      lid,
+      simd_gid,
+      simd_lid);
+}
+
+template <
+    typename T,
+    int group_size,
+    int bits,
+    bool has_global_scale, // unimplemented
+    bool aligned_N,
+    bool batched, // unused
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2,
+    typename Wtype = bfloat>
+[[kernel]] void fp_qmm_t_nax_splitk(
+    const device uint32_t* w [[buffer(0)]],
+    const device uint8_t* scales [[buffer(1)]],
+    const device T* x [[buffer(3)]],
+    device float* y [[buffer(4)]],
+    const constant int& K [[buffer(5)]],
+    const constant int& N [[buffer(6)]],
+    const constant int& M [[buffer(7)]],
+    const constant int& k_partition_size [[buffer(8)]],
+    const constant int& split_k_partition_stride [[buffer(9)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  constexpr int BK_padded = (BK + 16 / sizeof(Wtype));
+  constexpr int pack_factor = get_pack_factor<8, bits>();
+  constexpr int bytes_per_pack = get_bytes_per_pack();
+
+  threadgroup Wtype Ws[BN * BK_padded];
+
+  const int k_start = tid.z * k_partition_size;
+  x += k_start;
+  auto wl = (const device uint8_t*)w;
+  wl += k_start * bytes_per_pack / pack_factor;
+  scales += k_start / group_size;
+  y += tid.z * static_cast<int64_t>(split_k_partition_stride);
+
+  fp_qmm_t_impl<
+      T,
+      group_size,
+      bits,
+      false,
+      aligned_N,
+      BM,
+      BK,
+      BN,
+      WM,
+      WN,
+      Wtype,
+      float>(
+      (const device uint32_t*)wl,
+      scales,
+      nullptr,
+      x,
+      y,
+      Ws,
+      K,
+      N,
+      M,
+      k_partition_size,
+      tid,
+      lid,
+      simd_gid,
+      simd_lid);
 }
 
 template <
@@ -790,7 +874,20 @@ template <
       WM,
       WN,
       Wtype>(
-      w, scales, global_scale, x, y, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
+      w,
+      scales,
+      global_scale,
+      x,
+      y,
+      Ws,
+      K,
+      N,
+      M,
+      K,
+      tid,
+      lid,
+      simd_gid,
+      simd_lid);
 }
 
 template <

@@ -777,6 +777,46 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertLess(error.item(), tol * rounding.item())
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_mid_m_fp(self):
+        # Mid-size M for the fp modes: every split count, both row tilings and
+        # the boundaries between the vector and split-K routes.
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        shapes = [
+            (256, 4096),
+            (1024, 6144),
+            (2560, 1024),
+            (4096, 2048),
+        ]
+        for (K, N), M, mode, dtype in product(
+            shapes,
+            [8, 16, 17, 33, 130],
+            ["mxfp4", "mxfp8", "nvfp4"],
+            [mx.bfloat16, mx.float16, mx.float32],
+        ):
+            with self.subTest(K=K, N=N, M=M, mode=mode, dtype=dtype):
+                k1, k2 = mx.random.split(mx.random.key(M * K + N))
+                x = mx.random.normal((M, K), key=k1).astype(dtype)
+                w = (0.02 * mx.random.normal((N, K), key=k2)).astype(dtype)
+                wq = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(*wq, mode=mode)
+                y_ref = mx.matmul(
+                    x.astype(mx.float32),
+                    w_hat.astype(mx.float32).T,
+                    stream=mx.cpu,
+                )
+                y = mx.quantized_matmul(x, *wq, transpose=True, mode=mode)
+                self.assertEqual(y.shape, (M, N))
+                error = (y.astype(mx.float32) - y_ref).abs().mean()
+                if dtype == mx.float32:
+                    rounding = mx.array(1)
+                else:
+                    rounding = (
+                        (y_ref.astype(dtype).astype(mx.float32) - y_ref).abs().mean()
+                    )
+                self.assertLess(error.item(), 1.1 * rounding.item())
+
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_qmm_fp4_half_loader(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("Covers GPU kernels only")
