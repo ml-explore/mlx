@@ -55,20 +55,20 @@ bool fast::ScaledDotProductAttention::supports_bool_mask() {
 }
 
 bool fast::GatedDeltaUpdate::use_fallback(
-    const int Hk,
-    const int Dk,
-    const int Hv,
-    const int Dv,
-    const bool has_mask,
+    int Hk,
+    int Dk,
+    int Hv,
+    int Dv,
+    bool has_mask,
     Stream s) {
   return true;
 }
 
 bool fast::GatedDeltaUpdateVJP::use_fallback(
-    const int Hk,
-    const int Dk,
-    const int Hv,
-    const int Dv,
+    int Hk,
+    int Dk,
+    int Hv,
+    int Dv,
     Stream s) {
   return true;
 }
