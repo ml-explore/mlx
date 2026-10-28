@@ -2466,6 +2466,14 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.concatenate([a, b], axis=1)
         self.assertTrue(mx.array_equal(out, b))
 
+    def test_concatenate_large_offsets(self):
+        # Row 2**27 of the output starts at offset 2**31
+        rows = 2**27 + 1
+        a = mx.broadcast_to(mx.array([[1, 2, 3]], mx.uint8), (rows, 3))
+        b = mx.broadcast_to(mx.array([[4] * 13], mx.uint8), (rows, 13))
+        y = mx.concatenate([a, b], axis=1)
+        self.assertEqual(y[-1].tolist(), [1, 2, 3] + [4] * 13)
+
     def test_meshgrid(self):
         x = mx.array([1, 2, 3], dtype=mx.int32)
         y = np.array([1, 2, 3], dtype=np.int32)
