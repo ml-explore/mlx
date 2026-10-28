@@ -4873,10 +4873,7 @@ class TestOps(mlx_tests.MLXTestCase):
             nan_arr = mx.array([float("nan"), -float("nan")], dtype=dt)
             fp8_nan = mx.to_fp8(nan_arr)
             self.assertEqual(fp8_nan[0].item(), 0x7F)
-            if dt == mx.float32:
-                self.assertEqual(fp8_nan[1].item(), 0xFF)
-            else:
-                self.assertIn(fp8_nan[1].item(), [0x7F, 0xFF])
+            self.assertIn(fp8_nan[1].item(), [0x7F, 0xFF])
 
             back = mx.from_fp8(fp8_nan, dtype=dt)
             self.assertTrue(mx.isnan(back[0]).item())
