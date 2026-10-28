@@ -1324,6 +1324,13 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.arctan2(z, z)
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal only")
+    def test_expm1_argument_reduction(self):
+        x = np.array([-10, -1, -0.5, 0, 0.5, 1, 3, 10], dtype=np.float32)
+        expected = np.expm1(x.astype(np.float64))
+        result = mx.expm1(mx.array(x), stream=mx.gpu)
+        np.testing.assert_allclose(result, expected, rtol=2e-7, atol=0)
+
     def test_erf(self):
         inputs = [-5, 0.0, 0.5, 1.0, 2.0, 10.0]
         x = mx.array(inputs)
