@@ -635,6 +635,8 @@ inline bool use_qmv_mma(
     const array& w,
     const array& scales,
     QuantizationMode mode,
+    int group_size,
+    int bits,
     int M,
     int N,
     int K,
@@ -642,13 +644,16 @@ inline bool use_qmv_mma(
   if (K % 128 != 0) {
     return false;
   }
-  if (mode == QuantizationMode::Affine) {
-    return false;
-  }
   // Require aligned vector load.
   if ((x.offset() % (8 * x.itemsize())) || (w.offset() % 16) ||
       (scales.offset() % 2)) {
     return false;
+  }
+  // Only qmv_nax reads affine weights, with 3 to 8 bits.
+  if (mode == QuantizationMode::Affine) {
+    return metal::is_nax_available() && (bits >= 3 && bits != 7) &&
+        (group_size >= 32) && (x.dtype() == float16 || x.dtype() == bfloat16) &&
+        (N >= 512) && (K >= 1024) && (N % 32 == 0);
   }
   // Route for large K/N. Below 2048, nvfp4 with few rows is faster on
   // qmv_wide, which runs for M < 8 or M * N < 16384.
@@ -670,6 +675,7 @@ void qmv_mma(
     const array& x,
     const array& w,
     const array& scales,
+    const std::optional<array>& biases,
     array& out,
     int group_size,
     int bits,
@@ -711,13 +717,17 @@ void qmv_mma(
 
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
-  compute_encoder.set_input_array(w, 0);
-  compute_encoder.set_input_array(scales, 1);
-  compute_encoder.set_input_array(x, 2);
-  compute_encoder.set_output_array(out, 3);
-  compute_encoder.set_bytes(K, 4);
-  compute_encoder.set_bytes(N, 5);
-  compute_encoder.set_bytes(M, 6);
+  int c = 0;
+  compute_encoder.set_input_array(w, c++);
+  compute_encoder.set_input_array(scales, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
+  }
+  compute_encoder.set_input_array(x, c++);
+  compute_encoder.set_output_array(out, c++);
+  compute_encoder.set_bytes(K, c++);
+  compute_encoder.set_bytes(N, c++);
+  compute_encoder.set_bytes(M, c++);
   compute_encoder.dispatch_threadgroups(
       MTL::Size(N / bn, 1, 1), MTL::Size(32, wk, 1));
 }
@@ -2170,8 +2180,8 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // For few rows use qmv_mma when N/K is large enough.
   if (transpose_ && non_batched && (M >= 6) && (M <= 16) &&
-      use_qmv_mma(x, w, scales, mode_, M, N, K, d)) {
-    qmv_mma(x, w, scales, out, group_size_, bits_, M, N, K, d, s, mode);
+      use_qmv_mma(x, w, scales, mode_, group_size_, bits_, M, N, K, d)) {
+    qmv_mma(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
     return;
   }
 

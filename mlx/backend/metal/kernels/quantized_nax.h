@@ -2133,3 +2133,154 @@ template <
     });
   });
 }
+
+// Few rows of x times transposed weights, as fp_qmv_nax. Each thread reads 32
+// values of a weight row per K step, which lie in one quantization group.
+template <typename T, int group_size, int bits, int WK = 8, int BN = 32>
+[[kernel]] void affine_qmv_nax(
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
+    device T* y [[buffer(4)]],
+    const constant int& K [[buffer(5)]],
+    const constant int& N [[buffer(6)]],
+    const constant int& M [[buffer(7)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]]) {
+  static_assert(BN % 32 == 0, "BN should be divisible by 32");
+  static_assert(
+      bits >= 3 && bits != 7 && bits <= 8 && group_size >= 32,
+      "qmv_nax reads 3, 4, 5, 6 and 8 bits with groups of 32 or more");
+
+  using Frag = BaseNAXFrag;
+  constexpr int BK = 128;
+  constexpr short TK = BK / 16;
+  constexpr short TN = BN / 16;
+  // The thread's 32 values take bits words
+  constexpr short words = bits;
+  constexpr uint mask = (1 << bits) - 1;
+
+  const short2 coord = Frag::get_coord();
+  const short fm = coord.y;
+  const int k_lane = 8 * coord.x;
+  const int row_words = K / 32 * bits;
+  const int row_groups = K / group_size;
+
+  const int y_col = tid.x * BN;
+  w += (y_col + fm) * static_cast<int64_t>(row_words) + k_lane / 32 * bits;
+  scales += (y_col + fm) * static_cast<int64_t>(row_groups);
+  biases += (y_col + fm) * static_cast<int64_t>(row_groups);
+  x += fm * static_cast<int64_t>(K) + k_lane;
+  y += y_col;
+  const bool x_rows[2] = {fm < M, fm + 8 < M};
+
+  NAXTile<float, 1, TN> Dtile;
+  Dtile.clear();
+
+  for (int k = simd_gid * BK; k < K; k += WK * BK) {
+    vec<T, 8> xs[2][4];
+    STEEL_PRAGMA_UNROLL
+    for (short r = 0; r < 2; r++) {
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < 4; i++) {
+        xs[r][i] = x_rows[r]
+            ? *(const device vec<T, 8>*)(x + r * 8 * static_cast<int64_t>(K) +
+                                         k + 8 * i)
+            : vec<T, 8>(0);
+      }
+    }
+    const int g = (k + k_lane) / group_size;
+    uint ws[TN][2][words];
+    float ss[TN][2];
+    float bs[TN][2];
+    STEEL_PRAGMA_UNROLL
+    for (short t = 0; t < TN; t++) {
+      STEEL_PRAGMA_UNROLL
+      for (short r = 0; r < 2; r++) {
+        const int row = 16 * t + 8 * r;
+        const device uint32_t* wt =
+            w + row * static_cast<int64_t>(row_words) + k / 32 * bits;
+        if constexpr (words % 4 == 0) {
+          STEEL_PRAGMA_UNROLL
+          for (short l = 0; l < words; l += 4) {
+            const uint4 v = *(const device uint4*)(wt + l);
+            ws[t][r][l] = v.x;
+            ws[t][r][l + 1] = v.y;
+            ws[t][r][l + 2] = v.z;
+            ws[t][r][l + 3] = v.w;
+          }
+        } else {
+          STEEL_PRAGMA_UNROLL
+          for (short l = 0; l < words; l++) {
+            ws[t][r][l] = wt[l];
+          }
+        }
+        const int64_t sg = row * static_cast<int64_t>(row_groups) + g;
+        ss[t][r] = float(scales[sg]);
+        bs[t][r] = float(biases[sg]);
+      }
+    }
+
+    STEEL_PRAGMA_UNROLL
+    for (short f = 0; f < TK; f++) {
+      typename Frag::template dtype_frag_t<T> a;
+      STEEL_PRAGMA_UNROLL
+      for (short r = 0; r < 2; r++) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < 4; j++) {
+          a[4 * r + j] = xs[r][f / 2][4 * (f % 2) + j];
+        }
+      }
+      // Values 4 * f to 4 * f + 3 of the thread's 32, which can span two
+      // words
+      const short bit = 4 * f * bits;
+      const short word = bit / 32;
+      const short shift = bit % 32;
+      typename Frag::template dtype_frag_t<T> b[TN];
+      STEEL_PRAGMA_UNROLL
+      for (short t = 0; t < TN; t++) {
+        STEEL_PRAGMA_UNROLL
+        for (short r = 0; r < 2; r++) {
+          uint q = ws[t][r][word] >> shift;
+          if (shift + 4 * bits > 32) {
+            q |= ws[t][r][word + 1] << (32 - shift);
+          }
+          STEEL_PRAGMA_UNROLL
+          for (short j = 0; j < 4; j++) {
+            b[t][4 * r + j] = static_cast<T>(
+                ss[t][r] * float((q >> (bits * j)) & mask) + bs[t][r]);
+          }
+        }
+      }
+      STEEL_PRAGMA_UNROLL
+      for (short t = 0; t < TN; t += 2) {
+        Frag::mma(
+            Dtile.frag_at(0, t),
+            Dtile.frag_at(0, t + 1),
+            a,
+            metal::bool_constant<false>{},
+            b[t],
+            b[t + 1],
+            metal::bool_constant<true>{});
+      }
+    }
+  }
+
+  threadgroup float Ps[(WK - 1) * 16 * BN];
+  if (simd_gid > 0) {
+    Dtile.template store<float, BN, 1>(Ps + (simd_gid - 1) * 16 * BN);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (simd_gid == 0) {
+    for (int i = 0; i < WK - 1; i++) {
+      NAXTile<float, 1, TN> Ptile;
+      Ptile.template load<float, BN, 1>(Ps + i * 16 * BN);
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < Dtile.kNumFrags; j++) {
+        Dtile.val_frags[j] += Ptile.val_frags[j];
+      }
+    }
+    Dtile.store_rows(y, N, M);
+  }
+}
