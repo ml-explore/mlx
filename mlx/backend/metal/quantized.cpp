@@ -650,10 +650,14 @@ inline bool use_qmv_mma(
       (scales.offset() % 2)) {
     return false;
   }
-  // Route for large K/N.
+  // Route for large K/N. Below 2048, nvfp4 with few rows is faster on
+  // qmv_wide, which runs for M < 8 or M * N < 16384.
   if (metal::is_nax_available()) {
-    return (env::enable_tf32() || x.dtype() != float32) && (N >= 2048) &&
-        (K >= 2048) && (N % 32 == 0);
+    bool nvfp4_wide = (mode == QuantizationMode::Nvfp4) &&
+        (M < 8 || (M < 12 && M * N < 16384));
+    int min_size = nvfp4_wide ? 2048 : 1024;
+    return (env::enable_tf32() || x.dtype() != float32) && (N >= min_size) &&
+        (K >= min_size) && (N % 32 == 0);
   }
   if (d.get_architecture().back() == 'd') {
     return (N >= 4096) && (K >= 4096) && (N % 16 == 0);
