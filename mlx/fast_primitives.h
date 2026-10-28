@@ -414,6 +414,7 @@ class GatedDeltaUpdate : public Custom {
       const int Hv,
       const int Dv,
       const bool has_mask,
+      const bool vector_gate,
       Stream s);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)

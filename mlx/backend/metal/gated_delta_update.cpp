@@ -71,11 +71,17 @@ bool GatedDeltaUpdate::use_fallback(
     const int Hv,
     const int Dv,
     const bool has_mask,
+    const bool vector_gate,
     Stream s) {
   if (s.device == Device::cpu) {
     return true;
   }
   if (has_mask) {
+    return true;
+  }
+  // The fused kernels read the gate as [B, T, Hv]. A per-channel gate
+  // [B, T, Hv, Dk] must take the fallback, which handles both ranks.
+  if (vector_gate) {
     return true;
   }
   return !supported_gated_delta_shape(Hk, Dk, Hv, Dv);

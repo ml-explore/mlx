@@ -30,6 +30,7 @@ bool fast::GatedDeltaUpdate::use_fallback(
     const int Hv,
     const int Dv,
     const bool has_mask,
+    const bool vector_gate,
     Stream s) {
   return true;
 }
