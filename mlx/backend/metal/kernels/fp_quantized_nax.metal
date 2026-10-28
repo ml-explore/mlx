@@ -8,7 +8,7 @@
 #include "mlx/backend/metal/kernels/fp_quantized_nax.h"
 
 ///////////////////////////////////////////////////////////////////////////////
-// fp_qmm_t_nax, fp_gather_qmm_t_nax
+// fp_qmm_t_nax, fp_gather_qmm_t_nax, fp_qmm_t_nax_splitk
 ///////////////////////////////////////////////////////////////////////////////
 
 #define instantiate_qmm(name, type, mode, group_size, bits, has_global_scale, aligned_n, batch, bm, bn) \
@@ -41,6 +41,10 @@
   instantiate_qmm_aligned_batched(qmm_t_nax, type, mode, group_size, bits, has_global_scale, 64, 64) \
   instantiate_qmm_aligned_batched(qmm_t_nax, type, mode, group_size, bits, has_global_scale, 32, 64) \
   instantiate_qmm_aligned(gather_qmm_t_nax, type, mode, group_size, bits, has_global_scale, 64, 64)
+
+#define instantiate_qmm_splitk_all_missing_global_scale(type, mode, group_size, bits) \
+  instantiate_qmm(qmm_t_nax_splitk, type, mode, group_size, bits, 0, 1, 0, 32, 64)     \
+  instantiate_qmm(qmm_t_nax_splitk, type, mode, group_size, bits, 0, 1, 0, 64, 64)
 
 ///////////////////////////////////////////////////////////////////////////////
 // fp_gather_qmm_rhs_nax
@@ -93,7 +97,8 @@
   instantiate_grouped_qmm_all(type, mode, group_size, bits, has_global_scale)     \
 
 #define instantiate_quantized_all_missing_global_scale(type, mode, group_size, bits) \
-  instantiate_qmv_nax_all_missing_global_scale(type, mode, group_size, bits)
+  instantiate_qmv_nax_all_missing_global_scale(type, mode, group_size, bits)        \
+  instantiate_qmm_splitk_all_missing_global_scale(type, mode, group_size, bits)
 
 #define instantiate_quantized_all_quants(type)            \
   instantiate_quantized_all(type, mxfp4, 32, 4, 0) \
