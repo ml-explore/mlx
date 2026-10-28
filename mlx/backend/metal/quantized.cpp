@@ -641,7 +641,15 @@ inline bool use_qmv_mma(
     int N,
     int K,
     metal::Device& d) {
-  if (K % 128 != 0) {
+  bool nax = metal::is_nax_available();
+  bool affine = mode == QuantizationMode::Affine;
+  // affine_qmv_mma beats qmv from 3 rows below gen 15 and qmv_wide from 4
+  // rows above; the other paths from 6.
+  int min_rows = 6;
+  if (affine && !nax) {
+    min_rows = d.get_architecture_gen() >= 15 ? 4 : 3;
+  }
+  if (M < min_rows || M > 16 || K % 128 != 0) {
     return false;
   }
   // Require aligned vector load.
@@ -650,12 +658,23 @@ inline bool use_qmv_mma(
     return false;
   }
   // Route for large K/N.
-  bool nax = metal::is_nax_available();
-  if (mode == QuantizationMode::Affine) {
-    // Only qmv_nax reads affine weights, with 3 to 8 bits.
-    return nax && (bits >= 3 && bits != 7) && (group_size >= 32) &&
-        (x.dtype() == float16 || x.dtype() == bfloat16) && (N >= 512) &&
-        (K >= 1024) && (N % 32 == 0);
+  if (affine) {
+    if (nax) {
+      // qmv_nax reads affine weights with 3 to 8 bits.
+      return (bits >= 3 && bits != 7) && (group_size >= 32) &&
+          (x.dtype() == float16 || x.dtype() == bfloat16) && (N >= 512) &&
+          (K >= 1024) && (N % 32 == 0);
+    }
+    // Ultra keeps the vector kernels.
+    if (d.get_architecture().back() == 'd') {
+      return false;
+    }
+    // Only 4 and 8 bits are instantiated; affine pays off from a smaller N * K
+    // than fp.
+    return (bits == 4 || bits == 8) &&
+        (group_size == 32 || group_size == 64 || group_size == 128) &&
+        (N >= 512) && (K >= 512) && (int64_t(N) * K >= (int64_t(1) << 21)) &&
+        (N % 16 == 0);
   } else { // fp quantization
     if (nax) {
       // Below 2048, nvfp4 with few rows is faster on qmv_wide, which runs for
@@ -690,8 +709,14 @@ void qmv_mma(
     const Stream& s,
     const std::string& mode) {
   bool nax = metal::is_nax_available();
-  int wk = nax || d.get_architecture_gen() >= 15 ? 8 : 4;
-  int bn = nax ? 32 : 16;
+  bool affine = mode == "affine";
+  // Affine stays at wk 4 on gen-15+ too (wk 8 was no faster on M4).
+  int wk = nax || (!affine && d.get_architecture_gen() >= 15) ? 8 : 4;
+  int tm = M > 8 ? 2 : 1;
+  // Below gen 15, affine with one row tile is faster at 32 columns (M2 Pro).
+  bool affine_bn32 =
+      affine && tm == 1 && d.get_architecture_gen() < 15 && N % 32 == 0;
+  int bn = (nax || affine_bn32) ? 32 : 16;
   std::string type_string = get_type_string(x.dtype());
   std::string kname;
   kname.reserve(64);
@@ -713,7 +738,6 @@ void qmv_mma(
     kernel = get_qmm_nax_kernel_wrapped(
         d, kname, "qmv_nax", mode, type_string, group_size, bits, wk, bn);
   } else {
-    int tm = M > 8 ? 2 : 1;
     concatenate(kname, "_tm_", tm);
     kernel = get_quantized_kernel_wrapped(
         d, kname, "qmv_mma", mode, type_string, group_size, bits, wk, bn, tm);
@@ -2184,7 +2208,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto mode = quantization_mode_to_string(mode_);
 
   // For few rows use qmv_mma when N/K is large enough.
-  if (transpose_ && non_batched && (M >= 6) && (M <= 16) &&
+  if (transpose_ && non_batched &&
       use_qmv_mma(x, w, scales, mode_, group_size_, bits_, M, N, K, d)) {
     qmv_mma(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
     return;
