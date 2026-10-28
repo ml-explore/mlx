@@ -726,8 +726,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
         ]
         for (K, N), M, bits, group_size, dtype in product(
             shapes,
-            [8, 31, 33, 130],
-            [2, 3, 4, 6, 8],
+            [8, 12, 31, 33, 130],
+            [2, 3, 4, 5, 6, 8],
             [32, 64, 128],
             [mx.bfloat16, mx.float16, mx.float32],
         ):
