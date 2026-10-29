@@ -188,10 +188,12 @@ void GatedDeltaUpdate::eval_gpu(
       // name one; it just never stores.
       std::string base_name =
           "seq_gated_delta_" + suffix + "_" + std::to_string(ckpt);
-      std::string hash_name = base_name + (vectorized_g ? "_vecg" : "");
 
-      auto delta_kernel =
-          get_gated_delta_kernel(d, base_name, hash_name, func_consts);
+      auto delta_kernel = get_gated_delta_kernel(
+          d,
+          base_name,
+          vectorized_g ? base_name + "_vecg" : base_name,
+          func_consts);
 
       compute_encoder.set_compute_pipeline_state(delta_kernel);
 
@@ -457,13 +459,15 @@ void GatedDeltaUpdateVJP::eval_gpu(
     case 1:
     case 0: {
       const std::string ckpt_suffix = "_" + std::to_string(ckpt);
-      const std::string vecg_suffix = vectorized_g ? "_vecg" : "";
 
       {
         std::string base_name = "seq_gated_delta_" + suffix + ckpt_suffix;
 
         auto delta_kernel = get_gated_delta_kernel(
-            d, base_name, base_name + "_save" + vecg_suffix, save_consts);
+            d,
+            base_name,
+            vectorized_g ? base_name + "_save_vecg" : base_name + "_save",
+            save_consts);
 
         compute_encoder.set_compute_pipeline_state(delta_kernel);
         compute_encoder.set_input_array(q, 0);
@@ -486,7 +490,10 @@ void GatedDeltaUpdateVJP::eval_gpu(
         std::string base_name = "seq_gated_delta_vjp_" + suffix + ckpt_suffix;
 
         auto delta_kernel = get_gated_delta_vjp_kernel(
-            d, base_name, base_name + vecg_suffix, vjp_consts);
+            d,
+            base_name,
+            vectorized_g ? base_name + "_vecg" : base_name,
+            vjp_consts);
 
         compute_encoder.set_compute_pipeline_state(delta_kernel);
         compute_encoder.set_input_array(q, 0);
