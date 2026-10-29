@@ -240,6 +240,22 @@ METAL_FUNC void row_sum(thread float* dst, const thread T& tile) {
 
 namespace mlx {
 namespace steel {
+
+// Split into an fp16 part and a remainder. The relaxed f32 matmul2d
+// rounds its inputs to fp16, so multiply the parts separately.
+template <typename T>
+METAL_FUNC static void split_fp16(
+    const thread BaseNAXFrag::dtype_frag_t<T>& x,
+    thread BaseNAXFrag::dtype_frag_t<float>& hi,
+    thread BaseNAXFrag::dtype_frag_t<float>& lo) {
+  STEEL_PRAGMA_UNROLL
+  for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+    const float h = float(half(x[i]));
+    hi[i] = h;
+    lo[i] = float(x[i]) - h;
+  }
+}
+
 template <
     typename CType,
     typename AType,
@@ -280,16 +296,60 @@ METAL_FUNC static constexpr void mma(
       gemm_op
           .template get_destination_cooperative_tensor<ct_a_t, ct_b_t, CType>();
 
-  STEEL_PRAGMA_UNROLL
-  for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
-    ct_a[i] = A0[i];
-    ct_a[BaseNAXFrag::kElemsPerFrag + i] = A1[i];
-    ct_b[i] = B0[i];
-    ct_b[BaseNAXFrag::kElemsPerFrag + i] = B1[i];
-    ct_c[i] = C[i];
-  }
+  if constexpr (is_same_v<AType, float> && is_same_v<BType, float>) {
+    using frag_t = BaseNAXFrag::dtype_frag_t<float>;
+    frag_t a0_hi, a0_lo, a1_hi, a1_lo, b0_hi, b0_lo, b1_hi, b1_lo;
+    split_fp16(A0, a0_hi, a0_lo);
+    split_fp16(A1, a1_hi, a1_lo);
+    split_fp16(B0, b0_hi, b0_lo);
+    split_fp16(B1, b1_hi, b1_lo);
 
-  gemm_op.run(ct_a, ct_b, ct_c);
+    frag_t acc;
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      ct_a[i] = a0_hi[i];
+      ct_a[BaseNAXFrag::kElemsPerFrag + i] = a1_hi[i];
+      ct_b[i] = b0_hi[i];
+      ct_b[BaseNAXFrag::kElemsPerFrag + i] = b1_hi[i];
+      ct_c[i] = C[i];
+    }
+    gemm_op.run(ct_a, ct_b, ct_c);
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      acc[i] = ct_c[i];
+      ct_a[i] = a0_lo[i];
+      ct_a[BaseNAXFrag::kElemsPerFrag + i] = a1_lo[i];
+      ct_c[i] = 0.0;
+    }
+    gemm_op.run(ct_a, ct_b, ct_c);
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      acc[i] += ct_c[i];
+      ct_a[i] = a0_hi[i];
+      ct_a[BaseNAXFrag::kElemsPerFrag + i] = a1_hi[i];
+      ct_b[i] = b0_lo[i];
+      ct_b[BaseNAXFrag::kElemsPerFrag + i] = b1_lo[i];
+      ct_c[i] = 0.0;
+    }
+    gemm_op.run(ct_a, ct_b, ct_c);
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      acc[i] += ct_c[i];
+      ct_c[i] = acc[i];
+    }
+  } else {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      ct_a[i] = A0[i];
+      ct_a[BaseNAXFrag::kElemsPerFrag + i] = A1[i];
+      ct_b[i] = B0[i];
+      ct_b[BaseNAXFrag::kElemsPerFrag + i] = B1[i];
+      ct_c[i] = C[i];
+    }
+
+    gemm_op.run(ct_a, ct_b, ct_c);
+  }
 
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
@@ -334,16 +394,55 @@ METAL_FUNC static constexpr void mma(
       gemm_op
           .template get_destination_cooperative_tensor<ct_a_t, ct_b_t, CType>();
 
-  STEEL_PRAGMA_UNROLL
-  for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
-    ct_a[i] = A[i];
-    ct_b[i] = B[i];
-    ct_b[BaseNAXFrag::kElemsPerFrag + i] = 0.0;
-    ct_c[i] = C[i];
-    ct_c[BaseNAXFrag::kElemsPerFrag + i] = 0.0;
-  }
+  if constexpr (is_same_v<AType, float> && is_same_v<BType, float>) {
+    using frag_t = BaseNAXFrag::dtype_frag_t<float>;
+    frag_t a_hi, a_lo, b_hi, b_lo;
+    split_fp16(A, a_hi, a_lo);
+    split_fp16(B, b_hi, b_lo);
 
-  gemm_op.run(ct_a, ct_b, ct_c);
+    frag_t acc;
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      ct_a[i] = a_hi[i];
+      ct_b[i] = b_hi[i];
+      ct_b[BaseNAXFrag::kElemsPerFrag + i] = 0.0;
+      ct_c[i] = C[i];
+      ct_c[BaseNAXFrag::kElemsPerFrag + i] = 0.0;
+    }
+    gemm_op.run(ct_a, ct_b, ct_c);
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      acc[i] = ct_c[i];
+      ct_a[i] = a_lo[i];
+      ct_c[i] = 0.0;
+    }
+    gemm_op.run(ct_a, ct_b, ct_c);
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      acc[i] += ct_c[i];
+      ct_a[i] = a_hi[i];
+      ct_b[i] = b_lo[i];
+      ct_c[i] = 0.0;
+    }
+    gemm_op.run(ct_a, ct_b, ct_c);
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      acc[i] += ct_c[i];
+      ct_c[i] = acc[i];
+    }
+  } else {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      ct_a[i] = A[i];
+      ct_b[i] = B[i];
+      ct_b[BaseNAXFrag::kElemsPerFrag + i] = 0.0;
+      ct_c[i] = C[i];
+      ct_c[BaseNAXFrag::kElemsPerFrag + i] = 0.0;
+    }
+
+    gemm_op.run(ct_a, ct_b, ct_c);
+  }
 
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
@@ -395,18 +494,66 @@ METAL_FUNC static constexpr void mman(
       gemm_op
           .template get_destination_cooperative_tensor<ct_a_t, ct_b_t, CType>();
 
-  // Load A in to left operand registers
-  STEEL_PRAGMA_UNROLL
-  for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
-    ct_a[i] = A[i];
-    ct_b[i] = Bn0[i];
-    ct_b[BaseNAXFrag::kElemsPerFrag + i] = Bn1[i];
-    ct_c[i] = Cn0[i];
-    ct_c[BaseNAXFrag::kElemsPerFrag + i] = Cn1[i];
-  }
+  if constexpr (is_same_v<AType, float> && is_same_v<BType, float>) {
+    using frag_t = BaseNAXFrag::dtype_frag_t<float>;
+    frag_t a_hi, a_lo, b0_hi, b0_lo, b1_hi, b1_lo;
+    split_fp16(A, a_hi, a_lo);
+    split_fp16(Bn0, b0_hi, b0_lo);
+    split_fp16(Bn1, b1_hi, b1_lo);
 
-  // Do matmul
-  gemm_op.run(ct_a, ct_b, ct_c);
+    frag_t acc0, acc1;
+
+    // Load A in to left operand registers
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      ct_a[i] = a_hi[i];
+      ct_b[i] = b0_hi[i];
+      ct_b[BaseNAXFrag::kElemsPerFrag + i] = b1_hi[i];
+      ct_c[i] = Cn0[i];
+      ct_c[BaseNAXFrag::kElemsPerFrag + i] = Cn1[i];
+    }
+    gemm_op.run(ct_a, ct_b, ct_c);
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      acc0[i] = ct_c[i];
+      acc1[i] = ct_c[BaseNAXFrag::kElemsPerFrag + i];
+      ct_a[i] = a_lo[i];
+      ct_c[i] = 0.0;
+      ct_c[BaseNAXFrag::kElemsPerFrag + i] = 0.0;
+    }
+    gemm_op.run(ct_a, ct_b, ct_c);
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      acc0[i] += ct_c[i];
+      acc1[i] += ct_c[BaseNAXFrag::kElemsPerFrag + i];
+      ct_a[i] = a_hi[i];
+      ct_b[i] = b0_lo[i];
+      ct_b[BaseNAXFrag::kElemsPerFrag + i] = b1_lo[i];
+      ct_c[i] = 0.0;
+      ct_c[BaseNAXFrag::kElemsPerFrag + i] = 0.0;
+    }
+    gemm_op.run(ct_a, ct_b, ct_c);
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      acc0[i] += ct_c[i];
+      acc1[i] += ct_c[BaseNAXFrag::kElemsPerFrag + i];
+      ct_c[i] = acc0[i];
+      ct_c[BaseNAXFrag::kElemsPerFrag + i] = acc1[i];
+    }
+  } else {
+    // Load A in to left operand registers
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
+      ct_a[i] = A[i];
+      ct_b[i] = Bn0[i];
+      ct_b[BaseNAXFrag::kElemsPerFrag + i] = Bn1[i];
+      ct_c[i] = Cn0[i];
+      ct_c[BaseNAXFrag::kElemsPerFrag + i] = Cn1[i];
+    }
+
+    // Do matmul
+    gemm_op.run(ct_a, ct_b, ct_c);
+  }
 
   // Copy out results
   STEEL_PRAGMA_UNROLL
