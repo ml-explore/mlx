@@ -35,6 +35,20 @@ inline bool is_empty_dim(dim3 dim) {
       (dim.x == 1 && dim.y == 1 && dim.z == 1);
 }
 
+// Clustered kernels are keyed on their function, see subgraph_to_key.
+template <typename F>
+std::string kernel_node_type(F func, dim3 cluster_dim) {
+  if (is_empty_dim(cluster_dim)) {
+    return "K";
+  }
+  return fmt::format(
+      "K{}x{}x{}@{:x}",
+      cluster_dim.x,
+      cluster_dim.y,
+      cluster_dim.z,
+      reinterpret_cast<uintptr_t>(func));
+}
+
 } // namespace
 
 Device::Device(int device) : device_(device) {
@@ -281,7 +295,8 @@ void CommandEncoder::add_kernel_node_raw(
   kernel_params.blockDim = block_dim;
   kernel_params.kernelParams = params;
   kernel_params.sharedMemBytes = smem_bytes;
-  cudaGraphNode_t node = add_kernel_node_raw(kernel_params);
+  cudaGraphNode_t node =
+      add_kernel_node_raw(kernel_params, kernel_node_type(func, cluster_dim));
   if (use_cluster) {
     cudaKernelNodeAttrValue attr = {};
     attr.clusterDim.x = cluster_dim.x;
@@ -336,7 +351,8 @@ void CommandEncoder::add_kernel_node_raw(
   kernel_params.blockDimZ = block_dim.z;
   kernel_params.kernelParams = params;
   kernel_params.sharedMemBytes = smem_bytes;
-  CUgraphNode node = add_kernel_node_raw(kernel_params);
+  CUgraphNode node =
+      add_kernel_node_raw(kernel_params, kernel_node_type(func, cluster_dim));
   if (use_cluster) {
     CUlaunchAttributeValue attr = {};
     attr.clusterDim.x = cluster_dim.x;
@@ -348,18 +364,20 @@ void CommandEncoder::add_kernel_node_raw(
 }
 
 cudaGraphNode_t CommandEncoder::add_kernel_node_raw(
-    const cudaKernelNodeParams& params) {
+    const cudaKernelNodeParams& params,
+    const std::string& node_type) {
   cudaGraphNode_t node;
   CHECK_CUDA_ERROR(cudaGraphAddKernelNode(&node, graph_, NULL, 0, &params));
-  insert_graph_dependencies(GraphNode{node, "K"});
+  insert_graph_dependencies(GraphNode{node, node_type});
   return node;
 }
 
 CUgraphNode CommandEncoder::add_kernel_node_raw(
-    const CUDA_KERNEL_NODE_PARAMS& params) {
+    const CUDA_KERNEL_NODE_PARAMS& params,
+    const std::string& node_type) {
   CUgraphNode node;
   CHECK_CUDA_ERROR(cuGraphAddKernelNode(&node, graph_, NULL, 0, &params));
-  insert_graph_dependencies(GraphNode{node, "K"});
+  insert_graph_dependencies(GraphNode{node, node_type});
   return node;
 }
 
@@ -367,7 +385,10 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
   // Constructs a key representing the nodes of a sub-graph.
   // Also checks if the sub-graph is updatable as CUDA graphs do not get
   // updated correctly if a kernel node getting updated has a different cluster
-  // shape than the node it's being updated with.
+  // shape than the node it's being updated with. Updating a clustered node to a
+  // different function can also keep the old cluster shape (cuBLAS nvjet 2x2f
+  // to 2x1 runs in 4-CTA clusters and hangs), so clustered nodes key on the
+  // function.
   std::string key = "(";
   size_t num_nodes = 0;
   CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, nullptr, &num_nodes));
@@ -409,6 +430,14 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
         } else {
           key += "K";
           key += std::to_string(cluster_dim.clusterDim.x);
+          if (cluster_dim.clusterDim.x > 1) {
+            CUDA_KERNEL_NODE_PARAMS params = {};
+            CHECK_CUDA_ERROR(cuGraphKernelNodeGetParams(node, &params));
+            key += fmt::format(
+                "@{:x}.{:x}",
+                reinterpret_cast<uintptr_t>(params.func),
+                reinterpret_cast<uintptr_t>(params.kern));
+          }
         }
         break;
       }

@@ -125,8 +125,12 @@ class MLX_API CommandEncoder {
   void synchronize();
 
  private:
-  cudaGraphNode_t add_kernel_node_raw(const cudaKernelNodeParams& params);
-  CUgraphNode add_kernel_node_raw(const CUDA_KERNEL_NODE_PARAMS& params);
+  cudaGraphNode_t add_kernel_node_raw(
+      const cudaKernelNodeParams& params,
+      const std::string& node_type);
+  CUgraphNode add_kernel_node_raw(
+      const CUDA_KERNEL_NODE_PARAMS& params,
+      const std::string& node_type);
 
   struct GraphNode {
     cudaGraphNode_t node;
