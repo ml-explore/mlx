@@ -3545,7 +3545,8 @@ std::vector<array> Power::vjp(
       // 0 * log 0 -> 0
       vjps.push_back(where(exp, exp_vjp, array(0.0f, exp.dtype()), stream()));
     }
-    vjps.back() = multiply(cotangents[0], vjps.back(), stream());
+    vjps.back() =
+        multiply(cotangents[0], conjugate(vjps.back(), stream()), stream());
   }
   return vjps;
 }
@@ -3554,13 +3555,20 @@ std::vector<array> Power::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
+  // Undo the conjugate that the vjp applies to its multiplier.
   auto output = power(primals[0], primals[1], stream());
-  auto jvp = vjp(primals, {tangents[0]}, {argnums[0]}, {output})[0];
+  auto jvp = vjp(
+      primals, {conjugate(tangents[0], stream())}, {argnums[0]}, {output})[0];
   for (int i = 1; i < argnums.size(); ++i) {
-    jvp = add(
-        jvp, vjp(primals, {tangents[i]}, {argnums[i]}, {output})[0], stream());
+    jvp =
+        add(jvp,
+            vjp(primals,
+                {conjugate(tangents[i], stream())},
+                {argnums[i]},
+                {output})[0],
+            stream());
   }
-  return {jvp};
+  return {conjugate(jvp, stream())};
 }
 
 std::pair<std::vector<array>, std::vector<int>> Power::vmap(
