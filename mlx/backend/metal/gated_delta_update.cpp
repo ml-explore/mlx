@@ -104,7 +104,7 @@ void GatedDeltaUpdate::eval_gpu(
   int Hv = v.shape(2);
   int Dv = v.shape(3);
 
-  bool vectorized_g = g.ndim() == 4;
+  bool vectorized_g = (g.ndim() == 4);
   int C = vectorized_g ? 1 : gated_delta_chunk_size(T);
   const int ckpt = gated_delta_ckpt(C);
 
@@ -262,7 +262,7 @@ void GatedDeltaUpdateVJP::eval_gpu(
   int Dv = v.shape(3);
 
   // 16 = chunked NAX, anything else = sequential.
-  bool vectorized_g = g.ndim() == 4;
+  bool vectorized_g = (g.ndim() == 4);
   int C = vectorized_g ? 1 : gated_delta_chunk_size_vjp();
   const bool chunked = (C == 16);
 

@@ -312,7 +312,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
   }
 
   // g: [B, T, Hv] or [B, T, Hv, Dk]
-  auto g_ = g + (vectorized_g ? b_idx * T * Hv * Dk : b_idx * T * Hv);
+  auto g_ = g + (vectorized_g ? (b_idx * T * Hv * Dk) : (b_idx * T * Hv));
   auto beta_ = beta + b_idx * T * Hv;
 
   // Checkpoint every Ckpt-th step rather than every step: at T = 4096 with
@@ -335,8 +335,8 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
     float kv_mem = 0.0f;
     for (int i = 0; i < n_per_t; ++i) {
       auto s_idx = n_per_t * dk_idx + i;
-      state[i] =
-          state[i] * (vectorized_g ? g_[hv_idx * Dk + s_idx] : g_[hv_idx]);
+      auto g_idx = vectorized_g ? (hv_idx * Dk + s_idx) : hv_idx;
+      state[i] = state[i] * g_[g_idx];
       kv_mem += state[i] * k_[s_idx];
     }
     kv_mem = simd_sum(kv_mem);
