@@ -47,10 +47,10 @@ def make_pt_conv_2D(strides=(1, 1), padding=(0, 0), groups=1):
     return pt_conv_2D
 
 
-def bench_shape(N, H, W, C, kH, kW, O, strides, padding, groups, np_dtype):
+def bench_shape(N, H, W, C, kH, kW, OC, strides, padding, groups, np_dtype):
     scale = 1.0 / math.sqrt(kH * kH * C)
     a_np = np.random.uniform(0, 0.5, (N, H, W, C)).astype(np_dtype)
-    b_np = np.random.uniform(-scale, scale, (O, kH, kW, int(C / groups))).astype(
+    b_np = np.random.uniform(-scale, scale, (OC, kH, kW, int(C / groups))).astype(
         np_dtype
     )
 
@@ -79,7 +79,9 @@ def bench_shape(N, H, W, C, kH, kW, O, strides, padding, groups, np_dtype):
 
     if not np.allclose(out_pt, out_mx, atol=atol):
         print(
-            f"Failed at {(N, H, W, C)}, {(O, kH, kW, C)} [strides = {strides}, padding = {padding}, groups = {groups}] with max(|a - b|) = {np.max(np.abs(out_pt - out_mx))}"
+            f"Failed at {(N, H, W, C)}, {(OC, kH, kW, C)} [strides = {strides}, "
+            f"padding = {padding}, groups = {groups}] with max(|a - b|) = "
+            f"{np.max(np.abs(out_pt - out_mx))}"
         )
 
     return time_mlx, time_torch
@@ -94,14 +96,15 @@ if __name__ == "__main__":
         (4, 32, 32, 370, 7, 7, 128),
         (2, 320, 640, 21, 7, 7, 21),
     )
-    for N, H, W, C, kh, kw, O in shapes:
+    for N, H, W, C, kh, kw, OC in shapes:
         time_mlx, time_torch = bench_shape(
-            N, H, W, C, kh, kw, O, (1, 1), (0, 0), 1, dtype
+            N, H, W, C, kh, kw, OC, (1, 1), (0, 0), 1, dtype
         )
         diff = time_torch / time_mlx - 1.0
 
         print(
-            f"({N}, {H:3d}, {W:3d}, {C:3d}), ({O:3d}, {kh:2d}, {kw:2d}, {C:3d}), {dtype}, {100. * diff:+5.2f}%"
+            f"({N}, {H:3d}, {W:3d}, {C:3d}), ({OC:3d}, {kh:2d}, {kw:2d}, {C:3d}), "
+            f"{dtype}, {100.0 * diff:+5.2f}%"
         )
         if time_mlx >= 2.0 * time_torch:
             print("ATTENTION ^^^^^^^")

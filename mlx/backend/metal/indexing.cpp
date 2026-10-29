@@ -38,6 +38,12 @@ std::pair<std::string, std::string> make_index_args(
   return {idx_args.str(), idx_arr.str()};
 }
 
+// The 64-bit path must cover both the logical size and the span reachable
+// through the strides (views) or a smaller span (broadcast arrays).
+inline bool exceeds_int32(const array& a) {
+  return a.size() > INT32_MAX || a.data_size() > INT32_MAX;
+}
+
 template <typename T>
 inline std::string make_op(typename T::ReduceType r, const std::string& dt) {
   switch (r) {
@@ -78,8 +84,11 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     slice_size *= s;
   }
 
-  bool large_index = nidx && inputs[1].size() > INT32_MAX;
-  bool large_src = src.size() > INT32_MAX;
+  bool large_index = false;
+  for (int i = 1; i <= nidx; ++i) {
+    large_index |= exceeds_int32(inputs[i]);
+  }
+  bool large_src = exceeds_int32(src);
   bool large_out = out.size() > INT32_MAX;
   bool large = large_index || large_src || large_out;
 
@@ -212,9 +221,6 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_vector_bytes(axes_, 6);
 
   // Set index info
-  //
-  // We don't need to check for empty idx_shapes because gather has a
-  // idx_ndim == 0 specialization
   compute_encoder.set_vector_bytes(idx_shapes, 7);
   compute_encoder.set_vector_bytes(idx_strides, 8);
   compute_encoder.set_vector_bytes(idx_contigs, 9);
@@ -305,8 +311,11 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   auto upd_contig = upd.flags().row_contiguous;
   bool large_out = out.size() > INT32_MAX;
-  bool large_idx = nidx && (inputs[1].size() > INT32_MAX);
-  bool large_upd = upd.size() > INT32_MAX;
+  bool large_idx = false;
+  for (int i = 1; i <= nidx; ++i) {
+    large_idx |= exceeds_int32(inputs[i]);
+  }
+  bool large_upd = exceeds_int32(upd);
   bool large = large_out || large_idx || large_upd;
   std::string kernel_name = fmt::format(
       "scatter{0}{1}_{2}_{3}_{4}_nwork{5}_{6}",
@@ -379,42 +388,19 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     idx_contigs.push_back(inputs[i + 1].flags().row_contiguous);
   }
 
-  if (upd_ndim == 0) {
-    // Need placeholders so Metal doesn't complain
-    int shape_ = 0;
-    int64_t stride_ = 0;
-    compute_encoder.set_bytes(shape_, 3);
-    compute_encoder.set_bytes(stride_, 4);
-  } else {
-    compute_encoder.set_vector_bytes(upd.shape(), 3);
-    compute_encoder.set_vector_bytes(upd.strides(), 4);
-  }
+  compute_encoder.set_vector_bytes(upd.shape(), 3);
+  compute_encoder.set_vector_bytes(upd.strides(), 4);
   compute_encoder.set_bytes(upd_ndim, 5);
   compute_encoder.set_bytes(upd_size, 6);
 
   // Set output info
   size_t out_ndim = out.ndim();
-  if (out_ndim == 0) {
-    // Need placeholders so Metal doesn't complain
-    int shape_ = 0;
-    int64_t stride_ = 0;
-    compute_encoder.set_bytes(shape_, 7);
-    compute_encoder.set_bytes(stride_, 8);
-  } else {
-    compute_encoder.set_vector_bytes(out.shape(), 7);
-    compute_encoder.set_vector_bytes(out.strides(), 8);
-  }
+  compute_encoder.set_vector_bytes(out.shape(), 7);
+  compute_encoder.set_vector_bytes(out.strides(), 8);
   compute_encoder.set_bytes(out_ndim, 9);
-  compute_encoder.set_vector_bytes(axes_, 10);
 
   // Set index info
-  if (idx_ndim == 0) {
-    // Add a 0 in idx_shapes and strides to avoid the missing buffer binding
-    // error in the metal API.
-    idx_shapes.push_back(0);
-    idx_strides.push_back(0);
-    idx_contigs.push_back(false);
-  }
+  compute_encoder.set_vector_bytes(axes_, 10);
   compute_encoder.set_vector_bytes(idx_shapes, 11);
   compute_encoder.set_vector_bytes(idx_strides, 12);
   compute_encoder.set_vector_bytes(idx_contigs, 13);
@@ -452,7 +438,7 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   size_t ndim = src.ndim();
 
-  bool large = idx.size() > INT32_MAX || src.size() > INT32_MAX;
+  bool large = exceeds_int32(idx) || exceeds_int32(src);
 
   std::string kernel_name = fmt::format(
       "gather_axis{0}{1}_{2}",
@@ -552,7 +538,8 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   size_t ndim = src.ndim();
 
-  bool large = idx.size() > INT32_MAX || src.size() > INT32_MAX;
+  bool large =
+      exceeds_int32(idx) || src.size() > INT32_MAX || exceeds_int32(upd);
 
   std::string op_name;
   switch (reduce_type_) {
@@ -668,11 +655,9 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  array mask_flat = flatten_in_eval(mask, 1, -1, s);
-  if (mask_flat.data<void>() != mask.data<void>()) {
-    compute_encoder.add_temporary(mask_flat);
-  }
-
+  array mask_flat = (mask.ndim() == 1)
+      ? reshape_in_eval(mask, {mask.shape(0), 1}, s)
+      : flatten_in_eval(mask, 1, -1, s);
   if (!mask_flat.flags().row_contiguous) {
     mask_flat = contiguous_copy_gpu(mask_flat, s);
     compute_encoder.add_temporary(mask_flat);
@@ -813,7 +798,7 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto [ds, rc, cc] = check_contiguity(shape, strides[1]);
   bool out_contiguous = rc;
-  bool large = upd.size() > INT32_MAX;
+  bool large = exceeds_int32(upd);
   std::string kernel_name = fmt::format(
       "slice_update_{0}_{1}{2}_{3}_{4}_{5}_nw{6}_nd{7}",
       op_name,

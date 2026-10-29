@@ -39,7 +39,7 @@ inline void set_binary_op_output_data(
     const array& b,
     array& out,
     BinaryOpType bopt,
-    std::function<allocator::Buffer(size_t)> mallocfn = allocator::malloc) {
+    std::function<allocator::Data(size_t)> mallocfn = allocator::malloc) {
   bool b_donatable = is_donatable(b, out);
   bool a_donatable = is_donatable(a, out);
   switch (bopt) {

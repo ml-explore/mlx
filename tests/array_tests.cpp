@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 #include <cassert>
 #include <climits>
+#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -581,7 +582,8 @@ TEST_CASE("test array shared buffer") {
   Shape shape = {2, 2};
   auto n_elem = shape[0] * shape[1];
 
-  allocator::Buffer buf_b = allocator::malloc(n_elem * sizeof(float));
+  allocator::Buffer buf_b =
+      allocator::allocator().malloc(n_elem * sizeof(float));
   void* buf_b_ptr = buf_b.raw_ptr();
   float* float_buf_b = (float*)buf_b_ptr;
 
@@ -594,11 +596,11 @@ TEST_CASE("test array shared buffer") {
   auto deleter = [float_buf_b](allocator::Buffer buf) {
     CHECK_EQ(float_buf_b, (float*)buf.raw_ptr());
     CHECK_EQ(float_buf_b[0], ((float*)buf.raw_ptr())[0]);
-    allocator::free(buf);
+    allocator::allocator().free(buf);
   };
 
   array a = ones(shape, float32);
-  array b = array(buf_b, shape, float32, deleter);
+  array b = array(allocator::Data(buf_b, deleter), shape, float32);
 
   eval(a + b);
 }
@@ -645,6 +647,19 @@ TEST_CASE("test make array from user buffer") {
   }
   // deleter should always get called
   CHECK_EQ(count, 1);
+}
+
+TEST_CASE("test user buffer is not donated") {
+  int size = 4096;
+  std::vector<float> buffer(size, 1.0f);
+  auto out = exp(array(buffer.data(), Shape{size}, float32, [](void*) {}));
+  eval(out);
+  CHECK_EQ(buffer[0], 1.0f);
+}
+
+TEST_CASE("test null deleter is not owned") {
+  allocator::Data data(allocator::Buffer(nullptr), nullptr);
+  CHECK_FALSE(data.is_owned());
 }
 
 TEST_CASE("test negative indexing for shape/strides") {
@@ -746,4 +761,20 @@ TEST_CASE("test assigning a sibling over the last reference keeps the cycle") {
   last = last.siblings()[0];
   REQUIRE_EQ(last.siblings().size(), 1);
   CHECK(array_equal(last, array({2})).item<bool>());
+}
+
+TEST_CASE("test unaligned scalar item") {
+  uint64_t expected = 0x0123456789abcdef;
+  for (size_t offset = 1; offset < sizeof(expected); ++offset) {
+    std::vector<uint8_t> data(offset + sizeof(expected));
+    std::memcpy(data.data() + offset, &expected, sizeof(expected));
+    auto storage = array(data.data(), {static_cast<int>(data.size())}, uint8);
+    auto scalar = view(as_strided(storage, {8}, {1}, offset), uint64);
+    eval(scalar);
+    if (default_device() == Device::cpu) {
+      CHECK_EQ(scalar.data<void>(), storage.data<uint8_t>() + offset);
+    }
+    CHECK_EQ(scalar.item<uint64_t>(), expected);
+    CHECK_EQ(static_cast<const array&>(scalar).item<uint64_t>(), expected);
+  }
 }

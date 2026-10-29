@@ -24,7 +24,8 @@ class RoPE(Module):
             implementation which is slightly less efficient. Default: ``False``.
         base (float, optional): The base used to compute angular frequency for
             each dimension in the positional encodings. Default: ``10000``.
-        scale (float, optional): The scale used to scale the positions. Default: ``1.0``.
+        scale (float, optional): The scale used to scale the positions.
+            Default: ``1.0``.
     """
 
     def __init__(
@@ -89,7 +90,8 @@ class SinusoidalPositionalEncoding(Module):
         # embedding dimension must be positive and even.
         if dims <= 0 or dims % 2 != 0:
             raise ValueError(
-                f"[SinusoidalPositionalEncoding] dims must be positive and even but got {dims}."
+                f"[SinusoidalPositionalEncoding] dims must be positive and even but "
+                f"got {dims}."
             )
 
         # Avoid division by zero when dims == 2 (one frequency pair).
@@ -132,7 +134,8 @@ class ALiBi(Module):
     ALiBi adds a static, non-learnable bias matrix to attention scores proportional
     to the distance between query and key tokens.
 
-    For more details see `Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation <https://arxiv.org/abs/2108.12409>`_.
+    For more details see `Train Short, Test Long: Attention with Linear Biases Enables
+    Input Length Extrapolation <https://arxiv.org/abs/2108.12409>`_.
     """
 
     @staticmethod
@@ -150,7 +153,8 @@ class ALiBi(Module):
             k_sequence_length (int): The key sequence length.
             num_heads (int): The number of attention heads.
             offset (int, optional): The position offset. Default: ``0``.
-            dtype (Dtype, optional): Data type of the output array. Default: ``mx.float32``.
+            dtype (Dtype, optional): Data type of the output array. Default:
+                ``mx.float32``.
 
         Returns:
             array: The ALiBi bias matrix.
@@ -170,7 +174,8 @@ class ALiBi(Module):
 
         Args:
             num_heads (int): The number of attention heads.
-            dtype (Dtype, optional): Data type of the output array. Default: ``mx.float32``.
+            dtype (Dtype, optional): Data type of the output array. Default:
+                ``mx.float32``.
 
         Returns:
             array: The slopes array expanded for head broadcasting.

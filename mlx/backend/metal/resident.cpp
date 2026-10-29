@@ -1,14 +1,16 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2024-2026 Apple Inc.
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cstdio>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/resident.h"
-#include "mlx/utils.h"
+#include "mlx/config.h"
 
 namespace mlx::core::metal {
 
@@ -19,7 +21,11 @@ ResidencySets::ResidencySets(MTL::Device* d) {
   if (__builtin_available(macOS 15, iOS 18, *)) {
     device_ = d;
     enabled_ = true;
-    int pct = env::residency_set_max_pct();
+    // Per-set residency-set size, as a percentage of the device's recommended
+    // max working-set size. Controls only how wired memory is distributed
+    // across residency sets, never how much is wired; see metal::ResidencySets.
+    // A value <= 0 or >= 100 puts everything in a single set.
+    int pct = config::get("MLX_RESIDENCY_SET_MAX_PCT", 5);
     if (pct <= 0 || pct >= 100) {
       max_bytes_per_set_ = 0; // a single set holds everything
     } else {
@@ -33,21 +39,49 @@ ResidencySets::ResidencySets(MTL::Device* d) {
     std::lock_guard<std::mutex> lk(mtx_);
     // Set 0 always exists and is the fallback when a later set cannot be
     // made, so failing to create it is fatal.
-    NS::Error* error = nullptr;
+    std::string error;
     if (!add_set_locked(&error)) {
       std::ostringstream msg;
       msg << "[metal::Device] Unable to construct residency set.\n";
-      if (error) {
-        msg << error->localizedDescription()->utf8String() << "\n";
+      if (!error.empty()) {
+        msg << error << "\n";
       }
       throw std::runtime_error(msg.str());
+    }
+    if (int interval =
+            config::get("MLX_METAL_RESIDENCY_REFRESH_INTERVAL_MS", 0);
+        interval > 0) {
+      refresh_thread_ = std::thread([this, interval] {
+        std::unique_lock<std::mutex> lock(mtx_);
+        while (!refresh_cv_.wait_for(
+            lock, std::chrono::milliseconds(interval), [this] {
+              return stop_refresh_;
+            })) {
+          auto pool = new_scoped_memory_pool();
+          // macOS can drop residency after GPU idle despite a standing request.
+          for (auto& s : sets_) {
+            if (s.size != 0) {
+              s.set->requestResidency();
+            }
+          }
+        }
+      });
     }
   }
 }
 
-ResidencySets::~ResidencySets() = default;
+ResidencySets::~ResidencySets() {
+  if (refresh_thread_.joinable()) {
+    {
+      std::lock_guard<std::mutex> lock(mtx_);
+      stop_refresh_ = true;
+    }
+    refresh_cv_.notify_one();
+    refresh_thread_.join();
+  }
+}
 
-bool ResidencySets::add_set_locked(NS::Error** error_out) {
+bool ResidencySets::add_set_locked(std::string* error_out) {
   NS::SharedPtr<MTL::ResidencySet> set;
   if (__builtin_available(macOS 15, iOS 18, *)) {
     auto pool = new_scoped_memory_pool();
@@ -58,8 +92,9 @@ bool ResidencySets::add_set_locked(NS::Error** error_out) {
       // A standing request, so allocations added to this set later are
       // covered without requesting residency again on every insert.
       set->requestResidency();
-    } else if (error_out) {
-      *error_out = error;
+    } else if (error_out && error) {
+      // The error is autoreleased into this pool, so copy its text out now.
+      *error_out = error->localizedDescription()->utf8String();
     }
   }
   if (!set) {
@@ -67,7 +102,7 @@ bool ResidencySets::add_set_locked(NS::Error** error_out) {
   }
   sets_.push_back(Set{std::move(set), 0});
   num_sets_.store(sets_.size(), std::memory_order_release);
-  if (env::residency_debug()) {
+  if (config::get("MLX_RESIDENCY_DEBUG", 0)) {
     fprintf(
         stderr,
         "[residency] created residency set %zu (max_bytes_per_set=%zu MB)\n",

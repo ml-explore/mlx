@@ -26,6 +26,7 @@ using namespace mlx::core::simd;
 DEFAULT_BINARY_OP(Add, operator+)
 DEFAULT_BINARY_OP(ArcTan2, atan2)
 DEFAULT_BINARY_OP(Divide, divide)
+DEFAULT_BINARY_OP(FloorDivide, floor_divide)
 DEFAULT_BINARY_OP(Multiply, operator*)
 DEFAULT_BINARY_OP(Subtract, operator-)
 DEFAULT_BINARY_OP(LogicalAnd, operator&&)
@@ -33,8 +34,6 @@ DEFAULT_BINARY_OP(LogicalOr, operator||)
 DEFAULT_BINARY_OP(BitwiseAnd, operator&)
 DEFAULT_BINARY_OP(BitwiseOr, operator|)
 DEFAULT_BINARY_OP(BitwiseXor, operator^)
-DEFAULT_BINARY_OP(LeftShift, operator<<)
-DEFAULT_BINARY_OP(RightShift, operator>>)
 DEFAULT_BINARY_OP(Remainder, remainder)
 DEFAULT_BINARY_OP(Maximum, maximum)
 DEFAULT_BINARY_OP(Minimum, minimum)
@@ -78,6 +77,30 @@ struct LogAddExp {
     auto mask = minval == -inf || maxval == inf;
     auto out = maxval + log1p(exp(minval - maxval));
     return select(mask, Simd<T, N>(maxval), Simd<T, N>(out));
+  }
+  BINARY_SINGLE()
+};
+
+struct LeftShift {
+  template <int N, typename T>
+  Simd<T, N> operator()(Simd<T, N> x, Simd<T, N> y) {
+    auto valid = y >= 0 && y < static_cast<T>(sizeof(T) * 8);
+    auto count = select(valid, y, Simd<T, N>(0));
+    return select(valid, Simd<T, N>(x << count), Simd<T, N>(0));
+  }
+  BINARY_SINGLE()
+};
+
+struct RightShift {
+  template <int N, typename T>
+  Simd<T, N> operator()(Simd<T, N> x, Simd<T, N> y) {
+    auto valid = y >= 0 && y < static_cast<T>(sizeof(T) * 8);
+    auto count = select(valid, y, Simd<T, N>(0));
+    auto fallback = Simd<T, N>(0);
+    if constexpr (std::is_signed_v<T>) {
+      fallback = select(x < 0, Simd<T, N>(-1), fallback);
+    }
+    return select(valid, Simd<T, N>(x >> count), fallback);
   }
   BINARY_SINGLE()
 };

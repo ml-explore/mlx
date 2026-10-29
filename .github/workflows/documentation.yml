@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/build-docs
-      
+
   deploy:
     needs: build
     permissions:

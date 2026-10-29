@@ -206,7 +206,8 @@ __global__ void strided_scan(
     U* out,
     int32_t axis_size,
     int64_t stride,
-    int64_t stride_blocks) {
+    int64_t stride_blocks,
+    int64_t data_size) {
   auto grid = cg::this_grid();
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
@@ -233,7 +234,10 @@ __global__ void strided_scan(
   uint32_t scan_offset_y = warp.thread_rank();
   uint32_t scan_offset_x = warp.meta_group_rank() * n_scans;
 
-  uint32_t stride_limit = stride - global_index_x;
+  int64_t stride_limit = cuda::std::min(
+      stride - global_index_x,
+      data_size - offset - global_index_x);
+
   in += offset + global_index_x + read_offset_x;
   out += offset + global_index_x + read_offset_x;
   U* read_into = read_buffer + read_offset_y * BN_pad + read_offset_x;
@@ -435,7 +439,8 @@ void scan_gpu_inplace(
                   gpu_ptr<U>(out),
                   axis_size,
                   stride,
-                  stride_blocks);
+                  stride_blocks,
+                  int64_t(in.data_size()));
             }
           });
         });
@@ -474,8 +479,9 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
           in.flags());
     }
   } else {
-    in = contiguous_copy_gpu(in, s);
-    out.copy_shared_buffer(in);
+    // Output type can be wider than input
+    copy_gpu(in, out, CopyType::General, s);
+    in = out;
   }
 
   scan_gpu_inplace(in, out, reduce_type_, axis_, reverse_, inclusive_, s);

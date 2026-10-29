@@ -285,8 +285,9 @@ void save_safetensors(
     file += ".safetensors";
 
   // Serialize array
-  save_safetensors(
-      std::make_shared<io::FileWriter>(std::move(file)), a, metadata);
+  io::write_and_replace(file, [&a, &metadata](const std::string& path) {
+    save_safetensors(std::make_shared<io::FileWriter>(path), a, metadata);
+  });
 }
 
 } // namespace mlx::core

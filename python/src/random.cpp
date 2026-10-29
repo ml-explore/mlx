@@ -74,13 +74,9 @@ void reset_random_state() {
 class RandomState {};
 
 nb::object random_state_sentinel() {
-  static nb::object sentinel = []() {
-    auto sentinel = nb::cast(RandomState{});
-    sentinel.inc_ref();
-    return sentinel;
-  }();
+  static nb::handle sentinel = nb::cast(RandomState{}).release();
 
-  return sentinel;
+  return nb::borrow(sentinel);
 }
 
 mx::array random_state_key() {
@@ -107,9 +103,10 @@ void init_random(nb::module_& parent_module) {
             return default_key().state()[0];
           },
           "index"_a)
-      .def("__iter__", [](const RandomState&) {
-        return nb::iter(default_key().state());
-      });
+      .def(
+          "__iter__",
+          [](const RandomState&) { return nb::iter(default_key().state()); })
+      .freeze();
 
   m.def("__getattr__", [&](nb::handle key) -> nb::object {
     // Create random.state lazily to avoid initializing device during import.

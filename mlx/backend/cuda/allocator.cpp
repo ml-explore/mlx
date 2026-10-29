@@ -69,9 +69,9 @@ inline void* unified_malloc(size_t size) {
 
 inline void unified_free(void* data) {
   if (supports_managed_memory()) {
-    CHECK_CUDA_ERROR(cudaFree(data));
+    cudaFree(data);
   } else {
-    CHECK_CUDA_ERROR(cudaFreeHost(data));
+    cudaFreeHost(data);
   }
 }
 
@@ -251,6 +251,9 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
   if (buf->device >= 0 && buf->device != device) {
     move_to_unified_memory(*buf, stream);
   }
+#ifndef NDEBUG
+  track_allocation(buf->data, size);
+#endif
   return Buffer{buf};
 }
 
@@ -267,6 +270,10 @@ void CudaAllocator::free(Buffer buffer) {
     delete buf;
     return;
   }
+
+#ifndef NDEBUG
+  untrack_allocation(buf->data);
+#endif
 
   std::unique_lock lock(mutex_);
   active_memory_ -= buf->size;
@@ -301,6 +308,9 @@ void CudaAllocator::move_to_unified_memory(
     CHECK_CUDA_ERROR(cudaMemcpy(data, buf.data, buf.size, kind));
     free_async(buf);
   }
+#ifndef NDEBUG
+  swap_allocation(buf.data, data);
+#endif
   buf.data = data;
   buf.device = -1;
 }
@@ -324,9 +334,9 @@ void CudaAllocator::free_async(CudaBuffer& buf, cudaStream_t stream) {
       if (!stream) {
         stream = free_streams_[buf.device];
       }
-      CHECK_CUDA_ERROR(cudaFreeAsync(buf.data, stream));
+      cudaFreeAsync(buf.data, stream);
     } else {
-      CHECK_CUDA_ERROR(cudaFree(buf.data));
+      cudaFree(buf.data);
     }
   }
 }
@@ -396,9 +406,10 @@ CudaAllocator& allocator() {
   return *allocator_;
 }
 
-Buffer malloc_async(size_t size, CommandEncoder& encoder) {
-  return allocator().malloc_async(
-      size, encoder.device().cuda_device(), encoder.stream());
+allocator::Data malloc_async(size_t size, CommandEncoder& encoder) {
+  return allocator::Data(
+      allocator().malloc_async(
+          size, encoder.device().cuda_device(), encoder.stream()));
 }
 
 } // namespace cu

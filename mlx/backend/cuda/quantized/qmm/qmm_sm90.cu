@@ -124,10 +124,10 @@ void qmm_sm90(
   const char* tag = "[quantized_matmul]";
   auto [m, n, k, l, broadcast_b] = make_problem_shape(x, w, out);
 
-  auto dA = make_stride(int64_t(k), Int<1>{}, int64_t(m * k));
-  auto dB = make_stride(int64_t(k), Int<1>{}, int64_t(n * k));
-  auto dS = make_stride(Int<1>{}, int64_t(n), int64_t(n * k / group_size));
-  auto dD = make_stride(Int<1>{}, int64_t(n), int64_t(m * n));
+  auto dA = make_stride(int64_t(k), Int<1>{}, int64_t(m) * k);
+  auto dB = make_stride(int64_t(k), Int<1>{}, int64_t(n) * k);
+  auto dS = make_stride(Int<1>{}, int64_t(n), int64_t(n) * k / group_size);
+  auto dD = make_stride(Int<1>{}, int64_t(n), int64_t(m) * n);
   if (broadcast_b) {
     get<2>(dB) = 0;
     get<2>(dS) = 0;

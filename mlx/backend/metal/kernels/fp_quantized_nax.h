@@ -191,15 +191,15 @@ using namespace mlx::steel;
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool aligned_N,
-    const bool has_global_scale = false,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2,
+    int group_size,
+    int bits,
+    bool has_global_scale,
+    bool aligned_N,
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2,
     typename Wtype = bfloat>
 METAL_FUNC void fp_qmm_t_impl(
     const device uint32_t* w,
@@ -337,16 +337,47 @@ METAL_FUNC void fp_qmm_t_impl(
   });
 }
 
+template <typename Wtype, int group_size, int bits>
+METAL_FUNC vec<Wtype, 4> dequantize_fp_x4(uint q, uint8_t s) {
+  half2 a;
+  half2 b;
+  if constexpr (bits == 4) {
+    const uint lo = (q & 0x000f) | ((q & 0x00f0) << 12);
+    const uint hi = ((q >> 8) & 0x000f) | ((q & 0xf000) << 4);
+    a = as_type<half2>(((lo & 0x00070007) << 9) | ((lo & 0x00080008) << 12));
+    b = as_type<half2>(((hi & 0x00070007) << 9) | ((hi & 0x00080008) << 12));
+  } else {
+    const uint lo = (q & 0x000000ff) | ((q & 0x0000ff00) << 8);
+    const uint hi = ((q >> 16) & 0x000000ff) | ((q >> 8) & 0x00ff0000);
+    a = as_type<half2>(((lo & 0x00800080) << 8) | ((lo & 0x007f007f) << 7));
+    b = as_type<half2>(((hi & 0x00800080) << 8) | ((hi & 0x007f007f) << 7));
+  }
+  if constexpr (group_size == 16) {
+    const half scale = dequantize_scale<half, group_size>(s);
+    a = (a * half2(16384.0h)) * scale;
+    b = (b * half2(16384.0h)) * scale;
+    return vec<Wtype, 4>(Wtype(a.x), Wtype(a.y), Wtype(b.x), Wtype(b.y));
+  } else {
+    const float scale = dequantize_scale<float, group_size>(s) *
+        (bits == 4 ? 16384.0f : 256.0f);
+    return vec<Wtype, 4>(
+        Wtype(float(a.x) * scale),
+        Wtype(float(a.y) * scale),
+        Wtype(float(b.x) * scale),
+        Wtype(float(b.y) * scale));
+  }
+}
+
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool has_global_scale = false,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2,
+    int group_size,
+    int bits,
+    bool has_global_scale = false,
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2,
     typename Wtype = bfloat>
 METAL_FUNC void fp_qmm_n_impl(
     const device uint32_t* w,
@@ -552,16 +583,16 @@ METAL_FUNC void adjust_matrix_offsets(
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool aligned_N,
-    const bool batched,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2,
-    const bool has_global_scale = false,
+    int group_size,
+    int bits,
+    bool has_global_scale,
+    bool aligned_N,
+    bool batched,
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2,
     typename Wtype = bfloat>
 [[kernel]] void fp_qmm_t_nax(
     const device uint32_t* w,
@@ -609,8 +640,8 @@ template <
       T,
       group_size,
       bits,
-      aligned_N,
       has_global_scale,
+      aligned_N,
       BM,
       BK,
       BN,
@@ -622,14 +653,16 @@ template <
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool batched,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2,
+    int group_size,
+    int bits,
+    bool has_global_scale, // unimplemented
+    bool aligned_N, // unused
+    bool batched,
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2,
     typename Wtype = bfloat>
 [[kernel]] void fp_qmm_n_nax(
     const device uint32_t* w,
@@ -681,15 +714,16 @@ template <
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool aligned_N,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2,
-    const bool has_global_scale = false,
+    int group_size,
+    int bits,
+    bool has_global_scale,
+    bool aligned_N,
+    bool batched, // unused
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2,
     typename Wtype = bfloat>
 [[kernel]] void fp_gather_qmm_t_nax(
     const device uint32_t* w,
@@ -748,8 +782,8 @@ template <
       T,
       group_size,
       bits,
-      aligned_N,
       has_global_scale,
+      aligned_N,
       BM,
       BK,
       BN,
@@ -761,14 +795,16 @@ template <
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2,
-    const bool has_global_scale = false,
+    int group_size,
+    int bits,
+    bool has_global_scale, // unimplemented
+    bool aligned_N, // unused
+    bool batched, // unused
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2,
     typename Wtype = bfloat>
 [[kernel]] void fp_gather_qmm_n_nax(
     const device uint32_t* w,
@@ -832,25 +868,26 @@ template <
 template <
     typename T,
     int group_size,
-    const int bits,
+    int bits,
+    bool has_global_scale, // unimplemented
+    bool transpose,
     int BM,
     int BN,
     int BK,
     int WM,
     int WN,
-    bool transpose,
-    bool has_global_scale = false,
     typename Wtype = bfloat>
 [[kernel]] void fp_gather_qmm_rhs_nax(
     const device T* x,
     const device uint32_t* w,
     const device uint8_t* scales,
     const device float* global_scale,
-    const device uint32_t* indices,
+    const device int32_t* offsets,
     device T* y,
     const constant int& M,
     const constant int& N,
     const constant int& K,
+    const constant int& num_groups,
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint simd_lane_id [[thread_index_in_simdgroup]]) {
@@ -880,13 +917,18 @@ template <
   const int K_it = K / BK;
   const size_t stride_w = transpose ? N * K_w : K * N_w;
   const size_t stride_s = transpose ? N * K_g : K * N_g;
-  const int y_row = tid.y * BM;
+  int y_row;
+  int group;
+  short tgp_bm;
+  if (!schedule_row_tile<BM>(
+          offsets, num_groups, M, tid.y, simd_lane_id, y_row, group, tgp_bm)) {
+    return;
+  }
   const int y_col = tid.x * BN;
   const size_t y_row_long = size_t(y_row);
   const size_t y_col_long = size_t(y_col);
 
   // Prepare threadgroup bounds
-  const short tgp_bm = align_M ? BM : short(min(BM, M - y_row));
   const short tgp_bn = align_N ? BN : short(min(BN, N - y_col));
 
   // Calculate the final tiles in the case that K is not aligned
@@ -912,10 +954,10 @@ template <
   const short tm = SM * (simd_group_id / WN);
   const short tn = SN * (simd_group_id % WN);
 
-  const short sgp_sm = align_M ? SM : min(int(SM), max(0, (M - (y_row + tm))));
+  const short sgp_sm = short(clamp(int(tgp_bm) - tm, 0, int(SM)));
   const short sgp_sn = align_N ? SN : min(int(SN), max(0, (N - (y_col + tn))));
 
-  const bool is_unaligned_sm = align_M ? false : (sgp_sm != SM);
+  const bool rows_in_bounds = y_row + tm + SM <= M;
   const bool is_unaligned_bn = align_N ? false : (tgp_bn != BN);
 
   constexpr short BR = transpose ? TN : TK;
@@ -923,150 +965,268 @@ template <
 
   using AccumType = float;
 
-  // Do as many matmuls as necessary
-  uint32_t index;
-  short offset;
-  uint32_t index_next = indices[y_row];
-  short offset_next = 0;
-  int n = 0;
-  while (n < tgp_bm) {
-    n++;
-    offset = offset_next;
-    index = index_next;
-    offset_next = tgp_bm;
-    for (; n < tgp_bm; n++) {
-      if (indices[y_row + n] != index) {
-        offset_next = n;
-        index_next = indices[y_row + n];
-        break;
-      }
-    }
-    threadgroup_barrier(mem_flags::mem_none);
+  const bool sg_active = sgp_sm > 0;
 
-    // Prepare threadgroup mma operation
-    const short m_lo_lim = min(int(sgp_sm), max(0, offset - tm));
-    const short m_hi_lim = min(int(sgp_sm), max(0, offset_next - tm));
-    const bool sg_active = m_hi_lim > m_lo_lim;
+  NAXTile<AccumType, TM, TN> Dtile;
+  Dtile.clear();
 
-    NAXTile<AccumType, TM, TN> Dtile;
-    Dtile.clear();
+  const device T* xn = x + tm * K;
 
-    const device T* xn = x + tm * K;
+  // Prepare threadgroup loading operations
+  thread loader_w_t loader_w(
+      wl + group * stride_w,
+      scales + group * stride_s,
+      transpose ? K : N,
+      Ws,
+      simd_group_id,
+      simd_lane_id,
+      global_scale + group);
 
-    // Prepare threadgroup loading operations
-    thread loader_w_t loader_w(
-        wl + index * stride_w,
-        scales + index * stride_s,
-        transpose ? K : N,
-        Ws,
-        simd_group_id,
-        simd_lane_id,
-        global_scale + index);
-
-    dispatch_bool(align_M || !is_unaligned_sm, [&](auto kAlignedM) {
-      dispatch_bool(align_N || !is_unaligned_bn, [&](auto kAlignedN) {
-        for (int k = 0; k < K_it; k++) {
-          threadgroup_barrier(mem_flags::mem_threadgroup);
-          if constexpr (kAlignedN.value) {
-            loader_w.load_unsafe();
-          } else {
-            loader_w.load_safe(
-                transpose ? short2(BK, tgp_bn) : short2(tgp_bn, BK));
-          }
-
-          threadgroup_barrier(mem_flags::mem_threadgroup);
-
-          STEEL_PRAGMA_NO_UNROLL
-          for (int kk1 = 0; kk1 < BK; kk1 += SK) {
-            if (sg_active) {
-              NAXTile<T, TM, TK> Atile;
-              NAXTile<Wtype, BR, BC> Btile;
-
-              volatile int compiler_barrier;
-
-              if constexpr (kAlignedM.value) {
-                Atile.load(xn + kk1, K);
-              } else {
-                Atile.load_safe(xn + kk1, K, short2(SK, sgp_sm));
-              }
-
-              if constexpr (transpose) {
-                Btile.template load<Wtype, BK_padded, 1>(
-                    Ws + tn * BK_padded + kk1);
-              } else {
-                Btile.template load<Wtype, BN_padded, 1>(
-                    Ws + tn + kk1 * BN_padded);
-              }
-
-              tile_matmad_nax(
-                  Dtile,
-                  Atile,
-                  metal::bool_constant<false>{},
-                  Btile,
-                  metal::bool_constant<transpose>{});
-
-              (void)compiler_barrier;
-            }
-          }
-
-          xn += BK;
-          loader_w.next();
-        }
-
-        if (!align_K) {
-          threadgroup_barrier(mem_flags::mem_threadgroup);
-          loader_w.load_safe(tile_w);
-          threadgroup_barrier(mem_flags::mem_threadgroup);
-
-          STEEL_PRAGMA_NO_UNROLL
-          for (int kk1 = 0; kk1 < BK; kk1 += SK) {
-            if (sg_active) {
-              NAXTile<T, TM, TK> Atile;
-              NAXTile<Wtype, BR, BC> Btile;
-
-              volatile int compiler_barrier;
-
-              const short psk = min(int(SK), max(0, (k_remain - kk1)));
-              Atile.load_safe(xn + kk1, K, short2(psk, sgp_sm));
-
-              if constexpr (transpose) {
-                Btile.template load<Wtype, BK_padded, 1>(
-                    Ws + tn * BK_padded + kk1);
-              } else {
-                Btile.template load<Wtype, BN_padded, 1>(
-                    Ws + tn + kk1 * BN_padded);
-              }
-
-              tile_matmad_nax(
-                  Dtile,
-                  Atile,
-                  metal::bool_constant<false>{},
-                  Btile,
-                  metal::bool_constant<transpose>{});
-
-              (void)compiler_barrier;
-            }
-          }
+  dispatch_bool(rows_in_bounds, [&](auto kAlignedM) {
+    dispatch_bool(align_N || !is_unaligned_bn, [&](auto kAlignedN) {
+      for (int k = 0; k < K_it; k++) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        if constexpr (kAlignedN.value) {
+          loader_w.load_unsafe();
+        } else {
+          loader_w.load_safe(
+              transpose ? short2(BK, tgp_bn) : short2(tgp_bn, BK));
         }
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
-        // Store results to device memory
-        if constexpr (kAlignedN.value) {
-          if (m_lo_lim == 0 && m_hi_lim == SM) {
-            Dtile.store(y + tm * N + tn, N);
-          } else {
-            Dtile.store_slice(
-                y + tm * N + tn, N, short2(0, m_lo_lim), short2(SN, m_hi_lim));
+        STEEL_PRAGMA_NO_UNROLL
+        for (int kk1 = 0; kk1 < BK; kk1 += SK) {
+          if (sg_active) {
+            NAXTile<T, TM, TK> Atile;
+            NAXTile<Wtype, BR, BC> Btile;
+
+            volatile int compiler_barrier;
+
+            if constexpr (kAlignedM.value) {
+              Atile.load(xn + kk1, K);
+            } else {
+              Atile.load_safe(xn + kk1, K, short2(SK, sgp_sm));
+            }
+
+            if constexpr (transpose) {
+              Btile.template load<Wtype, BK_padded, 1>(
+                  Ws + tn * BK_padded + kk1);
+            } else {
+              Btile.template load<Wtype, BN_padded, 1>(
+                  Ws + tn + kk1 * BN_padded);
+            }
+
+            tile_matmad_nax(
+                Dtile,
+                Atile,
+                metal::bool_constant<false>{},
+                Btile,
+                metal::bool_constant<transpose>{});
+
+            (void)compiler_barrier;
           }
+        }
+
+        xn += BK;
+        loader_w.next();
+      }
+
+      if (!align_K) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_w.load_safe(tile_w);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        STEEL_PRAGMA_NO_UNROLL
+        for (int kk1 = 0; kk1 < BK; kk1 += SK) {
+          if (sg_active) {
+            NAXTile<T, TM, TK> Atile;
+            NAXTile<Wtype, BR, BC> Btile;
+
+            volatile int compiler_barrier;
+
+            const short psk = min(int(SK), max(0, (k_remain - kk1)));
+            Atile.load_safe(xn + kk1, K, short2(psk, sgp_sm));
+
+            if constexpr (transpose) {
+              Btile.template load<Wtype, BK_padded, 1>(
+                  Ws + tn * BK_padded + kk1);
+            } else {
+              Btile.template load<Wtype, BN_padded, 1>(
+                  Ws + tn + kk1 * BN_padded);
+            }
+
+            tile_matmad_nax(
+                Dtile,
+                Atile,
+                metal::bool_constant<false>{},
+                Btile,
+                metal::bool_constant<transpose>{});
+
+            (void)compiler_barrier;
+          }
+        }
+      }
+
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+
+      // Store results to device memory
+      if constexpr (kAlignedN.value) {
+        if (sgp_sm == SM) {
+          Dtile.store(y + tm * N + tn, N);
         } else {
           Dtile.store_slice(
-              y + tm * N + tn,
-              N,
-              short2(0, m_lo_lim),
-              short2(sgp_sn, m_hi_lim));
+              y + tm * N + tn, N, short2(0, 0), short2(SN, sgp_sm));
         }
-      });
+      } else {
+        Dtile.store_slice(
+            y + tm * N + tn, N, short2(0, 0), short2(sgp_sn, sgp_sm));
+      }
     });
+  });
+}
+
+template <
+    typename T,
+    int group_size,
+    int bits,
+    int WK = 8,
+    int BN = 32,
+    typename Wtype = bfloat>
+[[kernel]] void fp_qmv_nax(
+    const device uint32_t* w,
+    const device uint8_t* scales,
+    const device T* x,
+    device T* y,
+    const constant int& K,
+    const constant int& N,
+    const constant int& M,
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]]) {
+  static_assert(BN % 32 == 0, "BN should be divisible by 32");
+  static_assert(
+      (group_size == 16 && bits == 4) ||
+          (group_size == 32 && (bits == 4 || bits == 8)),
+      "qmv_nax reads nvfp4, mxfp4 and mxfp8");
+
+  using Frag = BaseNAXFrag;
+  using scale_bits_t = metal::conditional_t<group_size == 16, ushort, uint8_t>;
+  constexpr int BK = 128;
+  constexpr short TK = BK / 16;
+  constexpr short TN = BN / 16;
+  constexpr int pack_factor = 8 / bits;
+  constexpr short loads = bits / 4;
+
+  const short2 coord = Frag::get_coord();
+  const short fm = coord.y;
+  const int k_lane = 8 * coord.x;
+  const int row_bytes = K / pack_factor;
+  const int row_scales = K / group_size;
+
+  const int y_col = tid.x * BN;
+  auto wl = (const device uint8_t*)w +
+      (y_col + fm) * static_cast<int64_t>(row_bytes) + k_lane / pack_factor;
+  scales +=
+      (y_col + fm) * static_cast<int64_t>(row_scales) + k_lane / group_size;
+  x += fm * static_cast<int64_t>(K) + k_lane;
+  y += y_col;
+  const bool x_rows[2] = {fm < M, fm + 8 < M};
+
+  NAXTile<float, 1, TN> Dtile;
+  Dtile.clear();
+
+  for (int k = simd_gid * BK; k < K; k += WK * BK) {
+    vec<T, 8> xs[2][4];
+    STEEL_PRAGMA_UNROLL
+    for (short r = 0; r < 2; r++) {
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < 4; i++) {
+        xs[r][i] = x_rows[r]
+            ? *(const device vec<T, 8>*)(x + r * 8 * static_cast<int64_t>(K) +
+                                         k + 8 * i)
+            : vec<T, 8>(0);
+      }
+    }
+    uint4 ws[TN][2][loads];
+    scale_bits_t ss[TN][2];
+    STEEL_PRAGMA_UNROLL
+    for (short t = 0; t < TN; t++) {
+      STEEL_PRAGMA_UNROLL
+      for (short r = 0; r < 2; r++) {
+        const int row = 16 * t + 8 * r;
+        const device uint8_t* wt =
+            wl + row * static_cast<int64_t>(row_bytes) + k / pack_factor;
+        const device uint8_t* st =
+            scales + row * static_cast<int64_t>(row_scales) + k / group_size;
+        STEEL_PRAGMA_UNROLL
+        for (short l = 0; l < loads; l++) {
+          ws[t][r][l] = *(const device uint4*)(wt + 16 * l);
+        }
+        ss[t][r] = *(const device scale_bits_t*)st;
+      }
+    }
+
+    STEEL_PRAGMA_UNROLL
+    for (short f = 0; f < TK; f++) {
+      typename Frag::template dtype_frag_t<T> a;
+      STEEL_PRAGMA_UNROLL
+      for (short r = 0; r < 2; r++) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < 4; j++) {
+          a[4 * r + j] = xs[r][f / 2][4 * (f % 2) + j];
+        }
+      }
+      typename Frag::template dtype_frag_t<Wtype> b[TN];
+      STEEL_PRAGMA_UNROLL
+      for (short t = 0; t < TN; t++) {
+        STEEL_PRAGMA_UNROLL
+        for (short r = 0; r < 2; r++) {
+          uint q;
+          if constexpr (bits == 4) {
+            q = ws[t][r][0][f / 2] >> (16 * (f % 2));
+          } else {
+            q = ws[t][r][f / 4][f % 4];
+          }
+          uint8_t s = ss[t][r];
+          if constexpr (group_size == 16) {
+            s = ss[t][r] >> (8 * (f / 4));
+          }
+          const vec<Wtype, 4> v =
+              dequantize_fp_x4<Wtype, group_size, bits>(q, s);
+          STEEL_PRAGMA_UNROLL
+          for (short j = 0; j < 4; j++) {
+            b[t][4 * r + j] = v[j];
+          }
+        }
+      }
+      STEEL_PRAGMA_UNROLL
+      for (short t = 0; t < TN; t += 2) {
+        Frag::mma(
+            Dtile.frag_at(0, t),
+            Dtile.frag_at(0, t + 1),
+            a,
+            metal::bool_constant<false>{},
+            b[t],
+            b[t + 1],
+            metal::bool_constant<true>{});
+      }
+    }
+  }
+
+  threadgroup float Ps[(WK - 1) * 16 * BN];
+  if (simd_gid > 0) {
+    Dtile.template store<float, BN, 1>(Ps + (simd_gid - 1) * 16 * BN);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (simd_gid == 0) {
+    for (int i = 0; i < WK - 1; i++) {
+      NAXTile<float, 1, TN> Ptile;
+      Ptile.template load<float, BN, 1>(Ps + i * 16 * BN);
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < Dtile.kNumFrags; j++) {
+        Dtile.val_frags[j] += Ptile.val_frags[j];
+      }
+    }
+    Dtile.store_rows(y, N, M);
   }
 }

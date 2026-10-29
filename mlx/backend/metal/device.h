@@ -62,8 +62,13 @@ class MLX_API CommandEncoder {
 
   template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
   void set_vector_bytes(const Vec& vec, size_t nelems, int idx) {
-    get_command_encoder()->setBytes(
-        vec.data(), nelems * sizeof(typename Vec::value_type), idx);
+    using T = typename Vec::value_type;
+    if (nelems > 0) {
+      get_command_encoder()->setBytes(vec.data(), nelems * sizeof(T), idx);
+    } else {
+      T val{};
+      get_command_encoder()->setBytes(&val, sizeof(T), idx);
+    }
   }
   template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
   void set_vector_bytes(const Vec& vec, int idx) {
@@ -89,12 +94,18 @@ class MLX_API CommandEncoder {
   }
 
   void barrier();
-  void end_encoding();
+  void end_encoding(bool wait_in_flight = false);
   void wait_event(Event event, uint64_t value);
   void signal_event(Event event, uint64_t value);
   bool needs_commit() const;
   void commit(std::function<void()> completion = nullptr);
   void synchronize();
+#ifndef NDEBUG
+  void verify_graph(
+      const char* primitive_name,
+      const std::vector<array>& inputs,
+      const std::vector<array>& outputs);
+#endif
 
   MTL::CommandBuffer* get_command_buffer() const {
     return buffer_.get();
@@ -138,6 +149,9 @@ class MLX_API CommandEncoder {
   std::unordered_set<MTL::Resource*> concurrent_outputs_;
   std::unordered_set<const void*> all_inputs_;
   std::unordered_set<const void*> all_outputs_;
+#ifndef NDEBUG
+  std::vector<void*> registered_data_ptrs_;
+#endif
 
   // A map of prior command encoder outputs to their corresponding fence.
   std::unordered_map<const void*, NS::SharedPtr<MTL::Fence>> prev_ce_outputs_;
@@ -161,7 +175,7 @@ class MLX_API Device {
   int get_architecture_gen() const {
     return arch_gen_;
   }
-  std::tuple<int, int> get_max_ops_mb_per_buffer() const {
+  std::tuple<int, int> get_default_max_ops_mb_per_buffer() const {
     return std::make_tuple(max_ops_per_buffer_, max_mb_per_buffer_);
   }
 

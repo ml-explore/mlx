@@ -51,7 +51,7 @@ class Config {
   friend std::shared_ptr<Group> init(const Config& cfg, bool strict);
 
  private:
-  std::vector<std::string> get_mesh_connectivity() const;
+  std::vector<std::vector<std::string>> get_mesh_connectivity() const;
   std::pair<std::vector<std::string>, std::vector<std::string>>
   get_ring_connectivity() const;
   SideChannel get_side_channel() const;

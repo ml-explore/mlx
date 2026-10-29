@@ -1,7 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import gc
-import unittest
 
 import mlx.core as mx
 import mlx_tests
@@ -9,8 +8,8 @@ import mlx_tests
 
 class TestVmap(mlx_tests.MLXTestCase):
     def test_basics(self):
-        # Can't vmap over scalars
-        with self.assertRaises(ValueError):
+        # Can't vmap over scalars, axis 0 is out of bounds for a 0d array
+        with self.assertRaises(IndexError):
             mx.vmap(mx.exp)(mx.array(1.0))
 
         # Invalid input
@@ -21,13 +20,13 @@ class TestVmap(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.vmap(mx.exp, in_axes="hello")(mx.array([0, 1]))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.vmap(mx.exp, in_axes=2)(mx.array([0, 1]))
 
         with self.assertRaises(ValueError):
             mx.vmap(mx.exp, out_axes="hello")(mx.array([0, 1]))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(IndexError):
             mx.vmap(mx.exp, out_axes=2)(mx.array([0, 1]))
 
     def test_unary(self):
@@ -219,6 +218,19 @@ class TestVmap(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.array_equal(out, expected))
 
+    def test_vmap_strided_slice_single_element(self):
+        # A strided slice selecting exactly one element must vmap to the
+        # batched version of what the un-batched slice returns (regression:
+        # the stored stride was collapsed to 1 without narrowing stop, so
+        # re-deriving the region returned every element in the span).
+        x = mx.arange(24, dtype=mx.float32).reshape(4, 2, 3)
+        out = mx.vmap(lambda t: t[0::2])(x)
+        self.assertTrue(mx.array_equal(out, x[:, 0:1]))
+
+        y = mx.arange(48, dtype=mx.float32).reshape(4, 4, 3)
+        out = mx.vmap(lambda t: t[0::2])(y)
+        self.assertTrue(mx.array_equal(out, y[:, 0:4:2]))
+
     def test_vmap_reduce(self):
         a = mx.ones((5, 5), mx.int32)
         out = mx.vmap(lambda x: x.sum())(a)
@@ -347,11 +359,11 @@ class TestVmap(mlx_tests.MLXTestCase):
         b = mx.ones((1, 1, 1, 5))
 
         with self.assertRaises(ValueError):
-            out = mx.vmap(lambda x, y: x + y)(a, b)
+            mx.vmap(lambda x, y: x + y)(a, b)
 
         b = mx.ones((10, 5))
         with self.assertRaises(ValueError):
-            out = mx.vmap(lambda x, y: x + y, in_axes=(0, 1))(a, b)
+            mx.vmap(lambda x, y: x + y, in_axes=(0, 1))(a, b)
 
     def test_vmap_matmul(self):
         a = mx.random.uniform(shape=(2, 3, 4))
@@ -392,13 +404,60 @@ class TestVmap(mlx_tests.MLXTestCase):
         expected = mx.addmm(mx.moveaxis(c, 2, 0), a, mx.moveaxis(b, 1, 0))
         self.assertTrue(mx.allclose(out, expected))
 
+    def test_vmap_slice_update(self):
+        src = mx.arange(24, dtype=mx.float32).reshape(3, 4, 2)
+        upd = mx.array([[100.0, 200.0]])
+        start = mx.array([1, 0])
+
+        def dynamic(s, u, k):
+            return mx.slice_update(s, u, k, axes=(0, 1))
+
+        def static(s, u):
+            s = s + 0
+            s[1:2, 0:2] = u
+            return s
+
+        for ax in range(3):
+            # Batched src, unbatched update
+            s = mx.moveaxis(src, 0, ax)
+            out = mx.vmap(dynamic, in_axes=(ax, None, None))(s, upd, start)
+            expected = mx.stack([dynamic(src[i], upd, start) for i in range(3)])
+            self.assertTrue(mx.array_equal(out, expected))
+
+            out = mx.vmap(static, in_axes=(ax, None))(s, upd)
+            expected = mx.stack([static(src[i], upd) for i in range(3)])
+            self.assertTrue(mx.array_equal(out, expected))
+
+        # Batched update, unbatched src
+        u = mx.stack([upd + i for i in range(3)])
+        out = mx.vmap(dynamic, in_axes=(None, 0, None))(src[0], u, start)
+        expected = mx.stack([dynamic(src[0], u[i], start) for i in range(3)])
+        self.assertTrue(mx.array_equal(out, expected))
+
+        out = mx.vmap(static, in_axes=(None, 0))(src[0], u)
+        expected = mx.stack([static(src[0], u[i]) for i in range(3)])
+        self.assertTrue(mx.array_equal(out, expected))
+
+        # Both batched
+        out = mx.vmap(dynamic, in_axes=(0, 0, None))(src, u, start)
+        expected = mx.stack([dynamic(src[i], u[i], start) for i in range(3)])
+        self.assertTrue(mx.array_equal(out, expected))
+
+        out = mx.vmap(static, in_axes=(0, 0))(src, u)
+        expected = mx.stack([static(src[i], u[i]) for i in range(3)])
+        self.assertTrue(mx.array_equal(out, expected))
+
     def test_vmap_svd(self):
         a = mx.random.uniform(shape=(3, 4, 2))
 
-        cpu_svd_full = lambda x: mx.linalg.svd(x, compute_uv=True, stream=mx.cpu)
-        cpu_svd_singular = lambda x: mx.linalg.svd(x, compute_uv=False, stream=mx.cpu)
+        def cpu_svd_full(x):
+            return mx.linalg.svd(x, compute_uv=True, stream=mx.cpu)
 
-        # Vmap over the first axis (this is already supported natively by the primitive).
+        def cpu_svd_singular(x):
+            return mx.linalg.svd(x, compute_uv=False, stream=mx.cpu)
+
+        # Vmap over the first axis (this is already supported natively by the
+        # primitive).
         Us, Ss, Vts = mx.vmap(cpu_svd_full, in_axes=(0,))(a)
         self.assertEqual(Us.shape, (a.shape[0], a.shape[1], a.shape[1]))
         self.assertEqual(Ss.shape, (a.shape[0], a.shape[2]))
@@ -450,9 +509,11 @@ class TestVmap(mlx_tests.MLXTestCase):
         mx.random.seed(42)
         a = mx.random.uniform(shape=(3, 4, 4))
 
-        cpu_inv = lambda x: mx.linalg.inv(x, stream=mx.cpu)
+        def cpu_inv(x):
+            return mx.linalg.inv(x, stream=mx.cpu)
 
-        # Vmap over the first axis (this is already supported natively by the primitive).
+        # Vmap over the first axis (this is already supported natively by the
+        # primitive).
         invs = mx.vmap(cpu_inv, in_axes=(0,))(a)
 
         for i in range(a.shape[0]):
@@ -475,6 +536,21 @@ class TestVmap(mlx_tests.MLXTestCase):
                     a[:, i, :] @ invs[i], mx.eye(a.shape[0]), rtol=1e-4, atol=1e-5
                 )
             )
+
+    def test_vmap_tri_inverse(self):
+        mx.random.seed(42)
+        a = mx.random.normal(shape=(3, 4, 4)) + 4 * mx.eye(4)
+
+        for upper in (False, True):
+
+            def cpu_tri_inv(x):
+                return mx.linalg.tri_inv(x, upper=upper, stream=mx.cpu)
+
+            expected = cpu_tri_inv(a)
+            out = mx.vmap(cpu_tri_inv, in_axes=(0,))(a)
+            self.assertTrue(mx.allclose(out, expected, rtol=1e-4, atol=1e-5))
+            out = mx.vmap(cpu_tri_inv, in_axes=(1,))(a.swapaxes(0, 1))
+            self.assertTrue(mx.allclose(out, expected, rtol=1e-4, atol=1e-5))
 
     def test_vmap_gather(self):
         def gather(a, idx):
@@ -546,6 +622,41 @@ class TestVmap(mlx_tests.MLXTestCase):
         out = mx.vmap(scatter_add, in_axes=(1,), out_axes=1)(a)
         expected = mx.array([[2.0, 3.0, 4.0], [2.0, 3.0, 4.0]])
         self.assertTrue(mx.allclose(out, expected))
+
+    def test_vmap_scatter_higher_rank(self):
+        # The vmap axis becomes an extra scattered source axis, so the
+        # singleton added to the updates has to land at that axis rather than
+        # at the front of the source dims. Only shows up for a vmap axis >= 2,
+        # where the misplaced singleton actually reorders a non-unit dim.
+        def unstack(x, axis):
+            return [s.squeeze(axis) for s in mx.split(x, x.shape[axis], axis=axis)]
+
+        for shape in [(2, 3), (2, 3, 4), (2, 3, 4, 5)]:
+            n = 1
+            for d in shape:
+                n *= d
+            a = mx.arange(n, dtype=mx.float32).reshape(shape)
+
+            fns = {
+                "add_derived": lambda x: x.at[mx.array([0])].add(x[:1]),
+                "add_const": lambda x: x.at[mx.array([0])].add(
+                    mx.ones((1,) + tuple(x.shape[1:]), dtype=x.dtype)
+                ),
+                "add_dup": lambda x: x.at[mx.array([0, 0])].add(
+                    mx.ones((2,) + tuple(x.shape[1:]), dtype=x.dtype)
+                ),
+                "maximum": lambda x: x.at[mx.array([0])].maximum(x[:1] + 1.0),
+            }
+            for name, fn in fns.items():
+                for ax in range(len(shape)):
+                    out = mx.vmap(fn, in_axes=ax, out_axes=ax)(a)
+                    expected = mx.stack([fn(s) for s in unstack(a, ax)], axis=ax)
+                    self.assertEqual(
+                        out.shape, expected.shape, f"{name} ax{ax} {shape}"
+                    )
+                    self.assertTrue(
+                        mx.array_equal(out, expected), f"{name} ax{ax} {shape}"
+                    )
 
         # Multiple indices
         def scatter(a):
@@ -866,7 +977,7 @@ class TestVmap(mlx_tests.MLXTestCase):
         def transform_vector(t):
             return Vector([t[0] + 10, t[1] * 10])
 
-        x = State(mx.array(1), mx.array(2))
+        _x = State(mx.array(1), mx.array(2))
 
         vmap_transform = mx.vmap(transform)
         vmap_transform_tuple = mx.vmap(transform_tuple)
@@ -1036,6 +1147,17 @@ class TestVmap(mlx_tests.MLXTestCase):
         for axis in (0, -1):
             out = mx.vmap(lambda x: mx.argsort(x, axis=axis), in_axes=1, out_axes=1)(a)
             self.assertTrue(mx.array_equal(out, expected))
+
+    def test_vmap_view(self):
+        a = mx.arange(16, dtype=mx.uint8).reshape(4, 4)
+        b = mx.arange(16, dtype=mx.int32).reshape(4, 4)
+        for x, dtype in [(a, mx.int8), (a, mx.int16), (a, mx.int32), (b, mx.uint8)]:
+            for in_axes in [0, 1, -1]:
+                expected = mx.stack(
+                    [mx.take(x, i, axis=in_axes).view(dtype) for i in range(4)]
+                )
+                out = mx.vmap(lambda y: y.view(dtype), in_axes=in_axes)(x)
+                self.assertTrue(mx.array_equal(out, expected))
 
 
 if __name__ == "__main__":

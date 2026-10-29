@@ -119,8 +119,7 @@ def join_schedules(schedules: List[Callable], boundaries: List[int]) -> Callable
 
     if len(schedules) != len(boundaries) + 1:
         raise ValueError(
-            f"Received {len(boundaries)} boundaries but "
-            f"expected {len(schedules) - 1}."
+            f"Received {len(boundaries)} boundaries but expected {len(schedules) - 1}."
         )
 
     def schedule(step):

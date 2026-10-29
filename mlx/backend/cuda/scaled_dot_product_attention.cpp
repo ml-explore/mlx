@@ -1,4 +1,4 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
 #include "mlx/backend/cuda/cudnn_utils.h"
 #include "mlx/backend/cuda/device.h"
@@ -319,10 +319,7 @@ bool supports_sdpa_cudnn(
     bool has_arr_mask,
     bool do_causal,
     Stream s) {
-  static bool enabled = env::get_var("MLX_CUDA_USE_CUDNN_SDPA", 1);
-  if (!enabled) {
-    return false;
-  }
+  bool enabled = config::get("MLX_CUDA_USE_CUDNN_SDPA", 1);
 
   // cuDNN SDPA requires Ampere and later.
   if (cu::device(s.device).compute_capability_major() < 8) {
@@ -557,11 +554,19 @@ std::tuple<bool, std::string> has_fused_kernel(
     const array& v,
     bool has_arr_mask,
     bool do_causal,
+    int window_size,
     bool output_logsumexp,
     Stream s) {
   if (s.device != Device::gpu) {
     return {false, "the fused kernels require a GPU stream."};
   }
+  if (window_size > 0) {
+    return {false, "window attention support for CUDA is NYI"};
+  }
+  if (output_logsumexp && window_size > 0) {
+    return {false, "window support for backward attention is NYI"};
+  }
+
   if (!supports_sdpa_cudnn(q, k, v, has_arr_mask, do_causal, s) &&
       !supports_sdpa_vector(q, k, v, has_arr_mask, output_logsumexp)) {
     std::ostringstream msg;
@@ -583,12 +588,14 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    bool has_sinks,
+    int window_size,
     bool is_training,
     bool output_logsumexp,
     bool force_fused,
     Stream s) {
-  auto [has_fused, reason] =
-      has_fused_kernel(q, k, v, has_arr_mask, do_causal, output_logsumexp, s);
+  auto [has_fused, reason] = has_fused_kernel(
+      q, k, v, has_arr_mask, do_causal, window_size, output_logsumexp, s);
   if (force_fused) {
     if (!has_fused) {
       std::ostringstream msg;

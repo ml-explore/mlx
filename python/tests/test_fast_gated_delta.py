@@ -9,7 +9,7 @@ try:
     import torch
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 
@@ -32,9 +32,12 @@ def gated_delta_oracle(
         k: [B, T, H, K]
         v: [B, T, H, V]
         beta: [B, T, H]
-        g: [B, T, H]                    <--- Difference: with out kernel: this is expected as a log.
-        scale: float, optional          <--- Difference: This is done by the qwen3_5 model.
-        initial_state: [B, H, K, V], optional <- Difference: last two dimensions are transposed.
+        g: [B, T, H]                    <--- Difference: with out kernel:
+                                            this is expected as a log.
+        scale: float, optional          <--- Difference: This is done by the
+                                            qwen3_5 model.
+        initial_state: [B, H, K, V], optional <- Difference: last two dimensions
+                                                are transposed.
         output_final_state: bool
 
     Returns:
@@ -115,7 +118,8 @@ def runner(dims, stream=mx.gpu, reference=True):
         out_ref = mx.array(out_on)
         hf_ref = mx.array(hf_on)
     else:
-        # use fallback for tests once fallback is validated by setting a mask instead of using the cpu
+        # use fallback for tests once fallback is validated by setting a mask instead of
+        # using the cpu
         mask = mx.ones((B, T))
 
         out_ref, hf_ref = mx.fast.gated_delta_update(
@@ -155,6 +159,7 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
         diff_heads2,
         large_t_dims,
     ]
+    vjp_dims = [base_dims, unaligned_dims, diff_heads, diff_heads2]
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_gated_delta_fallback(self):
@@ -170,7 +175,6 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
 
     def test_gated_delta_fallback_masked(self):
         for dims in self.fallback_dims:
-
             B, Hk, Hv, T, Dk, Dv = dims
 
             q = mx.random.normal(shape=(B, T, Hk, Dk))
@@ -225,7 +229,6 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
         dtypes = [mx.bfloat16, mx.float32]
         for dtype in dtypes:
             for dims in [self.base_dims]:
-
                 B, Hk, Hv, T, Dk, Dv = dims
 
                 q = mx.random.normal(shape=(B, T, Hk, Dk), dtype=dtype)
@@ -280,6 +283,58 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
             self.assertTrue(
                 mx.allclose(hf_ref, hf, atol=1e-1, rtol=1e-4), msg="State " + msg
             )
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_gated_delta_vjp(self):
+        for dims in self.vjp_dims:
+            B, Hk, Hv, T, Dk, Dv = dims
+
+            mx.random.seed(0)
+            q = mx.random.normal(shape=(B, T, Hk, Dk))
+            k = mx.random.normal(shape=(B, T, Hk, Dk))
+            k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
+            v = mx.random.normal(shape=(B, T, Hv, Dv))
+            g = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
+            b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
+            h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
+            primals = [q, k, v, g, b, h0]
+
+            cotans = [
+                mx.random.normal(shape=(B, T, Hv, Dv)) * 1e-2,
+                mx.random.normal(shape=(B, Hv, Dv, Dk)) * 1e-2,
+            ]
+
+            def f(q, k, v, g, b, h0):
+                out, state = mx.fast.gated_delta_update(q, k, v, g, b, initial_state=h0)
+                return out, state
+
+            def run(fallback, chunk):
+                with mx.config.scoped_update(
+                    GATED_DELTA_VJP_FALLBACK=1 if fallback else 0,
+                    GATED_DELTA_CHUNK_VJP=chunk,
+                ):
+                    outs, vjps = mx.vjp(f, primals, cotans)
+                    mx.eval(outs, vjps)
+                return outs, vjps
+
+            o_ref, vjp_ref = run(True, 0)
+
+            for chunk in (0, 16):
+                rtol = 1e-5 if chunk == 0 else 1e-2
+                atol = 1e-5 if chunk == 0 else 1e-2
+                with self.subTest(dims=dims, chunk=chunk):
+                    o_out, vjp_out = run(False, chunk)
+                    for i in range(len(o_ref)):
+                        self.assertTrue(
+                            mx.allclose(o_ref[i], o_out[i], rtol=rtol, atol=atol),
+                            msg=f"Output {i}, dims={dims}, chunk={chunk}",
+                        )
+                    for i in range(len(vjp_ref)):
+                        self.assertTrue(
+                            mx.allclose(vjp_ref[i], vjp_out[i], rtol=rtol, atol=atol),
+                            msg=f"Grad {i}, dims={dims}, chunk={chunk}",
+                        )
+            mx.clear_cache()
 
 
 if __name__ == "__main__":

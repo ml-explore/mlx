@@ -36,14 +36,14 @@ runs:
       shell: bash
       env:
         DEVICE: cpu
-      run: python python/tests/run.py -v
+      run: uv run pytest --durations=10 -n 4 || uv run pytest --last-failed
 
     - name: Run Python tests - GPU
       if: steps.gpu-check.outputs.good == 'true'
       shell: bash
       env:
         DEVICE: gpu
-      run: python python/tests/run.py -v
+      run: uv run pytest --durations=10
 
     - name: Run CPP tests - CPU
       shell: bash

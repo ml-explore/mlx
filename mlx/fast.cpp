@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 #include <cassert>
 #include <numeric>
 
@@ -35,7 +35,7 @@ std::vector<array> Custom::jvp(
     if (j < argnums.size() && i == argnums[j]) {
       all_tangents.emplace_back(tangents[j++]);
     } else {
-      all_tangents.emplace_back(zeros_like(primals[i]));
+      all_tangents.emplace_back(zeros_like(primals[i], stream()));
     }
   }
   auto [_, jvps] = mlx::core::jvp(fallback_, primals, all_tangents);
@@ -352,7 +352,7 @@ array layer_norm(
     auto xc = subtract(x, mu, s);
     auto v = mean(square(xc, s), /* axis= */ -1, /* keepdims= */ true, s);
 
-    x = multiply(xc, rsqrt(add(v, array(eps, float32), s), s));
+    x = multiply(xc, rsqrt(add(v, array(eps, float32), s), s), s);
     x = astype(x, out_type, s);
 
     // If the LN is affine then transform x according to the weight and bias
@@ -405,7 +405,7 @@ std::vector<array> LayerNorm::vjp(
     auto mu = multiply(sumx, norm, s);
     auto mu2 = multiply(sumx2, norm, s);
     auto var = subtract(mu2, square(mu, s), s);
-    auto n = rsqrt(add(var, array(eps, x.dtype()), s));
+    auto n = rsqrt(add(var, array(eps, x.dtype()), s), s);
     auto n3 = power(n, array(3, x.dtype()), s);
     auto x_c = subtract(x, mu, s);
 
@@ -716,6 +716,7 @@ array scaled_dot_product_attention(
     const array& keys,
     const array& values,
     const float scale,
+    int window_size /* = -1 */,
     const std::string& mask_mode /* = "" */,
     std::optional<array> mask_arr /* = {} */,
     const std::optional<array>& sinks /* = {} */,
@@ -729,6 +730,14 @@ array scaled_dot_product_attention(
       throw std::invalid_argument(msg.str());
     }
   }
+  if (window_size == 0 || window_size < -1) {
+    std::ostringstream msg;
+    msg << "[scaled_dot_product_attention] Invalid window_size " << window_size
+        << ". window_size must be positive or -1 for no window.";
+    throw std::invalid_argument(msg.str());
+  }
+  bool has_window = window_size > 0;
+
   // Check valid mask
   if (mask_mode != "" && mask_mode != "causal" && mask_mode != "array") {
     std::ostringstream msg;
@@ -820,6 +829,7 @@ array scaled_dot_product_attention(
                    n_q_heads,
                    n_kv_heads,
                    do_causal,
+                   window_size,
                    has_sinks,
                    has_arr_mask,
                    s](const std::vector<array>& inputs) {
@@ -833,10 +843,10 @@ array scaled_dot_product_attention(
       v = expand_dims(v, 2, s);
     }
     auto scores = matmul(q, swapaxes(k, -1, -2, s), s);
-    if (has_arr_mask || do_causal) {
+    if (has_arr_mask || do_causal || window_size > 0) {
       // Mask must be broadcast-compatible with [B, n_q_heads, L_q, L_kv]
       auto make_or_fetch_mask = [&]() {
-        if (do_causal) {
+        if (do_causal || window_size > 0) {
           int kL = k.shape(-2);
           int qL = q.shape(-2);
           int offset = kL - qL;
@@ -844,11 +854,36 @@ array scaled_dot_product_attention(
           auto k_idx = arange(0, kL, s);
           q_idx = expand_dims(q_idx, 1, s);
           k_idx = expand_dims(k_idx, 0, s);
+
+          if (window_size > 0) {
+            auto dist = abs(subtract(q_idx, k_idx, s), s);
+            auto window_mask = less(dist, array(window_size, dist.dtype()), s);
+
+            if (do_causal) {
+              auto causal_mask = greater_equal(q_idx, k_idx, s);
+              window_mask = logical_and(window_mask, causal_mask, s);
+            }
+
+            return window_mask;
+          }
+
           return greater_equal(q_idx, k_idx, s);
         }
         return inputs[3];
       };
       auto mask = make_or_fetch_mask();
+
+      // If we have an array mask on top of a built mask
+      if ((do_causal || window_size > 0) && has_arr_mask) {
+        auto arr_mask = inputs[3];
+
+        if (arr_mask.dtype() == bool_) {
+          mask = logical_and(mask, arr_mask, s);
+        } else {
+          auto minarr = array(finfo(scores.dtype()).min, scores.dtype());
+          mask = where(mask, arr_mask, minarr, s);
+        }
+      }
 
       if (n_repeats > 1 && mask.ndim() >= 3) {
         if (mask.shape(-3) == 1) {
@@ -934,6 +969,8 @@ array scaled_dot_product_attention(
           has_mask,
           has_arr_mask,
           do_causal,
+          has_sinks,
+          window_size,
           is_training,
           output_logsumexp,
           force_fused,
@@ -944,8 +981,9 @@ array scaled_dot_product_attention(
       array& mask = inputs[3];
       mask = where(
           mask,
-          full_like(mask, 0, final_type, s),
-          full_like(mask, -inf, final_type, s));
+          full_like(mask, 0, final_type, stream),
+          full_like(mask, -inf, final_type, stream),
+          stream);
     }
     Shape out_shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
     auto primitive = std::make_shared<ScaledDotProductAttention>(
@@ -954,6 +992,7 @@ array scaled_dot_product_attention(
         scale,
         do_causal,
         has_sinks,
+        window_size,
         output_logsumexp,
         force_fused);
     if (output_logsumexp) {
@@ -977,10 +1016,13 @@ std::vector<array> ScaledDotProductAttention::vjp(
     const std::vector<array>& outputs) {
   assert(primals.size() >= 3);
   assert(cotangents.size() == outputs.size());
-
   auto s = stream();
   if (ScaledDotProductAttentionVJP::use_fallback(primals[0], s)) {
     assert(outputs.size() == 1);
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
+
+  if (outputs.size() != 2) {
     return Custom::vjp(primals, cotangents, argnums, outputs);
   }
 
@@ -1021,6 +1063,7 @@ bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
       static_cast<const ScaledDotProductAttention&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
       has_sinks_ == a_other.has_sinks_ &&
+      window_size_ == a_other.window_size_ &&
       output_logsumexp_ == a_other.output_logsumexp_ &&
       force_fused_ == a_other.force_fused_;
 }
@@ -1053,8 +1096,10 @@ std::vector<array> gated_delta_update(
   auto q = astype(queries, out_dtype, s);
   auto k = astype(keys, out_dtype, s);
   auto v = astype(values, out_dtype, s);
-  auto g = astype(gates, out_dtype, s);
-  auto beta = astype(beta_, out_dtype, s);
+  // The decay sits close to 1, where a 16-bit type has too few mantissa
+  // bits, so gates and beta stay float32 regardless of the type of q.
+  auto g = astype(gates, float32, s);
+  auto beta = astype(beta_, float32, s);
 
   int B = q.shape(0);
   int T = q.shape(1);
@@ -1157,6 +1202,54 @@ std::vector<array> gated_delta_update(
 
   auto result = fallback({q, k, v, g, beta, h0, mask});
   return result;
+}
+std::vector<array> GatedDeltaUpdate::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  const int Hk = primals[0].shape(2);
+  const int Dk = primals[0].shape(3);
+  const int Hv = primals[2].shape(2);
+  const int Dv = primals[2].shape(3);
+
+  if (GatedDeltaUpdateVJP::use_fallback(Hk, Dk, Hv, Dv, stream())) {
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
+
+  if (primals.size() != 6) {
+    throw std::runtime_error(
+        "[GatedDeltaUpdate::vjp] expected 6 primals (q,k,v,g,beta,h0), got " +
+        std::to_string(primals.size()));
+  }
+  if (cotangents.size() != 2) {
+    throw std::runtime_error(
+        "[GatedDeltaUpdate::vjp] expected 2 cotangents (out, state), got " +
+        std::to_string(cotangents.size()));
+  }
+
+  std::vector<array> inputs = primals; // q,k,v,g,beta,h0  (indices 0..5)
+  inputs.push_back(cotangents[0]); // cot_o -> index 6
+  inputs.push_back(cotangents[1]); // cot_h -> index 7
+
+  std::vector<Shape> shapes;
+  std::vector<Dtype> dtypes;
+  for (int i = 0; i < 6; ++i) {
+    shapes.push_back(primals[i].shape());
+    dtypes.push_back(i == 5 ? float32 : primals[i].dtype()); // dh is float32
+  }
+
+  auto vjps = array::make_arrays(
+      std::move(shapes),
+      std::move(dtypes),
+      std::make_shared<GatedDeltaUpdateVJP>(stream(), fallback_),
+      std::move(inputs));
+
+  std::vector<array> returned_vjps;
+  for (int arg : argnums) {
+    returned_vjps.push_back(std::move(vjps[arg]));
+  }
+  return returned_vjps;
 }
 
 bool Quantize::is_equivalent(const Primitive& other) const {

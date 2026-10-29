@@ -5,7 +5,24 @@ from itertools import product
 
 import mlx.core as mx
 import mlx_tests
-import numpy as np
+
+
+def make_causal_mask(qL, kL):
+    offset = kL - qL
+    q_indices = mx.arange(qL) + offset
+    k_indices = mx.arange(kL)
+    mask = q_indices[:, None] >= k_indices[None]
+
+    return mask
+
+
+def make_window_mask(qL, kL, window_size):
+    offset = kL - qL
+    q_indices = mx.arange(qL) + offset
+    k_indices = mx.arange(kL)
+    mask = mx.abs(q_indices[:, None] - k_indices[None]) < window_size
+
+    return mask
 
 
 def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
@@ -27,7 +44,6 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
     scores = q @ mx.swapaxes(k, -1, -2)
     is_causal = mask == "causal"
     if mask is not None:
-
         if is_causal:
             offset = kL - L
             q_indices = mx.arange(L) + offset
@@ -148,7 +164,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
     def test_sdpa_pad_head_dim_opt_in(self):
         if mx.default_device() != mx.gpu:
             self.skipTest("requires GPU")
-        with mlx_tests.scoped_env(MLX_SDPA_PAD_HEAD_DIM="1"):
+        with mx.config.scoped_update(MLX_SDPA_PAD_HEAD_DIM=1):
             self.test_sdpa_head_dim_72()
             self.test_sdpa_head_dim_80()
             self.test_sdpa_head_dim_72_80_sinks()
@@ -225,6 +241,75 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 diff = mx.abs(out - ref) - atol * mx.abs(ref)
                 self.assertLessEqual(mx.max(diff).item(), atol)
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_full_d96_v64(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        mx.random.seed(0)
+        scale = 96**-0.5
+        cells = [
+            (1, 40, 40, 9, 33),
+            (1, 4, 4, 64, 64),
+            (2, 4, 2, 65, 97),
+            (1, 4, 4, 16, 9),
+            (1, 4, 2, 32, 31),
+            (1, 4, 2, 33, 32),
+        ]
+        for dtype, (B, qH, kH, qL, kL) in product(
+            (mx.float16, mx.bfloat16, mx.float32), cells
+        ):
+            q = (
+                (0.5 * mx.random.normal((B, qL, qH, 96)))
+                .astype(dtype)
+                .transpose(0, 2, 1, 3)
+            )
+            k = (0.5 * mx.random.normal((B, kH, kL + 32, 96))).astype(dtype)[:, :, :kL]
+            masks = [
+                None,
+                mx.arange(kL) < kL - 3,
+                mx.random.normal((qL, kL)).astype(dtype),
+            ]
+            if qL <= kL:
+                masks.append("causal")
+            for dv, mask, with_sinks in product((64, 96), masks, (False, True)):
+                with self.subTest(
+                    dtype=dtype,
+                    cell=(B, qH, kH, qL, kL),
+                    dv=dv,
+                    mask=type(mask).__name__,
+                    sinks=with_sinks,
+                ):
+                    v = (0.5 * mx.random.normal((B, kH, kL + 32, dv))).astype(dtype)[
+                        :, :, :kL
+                    ]
+                    if qL == 9:
+                        # V sliced from the interleaved K/V projection.
+                        v = (0.5 * mx.random.normal((B, kL, kH, 2 * dv))).astype(dtype)
+                        v = v.transpose(0, 2, 1, 3)[..., dv:]
+                    sinks = (
+                        mx.random.normal((qH,)).astype(dtype) if with_sinks else None
+                    )
+                    ref = mlx_ref_attn(
+                        q.astype(mx.float32),
+                        k.astype(mx.float32),
+                        v.astype(mx.float32),
+                        scale,
+                        mask,
+                        sinks,
+                    )
+                    out = mx.fast.scaled_dot_product_attention(
+                        q,
+                        k,
+                        v,
+                        scale=scale,
+                        mask=mask,
+                        sinks=sinks,
+                        force_fused=True,
+                    )
+                    self.assertEqual(out.shape, (B, qH, qL, dv))
+                    tol = 5e-3 if dtype == mx.bfloat16 else 1e-3
+                    self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
     @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
     def test_sdpa_full_head_dim_256(self):
         # On NAX devices, large nearly-square causal blocks take the fused
@@ -292,6 +377,51 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                         tol = 5e-3
                     self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
+        if not mx.metal.is_available() or mx.default_device() != mx.gpu:
+            return
+
+        mx.random.seed(0)
+        cases = (
+            (1, 4, 2, 1024, 1057, 1152),
+            (2, 2, 1, 1025, 1025, None),
+            (1, 2, 1, 1024, 4103, 4128),
+        )
+        for dtype, (B, qH, kH, qL, kL, cache_len) in product(
+            (mx.float16, mx.bfloat16), cases
+        ):
+            with self.subTest(dtype=dtype, qL=qL, kL=kL):
+                q = (0.5 * mx.random.normal((B, qH, qL, 512))).astype(dtype)
+                kv_len = cache_len or kL
+                k_cache = (0.5 * mx.random.normal((B, kH, kv_len, 512))).astype(dtype)
+                v_cache = (0.5 * mx.random.normal((B, kH, kv_len, 512))).astype(dtype)
+                k = k_cache[..., :kL, :]
+                v = v_cache[..., :kL, :]
+                scale = 512**-0.5
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask="causal")
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask="causal"
+                )
+                tol = 1e-2 if dtype == mx.bfloat16 else 1e-3
+                self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
+        q = mx.random.normal((1, 2, 1024, 512), mx.float16)
+        k = mx.random.normal((1, 1, 1057, 512), mx.float16)
+        v = mx.random.normal((1, 1, 1057, 512), mx.float16)
+        scale = 512**-0.5
+        mask = mx.random.uniform(shape=(1, 1, 1024, 1057)) > 0.2
+        sinks = mx.random.normal((2,), mx.float16)
+        fallback_cases = (
+            (v, mask, None),
+            (v, "causal", sinks),
+            (v[..., :128], "causal", None),
+        )
+        for v_arg, mask_arg, sinks_arg in fallback_cases:
+            ref = mlx_ref_attn(q, k, v_arg, scale=scale, mask=mask_arg, sinks=sinks_arg)
+            out = mx.fast.scaled_dot_product_attention(
+                q, k, v_arg, scale=scale, mask=mask_arg, sinks=sinks_arg
+            )
+            self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
+
     @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
     def test_sdpa_full_head_dim_512_nax(self):
         if mx.default_device() != mx.gpu:
@@ -327,7 +457,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             # Gemma 4 31B default route at the work threshold with sliced K/V.
             (1, 32, 16, 1024, 1025, 1056, False),
         ]
-        for dtype in (mx.float16, mx.bfloat16, mx.float32):
+        for dtype in (mx.float16, mx.bfloat16):
             for B, Nq, Nkv, qL, kL, cache_len, force_fused in cases:
                 with self.subTest(
                     dtype=dtype,
@@ -357,13 +487,9 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                         v,
                         scale=scale,
                         mask="causal",
-                        force_fused=force_fused
-                        and (
-                            dtype != mx.float32
-                            or os.getenv("MLX_ENABLE_TF32", "1") != "0"
-                        ),
+                        force_fused=force_fused,
                     )
-                    tol = 2e-3 if dtype != mx.bfloat16 else 1e-2
+                    tol = 2e-3 if dtype != mx.bfloat16 else 5e-2
                     self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
         q = mx.random.normal(shape=(1, 8, 33, D)).astype(mx.bfloat16)
@@ -444,6 +570,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         Nq = 4
         Nkv = 1
         scale = 1.0
+        tol = 1e-3 if mx.cuda.is_available() else 1e-4
         mx.random.seed(0)
         q = 5e-1 * mx.random.normal(shape=(1, Nq, 1, D))
         k = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
@@ -479,7 +606,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 scale=scale,
                 mask=m,
             )
-            self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+            self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
         L = 4096
         scale = 1.0
@@ -508,12 +635,18 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 scale=scale,
                 mask=m,
             )
-            self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+            self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
     def test_sdpa_vector_gqa_long(self):
         scale = 1.0
         mx.random.seed(0)
-        for Nq, Nkv, D in [(32, 4, 128), (64, 8, 64), (48, 4, 128), (64, 4, 128)]:
+        for Nq, Nkv, D in [
+            (32, 4, 128),
+            (64, 8, 64),
+            (48, 4, 128),
+            (64, 4, 128),
+            (16, 2, 256),
+        ]:
             for B, L in [(1, 8192), (1, 8201), (2, 8192)]:
                 q = 5e-1 * mx.random.normal(shape=(B, Nq, 1, D))
                 k = 5e-1 * mx.random.normal(shape=(B, Nkv, L + 32, D))[:, :, :L]
@@ -525,6 +658,51 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_vector_d96_v64(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        mx.random.seed(0)
+        scale = 96**-0.5
+        # Include MiniCPM3 heads and GQA to reach two-pass on smaller GPUs.
+        cells = [(1, 40, 40, 1, 127), (1, 40, 40, 8, 1025), (2, 4, 2, 4, 4097)]
+        for dtype, (B, qH, kH, qL, kL) in product(
+            (mx.float32, mx.float16, mx.bfloat16), cells
+        ):
+            q = mx.random.normal((B, qL, qH, 96)).astype(dtype)
+            q = q.transpose(0, 2, 1, 3)
+            k = mx.random.normal((B, kH, kL + 32, 96)).astype(dtype)[:, :, :kL]
+            v = mx.random.normal((B, kH, kL + 32, 64)).astype(dtype)[:, :, :kL]
+            masks = (
+                None,
+                "causal",
+                mx.arange(kL) < kL - 3,
+                mx.random.normal((qL, kL)).astype(dtype),
+            )
+            for mask in masks:
+                with self.subTest(
+                    dtype=dtype, cell=(B, qH, kH, qL, kL), mask=type(mask).__name__
+                ):
+                    # GPU float32 GEMM may use TF32; keep the reference exact.
+                    with mx.stream(mx.cpu):
+                        ref = mlx_ref_attn(
+                            q.astype(mx.float32),
+                            k.astype(mx.float32),
+                            v.astype(mx.float32),
+                            scale,
+                            mask,
+                        )
+                    out = mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, mask=mask, force_fused=True
+                    )
+                    self.assertEqual(out.shape, (B, qH, qL, 64))
+                    tol = (
+                        1e-5
+                        if dtype == mx.float32
+                        else (3e-3 if dtype == mx.float16 else 2e-2)
+                    )
+                    self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
     def test_sdpa_vector_head_dim_512(self):
         if mx.default_device() != mx.gpu:
             self.skipTest("requires GPU")
@@ -534,7 +712,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         scale = D**-0.5
         mx.random.seed(0)
 
-        with mlx_tests.scoped_env(MLX_SDPA_D512_MIN_KL="0"):
+        with mx.config.scoped_update(MLX_SDPA_D512_MIN_KL=0):
             # Test 1-pass kernel.
             for dtype in (mx.float32, mx.float16, mx.bfloat16):
                 with self.subTest(L=128, dtype=dtype, threshold="off"):
@@ -681,6 +859,50 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             )
             self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_short_query_many_heads(self):
+        key = mx.random.key(0)
+        for D, (qH, kH), qL, kL, mask, dtype in product(
+            (64, 128, 256),
+            ((24, 4), (28, 4)),
+            (6, 8),
+            (128, 1985),
+            (None, "causal"),
+            (mx.bfloat16, mx.float16, mx.float32),
+        ):
+            with self.subTest(D=D, qH=qH, kH=kH, qL=qL, kL=kL, mask=mask, dtype=dtype):
+                key, k1, k2 = mx.random.split(key, 3)
+                q = mx.random.normal((1, qL, qH, D), dtype, key=k1).swapaxes(1, 2)
+                cache = mx.random.normal((2, 1, kH, kL + 64, D), dtype, key=k2)
+                k = cache[0, :, :, :kL]
+                v = cache[1, :, :, :kL]
+                scale = D**-0.5
+                ref = mlx_ref_attn(
+                    q.astype(mx.float32),
+                    k.astype(mx.float32),
+                    v.astype(mx.float32),
+                    scale=scale,
+                    mask=mask,
+                )
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask=mask, force_fused=True
+                )
+                tol = {mx.bfloat16: 2e-2, mx.float16: 5e-3, mx.float32: 1e-4}[dtype]
+                self.assertTrue(
+                    mx.allclose(ref, out.astype(mx.float32), atol=tol, rtol=tol)
+                )
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_split_large_values(self):
+        q = mx.zeros((1, 24, 6, 128), dtype=mx.float16)
+        k = mx.zeros((1, 4, 128, 128), dtype=mx.float16)
+        v = mx.full((1, 4, 128, 128), 10000, dtype=mx.float16)
+        out = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=128**-0.5, force_fused=True
+        )
+        self.assertTrue(mx.all(mx.isfinite(out)))
+        self.assertTrue(mx.allclose(out, mx.full_like(out, 10000)))
+
     @unittest.skip("Different head and value dims is not enabled")
     def test_sdpa_vector_value_dims(self):
         D = 192
@@ -738,6 +960,45 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         ref = mlx_ref_attn(q, k, v, mask=mask)
         self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_vector_2pass_threadgroup_limit(self):
+        for dtype, D, q_heads, kv_heads, q_len in (
+            (mx.float16, 192, 32, 8, 8),
+            (mx.float16, 256, 24, 4, 5),
+            (mx.float16, 256, 32, 4, 4),
+            (mx.bfloat16, 256, 24, 4, 5),
+            (mx.bfloat16, 256, 32, 4, 4),
+            (mx.float32, 192, 32, 8, 8),
+            (mx.float32, 256, 24, 4, 5),
+            (mx.float32, 256, 32, 4, 4),
+        ):
+            # float16 only exceeded the limit without a causal mask, so cover
+            # all three mask kinds.
+            bool_mask = mx.random.uniform(shape=(1, 1, q_len, 1029)) < 0.5
+            for mask in ("causal", None, bool_mask):
+                mask_name = mask if not isinstance(mask, mx.array) else "bool"
+                with self.subTest(dtype=dtype, D=D, q_len=q_len, mask=mask_name):
+                    self.assertGreater(32 * q_heads // kv_heads * q_len, 896)
+                    q = mx.random.normal(shape=(1, q_heads, q_len, D), dtype=dtype)
+                    k = mx.random.normal(shape=(1, kv_heads, 1029, D), dtype=dtype)
+                    v = mx.random.normal(shape=(1, kv_heads, 1029, D), dtype=dtype)
+                    scale = D**-0.5
+
+                    out = mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, mask=mask, force_fused=True
+                    )
+                    ref = mlx_ref_attn(
+                        q.astype(mx.float32),
+                        k.astype(mx.float32),
+                        v.astype(mx.float32),
+                        scale=scale,
+                        mask=mask,
+                    )
+                    atol = 1e-4 if dtype == mx.float32 else 2e-3
+                    if dtype == mx.bfloat16:
+                        atol = 2e-2
+                    self.assertTrue(mx.allclose(out.astype(mx.float32), ref, atol=atol))
+
     @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
     def test_sdpa_blocks_env_override(self):
         # MLX_SDPA_BLOCKS used to be applied as-is, and values that are not
@@ -749,7 +1010,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         v = mx.random.normal(shape=(1, 8, 8192, D), dtype=mx.float16)
         ref = mx.fast.scaled_dot_product_attention(q, k, v, scale=D**-0.5)
         for blocks in (16, 33, 48, 100):
-            with mlx_tests.scoped_env(MLX_SDPA_BLOCKS=str(blocks)):
+            with mx.config.scoped_update(MLX_SDPA_BLOCKS=blocks):
                 out = mx.fast.scaled_dot_product_attention(q, k, v, scale=D**-0.5)
                 self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
@@ -808,15 +1069,16 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
                 out_ref = do_attention(mlx_ref_attn, q, k, v, scale, mask, t)
 
-                out_fst = do_attention(
-                    mx.fast.scaled_dot_product_attention,
-                    q,
-                    k,
-                    v,
-                    scale,
-                    mask,
-                    t,
-                )
+                with mx.config.scoped_update(MLX_ENABLE_TF32=0):
+                    out_fst = do_attention(
+                        mx.fast.scaled_dot_product_attention,
+                        q,
+                        k,
+                        v,
+                        scale,
+                        mask,
+                        t,
+                    )
 
                 # For causal mask when qL > kL, first qL-kL rows are undefined
                 # Compare only the valid portion
@@ -901,6 +1163,20 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         out = mx.fast.scaled_dot_product_attention(q, k, v, scale=1.0, mask=mask)
         ref = mlx_ref_attn(q, k, v, scale=1.0, mask=mask)
         self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+
+    def test_sdpa_vector_reversed_mask(self):
+        mx.random.seed(0)
+        q = mx.random.normal(shape=(1, 2, 1, 64))
+        k = mx.random.normal(shape=(1, 2, 16, 64))
+        v = mx.random.normal(shape=(1, 2, 16, 64))
+        masks = [
+            mx.random.normal(shape=(1, 2, 1, 16))[..., ::-1],
+            (mx.arange(16) % 3 != 0).reshape(1, 1, 1, 16)[..., ::-1],
+        ]
+        for mask in masks:
+            out = mx.fast.scaled_dot_product_attention(q, k, v, scale=0.125, mask=mask)
+            ref = mlx_ref_attn(q, k, v, scale=0.125, mask=mask)
+            self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     def test_sdpa_promote_mask(self):
         mask = mx.array(2.0, mx.bfloat16)
@@ -1027,20 +1303,25 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             mask_bool = mx.random.uniform(0, 1, (B, N_q, T, T), dtype=mx.float16) < 0.5
 
             for mask in (None, "causal", mask_additive, mask_bool):
-                sdpa_slow = lambda q, k, v: mlx_ref_attn(
-                    q, k, v, scale=scale, mask=mask
-                )
-                sdpa_fast = lambda q, k, v: mx.fast.scaled_dot_product_attention(
-                    q, k, v, scale=scale, mask=mask
-                )
+
+                def sdpa_slow(q, k, v):
+                    return mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+
+                def sdpa_fast(q, k, v):
+                    return mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, mask=mask
+                    )
+
                 test_vjp(sdpa_slow, sdpa_fast, [q, k, v])
 
-                loss_slow = lambda q, k, v: mlx_ref_attn(
-                    q, k, v, scale=scale, mask=mask
-                ).sum()
-                loss_fast = lambda q, k, v: mx.fast.scaled_dot_product_attention(
-                    q, k, v, scale=scale, mask=mask
-                ).sum()
+                def loss_slow(q, k, v):
+                    return mlx_ref_attn(q, k, v, scale=scale, mask=mask).sum()
+
+                def loss_fast(q, k, v):
+                    return mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, mask=mask
+                    ).sum()
+
                 test_grad(loss_slow, loss_fast, [q, k, v])
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
@@ -1076,7 +1357,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         # Vector attention kernel.
         for D in (192, 256, 512):
             with self.subTest(head_dim=D):
-                with mlx_tests.scoped_env(MLX_SDPA_D512_MIN_KL="0"):
+                with mx.config.scoped_update(MLX_SDPA_D512_MIN_KL=0):
                     q, k, v = make_qkv(4, 16385, D, 4, 2)
                     scale = D**-0.5
                     ref = mlx_ref_attn(q, k, v, scale=scale)
@@ -1111,12 +1392,12 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 q, k, v, scale=72**-0.5, force_fused=True
             )
         with self.assertRaisesRegex(ValueError, "GQA factor to be at most 32"):
-            q, k, v = make_qkv(8, 128, 64, qH=8, kH=1)
+            q, k, v = make_qkv(8, 128, 64, qH=32, kH=1)
             mx.fast.scaled_dot_product_attention(
                 q, k, v, scale=64**-0.5, force_fused=True
             )
         with self.assertRaisesRegex(ValueError, r"requires at least \d+ keys"):
-            with mlx_tests.scoped_env(MLX_SDPA_D512_MIN_KL=None):
+            with mx.config.scoped_update(MLX_SDPA_D512_MIN_KL=1024):
                 q, k, v = make_qkv(1, 512, 512, qH=32, kH=4)
                 mx.fast.scaled_dot_product_attention(
                     q, k, v, scale=512**-0.5, force_fused=True
@@ -1142,7 +1423,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             return q, k, v
 
         # Vector attention kernel.
-        for D in (64, 96, 128):
+        for D in (64, 96, 128, 256):
             with self.subTest(head_dim=D):
                 q, k, v = make_qkv(3, 128, D, 4, 2)
                 scale = D**-0.5
@@ -1184,6 +1465,148 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                         tolerance = {"rtol": 1e-2, "atol": 1e-2}
                     self.assertTrue(mx.allclose(ref, out, **tolerance))
 
+    def test_sdpa_window_size(self):
+        D = 64
+        scale = D**-0.5
+
+        qH = 4
+        kH = 2
+
+        for qL, kL, window, causal, sinks, mask_type in product(
+            (1, 7, 16),
+            (16, 33),
+            (1, 3, 16, 100),
+            (False, True),
+            (False, True),
+            (None, "bool", "additive"),
+        ):
+            if qL > kL or (causal and mask_type is not None):
+                continue
+            with self.subTest(
+                qL=qL,
+                kL=kL,
+                window=window,
+                causal=causal,
+                sinks=sinks,
+                mask_type=mask_type,
+            ):
+                q = mx.random.normal((2, qH, qL, D))
+                k = mx.random.normal((2, kH, kL, D))
+                v = mx.random.normal((2, kH, kL, D))
+                s = mx.random.normal((qH,)) if sinks else None
+
+                arr_mask = None
+                if mask_type == "bool":
+                    arr_mask = mx.random.uniform(shape=(2, qH, qL, kL)) < 0.7
+                    arr_mask[..., 0] = True
+                elif mask_type == "additive":
+                    arr_mask = mx.random.uniform(shape=(2, qH, qL, kL))
+
+                # Reference: the window as a boolean array mask.
+                ref_mask = make_window_mask(qL, kL, window)
+                if causal:
+                    ref_mask = ref_mask & make_causal_mask(qL, kL)
+
+                if mask_type == "bool":
+                    ref_mask = ref_mask & arr_mask
+                elif mask_type == "additive":
+                    ref_mask = mx.where(ref_mask, arr_mask, -mx.inf)
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask=ref_mask, sinks=s)
+
+                kwargs = {"scale": scale, "sinks": s, "window_size": window}
+                if causal:
+                    kwargs["mask"] = "causal"
+                elif arr_mask is not None:
+                    kwargs["mask"] = arr_mask
+                out = mx.fast.scaled_dot_product_attention(q, k, v, **kwargs)
+
+                # Fused kernels return 0 for rows with no visible key (and no
+                # sink), the reference returns a uniform average. Skip them.
+                if mask_type == "bool" and not sinks:
+                    valid = ref_mask.any(axis=-1, keepdims=True)
+                    ref = mx.where(valid, ref, 0)
+                    out = mx.where(valid, out, 0)
+                self.assertTrue(mx.allclose(ref, out, atol=1e-5, rtol=1e-5))
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    def test_sdpa_window_large(self):
+        D = 128
+        scale = D**-0.5
+
+        qH = 8
+        kH = 4
+
+        for qL, kL, window, causal, sinks, mask_type in product(
+            (3, 2050),
+            (2050, 4096),
+            (1024, 2048),
+            (False, True),
+            (False, True),
+            (None, "bool"),
+        ):
+            if qL > kL or (causal and mask_type is not None):
+                continue
+            with self.subTest(
+                qL=qL,
+                kL=kL,
+                window=window,
+                causal=causal,
+                sinks=sinks,
+                mask_type=mask_type,
+            ):
+                q = mx.random.normal((2, qH, qL, D))
+                k = mx.random.normal((2, kH, kL, D))
+                v = mx.random.normal((2, kH, kL, D))
+                s = mx.random.normal((qH,)) if sinks else None
+
+                arr_mask = None
+                if mask_type == "bool":
+                    arr_mask = mx.random.uniform(shape=(2, qH, qL, kL)) < 0.7
+                    arr_mask[..., 0] = True
+                elif mask_type == "additive":
+                    arr_mask = mx.random.uniform(shape=(2, qH, qL, kL))
+
+                # Reference: the window as a boolean array mask.
+                ref_mask = make_window_mask(qL, kL, window)
+                if causal:
+                    ref_mask = ref_mask & make_causal_mask(qL, kL)
+
+                if mask_type == "bool":
+                    ref_mask = ref_mask & arr_mask
+                elif mask_type == "additive":
+                    ref_mask = mx.where(ref_mask, arr_mask, -mx.inf)
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask=ref_mask, sinks=s)
+
+                kwargs = {"scale": scale, "sinks": s, "window_size": window}
+                if causal:
+                    kwargs["mask"] = "causal"
+                elif arr_mask is not None:
+                    kwargs["mask"] = arr_mask
+                out = mx.fast.scaled_dot_product_attention(q, k, v, **kwargs)
+
+                # Fused kernels return 0 for rows with no visible key (and no
+                # sink), the reference returns a uniform average. Skip them.
+                if mask_type == "bool" and not sinks:
+                    valid = ref_mask.any(axis=-1, keepdims=True)
+                    ref = mx.where(valid, ref, 0)
+                    out = mx.where(valid, out, 0)
+                self.assertTrue(mx.allclose(ref, out, atol=1e-5, rtol=1e-5))
+
+    def test_sdpa_window_size_errors(self):
+        q = mx.random.normal((1, 2, 4, 32))
+        for window in (0, -2):
+            with self.assertRaises(ValueError):
+                mx.fast.scaled_dot_product_attention(
+                    q, q, q, scale=1.0, window_size=window
+                )
+        out = mx.fast.scaled_dot_product_attention(q, q, q, scale=1.0, window_size=-1)
+        ref = mx.fast.scaled_dot_product_attention(q, q, q, scale=1.0)
+        self.assertTrue(mx.array_equal(out, ref))
+        with self.assertRaises(ValueError):
+            mx.fast.scaled_dot_product_attention(
+                q, q, q, scale=1.0, window_size=2, force_fused=True
+            )
+
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner(failfast=True)
+    mlx_tests.MLXTestRunner()

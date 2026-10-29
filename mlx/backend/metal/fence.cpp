@@ -1,5 +1,8 @@
 // Copyright © 2024 Apple Inc.
 #include "mlx/fence.h"
+
+#include <optional>
+
 #include "mlx/backend/metal/device.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
@@ -12,31 +15,28 @@ struct FenceImpl {
     if (!d->supportsFamily(MTL::GPUFamilyMetal3)) {
       use_fast = false;
     } else if (__builtin_available(macOS 15, iOS 18, *)) {
-      use_fast = env::metal_fast_synch();
+      use_fast = config::get("MLX_METAL_FAST_SYNCH", 0);
     }
 
     if (!use_fast) {
       event = std::make_unique<Event>(stream);
     } else {
-      auto buf = allocator::malloc(sizeof(uint32_t)).ptr();
-      fence = static_cast<void*>(buf);
+      fence.emplace(allocator::malloc(sizeof(uint32_t)));
       cpu_value()[0] = 0;
     }
   }
 
-  ~FenceImpl() {
-    if (use_fast) {
-      allocator::free(allocator::Buffer{static_cast<MTL::Buffer*>(fence)});
-    }
-  }
   bool use_fast{false};
   uint32_t count{0};
-  void* fence;
+  std::optional<allocator::Data> fence;
   std::unique_ptr<Event> event;
 
+  MTL::Buffer* buffer() {
+    return static_cast<MTL::Buffer*>(fence->buffer().ptr());
+  }
+
   std::atomic_uint* cpu_value() {
-    return static_cast<std::atomic_uint*>(
-        static_cast<MTL::Buffer*>(fence)->contents());
+    return static_cast<std::atomic_uint*>(buffer()->contents());
   }
 };
 
@@ -66,6 +66,8 @@ void Fence::wait(Stream stream, const array& x, uint32_t value) {
   auto& d = metal::device(stream.device);
   auto& compute_encoder = metal::get_command_encoder(stream);
 
+  compute_encoder.end_encoding();
+
   // Register outputs to ensure that no kernels which depends on the
   // output starts before this one is done
   compute_encoder.register_output_array(x);
@@ -74,10 +76,10 @@ void Fence::wait(Stream stream, const array& x, uint32_t value) {
   MTL::Size kernel_dims = MTL::Size(1, 1, 1);
   compute_encoder.set_compute_pipeline_state(kernel);
 
-  auto buf = static_cast<MTL::Buffer*>(f.fence);
-  compute_encoder.set_buffer(buf, 0);
+  compute_encoder.set_buffer(f.buffer(), 0);
   compute_encoder.set_bytes(value, 1);
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
+  compute_encoder.end_encoding(true);
 
   compute_encoder.get_command_buffer()->addCompletedHandler(
       [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
@@ -125,8 +127,7 @@ uint32_t Fence::update(Stream stream, const array& x, bool cross_device) {
   MTL::Size kernel_dims = MTL::Size(1, 1, 1);
   compute_encoder.set_compute_pipeline_state(kernel);
 
-  auto buf = static_cast<MTL::Buffer*>(f.fence);
-  compute_encoder.set_buffer(buf, 0);
+  compute_encoder.set_buffer(f.buffer(), 0);
   compute_encoder.set_bytes(f.count, 1);
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
 

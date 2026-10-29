@@ -207,7 +207,7 @@ The argument to the callback (``args``) is a dictionary which includes a
 * ``"keyword_inputs"``: The keyword specified inputs to the exported function
 * ``"outputs"``: The ordered outputs of the exported function
 * ``"constants"``: Any graph constants
-* ``"primitives"``: Inner graph nodes representating the operations
+* ``"primitive"``: An inner graph node representing an operation
 
 Each type has additional fields in the ``args`` dictionary.
 

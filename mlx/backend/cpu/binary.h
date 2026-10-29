@@ -16,7 +16,7 @@ namespace mlx::core {
 template <typename Op>
 struct VectorScalar {
   template <typename T, typename U>
-  void operator()(const T* a, const T* b, U* dst, int size) {
+  void operator()(const T* a, const T* b, U* dst, size_t size) {
     T scalar = *b;
     constexpr int N = simd::max_size<T>;
     while (size >= N) {
@@ -36,7 +36,7 @@ struct VectorScalar {
 template <typename Op>
 struct ScalarVector {
   template <typename T, typename U>
-  void operator()(const T* a, const T* b, U* dst, int size) {
+  void operator()(const T* a, const T* b, U* dst, size_t size) {
     T scalar = *a;
     constexpr int N = simd::max_size<T>;
     while (size >= N) {
@@ -56,7 +56,7 @@ struct ScalarVector {
 template <typename Op>
 struct VectorVector {
   template <typename T, typename U>
-  void operator()(const T* a, const T* b, U* dst, int size) {
+  void operator()(const T* a, const T* b, U* dst, size_t size) {
     constexpr int N = simd::max_size<T>;
     while (size >= N) {
       simd::store(dst, Op{}(simd::load<T, N>(a), simd::load<T, N>(b)));
@@ -112,7 +112,7 @@ void binary_op_dispatch_dims(
     const T* b,
     U* out,
     int dim,
-    int size,
+    size_t size,
     const Shape& shape,
     const Strides& a_strides,
     const Strides& b_strides,
@@ -135,7 +135,7 @@ void binary_op_dispatch_dims(
   ContiguousIterator a_it(shape, a_strides, dim - 3);
   ContiguousIterator b_it(shape, b_strides, dim - 3);
   auto stride = out_strides[dim - 4];
-  for (int64_t elem = 0; elem < size; elem += stride) {
+  for (size_t elem = 0; elem < size; elem += stride) {
     binary_op_dims<T, U, Op, 3, Strided>(
         a + a_it.loc,
         b + b_it.loc,
@@ -387,6 +387,7 @@ void binary_int_op_cpu(
     switch (out.dtype()) {
       case bool_:
         binary_op<bool, Op>(a, b, out, bopt);
+        break;
       case uint8:
         binary_op<uint8_t, Op>(a, b, out, bopt);
         break;

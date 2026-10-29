@@ -133,7 +133,8 @@ def main():
     mlx_dtype = MLX_DTYPES[args.dtype]
 
     print(
-        f"dtype={args.dtype} warmup={args.warmup} iters={args.iters} segments={args.segments}"
+        f"dtype={args.dtype} warmup={args.warmup} iters={args.iters} "
+        f"segments={args.segments}"
     )
 
     headers = [

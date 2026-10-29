@@ -48,8 +48,7 @@ def benchmark(shape, tokens):
         global_scale_x,
         global_scale_w,
         msg=(
-            f"mode=nvfp4 dtype=bfloat16 tokens={tokens} "
-            f"N={output_dims} K={input_dims}"
+            f"mode=nvfp4 dtype=bfloat16 tokens={tokens} N={output_dims} K={input_dims}"
         ),
     )
 

@@ -26,7 +26,7 @@ inline bool set_copy_output_data(
     const array& in,
     array& out,
     CopyType ctype,
-    std::function<allocator::Buffer(size_t)> mallocfn = allocator::malloc) {
+    std::function<allocator::Data(size_t)> mallocfn = allocator::malloc) {
   if (ctype == CopyType::Vector) {
     // If the input is donateable, we are doing a vector copy and the types
     // have the same size, then the input buffer can hold the output.

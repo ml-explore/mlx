@@ -4,6 +4,7 @@ import gc
 import itertools
 import math
 import unittest
+import weakref
 
 import mlx.core as mx
 import mlx_tests
@@ -19,18 +20,24 @@ except ImportError:
 
 class TestAutograd(mlx_tests.MLXTestCase):
     def test_jvp(self):
-        fun = lambda x: 2 * x
+        def fun(x):
+            return 2 * x
+
         out, dout = mx.jvp(fun, [mx.array(1.0)], [mx.array(2.0)])
         self.assertEqual(out[0].item(), 2.0)
         self.assertEqual(dout[0].item(), 4.0)
 
-        fun = lambda x, y: x * y
+        def fun(x, y):
+            return x * y
+
         _, out = mx.jvp(
             fun, [mx.array(4.0), mx.array(2.0)], [mx.array(3.0), mx.array(2.0)]
         )
         self.assertEqual(out[0].item(), 4.0 * 2.0 + 2.0 * 3.0)
 
-        fun = lambda x, y, z: (x * y, y * z)
+        def fun(x, y, z):
+            return (x * y, y * z)
+
         _, out = mx.jvp(
             fun,
             [mx.array(2.0), mx.array(4.0), mx.array(6.0)],
@@ -39,6 +46,55 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(len(out), 2)
         self.assertEqual(out[0].item(), 4.0 * 1.0 + 2.0 * 3.0)
         self.assertEqual(out[1].item(), 4.0 * 1.0 + 6.0 * 3.0)
+
+    def test_logcumsumexp_jvp(self):
+        x = mx.array([0.0, 0.0, 0.0])
+        t = mx.array([1.0, 1.0, 1.0])
+
+        for rev in (False, True):
+
+            def f(z):
+                return mx.logcumsumexp(z, axis=0, reverse=rev, inclusive=True)
+
+            _, (dout,) = mx.jvp(f, [x], [t])
+            self.assertTrue(mx.allclose(dout, mx.array([1.0, 1.0, 1.0])))
+
+        def f(z):
+            return mx.logcumsumexp(z, axis=0, reverse=False, inclusive=False)
+
+        _, (dout,) = mx.jvp(f, [x], [t])
+        self.assertTrue(mx.allclose(dout, mx.array([0.0, 1.0, 1.0])))
+
+        def f(z):
+            return mx.logcumsumexp(z, axis=0, reverse=True, inclusive=False)
+
+        _, (dout,) = mx.jvp(f, [x], [t])
+        self.assertTrue(mx.allclose(dout, mx.array([1.0, 1.0, 0.0])))
+
+        x = mx.array([1000.0, 1000.0, 1000.0])
+
+        def f(z):
+            return mx.logcumsumexp(z, axis=0, reverse=False, inclusive=True)
+
+        _, (dout,) = mx.jvp(f, [x], [t])
+        self.assertTrue(mx.allclose(dout, mx.array([1.0, 1.0, 1.0])))
+
+        x = mx.array([1.0, 2.0, 3.0])
+        t = mx.array([1.0, -2.0, 0.5])
+        eps = 1e-3
+
+        def f(z):
+            return mx.logcumsumexp(z, axis=0)
+
+        _, (dout,) = mx.jvp(f, [x], [t])
+
+        expected = (f(x + eps * t) - f(x - eps * t)) / (2 * eps)
+        self.assertTrue(mx.allclose(dout, expected, atol=1e-3))
+
+        x = mx.array([1.0, 2.0], dtype=mx.complex64)
+        t = mx.array([1 + 1j, 2 - 1j])
+        with self.assertRaises(ValueError):
+            mx.jvp(f, [x], [t])
 
     def test_jvp_comparison_tangent_dtype(self):
         # Comparison op JVP tangents should preserve the input tangent's
@@ -135,17 +191,23 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(dout, mx.array([1.0, 0.0, 1.0])))
 
     def test_vjp(self):
-        fun = lambda x: 2 * x
+        def fun(x):
+            return 2 * x
+
         out, dout = mx.vjp(fun, [mx.array(1.0)], [mx.array(2.0)])
         self.assertEqual(out[0].item(), 2.0)
         self.assertEqual(dout[0].item(), 4.0)
 
-        fun = lambda x, y: x * y
+        def fun(x, y):
+            return x * y
+
         _, dout = mx.vjp(fun, [mx.array(4.0), mx.array(2.0)], [mx.array(3.0)])
         self.assertEqual(dout[0].item(), 6.0)
         self.assertEqual(dout[1].item(), 12.0)
 
-        fun = lambda x, y, z: (x * y, y * z)
+        def fun(x, y, z):
+            return (x * y, y * z)
+
         _, out = mx.vjp(
             fun,
             [mx.array(2.0), mx.array(4.0), mx.array(6.0)],
@@ -158,7 +220,9 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
     def test_jvp_with_partly_traced_inputs(self):
         # power: each traced input must use its own tangent (issue #3634)
-        fun = lambda a, b: a**b
+        def fun(a, b):
+            return a**b
+
         primals = [mx.array(2.0), mx.array(3.0)]
         dyda = 12.0  # d/da a^b = b * a^(b - 1)
         dydb = math.log(2.0) * 8.0  # d/db a^b = ln(a) * a^b
@@ -168,10 +232,16 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertAlmostEqual(j.item(), dydb, places=4)
         _, (j,) = mx.jvp(fun, primals, [mx.array(1.0), mx.array(1.0)])
         self.assertAlmostEqual(j.item(), dyda + dydb, places=4)
-        fun = lambda a: a ** mx.array(3.0)
+
+        def fun(a):
+            return a ** mx.array(3.0)
+
         _, (j,) = mx.jvp(fun, [mx.array(2.0)], [mx.array(1.0)])
         self.assertAlmostEqual(j.item(), dyda, places=4)
-        fun = lambda b: mx.array(2.0) ** b
+
+        def fun(b):
+            return mx.array(2.0) ** b
+
         _, (j,) = mx.jvp(fun, [mx.array(3.0)], [mx.array(1.0)])
         self.assertAlmostEqual(j.item(), dydb, places=4)
 
@@ -190,18 +260,28 @@ class TestAutograd(mlx_tests.MLXTestCase):
         src = mx.zeros(4)
         upd = mx.ones(2)
         start = mx.array([1])
-        fun = lambda u: mx.slice_update(src, u, start, axes=[0])
+
+        def fun(u):
+            return mx.slice_update(src, u, start, axes=[0])
+
         _, (j,) = mx.jvp(fun, [upd], [mx.ones(2)])
         self.assertEqual(j.tolist(), [0.0, 1.0, 1.0, 0.0])
-        fun = lambda s: mx.slice_update(s, upd, start, axes=[0])
+
+        def fun(s):
+            return mx.slice_update(s, upd, start, axes=[0])
+
         _, (j,) = mx.jvp(fun, [src], [mx.ones(4)])
         self.assertEqual(j.tolist(), [1.0, 0.0, 0.0, 1.0])
-        fun = lambda s, u: mx.slice_update(s, u, start, axes=[0])
+
+        def fun(s, u):
+            return mx.slice_update(s, u, start, axes=[0])
+
         _, (j,) = mx.jvp(fun, [src, upd], [mx.ones(4), mx.full(2, 2.0)])
         self.assertEqual(j.tolist(), [1.0, 2.0, 2.0, 1.0])
 
     def test_grad(self):
-        fun = lambda x: x * x
+        def fun(x):
+            return x * x
 
         value, dfdx = mx.value_and_grad(fun)(mx.array(0.5))
         self.assertEqual(value.item(), 0.25)
@@ -215,7 +295,9 @@ class TestAutograd(mlx_tests.MLXTestCase):
         df3dx3 = mx.grad(mx.grad(mx.grad(fun)))(mx.array(0.5))
         self.assertEqual(df3dx3.item(), 0.0)
 
-        fun = lambda x, y: x * y
+        def fun(x, y):
+            return x * y
+
         x = mx.array(2.0)
         y = mx.array(3.0)
         dfdx = mx.grad(fun, argnums=0)(x, y)
@@ -224,7 +306,9 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(dfdx.item(), 2.0)
 
         # Pass non array args to functions works
-        fun = lambda x, y: x
+        def fun(x, y):
+            return x
+
         value, dfdx = mx.value_and_grad(fun)(mx.array(2.0), "hello")
         self.assertEqual(value.item(), 2.0)
         self.assertEqual(dfdx.item(), 1.0)
@@ -233,12 +317,16 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(dfdx.item(), 1.0)
 
         # Raises when function does not return array
-        fun = lambda x: "hello"
+        def fun(x):
+            return "hello"
+
         with self.assertRaises(ValueError):
             mx.grad(fun)(mx.array(2.0))
 
         # Raises for invalid argument number or argument type
-        fun = lambda x: x
+        def fun(x):
+            return x
+
         with self.assertRaises(ValueError):
             mx.grad(fun, argnums=2)(mx.array(2.0))
         with self.assertRaises(ValueError):
@@ -247,43 +335,57 @@ class TestAutograd(mlx_tests.MLXTestCase):
             mx.grad(fun)("hello")
 
         # Raises when output is not a scalar array
-        fun = lambda x: mx.sum(x, keepdims=True)
+        def fun(x):
+            return mx.sum(x, keepdims=True)
+
         with self.assertRaises(ValueError):
             mx.grad(fun)(mx.ones((2, 2)))
 
     def test_grad_trees(self):
-        fun = lambda x, y: x * y
+        def fun(x, y):
+            return x * y
+
         value, dfdx = mx.value_and_grad(fun, (0, 1))(mx.array(0.5), mx.array(2.0))
         self.assertEqual(value.item(), 1.0)
         self.assertTrue(isinstance(dfdx, tuple))
         self.assertEqual(dfdx[0].item(), 2.0)
         self.assertEqual(dfdx[1].item(), 0.5)
 
-        fun = lambda x, y: x * y
+        def fun(x, y):
+            return x * y
+
         value, dfdx = mx.value_and_grad(fun, 1)(mx.array(0.5), mx.array(2.0))
         self.assertEqual(value.item(), 1.0)
         self.assertEqual(dfdx.item(), 0.5)
 
-        fun = lambda p: p["x"] * p["y"]
+        def fun(p):
+            return p["x"] * p["y"]
+
         value, dfdx = mx.value_and_grad(fun)({"x": mx.array(0.5), "y": mx.array(2.0)})
         self.assertEqual(value.item(), 1.0)
         self.assertEqual(dfdx["x"].item(), 2.0)
         self.assertEqual(dfdx["y"].item(), 0.5)
 
-        fun = lambda p: p["x"] * p["y"]
+        def fun(p):
+            return p["x"] * p["y"]
+
         with self.assertRaises(ValueError):
             mx.value_and_grad(fun)({"x": 0.5, "y": mx.array(2.0)})
         with self.assertRaises(ValueError):
             mx.value_and_grad(fun, (0, 1))({"x": mx.array(0.5), "y": mx.array(2.0)})
 
-        fun = lambda p, b: mx.square(p[0]["foo"][2]) * b
+        def fun(p, b):
+            return mx.square(p[0]["foo"][2]) * b
+
         value, dfdx = mx.value_and_grad(fun)(
             [{"foo": [[], [], mx.array(2.0)]}], mx.array(0.5)
         )
         self.assertEqual(value.item(), 2.0)
         self.assertEqual(dfdx[0]["foo"][2].item(), 2.0)
 
-        fun = lambda x: x
+        def fun(x):
+            return x
+
         with self.assertRaises(TypeError):
             mx.value_and_grad(fun, (None, None))
         with self.assertRaises(ValueError):
@@ -293,9 +395,13 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
     def test_auxiliary_values(self):
         def fun(x, y):
-            l = (x * y).sum()
-            extra = {"loss": l, "foo": y.square() + x.square(), "bar": [1, 2, 3, y, x]}
-            return l, extra
+            loss = (x * y).sum()
+            extra = {
+                "loss": loss,
+                "foo": y.square() + x.square(),
+                "bar": [1, 2, 3, y, x],
+            }
+            return loss, extra
 
         fun_value_grad = mx.value_and_grad(fun)
         fun_grad = mx.grad(fun)
@@ -312,7 +418,9 @@ class TestAutograd(mlx_tests.MLXTestCase):
             _ = fun_grad(mx.ones((2, 2)), mx.ones((2, 2)))
 
     def test_grad_kwargs(self):
-        fun = lambda x, y: x * y
+        def fun(x, y):
+            return x * y
+
         a, b = mx.array(0.5), mx.array(2.0)
         dfdx = mx.grad(fun)
         self.assertEqual(dfdx(a, b).item(), 2.0)
@@ -343,7 +451,9 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertTrue(isinstance(grads[1], dict))
         self.assertEqual(grads[1]["y"].item(), 0.5)
 
-        fun = lambda x, y, z: x * y * z
+        def fun(x, y, z):
+            return x * y * z
+
         dfdxyz = mx.grad(fun, argnums=[0, 1], argnames=["z"])
         c = mx.array(4.0)
         grads = dfdxyz(a, b, z=c)
@@ -354,7 +464,9 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertTrue(isinstance(grads[1], dict))
         self.assertEqual(grads[1]["z"].item(), 1.0)
 
-        fun = lambda x, y: x * y
+        def fun(x, y):
+            return x * y
+
         dfdy = mx.grad(fun, argnames=["y"])
         grads = dfdy(a, y=b)
         self.assertTrue(isinstance(grads, tuple))
@@ -364,9 +476,15 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
     def test_captured(self):
         a = mx.array(5.0)
-        f = lambda x: a + x
-        g = lambda x: a + a
-        h = lambda x: x + x
+
+        def f(x):
+            return a + x
+
+        def g(x):
+            return a + a
+
+        def h(x):
+            return x + x
 
         dfdx = mx.grad(f)
         self.assertEqual(dfdx(a).item(), 1.0)
@@ -404,7 +522,9 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(vjps[0], 24.0 * mx.ones(shape_in)))
         self.assertTrue(mx.allclose(vjps[1], mx.zeros(shape_in)))
 
-        g = lambda x: h(w_in, x)
+        def g(x):
+            return h(w_in, x)
+
         vals, vjps = mx.vjp(g, [x_in], [cotan])
         mx.eval(vjps)
 
@@ -731,7 +851,7 @@ class TestAutograd(mlx_tests.MLXTestCase):
         _, vjps = mx.vjp(func, (arr,), (cotan,))
         self.assertEqual(vjps[0].item(), 8.0)
 
-    def test_power_grad(self):
+    def test_power_grad(self):  # noqa: F811
         def fun(x, y):
             res = x - y
             return res**x
@@ -1105,7 +1225,7 @@ class TestAutograd(mlx_tests.MLXTestCase):
         out1, dout1 = mx.jvp(outer_f, inputs, tans)
 
         @my_double.jvp
-        def random_grads(primals, tangents):
+        def random_grads(primals, tangents):  # noqa: F811
             return {
                 "out": 2 * primals["x"] * tangents["y"]
                 + 2 * primals["y"] * tangents["x"]
@@ -1261,6 +1381,51 @@ class TestAutograd(mlx_tests.MLXTestCase):
         expected[4:-5:-2] = tan_b
         self.assertTrue(mx.allclose(grad, expected))
 
+    def test_slice_grads_single_element(self):
+        # A strided slice selecting exactly one element must place each
+        # cotangent at the position the forward pass read it from, not over
+        # the whole half-open span (regression: the stride was collapsed to 1
+        # without narrowing stop, so the vjp re-derived a wider region).
+        def grad_of(fun, x):
+            return mx.grad(fun)(x)
+
+        # positive stride, first element of a length-2 axis
+        x = mx.zeros((2, 3))
+        Wa = mx.ones((1, 3))
+        Wb = mx.ones((1, 3)) * 2
+
+        def fun(z):
+            return (z[0::2] * Wa).sum() + (z[1::2] * Wb).sum()
+
+        g = grad_of(fun, x)
+        self.assertTrue(mx.allclose(g, mx.array([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])))
+
+        # positive stride, single element in a longer span
+        x = mx.zeros((8, 2))
+        W = mx.ones((1, 2))
+        g = grad_of(lambda z: (z[2:5:3] * W).sum(), x)
+        expected = mx.zeros((8, 2))
+        expected[2] = W
+        self.assertTrue(mx.allclose(g, expected))
+
+        # negative stride, single element
+        x = mx.zeros((2, 2))
+        W = mx.ones((1, 2))
+        g = grad_of(lambda z: (z[::-2] * W).sum(), x)
+        expected = mx.zeros((2, 2))
+        expected[1] = W
+        self.assertTrue(mx.allclose(g, expected))
+
+        # negative stride with start == 0 (cannot be expressed as a
+        # single-element negative-stride span; the unit-stride fallback must
+        # still land the cotangent at index 0)
+        x = mx.zeros((3, 2))
+        W = mx.ones((1, 2))
+        g = grad_of(lambda z: (z[0::-1] * W).sum(), x)
+        expected = mx.zeros((3, 2))
+        expected[0] = W
+        self.assertTrue(mx.allclose(g, expected))
+
     def test_leaks(self):
         for transform in [
             mx.grad,
@@ -1319,12 +1484,29 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertNotEqual(id(a_1), id(arrs[1]))
         self.assertEqual(id(a_2), id(arrs[2]))
 
+    def test_pad_value_grad(self):
+        x = mx.ones((2, 3))
+        v = mx.array(5.0)
+
+        def fun(x, v):
+            return mx.pad(x, pad_width=1, constant_values=v).sum()
+
+        # Padded elements: 4 * 5 - 2 * 3 = 14
+        gx, gv = mx.grad(fun, argnums=(0, 1))(x, v)
+        self.assertTrue(mx.array_equal(gx, mx.ones((2, 3))))
+        self.assertEqual(gv.item(), 14.0)
+
+        _, (tangent,) = mx.jvp(fun, [x, v], [mx.zeros((2, 3)), mx.array(1.0)])
+        self.assertEqual(tangent.item(), 14.0)
+
     def test_conv_second_order_grad_with_padding(self):
         x = mx.random.normal((1, 4, 4, 1))
         w = mx.random.normal((1, 2, 2, 1))
 
         def wgrad_sum(x_):
-            fn = lambda w_: mx.conv2d(x_, w_, padding=(1, 2)).sum()
+            def fn(w_):
+                return mx.conv2d(x_, w_, padding=(1, 2)).sum()
+
             return mx.grad(fn)(w).sum()
 
         dx = mx.grad(wgrad_sum)(x)
@@ -1485,8 +1667,22 @@ class TestAutograd(mlx_tests.MLXTestCase):
             mx.tan: lambda x: 1 / mx.cos(x) ** 2,
             mx.tanh: lambda x: 1 - mx.tanh(x) ** 2,
             mx.log1p: lambda x: 1 / (1 + x),
+            mx.cos: lambda x: -mx.sin(x),
+            mx.sqrt: lambda x: 0.5 / mx.sqrt(x),
+            mx.rsqrt: lambda x: -0.5 * mx.rsqrt(x) / x,
+            mx.arcsin: lambda x: 1 / mx.sqrt(1 - mx.square(x)),
+            mx.arccos: lambda x: -1 / mx.sqrt(1 - mx.square(x)),
+            mx.arctan: lambda x: 1 / (1 + mx.square(x)),
+            mx.arcsinh: lambda x: 1 / mx.sqrt(mx.square(x) + 1),
+            # 1 / sqrt(x**2 - 1) has the wrong sign when Re(x) < 0
+            mx.arccosh: lambda x: 1 / (mx.sqrt(x - 1) * mx.sqrt(x + 1)),
+            mx.arctanh: lambda x: 1 / (1 - mx.square(x)),
         }
         for fn, deriv in ops.items():
+            _, (jvp,) = mx.jvp(fn, [z], [cotangent])
+            expected = cotangent * deriv(z)
+            self.assertTrue(mx.allclose(jvp, expected, atol=1e-5), msg=str(fn))
+
             _, (vjp,) = mx.vjp(fn, [z], [cotangent])
             expected = cotangent * mx.conj(deriv(z))
             self.assertTrue(mx.allclose(vjp, expected, atol=1e-5), msg=str(fn))
@@ -1545,7 +1741,10 @@ class TestAutograd(mlx_tests.MLXTestCase):
             lambda a: mx.cummax(a, axis=0, inclusive=False),
             lambda a: mx.cummin(a, axis=0, reverse=True, inclusive=False),
         ):
-            f = lambda a: mx.sum(fn(a) ** 2)
+
+            def f(a):
+                return mx.sum(fn(a) ** 2)
+
             self.assertTrue(
                 mx.allclose(hvp(f, x, v), numerical_hvp(f, x, v), atol=1e-3)
             )
@@ -1558,10 +1757,38 @@ class TestAutograd(mlx_tests.MLXTestCase):
             lambda a: mx.partition(a, 1, axis=0),
             lambda a: mx.cummax(a, axis=0),
         ):
-            f = lambda a: mx.sum(fn(a) ** 2)
+
+            def f(a):
+                return mx.sum(fn(a) ** 2)
+
             self.assertTrue(
                 mx.allclose(hvp(f, y, w), numerical_hvp(f, y, w), atol=1e-3)
             )
+
+    def test_transform_releases_captures(self):
+        for transform in (
+            mx.compile,
+            mx.grad,
+            mx.value_and_grad,
+            mx.vmap,
+            mx.checkpoint,
+        ):
+            for cycle in (False, True):
+                with self.subTest(transform=transform, cycle=cycle):
+                    captured = mx.array(2.0)
+                    ref = weakref.ref(captured)
+
+                    def fun(x, captured=captured):
+                        return (x * captured).sum()
+
+                    fn = transform(fun)
+                    if cycle:
+                        fun.wrapped = fn
+                    result = fn(mx.ones((2, 3)))
+                    mx.eval(result)
+                    del result, fn, fun, captured
+                    gc.collect()
+                    self.assertIsNone(ref())
 
 
 if __name__ == "__main__":

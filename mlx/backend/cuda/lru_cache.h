@@ -33,8 +33,8 @@ class LRUCache {
 
   // Initialize with capacity read from |env_name|.
   LRUCache(const char* env_name, int default_capacity)
-      : LRUCache(env::get_var(env_name, default_capacity)) {
-    if (env::get_var("MLX_ENABLE_CACHE_THRASHING_CHECK", 1)) {
+      : LRUCache(config::get(env_name, default_capacity)) {
+    if (config::get("MLX_ENABLE_CACHE_THRASHING_CHECK", 1)) {
       env_name_ = env_name;
     }
   }
@@ -76,6 +76,7 @@ class LRUCache {
     auto it = map_.find(key);
     if (it == map_.end())
       return end();
+    cache_misses_ = 0;
     vlist_.splice(vlist_.begin(), vlist_, it->second);
     return it->second;
   }
@@ -84,6 +85,7 @@ class LRUCache {
   std::pair<iterator, bool> emplace(const K& key, U&& value) {
     auto it = map_.find(key);
     if (it != map_.end()) {
+      cache_misses_ = 0;
       vlist_.splice(vlist_.begin(), vlist_, it->second);
       return {it->second, false};
     }

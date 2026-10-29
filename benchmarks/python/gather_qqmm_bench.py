@@ -91,9 +91,7 @@ def benchmark(shape, workload, tokens):
         global_scale_w,
         rhs,
         sorted_,
-        msg=(
-            f"{workload} routes={rhs.size} " f"N={shape['output']} K={shape['input']}"
-        ),
+        msg=(f"{workload} routes={rhs.size} N={shape['output']} K={shape['input']}"),
     )
 
 

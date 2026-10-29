@@ -46,7 +46,7 @@ affine_quantize(const T* w, uint8_t* out, T* scales, T* biases, size_t size) {
 
   float w_thread[values_per_reduce];
   float w_min = Limits<float>::max();
-  float w_max = 0;
+  float w_max = -Limits<float>::max();
 
 #pragma clang loop unroll(full)
   for (int i = 0; i < values_per_reduce; i++) {

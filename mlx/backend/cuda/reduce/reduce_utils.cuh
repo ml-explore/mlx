@@ -135,11 +135,7 @@ inline void allocate_same_layout(
   fl.col_contiguous = cc;
   fl.contiguous = true;
   out.set_data(
-      cu::malloc_async(out.nbytes(), encoder),
-      data_size,
-      final_strides,
-      fl,
-      allocator::free);
+      cu::malloc_async(out.nbytes(), encoder), data_size, final_strides, fl);
 }
 
 } // namespace mlx::core

@@ -7,6 +7,7 @@
 #include <numeric>
 
 #include "mlx/io/gguf.h"
+#include "mlx/io/load.h"
 #include "mlx/ops.h"
 
 namespace mlx::core {
@@ -76,7 +77,7 @@ Shape get_shape(const gguf_tensor& tensor) {
   return shape;
 }
 
-std::tuple<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
+std::tuple<allocator::Data, Dtype> extract_tensor_data(gguf_tensor* tensor) {
   if (tensor == nullptr) {
     throw std::invalid_argument(
         "[extract_tensor_data] Input tensor pointer is null.");
@@ -87,24 +88,28 @@ std::tuple<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
     if (tensor->weights_data == nullptr) {
       throw std::runtime_error("[load_gguf] NULL tensor data pointer");
     }
-    allocator::Buffer buffer = allocator::malloc(tensor->bsize);
+    auto out = allocator::malloc(tensor->bsize);
     memcpy(
-        buffer.raw_ptr(),
+        out.buffer().raw_ptr(),
         tensor->weights_data,
         tensor->num_weights * equivalent_dtype.value().size());
-    return {buffer, equivalent_dtype.value()};
+    return {std::move(out), equivalent_dtype.value()};
   }
   // Otherwise, we convert to float16.
   // TODO: Add other dequantization options.
+  if (tensor->num_weights >
+      std::numeric_limits<size_t>::max() / sizeof(int16_t)) {
+    tensor_error(*tensor, "has too many elements to convert to float16");
+  }
   int16_t* data = gguf_tensor_to_f16(tensor);
   if (data == NULL) {
     throw std::runtime_error("[load_gguf] gguf_tensor_to_f16 failed");
   }
   const size_t new_size = tensor->num_weights * sizeof(int16_t);
-  allocator::Buffer buffer = allocator::malloc(new_size);
-  memcpy(buffer.raw_ptr(), data, new_size);
+  auto out = allocator::malloc(new_size);
+  memcpy(out.buffer().raw_ptr(), data, new_size);
   free(data);
-  return {buffer, float16};
+  return {std::move(out), float16};
 }
 
 void set_mx_value_from_gguf(
@@ -354,8 +359,8 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
       gguf_load_quantized(array_map, tensor);
     } else {
       std::string name(tensor.name, tensor.namelen);
-      const auto& [data, dtype] = extract_tensor_data(&tensor);
-      array loaded_array = array(data, get_shape(tensor), dtype);
+      auto [data, dtype] = extract_tensor_data(&tensor);
+      array loaded_array = array(std::move(data), get_shape(tensor), dtype);
       check_insert(array_map.insert({name, loaded_array}));
     }
   }
@@ -415,15 +420,12 @@ void append_kv_array(
   }
 }
 
-void save_gguf(
-    std::string file,
-    std::unordered_map<std::string, array> array_map,
-    std::unordered_map<std::string, GGUFMetaData> metadata /* = {} */) {
-  // Add .gguf to file name if it is not there
-  if (file.length() < 5 || file.substr(file.length() - 5, 5) != ".gguf") {
-    file += ".gguf";
-  }
+namespace {
 
+void write_gguf(
+    const std::string& file,
+    std::unordered_map<std::string, array> array_map,
+    std::unordered_map<std::string, GGUFMetaData> metadata) {
   std::unique_ptr<gguf_ctx, decltype(&gguf_close)> ctx(
       gguf_create(file.c_str(), GGUF_OVERWRITE), gguf_close);
   if (!ctx) {
@@ -589,6 +591,22 @@ void save_gguf(
       throw std::runtime_error("[save_gguf] gguf_append_tensor_data failed");
     }
   }
+}
+
+} // namespace
+
+void save_gguf(
+    std::string file,
+    std::unordered_map<std::string, array> array_map,
+    std::unordered_map<std::string, GGUFMetaData> metadata /* = {} */) {
+  // Add .gguf to file name if it is not there
+  if (file.length() < 5 || file.substr(file.length() - 5, 5) != ".gguf") {
+    file += ".gguf";
+  }
+
+  io::write_and_replace(file, [&array_map, &metadata](const std::string& path) {
+    write_gguf(path, array_map, metadata);
+  });
 }
 
 } // namespace mlx::core

@@ -63,12 +63,12 @@ struct EigWork<
   }
 
   void run(T* a, O* values, O* vectors) {
-    auto eig_tmp = static_cast<T*>(buffers[0].buffer.raw_ptr());
+    auto eig_tmp = static_cast<T*>(buffers[0].buffer().raw_ptr());
     T* vec_tmp = nullptr;
     if (vectors) {
-      vec_tmp = static_cast<T*>(buffers[1].buffer.raw_ptr());
+      vec_tmp = static_cast<T*>(buffers[1].buffer().raw_ptr());
     }
-    auto work = static_cast<T*>(buffers.back().buffer.raw_ptr());
+    auto work = static_cast<T*>(buffers.back().buffer().raw_ptr());
 
     int n_vecs_l = vectors ? N : 1;
     int n_vecs_r = 1;
@@ -166,9 +166,9 @@ struct EigWork<std::complex<float>> {
         &n_vecs_l,
         nullptr,
         &n_vecs_r,
-        static_cast<T*>(buffers[0].buffer.raw_ptr()),
+        static_cast<T*>(buffers[0].buffer().raw_ptr()),
         &lwork,
-        static_cast<R*>(buffers[1].buffer.raw_ptr()),
+        static_cast<R*>(buffers[1].buffer().raw_ptr()),
         &info);
   }
 };

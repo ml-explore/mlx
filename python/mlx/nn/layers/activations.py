@@ -180,7 +180,8 @@ def gelu_approx(x):
 
     .. math::
 
-        x = 0.5 * x * \left(1 + \text{Tanh}\left(\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right)
+        x = 0.5 * x * \left(1 + \text{Tanh}\left(\sqrt{2 / \pi} * \left(x + 0.044715 *
+        x^3\right)\right)\right)
 
     """
     return 0.5 * x * (1 + mx.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * x**3)))
@@ -557,7 +558,8 @@ class GELU(Module):
     However, if ``approx`` is set to 'precise' or 'fast' it applies
 
     .. math::
-        \textrm{GELUApprox}(x) &= 0.5 * x * \left(1 + \text{Tanh}\left(\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right) \\
+        \textrm{GELUApprox}(x) &= 0.5 * x * \left(1 + \text{Tanh}\left(\sqrt{2 / \pi} *
+        \left(x + 0.044715 * x^3\right)\right)\right) \\
         \textrm{GELUFast}(x) &= x * \sigma\left(1.702 * x\right)
 
     respectively.

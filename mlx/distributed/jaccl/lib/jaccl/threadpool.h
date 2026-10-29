@@ -134,4 +134,36 @@ inline void ThreadPool::start_threads(size_t threads) {
   }
 }
 
+// Run fn(lw) for each wire, the first n_wires - 1 on the pool and the last
+// inline, then wait for the pool calls before returning.
+template <typename Fn>
+void dispatch_wires(ThreadPool* pool, int n_wires, Fn&& fn) {
+  if (n_wires <= 1 || pool == nullptr) {
+    for (int lw = 0; lw < n_wires; lw++) {
+      fn(lw);
+    }
+    return;
+  }
+
+  std::vector<std::future<void>> futures;
+  futures.reserve(n_wires - 1);
+  for (int lw = 0; lw < n_wires - 1; lw++) {
+    futures.emplace_back(pool->enqueue(fn, lw));
+  }
+
+  // Wait for the pool calls even if the inline one throws, so they never
+  // outlive this frame.
+  try {
+    fn(n_wires - 1);
+  } catch (...) {
+    for (auto& f : futures) {
+      f.wait();
+    }
+    throw;
+  }
+  for (auto& f : futures) {
+    f.wait();
+  }
+}
+
 } // namespace jaccl

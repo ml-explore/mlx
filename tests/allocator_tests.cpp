@@ -20,33 +20,33 @@ using namespace mlx::core;
 
 TEST_CASE("test simple allocations") {
   {
-    auto buffer = allocator::malloc(sizeof(float));
+    auto buffer = allocator::allocator().malloc(sizeof(float));
     auto fptr = static_cast<float*>(buffer.raw_ptr());
     *fptr = 0.5f;
     CHECK_EQ(*fptr, 0.5f);
-    allocator::free(buffer);
+    allocator::allocator().free(buffer);
   }
 
   {
-    auto buffer = allocator::malloc(128 * sizeof(int));
+    auto buffer = allocator::allocator().malloc(128 * sizeof(int));
     int* ptr = static_cast<int*>(buffer.raw_ptr());
     for (int i = 0; i < 128; ++i) {
       ptr[i] = i;
     }
-    allocator::free(buffer);
+    allocator::allocator().free(buffer);
   }
 
   {
-    auto buffer = allocator::malloc(0);
-    allocator::free(buffer);
+    auto buffer = allocator::allocator().malloc(0);
+    allocator::allocator().free(buffer);
   }
 }
 
 TEST_CASE("test large allocations") {
   size_t size = 1 << 30;
   for (int i = 0; i < 100; ++i) {
-    auto buffer = allocator::malloc(size);
-    allocator::free(buffer);
+    auto buffer = allocator::allocator().malloc(size);
+    allocator::allocator().free(buffer);
   }
 }
 
@@ -54,14 +54,14 @@ TEST_CASE("test cached allocation keeps capacity") {
   auto old_limit = set_cache_limit(1 << 20);
   clear_cache();
 
-  auto large = allocator::malloc(8192);
-  allocator::free(large);
+  auto large = allocator::allocator().malloc(8192);
+  allocator::allocator().free(large);
   auto cached = get_cache_memory();
   CHECK_GE(cached, 8192);
 
-  auto small = allocator::malloc(6000);
+  auto small = allocator::allocator().malloc(6000);
   CHECK_GE(allocator::allocator().size(small), cached);
-  allocator::free(small);
+  allocator::allocator().free(small);
   CHECK_GE(get_cache_memory(), cached);
 
   clear_cache();
@@ -94,8 +94,8 @@ TEST_CASE("test clear cache synchronizes cpu streams") {
   auto old_limit = set_cache_limit(1 << 20);
   clear_cache();
 
-  auto cached = allocator::malloc(8192);
-  allocator::free(cached);
+  auto cached = allocator::allocator().malloc(8192);
+  allocator::allocator().free(cached);
   CHECK_GE(get_cache_memory(), 8192);
 
   auto task_started = std::make_shared<std::promise<void>>();

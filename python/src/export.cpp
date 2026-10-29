@@ -298,7 +298,8 @@ void init_export(nb::module_& m) {
             auto [args_, kwargs_] =
                 validate_and_extract_inputs(args, kwargs, "[export_function]");
             exporter(args_, kwargs_);
-          });
+          })
+      .freeze();
 
   m.def(
       "exporter",

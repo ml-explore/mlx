@@ -58,7 +58,8 @@ class MLXTestCase(unittest.TestCase):
     def tearDown(self):
         mx.set_default_device(self.default)
 
-    # Note if a tuple is passed into args, it will be considered a shape request and convert to a mx.random.normal with the shape matching the tuple
+    # Note if a tuple is passed into args, it will be considered a shape request and
+    # convert to a mx.random.normal with the shape matching the tuple
     def assertCmpNumpy(
         self,
         args: List[Union[Tuple[int], Any]],

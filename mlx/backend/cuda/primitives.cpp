@@ -34,6 +34,15 @@ bool fast::GatedDeltaUpdate::use_fallback(
   return true;
 }
 
+bool fast::GatedDeltaUpdateVJP::use_fallback(
+    const int Hk,
+    const int Dk,
+    const int Hv,
+    const int Dv,
+    Stream s) {
+  return true;
+}
+
 NO_GPU_MULTI(LUF)
 NO_GPU_MULTI(QRF)
 NO_GPU_MULTI(SVD)
@@ -43,7 +52,8 @@ NO_GPU_MULTI(Eigh)
 
 namespace fast {
 NO_GPU_MULTI(GatedDeltaUpdate)
-}
+NO_GPU_MULTI(GatedDeltaUpdateVJP)
+} // namespace fast
 
 namespace distributed {
 NO_GPU_MULTI(Send)

@@ -48,10 +48,13 @@ class Hostfile:
                     "MLX_METAL_FAST_SYNCH=1"
                 ],
                 "hosts": [
-                    {"ssh": "hostname1", "ips": ["123.123.123.1"], "rdma": [null, "rdma_en2", "rdma_en3"]},
-                    {"ssh": "hostname2", "ips": ["123.123.123.2"], "rdma": ["rdma_en2", null, "rdma_en3"]},
+                    {"ssh": "hostname1", "ips": ["123.123.123.1"],
+                     "rdma": [null, "rdma_en2", "rdma_en3"]},
+                    {"ssh": "hostname2", "ips": ["123.123.123.2"],
+                     "rdma": ["rdma_en2", null, "rdma_en3"]},
                     ...
-                    {"ssh": "hostnameN", "ips": ["123.123.123.N"], "rdma": ["rdma_en2", "rdma_en3", null]},
+                    {"ssh": "hostnameN", "ips": ["123.123.123.N"],
+                     "rdma": ["rdma_en2", "rdma_en3", null]},
                 ]
             }
 

@@ -148,12 +148,11 @@ get_backends() {
 }
 
 Group register_group(std::shared_ptr<detail::GroupImpl> group, std::string bk) {
-  auto& backends = get_backends();
   if (group == nullptr) {
-    group = std::make_shared<detail::EmptyGroup>();
-  } else {
-    backends.insert({"any", group});
+    return Group(std::make_shared<detail::EmptyGroup>());
   }
+  auto& backends = get_backends();
+  backends.insert({"any", group});
   backends.insert({std::move(bk), group});
   return Group(group);
 }
