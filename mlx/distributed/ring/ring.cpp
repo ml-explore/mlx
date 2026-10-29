@@ -889,7 +889,7 @@ std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
   int rank = std::atoi(rank_str);
 
   return std::make_shared<RingGroup>(
-    rank, nodes, load_sources(source_ips), ring_verbose != nullptr);
+      rank, nodes, load_sources(source_ips), ring_verbose != nullptr);
 }
 
 } // namespace mlx::core::distributed::ring
