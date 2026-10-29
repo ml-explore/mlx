@@ -516,6 +516,7 @@ class CustomKernel : public Primitive {
       Stream stream,
       std::string name,
       std::string source,
+      std::size_t source_hash,
       std::tuple<int, int, int> grid,
       std::tuple<int, int, int> threadgroup,
       std::vector<std::tuple<bool, bool, bool>> shape_infos,
@@ -524,11 +525,11 @@ class CustomKernel : public Primitive {
       std::vector<ScalarArg> scalar_arguments,
       bool is_precompiled,
       int shared_memory,
-      CompileOptions::Data compile_options = {},
-      std::optional<std::size_t> source_hash = std::nullopt)
+      CompileOptions::Data compile_options = {})
       : Primitive(stream),
         name_(std::move(name)),
         source_(std::move(source)),
+        source_hash_(source_hash),
         grid_(grid),
         threadgroup_(threadgroup),
         shape_infos_(std::move(shape_infos)),
@@ -537,8 +538,36 @@ class CustomKernel : public Primitive {
         scalar_arguments_(std::move(scalar_arguments)),
         is_precompiled_(is_precompiled),
         shared_memory_(shared_memory),
-        compile_options_(compile_options),
-        source_hash_(source_hash) {}
+        compile_options_(compile_options) {}
+
+  // Takes the arguments in state() order, for importing an exported function.
+  CustomKernel(
+      Stream stream,
+      std::string name,
+      std::string source,
+      std::tuple<int, int, int> grid,
+      std::tuple<int, int, int> threadgroup,
+      std::vector<std::tuple<bool, bool, bool>> shape_infos,
+      bool ensure_row_contiguous,
+      std::optional<float> init_value,
+      std::vector<ScalarArg> scalar_arguments,
+      bool is_precompiled,
+      int shared_memory,
+      CompileOptions::Data compile_options = {})
+      : CustomKernel(
+            stream,
+            std::move(name),
+            source,
+            std::hash<std::string>{}(source),
+            grid,
+            threadgroup,
+            std::move(shape_infos),
+            ensure_row_contiguous,
+            init_value,
+            std::move(scalar_arguments),
+            is_precompiled,
+            shared_memory,
+            std::move(compile_options)) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -567,6 +596,8 @@ class CustomKernel : public Primitive {
  private:
   std::string name_;
   std::string source_;
+  // std::hash of source_. Not part of state(): it is derived from source_.
+  std::size_t source_hash_;
   std::tuple<int, int, int> grid_;
   std::tuple<int, int, int> threadgroup_;
   std::vector<std::tuple<bool, bool, bool>> shape_infos_;
@@ -576,9 +607,6 @@ class CustomKernel : public Primitive {
   bool is_precompiled_;
   int shared_memory_;
   CompileOptions::Data compile_options_;
-  // std::hash of source_, when the caller already has it. Not part of state():
-  // it is derived from source_.
-  std::optional<std::size_t> source_hash_;
 };
 
 } // namespace mlx::core::fast

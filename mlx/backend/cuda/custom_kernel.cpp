@@ -211,6 +211,7 @@ CustomKernelFunction cuda_kernel(
         output_dtypes,
         template_args,
         shape_infos);
+    auto source_hash = std::hash<std::string>{}(kernel_source);
 
     if (verbose) {
       std::cout << "Generated source code for `" << kernel_name
@@ -227,6 +228,7 @@ CustomKernelFunction cuda_kernel(
             s,
             std::move(kernel_name),
             std::move(kernel_source),
+            source_hash,
             grid,
             threadgroup,
             shape_infos,
@@ -261,6 +263,7 @@ std::vector<array> precompiled_cuda_kernel(
           to_stream(s),
           name,
           compiled_source,
+          std::hash<std::string>{}(compiled_source),
           grid,
           threadgroup,
           shape_infos,
@@ -310,8 +313,7 @@ void CustomKernel::eval_gpu(
   // Compile the custom kernel
   std::string kernel_name =
       (is_precompiled_) ? name_ : "mlx::core::cu::" + name_;
-  std::string module_name =
-      fmt::format("{}_{:x}", name_, std::hash<std::string>{}(source_));
+  std::string module_name = fmt::format("{}_{:x}", name_, source_hash_);
   cu::JitModule& mod = cu::get_jit_module(
       encoder.device(),
       module_name,

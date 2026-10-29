@@ -228,8 +228,10 @@ struct GeneratedSource {
 
 class GeneratedSourceCache {
  public:
+  // Entries are never erased, and rehashing does not move the elements of an
+  // unordered_map, so the returned reference stays valid.
   template <typename F>
-  std::shared_ptr<const GeneratedSource> get(const std::string& name, F make) {
+  const GeneratedSource& get(const std::string& name, F make) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = cache_.find(name);
     if (it != cache_.end()) {
@@ -237,16 +239,13 @@ class GeneratedSourceCache {
     }
     auto source = make();
     auto hash = std::hash<std::string>{}(source);
-    auto entry = std::make_shared<const GeneratedSource>(
-        GeneratedSource{std::move(source), hash});
-    cache_.emplace(name, entry);
-    return entry;
+    return cache_.emplace(name, GeneratedSource{std::move(source), hash})
+        .first->second;
   }
 
  private:
   std::mutex mutex_;
-  std::unordered_map<std::string, std::shared_ptr<const GeneratedSource>>
-      cache_;
+  std::unordered_map<std::string, GeneratedSource> cache_;
 };
 
 } // namespace
@@ -368,7 +367,7 @@ CustomKernelFunction metal_kernel(
       cache_key += std::to_string(arg.index());
     }
 
-    auto entry = generated->get(cache_key, [&] {
+    const auto& entry = generated->get(cache_key, [&] {
       std::string kernel_source = write_signature(
           kernel_name,
           header,
@@ -395,7 +394,7 @@ CustomKernelFunction metal_kernel(
 
       return kernel_source;
     });
-    const std::string& kernel_source = entry->source;
+    const std::string& kernel_source = entry.source;
 
     if (verbose) {
       std::cout << "Generated source code for `" << name << "`:" << std::endl
@@ -411,6 +410,7 @@ CustomKernelFunction metal_kernel(
             s,
             std::move(kernel_name),
             kernel_source,
+            entry.hash,
             grid,
             threadgroup,
             shape_infos,
@@ -419,8 +419,7 @@ CustomKernelFunction metal_kernel(
             std::vector<ScalarArg>{},
             false,
             0,
-            compile_options.serialize(),
-            entry->hash),
+            compile_options.serialize()),
         std::move(inputs));
   };
 }
