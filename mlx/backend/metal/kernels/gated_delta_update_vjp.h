@@ -53,7 +53,8 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
   auto dv_base = dv + b_idx * T * v_stride + hv_idx * Dv;
   auto co_base = cot_o + b_idx * T * v_stride + hv_idx * Dv;
 
-  auto g_base = g + b_idx * T * g_stride + (vectorized_g ? hv_idx * Dk : hv_idx);
+  auto g_base =
+      g + b_idx * T * g_stride + (vectorized_g ? hv_idx * Dk : hv_idx);
   auto b_base = b + b_idx * T * Hv + hv_idx;
   auto dg_base =
       dg + b_idx * T * g_stride + (vectorized_g ? hv_idx * Dk : hv_idx);

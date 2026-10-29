@@ -188,8 +188,7 @@ void GatedDeltaUpdate::eval_gpu(
       // name one; it just never stores.
       std::string base_name =
           "seq_gated_delta_" + suffix + "_" + std::to_string(ckpt);
-      std::string hash_name =
-          base_name + (vectorized_g ? "_vecg" : "");
+      std::string hash_name = base_name + (vectorized_g ? "_vecg" : "");
 
       auto delta_kernel =
           get_gated_delta_kernel(d, base_name, hash_name, func_consts);

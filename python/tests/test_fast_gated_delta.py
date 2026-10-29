@@ -360,6 +360,30 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
             self.assertTrue(mx.allclose(out_ref, out, atol=1e-4, rtol=1e-4))
             self.assertTrue(mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4))
 
+            primals = [q, k, v, g, b, h0]
+            cotans = [
+                mx.random.normal(shape=(B, T, Hv, Dv)) * 1e-2,
+                mx.random.normal(shape=(B, Hv, Dv, Dk)) * 1e-2,
+            ]
+
+            def f(q, k, v, g, b, h0):
+                return mx.fast.gated_delta_update(q, k, v, g, b, initial_state=h0)
+
+            with mx.config.scoped_update(
+                GATED_DELTA_VJP_FALLBACK=1, GATED_DELTA_CHUNK_VJP=0
+            ):
+                _, vjp_ref = mx.vjp(f, primals, cotans)
+                mx.eval(vjp_ref)
+
+            with mx.config.scoped_update(
+                GATED_DELTA_VJP_FALLBACK=0, GATED_DELTA_CHUNK_VJP=0
+            ):
+                _, vjp_out = mx.vjp(f, primals, cotans)
+                mx.eval(vjp_out)
+
+            for g_ref, g_out in zip(vjp_ref, vjp_out):
+                self.assertTrue(mx.allclose(g_ref, g_out, atol=1e-5, rtol=1e-5))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)
