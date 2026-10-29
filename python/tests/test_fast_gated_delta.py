@@ -1,4 +1,3 @@
-import os
 import unittest
 from itertools import product
 
@@ -252,23 +251,21 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 self.assertTrue(dtype == out.dtype, msg="Out " + msg)
                 self.assertTrue(hf.dtype == mx.float32, msg="State " + msg)
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_sequential(self):
-        os.environ["GATED_DELTA_CHUNK"] = "0"
-        for dims in self.gpu_dims:
-            (out, hf), (out_ref, hf_ref) = runner(dims, reference=False)
-            msg = f"Failed on Dimensions: {dims}"
-            self.assertTrue(
-                mx.allclose(out_ref, out, atol=1e-4, rtol=1e-4), msg="Out " + msg
-            )
-            self.assertTrue(
-                mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4), msg="State " + msg
-            )
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        with mx.config.scoped_update(MLX_GATED_DELTA_CHUNK=0):
+            for dims in self.gpu_dims:
+                B, Hk, Hv, T, Dk, Dv = dims
+                with self.subTest(B=B, Hk=Hk, Hv=Hv, T=T, Dk=Dk, Dv=Dv):
+                    (out, hf), (out_ref, hf_ref) = runner(dims, reference=False)
+                    self.assertEqualArray(out_ref, out, atol=1e-4, rtol=1e-4)
+                    self.assertEqualArray(hf_ref, hf, atol=1e-4, rtol=1e-4)
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_vectorized_g(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
         for dims in self.gpu_dims:
-            mx.random.seed(0)
             (out, hf), (out_ref, hf_ref) = runner(
                 dims, reference=has_torch, vectorized_g=True
             )
@@ -278,29 +275,23 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_simdgroup(self):
-        os.environ["GATED_DELTA_CHUNK"] = "8"
-        for dims in self.gpu_dims:
-            (out, hf), (out_ref, hf_ref) = runner(dims, reference=False)
-            msg = f"Failed on Dimensions: {dims}"
-            self.assertTrue(
-                mx.allclose(out_ref, out, atol=1e-4, rtol=1e-4), msg="Out " + msg
-            )
-            self.assertTrue(
-                mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4), msg="State " + msg
-            )
+        with mx.config.scoped_update(MLX_GATED_DELTA_CHUNK=8):
+            for dims in self.gpu_dims:
+                B, Hk, Hv, T, Dk, Dv = dims
+                with self.subTest(B=B, Hk=Hk, Hv=Hv, T=T, Dk=Dk, Dv=Dv):
+                    (out, hf), (out_ref, hf_ref) = runner(dims, reference=False)
+                    self.assertEqualArray(out_ref, out, atol=1e-4, rtol=1e-4)
+                    self.assertEqualArray(hf_ref, hf, atol=1e-4, rtol=1e-4)
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_nax(self):
-        os.environ["GATED_DELTA_CHUNK"] = "16"
-        for dims in self.gpu_dims:
-            (out, hf), (out_ref, hf_ref) = runner(dims, reference=False)
-            msg = f"Failed on Dimensions: {dims}"
-            self.assertTrue(
-                mx.allclose(out_ref, out, atol=1e-1, rtol=1e-4), msg="Out " + msg
-            )
-            self.assertTrue(
-                mx.allclose(hf_ref, hf, atol=1e-1, rtol=1e-4), msg="State " + msg
-            )
+        with mx.config.scoped_update(MLX_GATED_DELTA_CHUNK=16):
+            for dims in self.gpu_dims:
+                B, Hk, Hv, T, Dk, Dv = dims
+                with self.subTest(B=B, Hk=Hk, Hv=Hv, T=T, Dk=Dk, Dv=Dv):
+                    (out, hf), (out_ref, hf_ref) = runner(dims, reference=False)
+                    self.assertEqualArray(out_ref, out, atol=1e-4, rtol=1e-4)
+                    self.assertEqualArray(hf_ref, hf, atol=1e-4, rtol=1e-4)
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_vjp(self):
@@ -329,8 +320,8 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
 
             def run(fallback, chunk):
                 with mx.config.scoped_update(
-                    GATED_DELTA_VJP_FALLBACK=1 if fallback else 0,
-                    GATED_DELTA_CHUNK_VJP=chunk,
+                    MLX_GATED_DELTA_VJP_FALLBACK=1 if fallback else 0,
+                    MLX_GATED_DELTA_CHUNK_VJP=chunk,
                 ):
                     outs, vjps = mx.vjp(f, primals, cotans)
                     mx.eval(outs, vjps)
