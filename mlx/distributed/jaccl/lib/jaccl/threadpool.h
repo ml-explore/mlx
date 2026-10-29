@@ -22,18 +22,15 @@
 //    distribution.
 #pragma once
 
-#include <algorithm>
 #include <atomic>
 #include <concepts>
 #include <condition_variable>
 #include <exception>
 #include <functional>
 #include <future>
-#include <iterator>
 #include <memory>
 #include <mutex>
 #include <queue>
-#include <ranges>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -145,8 +142,9 @@ inline void ThreadPool::start_threads(size_t threads) {
 template <std::invocable<int> Fn>
 void dispatch_wires(ThreadPool* pool, int n_wires, Fn&& fn) {
   if (n_wires <= 1 || !pool) {
-    std::ranges::for_each(
-        std::views::iota(0, std::max(n_wires, 0)), std::ref(fn));
+    for (int lw = 0; lw < n_wires; lw++) {
+      fn(lw);
+    }
     return;
   }
 
@@ -164,12 +162,13 @@ void dispatch_wires(ThreadPool* pool, int n_wires, Fn&& fn) {
 
   std::vector<std::future<void>> futures;
   futures.reserve(n_wires - 1);
-  std::ranges::transform(
-      std::views::iota(0, n_wires - 1),
-      std::back_inserter(futures),
-      [pool, &run](int lw) { return pool->enqueue(run, lw); });
+  for (int lw = 0; lw < n_wires - 1; lw++) {
+    futures.emplace_back(pool->enqueue(run, lw));
+  }
   run(n_wires - 1);
-  std::ranges::for_each(futures, [](std::future<void>& f) { f.wait(); });
+  for (auto& f : futures) {
+    f.wait();
+  }
 
   if (first_error) {
     std::rethrow_exception(first_error);

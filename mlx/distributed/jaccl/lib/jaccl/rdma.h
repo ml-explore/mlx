@@ -10,7 +10,6 @@
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <numeric>
 #include <span>
 #include <sstream>
 #include <stdexcept>
@@ -255,9 +254,9 @@ struct Connection {
   }
 
  private:
-  [[noreturn]] void fail(std::string reason) const {
+  [[noreturn]] void fail(const std::string& reason) const {
     std::call_once(failure_->once, [this, &reason] {
-      failure_->reason = "[jaccl] " + std::move(reason);
+      failure_->reason = "[jaccl] " + reason;
       failure_->failed.store(true, std::memory_order_release);
     });
     throw std::runtime_error(failure_->reason);
@@ -310,15 +309,21 @@ inline int poll(
     std::span<const Connection> connections,
     int num_completions,
     ibv_wc* work_completions) {
-  return std::accumulate(
-      connections.begin(),
-      connections.end(),
-      0,
-      [num_completions, work_completions](int done, const Connection& c) {
-        return c.ctx && done < num_completions
-            ? done + c.poll(num_completions - done, work_completions + done)
-            : done;
-      });
+  int completions = 0;
+  for (auto& c : connections) {
+    if (c.ctx == nullptr) {
+      continue;
+    }
+    if (completions >= num_completions) {
+      return completions;
+    }
+
+    int n =
+        c.poll(num_completions - completions, work_completions + completions);
+
+    completions += n;
+  }
+  return completions;
 }
 
 inline int poll(
