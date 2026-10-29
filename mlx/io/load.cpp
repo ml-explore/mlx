@@ -122,6 +122,7 @@ Dtype dtype_from_array_protocol(std::string_view t) {
 }
 
 #ifdef _WIN32
+
 // There is no pread on Windows, emulate it with ReadFile.
 int64_t pread(int fd, void* buf, uint64_t size, uint64_t offset) {
   HANDLE file = reinterpret_cast<HANDLE>(_get_osfhandle(fd));
@@ -203,11 +204,14 @@ bool posix_rename(
   CloseHandle(file);
   return renamed;
 }
-#endif
-#else
+#endif // NTDDI_VERSION >= NTDDI_WIN10_RS1
+
+#else // _WIN32
+
 int open_for_read(const std::string& file_path) {
   return open(file_path.c_str(), O_RDONLY | O_BINARY);
 }
+
 #endif
 
 // Rename `from` over `to`, replacing `to` if it exists.
@@ -219,8 +223,8 @@ void replace_file(
   if (posix_rename(from, to)) {
     return;
   }
-#endif
-#endif
+#endif // NTDDI_VERSION >= NTDDI_WIN10_RS1
+#endif // _WIN32
   std::filesystem::rename(from, to);
 }
 
