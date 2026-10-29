@@ -489,6 +489,34 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 )
                 self.assertLess(relative_error, 3e-2)
 
+    def test_qqmm_matrix_kernels(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Not implemented for CPU")
+            return
+
+        mx.random.seed(0)
+        dtype = mx.bfloat16
+        for M, N, K, mode in product(
+            [12, 32, 256],
+            [1024],
+            [1024],
+            ["nvfp4", "mxfp4", "mxfp8"],
+        ):
+            with self.subTest(shape=(M, N, K), mode=mode):
+                x = mx.random.normal((M, K)).astype(dtype)
+                w = mx.random.normal((N, K)).astype(dtype)
+                x_hat = mx.dequantize(
+                    *mx.quantize(x, mode=mode), mode=mode, dtype=mx.float32
+                )
+                w_q, scales = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(w_q, scales, mode=mode, dtype=mx.float32)
+
+                expected = x_hat @ mx.swapaxes(w_hat, -1, -2)
+                actual = mx.qqmm(x, w_q, scales, mode=mode)
+                delta = mx.abs(actual.astype(mx.float32) - expected)
+                relative_error = delta.max() / mx.abs(expected).max()
+                self.assertLess(relative_error, 3e-2)
+
     def test_qmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
