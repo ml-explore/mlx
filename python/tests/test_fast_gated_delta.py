@@ -336,6 +336,30 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                         )
             mx.clear_cache()
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_gated_delta_vectorized_g(self):
+        for dims in [self.base_dims, self.unaligned_dims, self.diff_heads]:
+            B, Hk, Hv, T, Dk, Dv = dims
+            mx.random.seed(0)
+            q = mx.random.normal(shape=(B, T, Hk, Dk))
+            k = mx.random.normal(shape=(B, T, Hk, Dk))
+            k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
+            v = mx.random.normal(shape=(B, T, Hv, Dv))
+            g = mx.sigmoid(mx.random.normal(shape=(B, T, Hv, Dk)))
+            b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
+            h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
+
+            mask = mx.ones((B, T))
+            out_ref, hf_ref = mx.fast.gated_delta_update(
+                q, k, v, g, b, initial_state=h0, mask=mask
+            )
+            out, hf = mx.fast.gated_delta_update(
+                q, k, v, g, b, initial_state=h0, stream=mx.gpu
+            )
+            mx.eval(out_ref, hf_ref, out, hf)
+            self.assertTrue(mx.allclose(out_ref, out, atol=1e-4, rtol=1e-4))
+            self.assertTrue(mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)
