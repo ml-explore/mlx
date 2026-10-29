@@ -96,6 +96,10 @@ std::tuple<allocator::Data, Dtype> extract_tensor_data(gguf_tensor* tensor) {
   }
   // Otherwise, we convert to float16.
   // TODO: Add other dequantization options.
+  if (tensor->num_weights >
+      std::numeric_limits<size_t>::max() / sizeof(int16_t)) {
+    tensor_error(*tensor, "has too many elements to convert to float16");
+  }
   int16_t* data = gguf_tensor_to_f16(tensor);
   if (data == NULL) {
     throw std::runtime_error("[load_gguf] gguf_tensor_to_f16 failed");
