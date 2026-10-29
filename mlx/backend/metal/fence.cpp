@@ -18,15 +18,16 @@ struct FenceImpl {
       use_fast = env::metal_fast_synch();
     }
 
-    if (!use_fast) {
-      event = std::make_unique<Event>(stream);
-    } else {
+    gpu_producer = stream.device == Device::gpu;
+    event = std::make_unique<Event>(stream);
+    if (use_fast) {
       fence.emplace(allocator::malloc(sizeof(uint32_t)));
       cpu_value()[0] = 0;
     }
   }
 
   bool use_fast{false};
+  bool gpu_producer{false};
   uint32_t count{0};
   std::optional<allocator::Data> fence;
   std::unique_ptr<Event> event;
@@ -60,6 +61,14 @@ void Fence::wait(Stream stream, const array& x, uint32_t value) {
       while (f.cpu_value()[0] < value) {
       }
     });
+    return;
+  }
+
+  // GPU waits on GPU work use the event, so no spin is needed. Also use
+  // the event when the drain below cannot see all GPU streams.
+  if (f.gpu_producer || !metal::get_global_command_encoders().empty()) {
+    f.event->set_value(value);
+    f.event->wait(stream);
     return;
   }
 
@@ -111,6 +120,8 @@ uint32_t Fence::update(Stream stream, const array& x, bool cross_device) {
       auto& f = *static_cast<FenceImpl*>(fence_.get());
       f.cpu_value()[0] = count;
     });
+    f.event->set_value(f.count);
+    f.event->signal(stream);
     return f.count;
   }
 
@@ -144,6 +155,9 @@ uint32_t Fence::update(Stream stream, const array& x, bool cross_device) {
 
   compute_encoder.get_command_buffer()->addCompletedHandler(
       [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
+
+  f.event->set_value(f.count);
+  f.event->signal(stream);
   return f.count;
 }
 
