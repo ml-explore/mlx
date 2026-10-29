@@ -112,6 +112,10 @@ class MLX_API CommandEncoder {
   void add_completed_handler(std::function<void()> task);
   bool needs_commit();
   void commit();
+  void synchronize();
+#ifndef NDEBUG
+  void verify_graph(const char* primitive_name);
+#endif
 
   Device& device() {
     return device_;
@@ -120,9 +124,6 @@ class MLX_API CommandEncoder {
   CudaStream& stream() {
     return stream_;
   }
-
-  // Wait until kernels and completion handlers are finished
-  void synchronize();
 
  private:
   cudaGraphNode_t add_kernel_node_raw(const cudaKernelNodeParams& params);
@@ -147,7 +148,7 @@ class MLX_API CommandEncoder {
   CudaStream stream_;
   CudaGraph graph_;
   std::shared_ptr<Worker> worker_;
-  int node_count_{0};
+
   bool in_concurrent_{false};
   std::vector<cudaGraphNode_t> from_nodes_;
   std::vector<cudaGraphNode_t> to_nodes_;
@@ -159,10 +160,18 @@ class MLX_API CommandEncoder {
   std::vector<std::uintptr_t> active_deps_;
   std::vector<std::uintptr_t> active_outputs_;
   std::unordered_map<std::uintptr_t, GraphNode> node_map_;
-  size_t bytes_in_graph_{0};
+  std::vector<cudaGraphNode_t> roots_;
+#ifndef NDEBUG
+  std::vector<void*> registered_data_ptrs_;
+#endif
   bool is_graph_updatable_{true};
+
+  int node_count_{0};
+  size_t bytes_in_graph_{0};
   int max_ops_per_graph_;
   int max_mb_per_graph_;
+
+  bool force_single_root_;
 };
 
 class MLX_API Device {

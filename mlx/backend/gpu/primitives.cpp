@@ -30,11 +30,7 @@ void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
     eval(inputs[0], out);
   } else {
     auto copy = contiguous_copy_gpu(inputs[0], stream());
-#if defined(MLX_USE_CUDA)
-    cu::get_command_encoder(stream()).add_temporary(copy);
-#else
-    metal::get_command_encoder(stream()).add_temporary(copy);
-#endif
+    // Donated to out.
     eval(copy, out);
   }
 }
@@ -183,7 +179,7 @@ void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Flatten::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("Flatten::eval_gpu");
-  reshape_gpu(inputs[0], out, stream());
+  reshape_gpu(inputs[0], out, false, stream());
 }
 
 void NumberOfElements::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -209,7 +205,7 @@ void Pad::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("Reshape::eval_gpu");
-  reshape_gpu(inputs[0], out, stream());
+  reshape_gpu(inputs[0], out, false, stream());
 }
 
 void Split::eval_gpu(
@@ -248,7 +244,7 @@ void Transpose::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Unflatten::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("Unflatten::eval_gpu");
-  reshape_gpu(inputs[0], out, stream());
+  reshape_gpu(inputs[0], out, false, stream());
 }
 
 void View::eval_gpu(const std::vector<array>& inputs, array& out) {

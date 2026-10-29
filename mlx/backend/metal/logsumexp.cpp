@@ -56,7 +56,7 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   int axis_size = in.shape().back();
-  int n_rows = in.data_size() / axis_size;
+  int64_t n_rows = in.data_size() / axis_size;
 
   const int simd_size = 32;
   const int n_reads = 4;
@@ -68,27 +68,24 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto kernel = get_logsumexp_kernel(d, kernel_name, out);
   {
-    MTL::Size grid_dims, group_dims;
+    size_t threadgroup_size;
     if (axis_size <= looped_limit) {
       size_t threadgroup_needed = (axis_size + n_reads - 1) / n_reads;
       size_t simds_needed = (threadgroup_needed + simd_size - 1) / simd_size;
-      size_t threadgroup_size = simd_size * simds_needed;
+      threadgroup_size = simd_size * simds_needed;
       assert(threadgroup_size <= kernel->maxTotalThreadsPerThreadgroup());
-      size_t n_threads = n_rows * threadgroup_size;
-      grid_dims = MTL::Size(n_threads, 1, 1);
-      group_dims = MTL::Size(threadgroup_size, 1, 1);
     } else {
-      size_t threadgroup_size = kernel->maxTotalThreadsPerThreadgroup();
-      size_t n_threads = n_rows * threadgroup_size;
-      grid_dims = MTL::Size(n_threads, 1, 1);
-      group_dims = MTL::Size(threadgroup_size, 1, 1);
+      threadgroup_size = kernel->maxTotalThreadsPerThreadgroup();
     }
 
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(in, 0);
-    compute_encoder.set_output_array(out, 1);
     compute_encoder.set_bytes(axis_size, 2);
-    compute_encoder.dispatch_threads(grid_dims, group_dims);
+    const int64_t in_row_bytes = int64_t(axis_size) * in.itemsize();
+    dispatch_threadgroups_in_slices(
+        compute_encoder, n_rows, threadgroup_size, [&](int64_t row) {
+          compute_encoder.set_input_array(in, 0, row * in_row_bytes);
+          compute_encoder.set_output_array(out, 1, row * out.itemsize());
+        });
   }
 }
 

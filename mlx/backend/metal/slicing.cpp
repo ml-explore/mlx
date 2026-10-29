@@ -25,19 +25,14 @@ void concatenate_gpu(
 
   out.set_data(allocator::malloc(out.nbytes()));
 
-  auto strides = out.strides();
-  auto flags = out.flags();
-  flags.row_contiguous = false;
-  flags.col_contiguous = false;
-  flags.contiguous = false;
+  Shape start(out.ndim(), 0);
   auto& d = metal::device(s.device);
   auto& compute_encoder = metal::get_command_encoder(s);
   auto concurrent_ctx = compute_encoder.start_concurrent();
   for (int i = 0; i < inputs.size(); i++) {
     array out_slice(inputs[i].shape(), out.dtype(), nullptr, {});
-    size_t data_offset = strides[axis] * sizes[i];
-    out_slice.copy_shared_buffer(
-        out, strides, flags, out_slice.size(), data_offset);
+    start[axis] = sizes[i];
+    slice_gpu(out, out_slice, start, Shape(out.ndim(), 1), s);
     copy_gpu_inplace(inputs[i], out_slice, CopyType::GeneralGeneral, s);
   }
 }

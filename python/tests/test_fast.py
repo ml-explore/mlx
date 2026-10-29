@@ -612,6 +612,22 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertEqual(g2.shape, logits.shape)
         self.assertLess(mx.abs(g1 - g2).max().item(), 1e-6)
 
+    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
+    def test_cross_entropy_grad_non_contiguous(self):
+        B, L, V = 32, 129, 8192
+        logits = mx.random.normal(shape=(B, L, V)).astype(mx.bfloat16)
+        targets = mx.random.randint(0, V, shape=(B, L))
+
+        def f_sliced(x):
+            return mx.fast.cross_entropy(x[:, :-1], targets[:, 1:]).sum()
+
+        def f_contiguous(x):
+            return mx.fast.cross_entropy(mx.contiguous(x[:, :-1]), targets[:, 1:]).sum()
+
+        expected = mx.grad(f_contiguous)(logits)
+        g = mx.grad(f_sliced)(logits)
+        self.assertTrue(mx.array_equal(g, expected))
+
     def test_layer_norm_dim_check(self):
         with self.assertRaises(ValueError):
             weight = mx.ones((129,))

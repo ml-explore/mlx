@@ -2466,6 +2466,14 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.concatenate([a, b], axis=1)
         self.assertTrue(mx.array_equal(out, b))
 
+    def test_concatenate_large_offsets(self):
+        # Row 2**27 of the output starts at offset 2**31
+        rows = 2**27 + 1
+        a = mx.broadcast_to(mx.array([[1, 2, 3]], mx.uint8), (rows, 3))
+        b = mx.broadcast_to(mx.array([[4] * 13], mx.uint8), (rows, 13))
+        y = mx.concatenate([a, b], axis=1)
+        self.assertEqual(y[-1].tolist(), [1, 2, 3] + [4] * 13)
+
     def test_meshgrid(self):
         x = mx.array([1, 2, 3], dtype=mx.int32)
         y = np.array([1, 2, 3], dtype=np.int32)
@@ -2898,6 +2906,18 @@ class TestOps(mlx_tests.MLXTestCase):
                     mx.allclose(got, want),
                     msg=f"{op} reverse={reverse}",
                 )
+
+    def test_scan_does_not_write_past_the_output(self):
+        for n, off in ((64, 63), (512, 400)):
+            with self.subTest(n=n, off=off):
+                base = mx.arange(1, n + 1, dtype=mx.float32).reshape(1, n)
+                canaries = [mx.zeros((16,)) + i for i in range(12)]
+                mx.eval(base, *canaries)
+                before = [np.array(x) for x in [base] + canaries]
+                mx.eval(mx.cumsum(base[:, off:], axis=0))
+                after = [np.array(x) for x in [base] + canaries]
+                for b, a in zip(before, after):
+                    self.assertTrue(np.array_equal(b, a))
 
     def test_cummax_cummin_nan(self):
         nan = float("nan")
@@ -4856,6 +4876,25 @@ class TestOps(mlx_tests.MLXTestCase):
         # The carry must not fire one byte early: 0x7e/0xfe stay finite
         finite = mx.from_fp8(mx.array([0x7E, 0xFE], dtype=mx.uint8), mx.float32)
         self.assertTrue(mx.array_equal(finite, mx.array([448.0, -448.0])))
+
+        for dt in [mx.float32, mx.float16, mx.bfloat16]:
+            nan_arr = mx.array([float("nan"), -float("nan")], dtype=dt)
+            fp8_nan = mx.to_fp8(nan_arr)
+            self.assertEqual(fp8_nan[0].item(), 0x7F)
+            self.assertIn(fp8_nan[1].item(), [0x7F, 0xFF])
+
+            back = mx.from_fp8(fp8_nan, dtype=dt)
+            self.assertTrue(mx.isnan(back[0]).item())
+            self.assertTrue(mx.isnan(back[1]).item())
+
+            overflow_arr = mx.array([float("inf"), -float("inf"), 1e5, -1e5], dtype=dt)
+            fp8_sat = mx.to_fp8(overflow_arr)
+            self.assertTrue(
+                mx.array_equal(
+                    fp8_sat,
+                    mx.array([0x7E, 0xFE, 0x7E, 0xFE], dtype=mx.uint8),
+                )
+            )
 
     def test_zeros_ones_empty_like_dtype(self):
         x = mx.array([1, 2, 3], dtype=mx.int32)

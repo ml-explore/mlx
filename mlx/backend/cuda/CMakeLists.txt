@@ -181,9 +181,37 @@ if(NOT DEFINED MLX_CUDA_ARCHITECTURES)
     set(MLX_CUDA_ARCHITECTURES "${MLX_CUDA_ARCHITECTURES}a")
   endif()
 endif()
+# Resolve all/all-major/native aliases.
+if(MLX_CUDA_ARCHITECTURES STREQUAL "all")
+  set(MLX_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES_ALL}")
+elseif(MLX_CUDA_ARCHITECTURES STREQUAL "all-major")
+  set(MLX_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES_ALL_MAJOR}")
+elseif(MLX_CUDA_ARCHITECTURES STREQUAL "native")
+  set(MLX_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES_NATIVE}")
+endif()
 message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
                                      "${MLX_CUDA_ARCHITECTURES}")
+
+# Pass the list of cuda arch to code.
+set(MLX_CUDA_ARCH_LIST)
+foreach(arch IN LISTS MLX_CUDA_ARCHITECTURES)
+  if(arch MATCHES "^([0-9]+[af]?)-(real|virtual)$")
+    if(CMAKE_MATCH_2 STREQUAL "real")
+      list(APPEND MLX_CUDA_ARCH_LIST "\"sm_${CMAKE_MATCH_1}\"")
+    else()
+      list(APPEND MLX_CUDA_ARCH_LIST "\"compute_${CMAKE_MATCH_1}\"")
+    endif()
+  elseif(arch MATCHES "^[0-9]+[af]?$")
+    list(APPEND MLX_CUDA_ARCH_LIST "\"sm_${arch}\"" "\"compute_${arch}\"")
+  else()
+    list(APPEND MLX_CUDA_ARCH_LIST "\"${arch}\"")
+  endif()
+endforeach()
+list(JOIN MLX_CUDA_ARCH_LIST "," MLX_CUDA_ARCH_LIST)
+target_compile_definitions(
+  mlx
+  PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:MLX_CUDA_ARCH_LIST=${MLX_CUDA_ARCH_LIST}>")
 
 # Configure Windows CUDA DLL loading.
 if(WIN32)

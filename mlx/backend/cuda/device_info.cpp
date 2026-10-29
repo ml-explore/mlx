@@ -227,6 +227,10 @@ bool is_available() {
   return true;
 }
 
+std::vector<std::string> get_arch_list() {
+  return {MLX_CUDA_ARCH_LIST};
+}
+
 } // namespace cu
 
 } // namespace mlx::core

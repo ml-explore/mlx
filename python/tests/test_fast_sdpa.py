@@ -164,7 +164,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
     def test_sdpa_pad_head_dim_opt_in(self):
         if mx.default_device() != mx.gpu:
             self.skipTest("requires GPU")
-        with mlx_tests.scoped_env(MLX_SDPA_PAD_HEAD_DIM="1"):
+        with mx.config.scoped_update(MLX_SDPA_PAD_HEAD_DIM=1):
             self.test_sdpa_head_dim_72()
             self.test_sdpa_head_dim_80()
             self.test_sdpa_head_dim_72_80_sinks()
@@ -712,7 +712,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         scale = D**-0.5
         mx.random.seed(0)
 
-        with mlx_tests.scoped_env(MLX_SDPA_D512_MIN_KL="0"):
+        with mx.config.scoped_update(MLX_SDPA_D512_MIN_KL=0):
             # Test 1-pass kernel.
             for dtype in (mx.float32, mx.float16, mx.bfloat16):
                 with self.subTest(L=128, dtype=dtype, threshold="off"):
@@ -859,6 +859,50 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             )
             self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_short_query_many_heads(self):
+        key = mx.random.key(0)
+        for D, (qH, kH), qL, kL, mask, dtype in product(
+            (64, 128, 256),
+            ((24, 4), (28, 4)),
+            (6, 8),
+            (128, 1985),
+            (None, "causal"),
+            (mx.bfloat16, mx.float16, mx.float32),
+        ):
+            with self.subTest(D=D, qH=qH, kH=kH, qL=qL, kL=kL, mask=mask, dtype=dtype):
+                key, k1, k2 = mx.random.split(key, 3)
+                q = mx.random.normal((1, qL, qH, D), dtype, key=k1).swapaxes(1, 2)
+                cache = mx.random.normal((2, 1, kH, kL + 64, D), dtype, key=k2)
+                k = cache[0, :, :, :kL]
+                v = cache[1, :, :, :kL]
+                scale = D**-0.5
+                ref = mlx_ref_attn(
+                    q.astype(mx.float32),
+                    k.astype(mx.float32),
+                    v.astype(mx.float32),
+                    scale=scale,
+                    mask=mask,
+                )
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask=mask, force_fused=True
+                )
+                tol = {mx.bfloat16: 2e-2, mx.float16: 5e-3, mx.float32: 1e-4}[dtype]
+                self.assertTrue(
+                    mx.allclose(ref, out.astype(mx.float32), atol=tol, rtol=tol)
+                )
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_split_large_values(self):
+        q = mx.zeros((1, 24, 6, 128), dtype=mx.float16)
+        k = mx.zeros((1, 4, 128, 128), dtype=mx.float16)
+        v = mx.full((1, 4, 128, 128), 10000, dtype=mx.float16)
+        out = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=128**-0.5, force_fused=True
+        )
+        self.assertTrue(mx.all(mx.isfinite(out)))
+        self.assertTrue(mx.allclose(out, mx.full_like(out, 10000)))
+
     @unittest.skip("Different head and value dims is not enabled")
     def test_sdpa_vector_value_dims(self):
         D = 192
@@ -966,7 +1010,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         v = mx.random.normal(shape=(1, 8, 8192, D), dtype=mx.float16)
         ref = mx.fast.scaled_dot_product_attention(q, k, v, scale=D**-0.5)
         for blocks in (16, 33, 48, 100):
-            with mlx_tests.scoped_env(MLX_SDPA_BLOCKS=str(blocks)):
+            with mx.config.scoped_update(MLX_SDPA_BLOCKS=blocks):
                 out = mx.fast.scaled_dot_product_attention(q, k, v, scale=D**-0.5)
                 self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
@@ -1025,7 +1069,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
                 out_ref = do_attention(mlx_ref_attn, q, k, v, scale, mask, t)
 
-                with mlx_tests.scoped_env(MLX_ENABLE_TF32="0"):
+                with mx.config.scoped_update(MLX_ENABLE_TF32=0):
                     out_fst = do_attention(
                         mx.fast.scaled_dot_product_attention,
                         q,
@@ -1313,7 +1357,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         # Vector attention kernel.
         for D in (192, 256, 512):
             with self.subTest(head_dim=D):
-                with mlx_tests.scoped_env(MLX_SDPA_D512_MIN_KL="0"):
+                with mx.config.scoped_update(MLX_SDPA_D512_MIN_KL=0):
                     q, k, v = make_qkv(4, 16385, D, 4, 2)
                     scale = D**-0.5
                     ref = mlx_ref_attn(q, k, v, scale=scale)
@@ -1348,12 +1392,12 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 q, k, v, scale=72**-0.5, force_fused=True
             )
         with self.assertRaisesRegex(ValueError, "GQA factor to be at most 32"):
-            q, k, v = make_qkv(8, 128, 64, qH=8, kH=1)
+            q, k, v = make_qkv(8, 128, 64, qH=32, kH=1)
             mx.fast.scaled_dot_product_attention(
                 q, k, v, scale=64**-0.5, force_fused=True
             )
         with self.assertRaisesRegex(ValueError, r"requires at least \d+ keys"):
-            with mlx_tests.scoped_env(MLX_SDPA_D512_MIN_KL=None):
+            with mx.config.scoped_update(MLX_SDPA_D512_MIN_KL=1024):
                 q, k, v = make_qkv(1, 512, 512, qH=32, kH=4)
                 mx.fast.scaled_dot_product_attention(
                     q, k, v, scale=512**-0.5, force_fused=True
@@ -1565,4 +1609,4 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner(failfast=True)
+    mlx_tests.MLXTestRunner()

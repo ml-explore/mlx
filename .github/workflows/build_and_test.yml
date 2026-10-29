@@ -23,6 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pre-commit/action@v3.0.1
+      - name: Test check_stream_args.py
+        shell: bash
+        run: python .github/scripts/check_stream_args.py --self-test
 
   build_and_test:
     name: ${{ matrix.os }} (${{ matrix.toolkit }}, ${{ matrix.arch }})
@@ -188,7 +191,6 @@ jobs:
 
   build_documentation:
     name: Build Documentation
-    if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-22.04
     needs: check_lint
     steps:

@@ -56,7 +56,8 @@ static inline T dequantize_scale(uint8_t s) {
       uint16_t i;
     };
     FOrI out;
-    out.i = (s == 0 ? 0x40 : (static_cast<uint16_t>(s) << 7));
+    out.i = (s == 0) ? 0x40
+                     : (s == 0xFF ? 0x7FC0 : (static_cast<uint16_t>(s) << 7));
     return static_cast<T>(out.f);
   }
 }

@@ -287,9 +287,6 @@ array_api_tests/test_searching_functions.py::test_argmin
 ## Misisng arguments
 ### Missing argument `append` `prepend`
 array_api_tests/test_utility_functions.py::test_diff_append_prepend
-## Other failures
-### AssertionError: out=False, but should be True [any()]
-array_api_tests/test_utility_functions.py::test_any
 
 # test_creation_functions.py
 ## Other failures

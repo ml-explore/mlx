@@ -26,12 +26,40 @@ static constexpr int MAX_ACTIVE_TASKS = 10;
 
 namespace {
 
-// Create a tracer copy of a primal for use in vjp/jvp. If the primal is a
-// stale Copy from a previous transform call (not an active tracer), peel it
-// off to prevent copy-chain accumulation when containers feed tracers back.
-array make_tracer(const array& p) {
-  auto s = p.has_primitive() ? p.primitive().stream()
-                             : default_stream(default_device());
+// Get the stream of the first array that has a primitive, else the default.
+StreamOrDevice find_stream(const std::vector<array>& arrays) {
+  for (auto& a : arrays) {
+    if (a.has_primitive()) {
+      return a.primitive().stream();
+    }
+  }
+  return std::monostate{};
+}
+
+StreamOrDevice find_stream(
+    const std::vector<array>& arrays1,
+    const std::vector<array>& arrays2) {
+  auto s = find_stream(arrays1);
+  if (!std::holds_alternative<std::monostate>(s)) {
+    return s;
+  }
+  return find_stream(arrays2);
+}
+
+array make_tracer(const array& p, StreamOrDevice fallback_stream) {
+  // A computed primal only needs its own identity: share its buffer so the
+  // trace adds no node and no stream for it. An active tracer from an enclosing
+  // transform still needs the Copy below to link the traces.
+  if (!p.is_tracer() && !p.has_primitive() && p.is_available()) {
+    array out(p.shape(), p.dtype(), nullptr, {});
+    out.copy_shared_buffer(p);
+    out.set_status(array::Status::available);
+    out.set_tracer(true);
+    return out;
+  }
+  // If the primal is a stale Copy from a previous transform call (not an active
+  // tracer), peel it off to prevent copy-chain accumulation when containers
+  // feed tracers back.
   auto source = p;
   if (!p.is_tracer() && p.has_primitive() && !p.inputs().empty()) {
     auto& prim = p.primitive();
@@ -39,6 +67,9 @@ array make_tracer(const array& p) {
       source = p.inputs()[0];
     }
   }
+  // Create a tracer copy of a primal for use in vjp/jvp.
+  auto s = p.has_primitive() ? StreamOrDevice(p.primitive().stream())
+                             : fallback_stream;
   auto out = copy(source, s);
   out.set_tracer(true);
   return out;
@@ -184,7 +215,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
 
     // Build the tape in BFS order with a width limit
-    int max_width = env::bfs_max_width();
+    int max_width = config::get("MLX_BFS_MAX_WIDTH", 20);
     dfs = std::stack<std::pair<std::reference_wrapper<array>, int>>();
     tape.push_back(synchronizer);
     for (int i = 0; !cache.empty() && (i < tape.size() || !dfs.empty());) {
@@ -404,9 +435,10 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
   detail::InTracing in_tracing{false, true};
 
   // Make tracers from given primals
+  auto fallback_stream = find_stream(primals, cotans);
   std::vector<array> primals_;
   for (auto& p : primals) {
-    primals_.push_back(make_tracer(p));
+    primals_.push_back(make_tracer(p, fallback_stream));
   }
 
   // Pass tracer primals through the function
@@ -563,8 +595,9 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
         cotan_it != cotan_map.end()) {
       vjps.push_back(cotan_it->second);
     } else {
-      auto s = primal.has_primitive() ? primal.primitive().stream()
-                                      : default_stream(default_device());
+      auto s = primal.has_primitive()
+          ? StreamOrDevice(primal.primitive().stream())
+          : fallback_stream;
       vjps.push_back(zeros_like(primal, s));
     }
   }
@@ -609,9 +642,10 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     }
   }
 
+  auto fallback_stream = find_stream(primals, tangents);
   std::vector<array> primals_;
   for (auto& p : primals) {
-    primals_.push_back(make_tracer(p));
+    primals_.push_back(make_tracer(p, fallback_stream));
   }
   auto outputs = fun(primals_);
 
@@ -925,7 +959,10 @@ std::vector<array> vmap_replace(
   // in the right place
   std::vector<array> outputs;
   for (int i = 0; i < s_outputs.size(); ++i) {
-    if (auto map_it = tmap.find(s_outputs[i].id()); map_it != tmap.end()) {
+    auto& s_out = s_outputs[i];
+    StreamOrDevice s =
+        s_out.has_primitive() ? s_out.primitive().stream() : StreamOrDevice{};
+    if (auto map_it = tmap.find(s_out.id()); map_it != tmap.end()) {
       auto& [out, vdim] = map_it->second;
       if (vdim != out_axes[i]) {
         if (out_axes[i] >= out.ndim()) {
@@ -934,14 +971,14 @@ std::vector<array> vmap_replace(
               << out.ndim() << " dimensions.";
           throw std::invalid_argument(msg.str());
         }
-        out = moveaxis(out, vdim, out_axes[i]);
+        out = moveaxis(out, vdim, out_axes[i], s);
       }
       outputs.push_back(out);
     } else {
       // When the output has no input dependencies
       // use the size of the vmapped axis in the inputs to expand the output
-      array output = expand_dims(s_outputs[i], out_axes[i]);
-      output = repeat(output, vmap_size, out_axes[i]);
+      array output = expand_dims(s_outputs[i], out_axes[i], s);
+      output = repeat(output, vmap_size, out_axes[i], s);
       outputs.push_back(output);
     }
   }
@@ -1033,8 +1070,10 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_function(
           fun_vmap = std::move(fun_vmap)](const std::vector<array>& args) {
     // Compute the outputs
     auto outputs = fun(args);
+
+    StreamOrDevice s = find_stream(outputs);
     for (auto& out : outputs) {
-      out = stop_gradient(out);
+      out = stop_gradient(out, s);
     }
 
     // Prepare the inputs to the primitive
@@ -1042,11 +1081,6 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_function(
     // pass.
     std::vector<array> inputs = args;
     inputs.insert(inputs.end(), outputs.begin(), outputs.end());
-
-    // Compute the stream. Maybe do it in a smarter way at some point in the
-    // future.
-    Stream s = (outputs[0].has_primitive()) ? outputs[0].primitive().stream()
-                                            : default_stream(default_device());
 
     // Make the output info
     std::vector<Shape> shapes;
@@ -1080,18 +1114,19 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_function(
             //
             // TODO: Use stop_gradient to make full use of argnums and not
             //       waste computation.
-            fun_jvp.value_or([fun](auto primals, auto tangents, auto argnums) {
-              std::vector<array> all_tangents;
-              for (int i = 0, j = 0; i < primals.size(); i++) {
-                if (j < argnums.size() && i == argnums[j]) {
-                  all_tangents.emplace_back(tangents[j++]);
-                } else {
-                  all_tangents.emplace_back(zeros_like(primals[i]));
-                }
-              }
-              auto [__, jvps] = jvp(fun, primals, all_tangents);
-              return jvps;
-            }),
+            fun_jvp.value_or(
+                [fun, s](auto primals, auto tangents, auto argnums) {
+                  std::vector<array> all_tangents;
+                  for (int i = 0, j = 0; i < primals.size(); i++) {
+                    if (j < argnums.size() && i == argnums[j]) {
+                      all_tangents.emplace_back(tangents[j++]);
+                    } else {
+                      all_tangents.emplace_back(zeros_like(primals[i], s));
+                    }
+                  }
+                  auto [__, jvps] = jvp(fun, primals, all_tangents);
+                  return jvps;
+                }),
 
             // Same as above, we use the passed vmap function or we compute it
             // from `fun`. The output axes is selected to be all 0s which again

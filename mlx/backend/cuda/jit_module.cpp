@@ -51,15 +51,14 @@ const std::filesystem::path& default_cuda_toolkit_path() {
 
 // Get the dirname of nvidia python package that contains CUDA headers.
 inline const char* cudart_dirname() {
-#if CUDART_VERSION < 13000
+#if CUDART_VERSION == 0
+#error "CUDART_VERSION not defined"
+#elif CUDART_VERSION < 13000
   return "cuda_runtime";
 #elif CUDART_VERSION < 14000
   return "cu13";
 #else
-  static_assert(
-      false,
-      "Please find out the newest dirname under site-packages/nvidia "
-      "and add it in this function.");
+  return "cu14";
 #endif
 }
 

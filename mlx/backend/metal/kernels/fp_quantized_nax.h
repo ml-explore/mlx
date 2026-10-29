@@ -191,15 +191,15 @@ using namespace mlx::steel;
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool aligned_N,
-    const bool has_global_scale = false,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2,
+    int group_size,
+    int bits,
+    bool has_global_scale,
+    bool aligned_N,
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2,
     typename Wtype = bfloat>
 METAL_FUNC void fp_qmm_t_impl(
     const device uint32_t* w,
@@ -370,14 +370,14 @@ METAL_FUNC vec<Wtype, 4> dequantize_fp_x4(uint q, uint8_t s) {
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool has_global_scale = false,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2,
+    int group_size,
+    int bits,
+    bool has_global_scale = false,
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2,
     typename Wtype = bfloat>
 METAL_FUNC void fp_qmm_n_impl(
     const device uint32_t* w,
@@ -583,16 +583,16 @@ METAL_FUNC void adjust_matrix_offsets(
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool aligned_N,
-    const bool batched,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2,
-    const bool has_global_scale = false,
+    int group_size,
+    int bits,
+    bool has_global_scale,
+    bool aligned_N,
+    bool batched,
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2,
     typename Wtype = bfloat>
 [[kernel]] void fp_qmm_t_nax(
     const device uint32_t* w,
@@ -640,8 +640,8 @@ template <
       T,
       group_size,
       bits,
-      aligned_N,
       has_global_scale,
+      aligned_N,
       BM,
       BK,
       BN,
@@ -653,14 +653,16 @@ template <
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool batched,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2,
+    int group_size,
+    int bits,
+    bool has_global_scale, // unimplemented
+    bool aligned_N, // unused
+    bool batched,
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2,
     typename Wtype = bfloat>
 [[kernel]] void fp_qmm_n_nax(
     const device uint32_t* w,
@@ -712,15 +714,16 @@ template <
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool aligned_N,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2,
-    const bool has_global_scale = false,
+    int group_size,
+    int bits,
+    bool has_global_scale,
+    bool aligned_N,
+    bool batched, // unused
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2,
     typename Wtype = bfloat>
 [[kernel]] void fp_gather_qmm_t_nax(
     const device uint32_t* w,
@@ -779,8 +782,8 @@ template <
       T,
       group_size,
       bits,
-      aligned_N,
       has_global_scale,
+      aligned_N,
       BM,
       BK,
       BN,
@@ -792,14 +795,16 @@ template <
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const int BM = 64,
-    const int BK = 64,
-    const int BN = 64,
-    const int WM = 2,
-    const int WN = 2,
-    const bool has_global_scale = false,
+    int group_size,
+    int bits,
+    bool has_global_scale, // unimplemented
+    bool aligned_N, // unused
+    bool batched, // unused
+    int BM = 64,
+    int BK = 64,
+    int BN = 64,
+    int WM = 2,
+    int WN = 2,
     typename Wtype = bfloat>
 [[kernel]] void fp_gather_qmm_n_nax(
     const device uint32_t* w,
@@ -863,14 +868,14 @@ template <
 template <
     typename T,
     int group_size,
-    const int bits,
+    int bits,
+    bool has_global_scale, // unimplemented
+    bool transpose,
     int BM,
     int BN,
     int BK,
     int WM,
     int WN,
-    bool transpose,
-    bool has_global_scale = false,
     typename Wtype = bfloat>
 [[kernel]] void fp_gather_qmm_rhs_nax(
     const device T* x,

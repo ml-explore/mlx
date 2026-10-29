@@ -1,54 +1,43 @@
-## Build the Docs
+## Build the Documentations
 
 ### Setup (do once)
-
-Install Doxygen:
-
-```
-brew install doxygen
-```
 
 Install Python packages:
 
 ```
-pip install -r requirements.txt
+uv pip install .[docs]
 ```
 
 ### Build
 
-Build the docs from `mlx/docs/`
+Build the docs from `docs/src/`
 
 ```
-doxygen && make html
+uv run sphinx-build -M html docs/src/ docs/build
 ```
 
-View the docs by running a server in `mlx/docs/build/html/`:
+View the docs:
 
 ```
-python -m http.server <port>
+open docs/build/html/index.html
 ```
 
-and point your browser to `http://localhost:<port>`.
+### Publish to GitHub Pages
 
-### Push to GitHub Pages
+By default whenever a new release is published the GitHub pages would be
+automatically rebuilt, but you can also manually rebuild the pages by triggering
+the [Documentation workflow](https://github.com/ml-explore/mlx/actions/workflows/documentation.yml).
 
-Check-out the `gh-pages` branch (`git switch gh-pages`) and build
-the docs. Then force add the `build/html` directory:
-
-`git add -f build/html`
-
-Commit and push the changes to the `gh-pages` branch.
-
-## Doc Development Setup
+## Development
 
 To enable live refresh of docs while writing:
 
 Install sphinx autobuild
 ```
-pip install sphinx-autobuild
+uv pip install sphinx-autobuild
 ```
 
-Run auto build on docs/src folder
+Run auto build on `docs/src` folder
 ```
-sphinx-autobuild ./src ./build/html
+uv run sphinx-autobuild docs/src docs/build/html
 ```
