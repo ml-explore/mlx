@@ -90,6 +90,10 @@ jobs:
         toolkit: ['cpu', 'metal', 'jit']
     runs-on: [self-hosted, macos]
     needs: check_lint
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+      # xcrun picks a newer Command Line Tools SDK that ld of Xcode cannot read.
+      SDKROOT: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
