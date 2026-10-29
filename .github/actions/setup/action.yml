@@ -51,7 +51,7 @@ runs:
       run: |
         brew update
         brew trust aws/tap # suppress warning in github actions
-        brew install openmpi
+        brew install openmpi ninja
         xcodebuild -showComponent MetalToolchain
         sysctl -a | grep machdep.cpu
 
