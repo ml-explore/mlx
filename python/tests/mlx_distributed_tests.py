@@ -148,16 +148,26 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
             self.assertTrue(mx.allclose(y, y2, atol=self.atol, rtol=self.rtol))
             self.assertTrue(mx.allclose(y[part], y1))
 
-            # Integer segments count inputs, not packed words
-            slin3 = shard_linear(qlin, "sharded-to-all", segments=[512])
+            # Integer segments count inputs, not packed words. Power-of-two
+            # scales, offsets in eighths and integer inputs keep every sum
+            # exact, so the sharded layer must match bit for bit whatever the
+            # summation order.
+            def exact(layer):
+                shape = layer.scales.shape
+                layer.scales = mx.power(2.0, mx.random.randint(-5, -2, shape))
+                layer.biases = mx.random.randint(-8, 8, shape) / 8
+                layer.bias = mx.random.randint(-8, 8, layer.bias.shape) / 8
+                return layer
+
+            qlin3 = exact(lin.to_quantized())
+            slin3 = shard_linear(qlin3, "sharded-to-all", segments=[512])
+            x3 = mx.random.randint(-4, 5, x.shape).astype(mx.float32)
             step = 512 // world.size()
             lo = world.rank() * step
-            x_part = mx.concatenate(
-                [x[:, lo : lo + step], x[:, 512 + lo : 512 + lo + step]], axis=1
+            x3_part = mx.concatenate(
+                [x3[:, lo : lo + step], x3[:, 512 + lo : 512 + lo + step]], axis=1
             )
-            self.assertTrue(
-                mx.allclose(y, slin3(x_part), atol=self.atol, rtol=self.rtol)
-            )
+            self.assertTrue(mx.array_equal(qlin3(x3), slin3(x3_part)))
 
             # A segment must split into whole quantization groups
             with self.assertRaises(ValueError):
@@ -167,17 +177,15 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
             step1, step2 = 15 * 64, 7 * 64
             seg = step1 * world.size()
             dims = seg + step2 * world.size()
-            qlin2 = nn.Linear(dims, 32).to_quantized()
+            qlin2 = exact(nn.Linear(dims, 32).to_quantized())
             slin4 = shard_linear(qlin2, "sharded-to-all", segments=[seg])
-            x2 = mx.random.normal((4, dims))
+            x2 = mx.random.randint(-4, 5, (4, dims)).astype(mx.float32)
             lo1 = world.rank() * step1
             lo2 = seg + world.rank() * step2
             x2_part = mx.concatenate(
                 [x2[:, lo1 : lo1 + step1], x2[:, lo2 : lo2 + step2]], axis=1
             )
-            self.assertTrue(
-                mx.allclose(qlin2(x2), slin4(x2_part), atol=self.atol, rtol=self.rtol)
-            )
+            self.assertTrue(mx.array_equal(qlin2(x2), slin4(x2_part)))
 
             # Test non-affine quantization modes (mxfp8)
             qlin_mxfp8 = lin.to_quantized(group_size=32, bits=8, mode="mxfp8")
