@@ -4791,7 +4791,7 @@ array conv_general(
       int64_t len = (in.shape(i + 1) - 1) * dil + 1;
       int64_t lo = padding_lo[i];
       int64_t hi = padding_hi[i];
-      int64_t start = lo < 0 ? (-lo + dil - 1) / dil : 0;
+      int64_t start = lo < 0 ? (safe_cast(-lo, "conv") + dil - 1) / dil : 0;
       int64_t stop = hi < 0 ? std::max<int64_t>(len + hi + dil - 1, 0) / dil
                             : in.shape(i + 1);
       if (stop <= start) {
