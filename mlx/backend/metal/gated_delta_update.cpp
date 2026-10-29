@@ -104,7 +104,8 @@ void GatedDeltaUpdate::eval_gpu(
   int Hv = v.shape(2);
   int Dv = v.shape(3);
 
-  int C = gated_delta_chunk_size(T);
+  bool vectorized_g = (g.ndim() == 4);
+  int C = vectorized_g ? 1 : gated_delta_chunk_size(T);
   const int ckpt = gated_delta_ckpt(C);
 
   std::string suffix = get_type_string(q.dtype()) + "_" + std::to_string(Dk) +
@@ -126,6 +127,7 @@ void GatedDeltaUpdate::eval_gpu(
   bool save_state = false;
   metal::MTLFCList func_consts = {
       {&save_state, MTL::DataType::DataTypeBool, 200},
+      {&vectorized_g, MTL::DataType::DataTypeBool, 201},
   };
 
   array dummy = scratch_alloc({1}, float32, s);
@@ -187,8 +189,11 @@ void GatedDeltaUpdate::eval_gpu(
       std::string base_name =
           "seq_gated_delta_" + suffix + "_" + std::to_string(ckpt);
 
-      auto delta_kernel =
-          get_gated_delta_kernel(d, base_name, base_name, func_consts);
+      auto delta_kernel = get_gated_delta_kernel(
+          d,
+          base_name,
+          vectorized_g ? base_name + "_vecg" : base_name,
+          func_consts);
 
       compute_encoder.set_compute_pipeline_state(delta_kernel);
 
@@ -259,7 +264,8 @@ void GatedDeltaUpdateVJP::eval_gpu(
   int Dv = v.shape(3);
 
   // 16 = chunked NAX, anything else = sequential.
-  int C = gated_delta_chunk_size_vjp();
+  bool vectorized_g = (g.ndim() == 4);
+  int C = vectorized_g ? 1 : gated_delta_chunk_size_vjp();
   const bool chunked = (C == 16);
 
   const int n_chunks = (T + 15) / 16;
@@ -326,6 +332,10 @@ void GatedDeltaUpdateVJP::eval_gpu(
   bool save_state = true;
   metal::MTLFCList save_consts = {
       {&save_state, MTL::DataType::DataTypeBool, 200},
+      {&vectorized_g, MTL::DataType::DataTypeBool, 201},
+  };
+  metal::MTLFCList vjp_consts = {
+      {&vectorized_g, MTL::DataType::DataTypeBool, 201},
   };
   metal::MTLFCList no_consts = {};
 
@@ -454,7 +464,10 @@ void GatedDeltaUpdateVJP::eval_gpu(
         std::string base_name = "seq_gated_delta_" + suffix + ckpt_suffix;
 
         auto delta_kernel = get_gated_delta_kernel(
-            d, base_name, base_name + "_save", save_consts);
+            d,
+            base_name,
+            vectorized_g ? base_name + "_save_vecg" : base_name + "_save",
+            save_consts);
 
         compute_encoder.set_compute_pipeline_state(delta_kernel);
         compute_encoder.set_input_array(q, 0);
@@ -476,8 +489,11 @@ void GatedDeltaUpdateVJP::eval_gpu(
       {
         std::string base_name = "seq_gated_delta_vjp_" + suffix + ckpt_suffix;
 
-        auto delta_kernel =
-            get_gated_delta_vjp_kernel(d, base_name, base_name, no_consts);
+        auto delta_kernel = get_gated_delta_vjp_kernel(
+            d,
+            base_name,
+            vectorized_g ? base_name + "_vecg" : base_name,
+            vjp_consts);
 
         compute_encoder.set_compute_pipeline_state(delta_kernel);
         compute_encoder.set_input_array(q, 0);
