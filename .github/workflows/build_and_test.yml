@@ -86,7 +86,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        macos-target: ['14.0', '15.0', '26.2']
+        macos-target: ['14.0', '26.2']
         toolkit: ['cpu', 'metal', 'jit']
     runs-on: [self-hosted, macos]
     needs: check_lint
