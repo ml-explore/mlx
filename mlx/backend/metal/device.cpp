@@ -539,12 +539,19 @@ bool CommandEncoder::needs_commit() const {
   return (buffer_ops_ > max_ops) || ((buffer_sizes_ >> 20) > max_mb);
 }
 
+bool CommandEncoder::has_pending_work() const {
+  return buffer_ops_ > 0 || !wait_events_.empty() || !signal_events_.empty() ||
+      in_flight_ > 0;
+}
+
 void CommandEncoder::commit(std::function<void()> completion) {
   // Metal locks a command buffer's residency at commit time, so attach any
   // sets created since the last commit first.
   residency_sets_.attach_new_sets(queue_.get(), sets_attached_);
+  in_flight_++;
   buffer_->addCompletedHandler(
       [&error_ = error_,
+       &in_flight_ = in_flight_,
        wait_events = std::move(wait_events_),
        signal_events = std::move(signal_events_),
        completion = std::move(completion)](MTL::CommandBuffer* cbuf) mutable {
@@ -580,6 +587,7 @@ void CommandEncoder::commit(std::function<void()> completion) {
             event.cast<EventImpl>().signal(value);
           }
         }
+        in_flight_--;
       });
   buffer_->commit();
   buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());

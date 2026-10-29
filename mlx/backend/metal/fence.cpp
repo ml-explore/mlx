@@ -80,7 +80,7 @@ void Fence::wait(Stream stream, const array& x, uint32_t value) {
   // The GPU scheduler does not know about the spin, which can block work on
   // other queues. Start it after the work of the other GPU streams is done.
   for (auto& [index, encoder] : metal::get_command_encoders()) {
-    if (&encoder != &compute_encoder) {
+    if (&encoder != &compute_encoder && encoder.has_pending_work()) {
       Event event(Stream(index, Device::gpu));
       encoder.signal_event(event, 1);
       encoder.commit();

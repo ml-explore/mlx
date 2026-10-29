@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Metal/Metal.hpp>
+#include <atomic>
 #include <functional>
 #include <mutex>
 #include <shared_mutex>
@@ -98,6 +99,8 @@ class MLX_API CommandEncoder {
   void wait_event(Event event, uint64_t value);
   void signal_event(Event event, uint64_t value);
   bool needs_commit() const;
+  // True if the queue may have work that has not finished yet.
+  bool has_pending_work() const;
   void commit(std::function<void()> completion = nullptr);
   void synchronize();
 
@@ -116,6 +119,9 @@ class MLX_API CommandEncoder {
   NS::SharedPtr<MTL::CommandBuffer> buffer_;
   int buffer_ops_{0};
   size_t buffer_sizes_{0};
+
+  // Number of committed command buffers that have not completed.
+  std::atomic<int> in_flight_{0};
 
   // The residency set and how many of its sets this queue has attached.
   ResidencySets& residency_sets_;
