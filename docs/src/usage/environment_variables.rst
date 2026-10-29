@@ -48,6 +48,16 @@ sets them.
    Enable verbose logging for the Ring backend. This variable is enabled by
    its presence.
 
+.. envvar:: MLX_RING_SOURCE_IPS
+
+   A comma-separated list of local IP addresses, without spaces, that the Ring
+   backend binds its outgoing connections to. The ``i``-th address is used for
+   the connection to the ``i``-th address of the next rank in the host file, so
+   the list must have one entry per address of the next rank. The operating
+   system still selects the port. When unset, the operating system also selects
+   the source address. Each process usually needs its own value because the
+   addresses belong to the local host.
+
 .. envvar:: MLX_IBV_DEVICES
 
    The path to the JSON device-connectivity file used by JACCL.
