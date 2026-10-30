@@ -14,11 +14,7 @@ struct FenceImpl {
   std::vector<Event> gpu_events;
   Event cpu_event;
 
-  FenceImpl(uint32_t count, Stream s) : count(count), cpu_event(s) {
-    // Ensure that we use AtomicEvent, it is the only event that can order a CPU
-    // stream against the GPU.
-    cpu_event.cast<cu::EventImpl>().ensure_created(s, 2);
-  }
+  FenceImpl(uint32_t count, Stream s) : count(count), cpu_event(s) {}
 };
 
 Fence::Fence(Stream s) {
@@ -59,8 +55,11 @@ uint32_t Fence::update(Stream s, const array& a, bool cross_device) {
     event.set_value(1);
     event.signal(s);
   }
-  f.cpu_event.set_value(f.count);
-  f.cpu_event.signal(s);
+  if (s.device != Device::gpu || cross_device) {
+    f.cpu_event.cast<cu::EventImpl>().ensure_created(s, 2);
+    f.cpu_event.set_value(f.count);
+    f.cpu_event.signal(s);
+  }
   return f.count;
 }
 
