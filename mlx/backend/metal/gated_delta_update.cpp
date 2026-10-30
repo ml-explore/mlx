@@ -14,14 +14,24 @@ namespace mlx::core::fast {
 
 namespace {
 
-inline int gated_delta_chunk_size(int T) {
-  const bool nax = metal::is_nax_available();
+inline int gated_delta_chunk_size(Dtype dtype, bool vectorized_g, int T) {
+  if (vectorized_g) {
+    // Only sequential kernel supports vectorized g.
+    return 1;
+  }
+  const bool nax =
+      metal::is_nax_available() && (env::enable_tf32() || dtype != float32);
   const int C = config::get("GATED_DELTA_CHUNK", T > 8 ? (nax ? 16 : 8) : 1);
   return (C == 16 && !nax) ? 8 : C;
 }
 
-inline int gated_delta_chunk_size_vjp() {
-  const bool nax = metal::is_nax_available();
+inline int gated_delta_chunk_size_vjp(Dtype dtype, bool vectorized_g) {
+  if (vectorized_g) {
+    // Only sequential kernel supports vectorized g.
+    return 1;
+  }
+  const bool nax =
+      metal::is_nax_available() && (env::enable_tf32() || dtype != float32);
   return nax ? config::get("GATED_DELTA_CHUNK_VJP", 16) : 1;
 }
 
@@ -105,7 +115,7 @@ void GatedDeltaUpdate::eval_gpu(
   int Dv = v.shape(3);
 
   bool vectorized_g = (g.ndim() == 4);
-  int C = vectorized_g ? 1 : gated_delta_chunk_size(T);
+  int C = gated_delta_chunk_size(q.dtype(), vectorized_g, T);
   const int ckpt = gated_delta_ckpt(C);
 
   std::string suffix = get_type_string(q.dtype()) + "_" + std::to_string(Dk) +
@@ -265,7 +275,7 @@ void GatedDeltaUpdateVJP::eval_gpu(
 
   // 16 = chunked NAX, anything else = sequential.
   bool vectorized_g = (g.ndim() == 4);
-  int C = vectorized_g ? 1 : gated_delta_chunk_size_vjp();
+  int C = gated_delta_chunk_size_vjp(q.dtype(), vectorized_g);
   const bool chunked = (C == 16);
 
   const int n_chunks = (T + 15) / 16;
