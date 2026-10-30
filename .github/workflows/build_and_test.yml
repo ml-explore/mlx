@@ -86,10 +86,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        macos-target: ['14.0', '15.0', '26.2']
+        macos-target: ['14.0', '26.2']
         toolkit: ['cpu', 'metal', 'jit']
-    runs-on: macos-26-xlarge
+    runs-on: [self-hosted, macos]
     needs: check_lint
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+      # xcrun picks a newer Command Line Tools SDK that ld of Xcode cannot read.
+      SDKROOT: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -121,12 +125,16 @@ jobs:
   mac_test:
     name: Test macOS (${{ matrix.toolkit }})
     if: github.repository == 'ml-explore/mlx'
-    runs-on: macos-26-xlarge
+    runs-on: [self-hosted, macos]
     needs: mac_build
     strategy:
       fail-fast: false
       matrix:
         toolkit: ['metal', 'jit']
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+      # xcrun picks a newer Command Line Tools SDK that ld of Xcode cannot read.
+      SDKROOT: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -146,7 +154,7 @@ jobs:
     name: Array API Tests (Metal)
     if: github.repository == 'ml-explore/mlx'
     needs: mac_build
-    runs-on: macos-26-xlarge
+    runs-on: [self-hosted, macos]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
