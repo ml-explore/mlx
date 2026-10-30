@@ -668,7 +668,8 @@ Finally, we build the nanobind_ bindings
 
     nanobind_add_module(
       mlx_sample_extensions
-      NB_STATIC FREE_THREADED LTO NOMINSIZE
+      BACKEND_MODULE nanobind_backend
+      LTO NOMINSIZE
       NB_DOMAIN mlx
       ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp
     )
@@ -696,6 +697,8 @@ build utilities defined in :mod:`mlx.extension`:
             ext_modules=[extension.CMakeExtension("mlx_sample_extensions")],
             cmdclass={"build_ext": extension.CMakeBuild},
             packages=[],
+            install_requires=["nanobind-backend>=1.0.0"],
+            options={"bdist_wheel": {"py_limited_api": "cp310"}},
             extras_require={"dev":[]},
             zip_safe=False,
             python_requires=">=3.10",
@@ -723,7 +726,7 @@ This results in the directory structure:
 | cmake_extension
 | ├── libmlx_ext.dylib # C++ extension library
 | ├── mlx_ext.metallib # Metal library
-| ├── mlx_sample_extensions.cpython-3x-darwin.so # Python binding
+| ├── mlx_sample_extensions.abi3.so # Python binding
 | ...
 
 When you try to install using the command ``python -m pip install .`` (in

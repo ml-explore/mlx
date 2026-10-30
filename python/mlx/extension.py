@@ -587,7 +587,7 @@ class BuildExtension(build_ext):
 # A CMakeExtension needs a sourcedir instead of a file list.
 class CMakeExtension(Extension):
     def __init__(self, name: str, sourcedir: str = "") -> None:
-        super().__init__(name, sources=[])
+        super().__init__(name, sources=[], py_limited_api=True)
         self.sourcedir = os.fspath(Path(sourcedir).resolve())
 
 
