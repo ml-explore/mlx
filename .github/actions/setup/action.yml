@@ -116,7 +116,7 @@ runs:
       if: runner.os != 'Windows'
       shell: bash
       run: |
-        uv venv --python ${{ inputs.python-version }} --managed-python
+        uv venv --python ${INPUTS_PYTHON_VERSION} --managed-python
         # Make sure all builds use the same cmake binary.
         uv pip install cmake
         source .venv/bin/activate
@@ -127,15 +127,19 @@ runs:
         if ${{ startsWith(inputs.toolkit, 'cuda') }} ; then
           echo MLX_PTX_CACHE_DIR=/tmp/mlx-ptx-cache >> $GITHUB_ENV
         fi
+      env:
+        INPUTS_PYTHON_VERSION: ${{ inputs.python-version }}
 
     - name: Setup Python venv (Windows)
       if: runner.os == 'Windows'
       shell: cmd
       run: |
-        uv venv --python ${{ inputs.python-version }}${{ runner.arch == 'arm64' && '-arm64' || ''}} || exit /b
+        uv venv --python %INPUTS_PYTHON_VERSION%${{ runner.arch == 'arm64' && '-arm64' || ''}} || exit /b
         uv pip install cmake
         call ".venv/Scripts/activate.bat"
         >>%GITHUB_ENV% set
+      env:
+        INPUTS_PYTHON_VERSION: ${{ inputs.python-version }}
 
     - name: Install CUDA toolkit (Linux)
       if: runner.os == 'Linux' && startsWith(inputs.toolkit, 'cuda')
@@ -147,6 +151,7 @@ runs:
             "cuda-12.9": "libcudnn9-dev-cuda-12 cuda-compiler-12-9 cuda-libraries-dev-12-9",
             "cuda-13.0": "libcudnn9-dev-cuda-13 cuda-compiler-13-0 cuda-libraries-dev-13-0"
           }
+        INPUTS_TOOLKIT: ${{ inputs.toolkit }}
       run: |
         # The CUDA binaries are hosted in the "sbsa" repo, the "arm64" repo is
         # Jetson specific. SBSA means Arm Server Base System Architecture.
@@ -157,7 +162,7 @@ runs:
         sudo apt-get install -y --no-install-recommends \
             libnccl2 libnccl-dev \
             ${{ fromJson(env.PACKAGES)[inputs.toolkit] }}
-        echo "/usr/local/${{ inputs.toolkit }}/bin" >> $GITHUB_PATH
+        echo "/usr/local/${INPUTS_TOOLKIT}/bin" >> $GITHUB_PATH
 
     - name: Install CUDA Toolkit (Windows)
       if: runner.os == 'Windows' && startsWith(inputs.toolkit, 'cuda')
