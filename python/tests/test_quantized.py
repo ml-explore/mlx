@@ -568,6 +568,37 @@ class TestQuantized(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.qqmm(x, w_q, scales, mode="nvfp4", biases=scales)
 
+    def test_qqmm_vjp_quantized_w(self):
+        # With quantized w, the gradient wrt x is the one with the dequantized w
+        mx.random.seed(0)
+        M, N, K = 64, 256, 512
+        modes = [("nvfp4", None, None), ("mxfp8", None, None)]
+        if mx.metal.is_available():
+            modes += [("affine", 64, 4), ("affine", 64, 8)]
+        for mode, group_size, bits in modes:
+            with self.subTest(mode=mode, bits=bits):
+                x = mx.random.normal((M, K)).astype(mx.bfloat16)
+                w = mx.random.normal((N, K)).astype(mx.bfloat16)
+                c = mx.random.normal((M, N)).astype(mx.bfloat16)
+                w_q, scales, *biases = mx.quantize(w, group_size, bits, mode=mode)
+                biases = biases[0] if biases else None
+                w_hat = mx.dequantize(
+                    w_q, scales, biases, group_size, bits, mode=mode, dtype=mx.bfloat16
+                )
+                kw = dict(group_size=group_size, bits=bits, mode=mode)
+                _, (dx,) = mx.vjp(
+                    lambda x: mx.qqmm(x, w_q, scales, biases=biases, **kw), (x,), (c,)
+                )
+                _, (dx_hat,) = mx.vjp(lambda x: mx.qqmm(x, w_hat, **kw), (x,), (c,))
+                self.assertTrue(mx.array_equal(dx, dx_hat))
+                if biases is not None:
+                    with self.assertRaises(ValueError):
+                        mx.vjp(
+                            lambda b: mx.qqmm(x, w_q, scales, biases=b, **kw),
+                            (biases,),
+                            (c,),
+                        )
+
     def test_qmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
