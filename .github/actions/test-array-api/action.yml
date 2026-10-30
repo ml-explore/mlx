@@ -1,0 +1,42 @@
+name: 'Run Array API tests'
+description: 'Run Array API tests'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout array-api-tests
+      uses: actions/checkout@v7
+      with:
+        repository: data-apis/array-api-tests
+        ref: 'ef5b39f1190d54dca0d9a12646033d2d123afdd5' # v2026.09.08
+        submodules: 'true'
+        path: 'array-api-tests'
+        persist-credentials: false
+    - name: Install dependencies
+      shell: bash
+      run: uv pip install -r array-api-tests/requirements.txt
+    - name: Run the test suite
+      shell: bash
+      env:
+        ARRAY_API_TESTS_MODULE: mlx.core
+        ARRAY_API_TESTS_SKIP_DTYPES: 'float64,complex128'
+        PYTHONWARNINGS: 'ignore::UserWarning::,ignore::DeprecationWarning::,ignore::RuntimeWarning::'
+        METAL_DEBUG_ERROR_MODE: 0
+        METAL_DEVICE_WRAPPER_TYPE: 1
+      run: |
+        cd array-api-tests
+        if ${{ runner.environment == 'self-hosted' }} ; then
+          JOBS=4
+        else
+          JOBS=2
+        fi
+        uv run pytest array_api_tests \
+          --durations=5 \
+          -n $JOBS \
+          -c pytest.ini \
+          --derandomize \
+          --disable-data-dependent-shapes \
+          --disable-deadline \
+          -o strict_xfail=False \
+          --skips-file "${GITHUB_WORKSPACE}/python/tests/xp-tests/skips.txt" \
+          --xfails-file "${GITHUB_WORKSPACE}/python/tests/xp-tests/xfail.txt"
