@@ -798,7 +798,7 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto [ds, rc, cc] = check_contiguity(shape, strides[1]);
   bool out_contiguous = rc;
-  bool large = exceeds_int32(upd);
+  bool large = exceeds_int32(upd) || exceeds_int32(out);
   std::string kernel_name = fmt::format(
       "slice_update_{0}_{1}{2}_{3}_{4}_{5}_nw{6}_nd{7}",
       op_name,
