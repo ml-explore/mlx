@@ -109,20 +109,22 @@ void _qmm(
   constexpr int bytes_per_pack = get_bytes_per_pack(bits);
   constexpr int packs_in_group = group_size / pack_factor;
 
+  std::vector<float> acc(N);
+
   for (int m = 0; m < M; m++) {
     const uint8_t* w_local = (const uint8_t*)w;
     const T* scales_local = scales;
     const T* biases_local = biases;
 
-    std::fill(result, result + N, 0);
+    std::fill(acc.begin(), acc.end(), 0);
 
     for (int k = 0; k < K; k++) {
-      T* result_local = result;
+      float* result_local = acc.data();
       T xi = *x++;
 
       for (int n = 0; n < N; n += group_size) {
-        T scale = *scales_local++;
-        T bias = *biases_local++;
+        float scale = *scales_local++;
+        float bias = *biases_local++;
         for (int ng = 0; ng < packs_in_group; ng++) {
           if constexpr (bits == 3 || bits == 5 || bits == 6) {
             T wl[pack_factor];
@@ -148,6 +150,7 @@ void _qmm(
       }
     }
 
+    std::copy(acc.begin(), acc.end(), result);
     result += N;
   }
 }
@@ -175,10 +178,10 @@ void _qmm_t(
 
     for (int n = 0; n < N; n++) {
       const T* x_local = x;
-      T sum = 0;
+      float sum = 0;
       for (int k = 0; k < K; k += group_size) {
-        T scale = *scales_local++;
-        T bias = *biases_local++;
+        float scale = *scales_local++;
+        float bias = *biases_local++;
 
         for (int kw = 0; kw < packs_in_group; kw++) {
           if constexpr (bits == 3 || bits == 5 || bits == 6) {
