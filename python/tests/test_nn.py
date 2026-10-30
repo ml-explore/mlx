@@ -267,6 +267,34 @@ class TestBase(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             nn.quantize(m, group_size=32, mode="mxfp8", quantize_input=True)
 
+    @unittest.skipIf(
+        not mx.metal.is_available(), "Affine qqmm is only supported on Metal"
+    )
+    def test_qqlinear_affine(self):
+        mx.random.seed(0)
+        lin = nn.Linear(512, 256, bias=False)
+        x = mx.random.normal((32, 512))
+        kw = dict(group_size=64, bits=4, mode="affine")
+        ql = lin.to_quantized(quantize_input=True, **kw)
+        self.assertTrue(isinstance(ql, nn.QQLinear))
+
+        # In training mode, qqmm quantizes the weights
+        self.assertTrue(mx.array_equal(ql(x), mx.qqmm(x, lin.weight, **kw)))
+
+        # In eval mode, the weights are stored with their scales and biases
+        ql.eval()
+        self.assertEqual(ql.weight.dtype, mx.uint32)
+        w_q, scales, biases = mx.quantize(lin.weight, 64, 4)
+        self.assertTrue(mx.array_equal(ql.biases, biases))
+        expected = mx.qqmm(x, w_q, scales, biases=biases, **kw)
+        self.assertTrue(mx.array_equal(ql(x), expected))
+
+        ql.train()
+        self.assertNotIn("scales", ql)
+        self.assertNotIn("biases", ql)
+        w_hat = mx.dequantize(w_q, scales, biases, 64, 4)
+        self.assertTrue(mx.array_equal(ql.weight, w_hat))
+
     def test_quantize_freeze(self):
         lin = nn.Linear(512, 512)
         qlin = lin.to_quantized()

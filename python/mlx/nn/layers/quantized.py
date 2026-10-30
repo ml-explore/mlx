@@ -40,8 +40,8 @@ def quantize(
     quantized. The module is updated in-place.
 
     Note:
-        ``quantize_input=True`` is only supported for ``"nvfp4"`` and ``"mxfp8"``
-        modes and :obj:`Linear` layers.
+        ``quantize_input=True`` is only supported for ``"nvfp4"``, ``"mxfp8"``
+        and ``"affine"`` modes and :obj:`Linear` layers.
 
     Args:
         model (mlx.nn.Module): The model whose leaf modules may be quantized.
@@ -315,7 +315,8 @@ class QQLinear(Module):
     Two use cases are supported:
 
     1) **Eval**:  The weights are frozen and stored in quantized form together with
-       their scales (``self.weight`` is quantized and ``self.scales`` is provided).
+       their scales (``self.weight`` is quantized and ``self.scales`` is provided,
+       and ``self.biases`` for ``"affine"``).
     2) **Train**: The weights are stored in higher precision and are quantized on
          the fly during computation so that gradients with respect to the weights
          can be computed.
@@ -339,8 +340,9 @@ class QQLinear(Module):
         bits (Optional[int]): The bit width to use for the quantized weight.
             See :func:`~mlx.core.quantize`. Default: ``None``.
         mode (Optional[str]): The quantization method to use (see
-            :func:`mlx.core.quantize`). Currently, only ``"nvfp4"`` and ``"mxfp8"``
-            are supported. Default: ``"nvfp4"``.
+            :func:`mlx.core.quantize`). Currently, only ``"nvfp4"``, ``"mxfp8"``
+            and ``"affine"`` are supported. With ``"affine"``, the input is
+            quantized to 8 bits (see :func:`mlx.core.qqmm`). Default: ``"nvfp4"``.
     """
 
     def __init__(
@@ -376,12 +378,14 @@ class QQLinear(Module):
 
     def quantize(self):
         if not self._quantized:
-            self.weight, self.scales = mx.quantize(
+            self.weight, self.scales, *biases = mx.quantize(
                 self.weight,
                 self.group_size,
                 self.bits,
                 mode=self.mode,
             )
+            if biases:
+                self.biases = biases[0]
             self._quantized = True
 
     def dequantize(self):
@@ -389,11 +393,14 @@ class QQLinear(Module):
             self.weight = mx.dequantize(
                 self.weight,
                 scales=self.scales,
+                biases=self.get("biases"),
                 group_size=self.group_size,
                 bits=self.bits,
                 mode=self.mode,
             )
             self.__delattr__("scales")
+            if "biases" in self:
+                self.__delattr__("biases")
             self._quantized = False
 
     def _set_training_mode(self, mode: bool):
@@ -412,6 +419,7 @@ class QQLinear(Module):
             group_size=self.group_size,
             bits=self.bits,
             mode=self.mode,
+            biases=self.get("biases"),
         )
         return x
 

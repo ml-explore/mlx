@@ -3736,45 +3736,65 @@ std::vector<Shape> QQMatmul::output_shapes(const std::vector<array>& inputs) {
 }
 
 std::vector<array> QQMatmul::vjp(
-    const std::vector<array>& primals, // non quantized x, non quantized w, if
-                                       // nvfp4 global_scale_x, global_scale_w
+    const std::vector<array>& primals, // non quantized x, w, scales and affine
+                                       // biases if w is quantized, if nvfp4
+                                       // global_scale_x, global_scale_w
     const std::vector<array>& cotangents, // non quantized upstream grads
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   bool is_nvfp4 = mode_ == QuantizationMode::Nvfp4;
-  assert(primals.size() == 2 || (is_nvfp4 && primals.size() == 4));
+  bool is_affine = mode_ == QuantizationMode::Affine;
+  bool w_quantized = primals[1].dtype() == uint32;
+  // Number of primals for w: w, scales and affine biases if w is quantized
+  int n_w = w_quantized ? (is_affine ? 3 : 2) : 1;
+  int n_primals = primals.size();
+  bool has_global_scale = n_primals == n_w + 3;
+  assert(n_primals == n_w + 1 || (is_nvfp4 && has_global_scale));
 
   std::vector<array> vjps;
   auto& cotan = cotangents[0];
   auto& s = stream();
-  // primal[1] -- non quantized w (N, K)
+  // primal[1] -- w (N, K)
   // primal[0] -- non quantized activations (M, K)
   // cotan -- non quantized grads (M, N)
   auto qmode = quantization_mode_to_string(mode_);
-  std::optional<array> cotan_amax = (primals.size() == 4)
+  std::optional<array> cotan_amax = has_global_scale
       ? std::make_optional(astype(max(abs(cotan, s), s), float32, s))
       : std::nullopt;
 
+  // idx 0 is global_scale_x, idx 1 is global_scale_w
   auto get_primal_scale = [&](int idx) {
-    return (primals.size() == 4) ? std::make_optional(primals[idx])
-                                 : std::nullopt;
+    return has_global_scale ? std::make_optional(primals[n_w + 1 + idx])
+                            : std::nullopt;
   };
 
   for (auto arg : argnums) {
     if (arg == 0) { // gradient wrt to x
+      auto w = w_quantized
+          ? dequantize(
+                primals[1],
+                primals[2],
+                is_affine ? std::make_optional(primals[3]) : std::nullopt,
+                group_size_,
+                bits_,
+                qmode,
+                get_primal_scale(1),
+                primals[0].dtype(),
+                s)
+          : primals[1];
       // We transpose weights -> quantize along N
       vjps.push_back(qqmm(
           cotan, //  M X N
-          swapaxes(primals[1], -1, -2, s), // assuming that w is 2D
+          swapaxes(w, -1, -2, s), // assuming that w is 2D
           {},
           group_size_,
           bits_,
           qmode,
           cotan_amax,
-          get_primal_scale(3), // global_scale_w (for w.T)
+          get_primal_scale(1), // global_scale_w (for w.T)
           std::nullopt,
           s));
-    } else if (arg == 1) { // gradient wrt to weights
+    } else if (arg == 1 && !w_quantized) { // gradient wrt to weights
       vjps.push_back(qqmm(
           swapaxes(cotan, -1, -2, s), // (N, M)
           swapaxes(primals[0], -1, -2, s), // (K, M)
@@ -3783,9 +3803,12 @@ std::vector<array> QQMatmul::vjp(
           bits_,
           qmode,
           cotan_amax,
-          get_primal_scale(2), // global_scale_x (for x.T)
+          get_primal_scale(0), // global_scale_x (for x.T)
           std::nullopt,
           s));
+    } else if (arg <= n_w) {
+      throw std::invalid_argument(
+          "[QQMatmul::vjp] No gradient wrt the quantized weights, scales or biases.");
     } else {
       vjps.push_back(zeros_like(primals[arg], s));
     }
