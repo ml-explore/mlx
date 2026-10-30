@@ -1443,6 +1443,28 @@ void qmm_splitk(
         x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
   }
 
+  // Route to qmm when NAX is available and aligned rather than falling back
+  // to the legacy non-NAX split-K kernel.
+  if (metal::is_nax_available() && (K % 64 == 0) && (N % 64 == 0) &&
+      (env::enable_tf32() || x.dtype() != float32)) {
+    return qmm(
+        x,
+        w,
+        scales,
+        biases,
+        std::nullopt,
+        out,
+        true,
+        group_size,
+        bits,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
+  }
+
   // Choose split_k to target ~512 threadgroups
   int bm = 32, bn = 32;
   int n_tiles = (N + bn - 1) / bn;
@@ -2176,9 +2198,9 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // For mid rows use NAX qmm when output is large enough.
   if (transpose_ && non_batched && (M >= 8) && (M < vector_limit) &&
-      (M * N >= 16384) &&
-      use_qmm_nax_splitk(x, biases, mode, M, N, K, group_size_)) {
-    qmm_splitk_nax(
+      (M * N >= 16384) && metal::is_nax_available() && (K % 64 == 0) &&
+      (N % 64 == 0) && (env::enable_tf32() || x.dtype() != float32)) {
+    qmm_splitk(
         x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
     return;
   }
