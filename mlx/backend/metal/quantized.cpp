@@ -762,9 +762,9 @@ std::pair<array, array> quantize_rows_int8(
   return {x_q, x_s};
 }
 
-// qmm_int_nax needs enough output tiles to fill the GPU, and groups of 64 or
-// more values. Otherwise the fp-weight routes on the dequantized x are as fast
-// or faster.
+// qmm_int_nax needs about 1.5 output tiles per GPU core (the K split fills the
+// rest), and groups of 64 or more values. Otherwise the fp-weight routes on the
+// dequantized x are as fast or faster.
 bool use_qmm_int_nax(
     const array& x,
     int M,
@@ -779,7 +779,7 @@ bool use_qmm_int_nax(
   }
   int cores = metal::gpu_core_count();
   int tiles = (N / 64) * ceildiv(M, 64);
-  return (M >= 32) && (tiles >= 2 * (cores > 0 ? cores : 16));
+  return (M >= 32) && (2 * tiles >= 3 * (cores > 0 ? cores : 16));
 }
 
 // K partitions for qmm_int_nax. Its threadgroups finish faster than the fp
