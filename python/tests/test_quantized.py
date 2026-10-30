@@ -517,6 +517,57 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 relative_error = delta.max() / mx.abs(expected).max()
                 self.assertLess(relative_error, 3e-2)
 
+    @unittest.skipIf(
+        not mx.metal.is_available(), "Affine qqmm is only supported on Metal"
+    )
+    def test_qqmm_affine(self):
+        mx.random.seed(0)
+        for M, N, K, bits, group_size, dtype in product(
+            [8, 256],
+            [128, 4096],
+            [512],
+            [4, 6, 8],
+            [32, 64, 128],
+            [mx.float16, mx.bfloat16],
+        ):
+            with self.subTest(
+                shape=(M, N, K), bits=bits, group_size=group_size, dtype=dtype
+            ):
+                x = mx.random.normal((M, K)).astype(dtype)
+                w = mx.random.normal((N, K)).astype(dtype)
+                # x is quantized to signed 8 bits whatever the bits of w
+                xg = x.astype(mx.float32).reshape(M, -1, group_size)
+                amax = mx.abs(xg).max(axis=-1, keepdims=True)
+                inv = mx.where(amax > 0, 127 / amax, 0)
+                x_hat = (mx.round(xg * inv) * (amax / 127)).reshape(M, K)
+                w_q, scales, biases = mx.quantize(w, group_size=group_size, bits=bits)
+                w_hat = mx.dequantize(
+                    w_q,
+                    scales,
+                    biases,
+                    group_size=group_size,
+                    bits=bits,
+                    dtype=mx.float32,
+                )
+                expected = x_hat @ mx.swapaxes(w_hat, -1, -2)
+                kw = dict(group_size=group_size, bits=bits, mode="affine")
+                for actual in (
+                    mx.qqmm(x, w_q, scales, biases=biases, **kw),
+                    mx.qqmm(x, w, **kw),
+                ):
+                    delta = mx.abs(actual.astype(mx.float32) - expected)
+                    relative_error = delta.max() / mx.abs(expected).max()
+                    self.assertLess(relative_error, 1e-2)
+
+        x = mx.random.normal((8, 512))
+        w = mx.random.normal((128, 512))
+        w_q, scales, biases = mx.quantize(w)
+        with self.assertRaises(ValueError):
+            mx.qqmm(x, w_q, scales, mode="affine")
+        w_q, scales = mx.quantize(w, mode="nvfp4")
+        with self.assertRaises(ValueError):
+            mx.qqmm(x, w_q, scales, mode="nvfp4", biases=scales)
+
     def test_qmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
