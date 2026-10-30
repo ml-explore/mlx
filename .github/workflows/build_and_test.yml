@@ -21,7 +21,7 @@ jobs:
     name: Check Lint
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: pre-commit/action@v3.0.1
       - name: Test check_stream_args.py
         shell: bash
@@ -62,12 +62,12 @@ jobs:
                     'ubuntu-22.04'))
       }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v7.0.1
+      - uses: $/.github/actions/setup
         id: setup
         with:
           toolkit: ${{ matrix.toolkit }}
-      - uses: ./.github/actions/build
+      - uses: $/.github/actions/build
         with:
           cmake-args: ${{ steps.setup.outputs.cmake-args }}
           # For MSVC, Ninja/Release is the only config supported by ccache.
@@ -75,9 +75,9 @@ jobs:
       - name: Check generated Python stubs with ty
         if: matrix.os == 'Linux' && matrix.arch == 'x86_64' && matrix.toolkit == 'cpu'
         run: uvx ty check python/mlx/core
-      - uses: ./.github/actions/test-linux
+      - uses: $/.github/actions/test-linux
         if: matrix.os == 'Linux' && (matrix.toolkit == 'cpu' || matrix.arch == 'x86_64')
-      - uses: ./.github/actions/test-windows
+      - uses: $/.github/actions/test-windows
         if: matrix.os == 'Windows' && matrix.toolkit == 'cpu'
 
   mac_build:
@@ -91,8 +91,8 @@ jobs:
     runs-on: [self-hosted, macos]
     needs: check_lint
     steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v7.0.1
+      - uses: $/.github/actions/setup
         id: setup
         with:
           toolkit: ${{ matrix.toolkit }}
@@ -109,10 +109,10 @@ jobs:
         run: |
           uv pip install build setuptools
           uv run python -m build -w
-      - uses: ./.github/actions/test-macos
+      - uses: $/.github/actions/test-macos
         with:
           toolkit: ${{ matrix.toolkit }}
-      - uses: ./.github/actions/test-array-api
+      - uses: $/.github/actions/test-array-api
         if: matrix.toolkit == 'metal'
 
   build_documentation:
@@ -120,8 +120,8 @@ jobs:
     runs-on: ubuntu-22.04
     needs: check_lint
     steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/build-docs
+      - uses: actions/checkout@v7.0.1
+      - uses: $/.github/actions/build-docs
 
   linux_sanitizer_build_and_test:
     name: Linux Sanitizer Tests (${{ matrix.sanitizer }})
@@ -135,7 +135,7 @@ jobs:
     runs-on: ubuntu-22.04-arm
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Install Dependencies
         run: |
@@ -173,7 +173,7 @@ jobs:
       image: fedora:42
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: CPP Build Test - No Release
         run: |
