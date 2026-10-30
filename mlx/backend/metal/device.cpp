@@ -3,6 +3,11 @@
 #include <cstdlib>
 #include <sstream>
 
+#include <TargetConditionals.h>
+#if TARGET_OS_OSX
+#include <IOKit/IOKitLib.h>
+#endif
+
 #include <fmt/format.h>
 
 #define NS_PRIVATE_IMPLEMENTATION
@@ -1057,6 +1062,39 @@ bool is_nax_available() {
   static bool is_nax_available_ = _check_nax();
   return is_nax_available_;
 #endif
+}
+
+int gpu_core_count() {
+  auto _count = []() {
+    int count = 0;
+#if TARGET_OS_OSX
+    io_iterator_t it;
+    if (IOServiceGetMatchingServices(
+            kIOMainPortDefault, IOServiceMatching("AGXAccelerator"), &it) !=
+        KERN_SUCCESS) {
+      return count;
+    }
+    while (io_object_t entry = IOIteratorNext(it)) {
+      CFTypeRef prop = IORegistryEntryCreateCFProperty(
+          entry, CFSTR("gpu-core-count"), kCFAllocatorDefault, 0);
+      if (prop) {
+        if (CFGetTypeID(prop) == CFNumberGetTypeID()) {
+          CFNumberGetValue(
+              static_cast<CFNumberRef>(prop), kCFNumberIntType, &count);
+        }
+        CFRelease(prop);
+      }
+      IOObjectRelease(entry);
+      if (count > 0) {
+        break;
+      }
+    }
+    IOObjectRelease(it);
+#endif
+    return count;
+  };
+  static int count_ = _count();
+  return count_;
 }
 
 } // namespace mlx::core::metal
