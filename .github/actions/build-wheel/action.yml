@@ -56,12 +56,14 @@ runs:
       run: |
         if ${{ runner.os == 'Linux' }} ; then
           auditwheel repair dist/mlx-*.whl \
-            --plat manylinux_2_35_${{ inputs.arch-tag }} \
+            --plat manylinux_2_35_${INPUTS_ARCH_TAG} \
             --exclude libmlx.so* \
             --only-plat
         else
           mv dist/mlx-*.whl wheelhouse/
         fi
+      env:
+        INPUTS_ARCH_TAG: ${{ inputs.arch-tag }}
 
     - name: Build backend package
       if: inputs.build-backend == 'true'
@@ -80,11 +82,11 @@ runs:
         if ${{ runner.os == 'Linux' }} ; then
           if [ -f dist/mlx_cpu*.whl ]; then
             auditwheel repair dist/mlx_cpu*.whl \
-              --plat manylinux_2_35_${{ inputs.arch-tag }}
+              --plat manylinux_2_35_${INPUTS_ARCH_TAG}
           fi
           if [ -f dist/mlx_cuda*.whl ]; then
             auditwheel repair dist/mlx_cuda*.whl \
-              --plat manylinux_2_35_${{ inputs.arch-tag }} \
+              --plat manylinux_2_35_${INPUTS_ARCH_TAG} \
               --exclude libcublas* \
               --exclude libcuda* \
               --exclude libcudnn* \
@@ -104,3 +106,5 @@ runs:
             mv dist/mlx_metal*.whl wheelhouse/
           fi
         fi
+      env:
+        INPUTS_ARCH_TAG: ${{ inputs.arch-tag }}
