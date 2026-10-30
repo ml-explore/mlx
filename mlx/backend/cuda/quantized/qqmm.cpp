@@ -93,6 +93,10 @@ GemmScalars create_nvfp4_scalars(
 
 void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("QQMatmul::eval_gpu");
+  if (mode_ == QuantizationMode::Affine) {
+    throw std::runtime_error(
+        "[QQMatmul] Affine quantization is not supported on CUDA yet.");
+  }
 
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);

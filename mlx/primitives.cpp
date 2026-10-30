@@ -3772,6 +3772,7 @@ std::vector<array> QQMatmul::vjp(
           qmode,
           cotan_amax,
           get_primal_scale(3), // global_scale_w (for w.T)
+          std::nullopt,
           s));
     } else if (arg == 1) { // gradient wrt to weights
       vjps.push_back(qqmm(
@@ -3783,6 +3784,7 @@ std::vector<array> QQMatmul::vjp(
           qmode,
           cotan_amax,
           get_primal_scale(2), // global_scale_x (for x.T)
+          std::nullopt,
           s));
     } else {
       vjps.push_back(zeros_like(primals[arg], s));

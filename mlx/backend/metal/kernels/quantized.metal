@@ -226,4 +226,25 @@
 instantiate_quantized_all_groups(float)
 instantiate_quantized_all_groups(float16_t)
 instantiate_quantized_all_groups(bfloat16_t)
+
+///////////////////////////////////////////////////////////////////////////////
+// affine_int8_quantize_dequantize
+///////////////////////////////////////////////////////////////////////////////
+
+#define instantiate_int8_quantize_dequantize(type, group_size) \
+  instantiate_kernel(                                         \
+      "affine_int8_quantize_dequantize_" #type "_gs_" #group_size "_b_8", \
+      affine_int8_quantize_dequantize,                        \
+      type,                                                   \
+      group_size,                                             \
+      8)
+
+#define instantiate_int8_quantize_dequantize_groups(type) \
+  instantiate_int8_quantize_dequantize(type, 32)         \
+  instantiate_int8_quantize_dequantize(type, 64)         \
+  instantiate_int8_quantize_dequantize(type, 128)
+
+instantiate_int8_quantize_dequantize_groups(float)
+instantiate_int8_quantize_dequantize_groups(float16_t)
+instantiate_int8_quantize_dequantize_groups(bfloat16_t)
 // clang-format on
