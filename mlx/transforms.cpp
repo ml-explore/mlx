@@ -1,8 +1,10 @@
 // Copyright © 2023-2024 Apple Inc.
+
 #include <algorithm>
 #include <deque>
 #include <future>
 #include <numeric>
+#include <ranges>
 #include <set>
 #include <sstream>
 #include <stack>
@@ -75,15 +77,16 @@ array make_tracer(const array& p, StreamOrDevice fallback_stream) {
   return out;
 }
 
-// For CustomTransforms, trailing inputs are outputs for buffer sharing in eval.
-size_t transform_inputs_size(const array& a) {
+auto get_inputs(auto& a) {
+  size_t count = a.inputs().size();
   if (a.has_primitive()) {
+    // For CustomTransforms, trailing inputs are outputs.
     auto& p = a.primitive();
     if (typeid(p) == typeid(CustomTransforms)) {
-      return a.inputs().size() - a.outputs().size();
+      count -= a.outputs().size();
     }
   }
-  return a.inputs().size();
+  return std::views::take(a.inputs(), count);
 }
 
 } // namespace
@@ -515,10 +518,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
       cache.insert(s.id());
     }
 
-    auto num_inputs = transform_inputs_size(a);
-    for (int i = 0; i < num_inputs; ++i) {
-      recurse(a.inputs()[i]);
-    }
+    std::ranges::for_each(get_inputs(a), recurse);
 
     // Stop grad
     if (a.has_primitive()) {
@@ -528,8 +528,8 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     }
 
     // Calculate gradient if any inputs require gradient
-    for (int i = 0; i < num_inputs; ++i) {
-      if (calc_grad.find(a.inputs()[i].id()) != calc_grad.end()) {
+    for (auto& input : get_inputs(a)) {
+      if (calc_grad.find(input.id()) != calc_grad.end()) {
         tape.push_back(a);
         calc_grad.insert(a.id());
         for (auto& s : a.siblings()) {
@@ -540,9 +540,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     }
   };
 
-  for (auto out : outputs) {
-    recurse(out);
-  }
+  std::ranges::for_each(outputs, recurse);
 
   // Run the tape backwards, computing vector-jacobian
   // products for each primitive
@@ -685,10 +683,7 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
       cache.insert(s.id());
     }
 
-    auto num_inputs = transform_inputs_size(a);
-    for (int i = 0; i < num_inputs; ++i) {
-      recurse(a.inputs()[i]);
-    }
+    std::ranges::for_each(get_inputs(a), recurse);
 
     // Stop grad
     if (a.has_primitive()) {
@@ -698,8 +693,8 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     }
 
     // Calculate gradient if any inputs require gradient
-    for (int i = 0; i < num_inputs; ++i) {
-      if (calc_grad.find(a.inputs()[i].id()) != calc_grad.end()) {
+    for (auto& input : get_inputs(a)) {
+      if (calc_grad.find(input.id()) != calc_grad.end()) {
         tape.push_back(a);
         calc_grad.insert(a.id());
         for (auto& s : a.siblings()) {
@@ -710,9 +705,7 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     }
   };
 
-  for (auto out : outputs) {
-    recurse(out);
-  }
+  std::ranges::for_each(outputs, recurse);
 
   std::unordered_map<std::uintptr_t, array> tan_map;
   for (int i = 0; i < primals_.size(); ++i) {
@@ -917,15 +910,13 @@ std::vector<array> vmap_replace(
       cache.insert(s.id());
     }
 
-    auto num_inputs = transform_inputs_size(a);
     // Recurse on inputs
-    for (int i = 0; i < num_inputs; ++i) {
-      recurse(a.inputs()[i]);
-    }
+    std::ranges::for_each(get_inputs(a), recurse);
+
     // If any input needs a vmap, then the outputs also need
     // a vmap
-    for (int i = 0; i < num_inputs; ++i) {
-      if (needs_vmap.find(a.inputs()[i].id()) != needs_vmap.end()) {
+    for (auto& input : get_inputs(a)) {
+      if (needs_vmap.find(input.id()) != needs_vmap.end()) {
         tape.push_back(a);
         tape.back().set_tracer(false);
         needs_vmap.insert(a.id());
