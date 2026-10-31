@@ -2142,6 +2142,53 @@ void dispatch_qmv(
       mode);
 }
 
+void qmv_mixed(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  std::string kname;
+  auto scale_type = get_type_string(scales.dtype());
+  bool partial_rows = N % 8 != 0;
+  concatenate(
+      kname,
+      "affine_qmv_fast_mixed_",
+      scale_type,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      "_pr_",
+      partial_rows);
+  auto kernel = get_quantized_kernel_wrapped(
+      d,
+      kname,
+      "qmv_fast_mixed",
+      "affine",
+      scale_type,
+      group_size,
+      bits,
+      partial_rows);
+  auto& encoder = metal::get_command_encoder(s);
+  encoder.set_compute_pipeline_state(kernel);
+  encoder.set_input_array(w, 0);
+  encoder.set_input_array(scales, 1);
+  encoder.set_input_array(biases, 2);
+  encoder.set_input_array(x, 3);
+  encoder.set_output_array(out, 4);
+  encoder.set_bytes(K, 5);
+  encoder.set_bytes(N, 6);
+  encoder.dispatch_threadgroups(
+      MTL::Size(1, (N + 7) / 8, 1), MTL::Size(32, 2, 1));
+}
+
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -2166,6 +2213,23 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
   auto mode = quantization_mode_to_string(mode_);
+
+  if (mode_ == QuantizationMode::Affine && scales.dtype() != x.dtype()) {
+    if (transpose_ && non_batched && M == 1 &&
+        K % qmv_fast_k_alignment(bits_) == 0) {
+      qmv_mixed(x, w, scales, *biases, out, group_size_, bits_, N, K, d, s);
+      return;
+    }
+    // Other kernels require constants with the activation dtype.
+    auto widen = [&](const array& a) {
+      array copy(a.shape(), x.dtype(), nullptr, {});
+      copy_gpu(a, copy, CopyType::General, s);
+      metal::get_command_encoder(s).add_temporary(copy);
+      return copy;
+    };
+    scales = widen(scales);
+    biases = widen(*biases);
+  }
 
   // For few rows use qmv_mma when N/K is large enough.
   if (transpose_ && non_batched && (M >= 6) && (M <= 16) &&
