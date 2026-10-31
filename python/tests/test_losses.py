@@ -91,6 +91,14 @@ class TestLosses(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.allclose(loss, expected))
 
+    # TODO:
+    # def test_softmax_collapse(self):
+    #     pass
+
+    # TODO:
+    # def test_softmax_cancellation(self):
+    #     pass
+
     def test_binary_cross_entropy(self):
         def _test_logits_as_inputs():
             logits = mx.array([0.105361, 0.223144, 1.20397, 0.916291])
