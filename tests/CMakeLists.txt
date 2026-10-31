@@ -19,6 +19,16 @@ if(MLX_BUILD_METAL)
   list(APPEND GPU_TEST_SOURCES residency_tests.cpp)
 endif()
 
+if(TARGET jaccl)
+  target_sources(tests PRIVATE jaccl_tests.cpp)
+  target_include_directories(
+    tests PRIVATE ${PROJECT_SOURCE_DIR}/mlx/distributed/jaccl/lib)
+  get_target_property(mlx_link_libraries mlx LINK_LIBRARIES)
+  if(BUILD_SHARED_LIBS OR NOT jaccl IN_LIST mlx_link_libraries)
+    target_link_libraries(tests PRIVATE jaccl)
+  endif()
+endif()
+
 include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
 
 target_sources(
