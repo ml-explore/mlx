@@ -3,8 +3,8 @@ target_sources(
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/broadcasting.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/common.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/custom_kernel.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/metal_kernel.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp)

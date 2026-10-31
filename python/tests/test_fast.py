@@ -1319,6 +1319,36 @@ class TestFast(mlx_tests.MLXTestCase):
         mx.eval(out)
         self.assertEqual(out.tolist(), [-1, -1, -1, -1])
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_kernel_template_args_one_object(self):
+        # An int 1 and a bool true template argument give the same kernel name
+        # but a different signature, which sizeof(S) exposes. Calling them in
+        # alternation on one kernel object must run the right source each time.
+        kernel = mx.fast.metal_kernel(
+            name="template_args",
+            input_names=["inp"],
+            output_names=["out"],
+            source="""
+                uint elem = thread_position_in_grid.x;
+                out[elem] = inp[elem] * S + sizeof(S);
+            """,
+        )
+
+        a = mx.arange(32, dtype=mx.float32)
+        cases = [(3, a * 3 + 4), (1, a + 4), (True, a + 1)]
+        for _ in range(2):
+            for s, expected in cases:
+                (out,) = kernel(
+                    inputs=[a],
+                    template=[("S", s)],
+                    grid=(a.size, 1, 1),
+                    threadgroup=(a.size, 1, 1),
+                    output_shapes=[a.shape],
+                    output_dtypes=[a.dtype],
+                    stream=mx.gpu,
+                )
+                self.assertTrue(mx.array_equal(out, expected))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

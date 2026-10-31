@@ -10,7 +10,7 @@
 #include <unordered_set>
 
 #include "mlx/array.h"
-#include "mlx/backend/common/metal_kernel.h"
+#include "mlx/backend/common/custom_kernel.h"
 #include "mlx/backend/metal/resident.h"
 #include "mlx/device.h"
 
@@ -185,7 +185,7 @@ class MLX_API Device {
 
   MTL::Library* get_library(
       const std::string& name,
-      const CompileOptions& compile_options,
+      const fast::CompileOptions& compile_options,
       const std::function<std::string(void)>& builder);
 
   MTL::Library* get_library(
@@ -216,7 +216,7 @@ class MLX_API Device {
  private:
   NS::SharedPtr<MTL::Library> build_library_(
       const std::string& source_string,
-      const CompileOptions& compile_options = {});
+      const fast::CompileOptions& compile_options = {});
 
   NS::SharedPtr<MTL::Function> get_function_(
       const std::string& name,
