@@ -13,20 +13,16 @@ namespace mlx::core::fast {
 namespace {
 
 // Threadgroup shrinks with the axis so a small vocabulary needs one iteration.
-inline std::pair<MTL::Size, MTL::Size> cross_entropy_dims(
+inline size_t cross_entropy_threadgroup_size(
     MTL::ComputePipelineState* kernel,
-    int axis_size,
-    int n_rows) {
+    int axis_size) {
   constexpr size_t simd_size = 32;
   size_t tg_max =
       (kernel->maxTotalThreadsPerThreadgroup() / simd_size) * simd_size;
   size_t needed =
       (axis_size + CROSS_ENTROPY_N_READS - 1) / CROSS_ENTROPY_N_READS;
-  size_t threadgroup_size = std::clamp(
+  return std::clamp(
       ((needed + simd_size - 1) / simd_size) * simd_size, simd_size, tg_max);
-  return {
-      MTL::Size(n_rows * threadgroup_size, 1, 1),
-      MTL::Size(threadgroup_size, 1, 1)};
 }
 
 array ensure_row_contiguous(
@@ -66,18 +62,21 @@ void CrossEntropy::eval_gpu(
   out.set_data(allocator::malloc(out.nbytes()));
 
   int axis_size = in.shape().back();
-  int n_rows = in.data_size() / axis_size;
+  int64_t n_rows = in.data_size() / axis_size;
 
   std::string kernel_name = "cross_entropy_" + type_to_name(in);
   auto kernel = get_cross_entropy_kernel(d, kernel_name, in);
-  auto [grid_dims, group_dims] = cross_entropy_dims(kernel, axis_size, n_rows);
+  size_t threadgroup_size = cross_entropy_threadgroup_size(kernel, axis_size);
 
   compute_encoder.set_compute_pipeline_state(kernel);
-  compute_encoder.set_input_array(in, 0);
-  compute_encoder.set_input_array(targets, 1);
-  compute_encoder.set_output_array(out, 2);
   compute_encoder.set_bytes(axis_size, 3);
-  compute_encoder.dispatch_threads(grid_dims, group_dims);
+  const int64_t row_bytes = int64_t(axis_size) * in.itemsize();
+  dispatch_threadgroups_in_slices(
+      compute_encoder, n_rows, threadgroup_size, [&](int64_t row) {
+        compute_encoder.set_input_array(in, 0, row * row_bytes);
+        compute_encoder.set_input_array(targets, 1, row * targets.itemsize());
+        compute_encoder.set_output_array(out, 2, row * out.itemsize());
+      });
 }
 
 void CrossEntropyVJP::eval_gpu(
@@ -109,20 +108,23 @@ void CrossEntropyVJP::eval_gpu(
   }
 
   int axis_size = in.shape().back();
-  int n_rows = in.data_size() / axis_size;
+  int64_t n_rows = in.data_size() / axis_size;
 
   std::string kernel_name = "cross_entropy_vjp_" + type_to_name(in);
   auto kernel = get_cross_entropy_kernel(d, kernel_name, in);
-  auto [grid_dims, group_dims] = cross_entropy_dims(kernel, axis_size, n_rows);
+  size_t threadgroup_size = cross_entropy_threadgroup_size(kernel, axis_size);
 
   compute_encoder.set_compute_pipeline_state(kernel);
-  compute_encoder.set_input_array(in, 0);
-  compute_encoder.set_input_array(targets, 1);
-  compute_encoder.set_input_array(loss, 2);
-  compute_encoder.set_input_array(cotan, 3);
-  compute_encoder.set_output_array(out, 4);
   compute_encoder.set_bytes(axis_size, 5);
-  compute_encoder.dispatch_threads(grid_dims, group_dims);
+  const int64_t row_bytes = int64_t(axis_size) * in.itemsize();
+  dispatch_threadgroups_in_slices(
+      compute_encoder, n_rows, threadgroup_size, [&](int64_t row) {
+        compute_encoder.set_input_array(in, 0, row * row_bytes);
+        compute_encoder.set_input_array(targets, 1, row * targets.itemsize());
+        compute_encoder.set_input_array(loss, 2, row * loss.itemsize());
+        compute_encoder.set_input_array(cotan, 3, row * cotan.itemsize());
+        compute_encoder.set_output_array(out, 4, row * row_bytes);
+      });
 }
 
 } // namespace mlx::core::fast
