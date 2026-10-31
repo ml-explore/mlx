@@ -248,6 +248,15 @@ void init_random(nb::module_& parent_module) {
 
         Returns:
             array: The output array of random values.
+
+        .. note::
+           Outputs are deterministic for a given key on a given machine, but
+           they are not guaranteed to be bit-exact across GPU architectures.
+           On Apple silicon, the M1 family (``applegpu_g13``) and later
+           families (M3, M5) produce different outputs for the same key because the
+           ``erfinv`` step of this function evaluates differently on each.
+           ``uniform``, ``key`` and ``split`` are unaffected. See
+           `issue #3568 <https://github.com/ml-explore/mlx/issues/3568>`_.
       )pbdoc");
   m.def(
       "multivariate_normal",
