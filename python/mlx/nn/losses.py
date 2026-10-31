@@ -110,27 +110,27 @@ def cross_entropy(
     else:
         logits = logits - mx.stop_gradient(mx.max(logits, axis=axis, keepdims=True))
 
-    if targets_as_probs:
-        # TODO: verify softmax cancellation issue in Soft-target cross-entropy
-        score = mx.sum(logits * targets, axis=axis)
-        target_idx = mx.argmax(targets, axis=axis)
-    else:
-        score = mx.take_along_axis(
-            logits, mx.expand_dims(targets, axis), axis
-        ).squeeze(axis)
-        target_idx = mx.expand_dims(targets, axis)
-    
-    indices = mx.arange(logits.shape[axis])
-    other_logits = mx.where(
-            indices == target_idx,
-            -float("inf"),
-            logits,
-        )
+        if targets_as_probs:
+            # TODO: verify softmax cancellation issue in Soft-target cross-entropy
+            score = mx.sum(logits * targets, axis=axis)
+            target_idx = mx.argmax(targets, axis=axis)
+        else:
+            score = mx.take_along_axis(
+                logits, mx.expand_dims(targets, axis), axis
+            ).squeeze(axis)
+            target_idx = mx.expand_dims(targets, axis)
+        
+        indices = mx.arange(logits.shape[axis])
+        other_logits = mx.where(
+                indices == target_idx,
+                -float("inf"),
+                logits,
+            )
 
-    relative_logits = other_logits - score if targets_as_probs else mx.expand_dims(score, axis)
+        relative_logits = other_logits - score if targets_as_probs else mx.expand_dims(score, axis)
 
-    logsumexp_logits = mx.logsumexp(relative_logits, axis=axis)
-    loss = mx.logaddexp(0.0, logsumexp_logits) # softplus
+        logsumexp_logits = mx.logsumexp(relative_logits, axis=axis)
+        loss = mx.logaddexp(0.0, logsumexp_logits) # softplus
 
     if label_smoothing > 0:
         loss = loss + label_smoothing * (score - logits.mean(axis=axis))
