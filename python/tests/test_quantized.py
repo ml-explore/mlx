@@ -777,6 +777,29 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertLess(error.item(), tol * rounding.item())
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_nax_unbiased_shapes(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        K, N = 4096, 4096
+        for M in [8, 16, 32, 36, 48, 64]:
+            with self.subTest(M=M):
+                k1, k2 = mx.random.split(mx.random.key(M))
+                x = mx.random.normal((M, K), key=k1).astype(mx.float16)
+                w = (0.02 * mx.random.normal((N, K), key=k2)).astype(mx.float16)
+                wq = mx.quantize(w, group_size=64, bits=4)
+                w_hat = mx.dequantize(*wq, group_size=64, bits=4)
+                y_ref = x.astype(mx.float32) @ w_hat.astype(mx.float32).T
+                y = mx.quantized_matmul(
+                    x, *wq, transpose=True, group_size=64, bits=4
+                )
+                self.assertEqual(y.shape, (M, N))
+                error = (y.astype(mx.float32) - y_ref).abs().mean()
+                rounding = (
+                    (y_ref.astype(mx.float16).astype(mx.float32) - y_ref).abs().mean()
+                )
+                self.assertLess(error.item(), 2.0 * rounding.item())
+
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_qmm_fp4_half_loader(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("Covers GPU kernels only")
