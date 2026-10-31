@@ -5010,6 +5010,7 @@ void validate_qqmm_inputs(
     const array& x,
     const array& w,
     const std::optional<array>& scales_w,
+    const std::optional<array>& biases_w,
     int group_size,
     int bits,
     const std::optional<array>& global_scale_x,
@@ -5032,7 +5033,8 @@ void validate_qqmm_inputs(
     }
     // if scales are provided, check compatibility with quantized w
     else {
-      validate_quantized_input("qqmm", w, *scales_w, group_size, bits);
+      validate_quantized_input(
+          "qqmm", w, *scales_w, group_size, bits, biases_w);
     }
   }
   // if w is not quantized, dtype must be in {f16, bf16, fp32}
@@ -5050,6 +5052,14 @@ void validate_qqmm_inputs(
     msg << "[qqmm] Only real floating types except float64 are supported but "
         << "first argument dtype == " << x.dtype() << ".";
     throw std::invalid_argument(msg.str());
+  }
+  // Quantized affine weights need biases, and only they take them
+  bool needs_biases = qmode == QuantizationMode::Affine && w.dtype() == uint32;
+  if (needs_biases != biases_w.has_value()) {
+    throw std::invalid_argument(
+        needs_biases
+            ? "[qqmm] Biases must be provided for quantized affine weights."
+            : "[qqmm] Biases are only used with quantized affine weights.");
   }
   // validate global scales
   validate_global_scale("qqmm", qmode, global_scale_x);
@@ -5105,6 +5115,7 @@ array qqmm(
     const std::string& mode /* = "nvfp4" */,
     const std::optional<array>& global_scale_x /* = std::nullopt */,
     const std::optional<array>& global_scale_w /* = std::nullopt */,
+    const std::optional<array>& biases_w /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto stream = to_stream(s);
   auto qmode = string_to_quantization_mode(mode, "qqmm");
@@ -5125,7 +5136,15 @@ array qqmm(
 
   // validate inputs
   validate_qqmm_inputs(
-      x, w, scales_w, group_size, bits, global_scale_x, global_scale_w, qmode);
+      x,
+      w,
+      scales_w,
+      biases_w,
+      group_size,
+      bits,
+      global_scale_x,
+      global_scale_w,
+      qmode);
   // validate and extract shapes
   auto [w_inner_dims, w_outer_dims] =
       extract_qqmm_dims(x, w, scales_w, group_size, bits);
@@ -5135,6 +5154,9 @@ array qqmm(
   };
   if (scales_w.has_value()) {
     inputs.push_back(*scales_w);
+  }
+  if (biases_w.has_value()) {
+    inputs.push_back(*biases_w);
   }
   if (global_scale_x.has_value() && global_scale_w.has_value()) {
     inputs.push_back(*global_scale_x);
@@ -5863,6 +5885,10 @@ array gather_qqmm(
     StreamOrDevice s) {
   auto stream = to_stream(s);
   auto qmode = string_to_quantization_mode(mode, "gather_qqmm");
+  if (qmode == QuantizationMode::Affine) {
+    throw std::invalid_argument(
+        "[gather_qqmm] Affine quantization is not supported.");
+  }
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
 

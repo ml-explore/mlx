@@ -1344,6 +1344,10 @@ void fast::ConvertFP8::eval_cpu(
 }
 
 void QQMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
+  if (mode_ == QuantizationMode::Affine) {
+    throw std::runtime_error(
+        "[QQMatmul] Affine quantization is not supported on CPU yet.");
+  }
   auto& encoder = cpu::get_command_encoder(stream());
 
   bool w_quantized = (inputs[1].dtype() == uint32);

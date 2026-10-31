@@ -100,14 +100,14 @@ class Linear(Module):
             QuantizedLinear or QQLinear: A quantized version of this layer.
 
         Notes:
-            Quantized input is only supported for ``"nvfp4"`` and ``"mxfp8"``
-            modes.
+            Quantized input is only supported for ``"nvfp4"``, ``"mxfp8"`` and
+            ``"affine"`` modes.
         """
         if quantize_input:
-            if mode not in ["nvfp4", "mxfp8"]:
+            if mode not in ["nvfp4", "mxfp8", "affine"]:
                 raise ValueError(
-                    f"Quantized activations are only supported for 'nvfp4' and 'mxfp8' "
-                    f"modes, got {mode}."
+                    f"Quantized activations are only supported for 'nvfp4', 'mxfp8' "
+                    f"and 'affine' modes, got {mode}."
                 )
             return QQLinear.from_linear(self, group_size, bits, mode)
         return QuantizedLinear.from_linear(self, group_size, bits, mode)

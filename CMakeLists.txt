@@ -234,6 +234,10 @@ if(MLX_BUILD_METAL)
     mlx PUBLIC $<BUILD_INTERFACE:${metal_cpp_SOURCE_DIR}>
                $<INSTALL_INTERFACE:include/metal_cpp>)
   target_link_libraries(mlx PUBLIC ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZ_LIB})
+  if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    find_library(IOKIT_LIB IOKit)
+    target_link_libraries(mlx PRIVATE ${IOKIT_LIB})
+  endif()
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

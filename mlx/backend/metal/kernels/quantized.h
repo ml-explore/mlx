@@ -2901,3 +2901,44 @@ template <typename T, int group_size, int bits, bool has_global_scale = false>
     }
   }
 }
+
+// Quantizes x to signed 8-bit integers with one scale per group, the largest
+// |x| over 127, and writes back the dequantized values. Affine qqmm uses it
+// for x.
+template <typename T, int group_size, int bits>
+[[kernel]] void affine_int8_quantize_dequantize(
+    const device T* x [[buffer(0)]],
+    device T* out [[buffer(1)]],
+    const constant int& K [[buffer(2)]],
+    uint2 tid [[thread_position_in_grid]]) {
+  static_assert(bits == 8, "x is quantized to 8 bits");
+  constexpr int lanes = group_size / 8;
+  const int k = tid.x * 8;
+  const bool valid = k < K;
+  const size_t offset = tid.y * size_t(K) + k;
+
+  // A group is either all valid or all past K, so the padding does not mix in
+  const vec<T, 8> v =
+      valid ? *(const device vec<T, 8>*)(x + offset) : vec<T, 8>(0);
+  float amax = 0;
+#pragma clang loop unroll(full)
+  for (int j = 0; j < 8; j++) {
+    amax = max(amax, abs(float(v[j])));
+  }
+#pragma clang loop unroll(full)
+  for (int o = 1; o < lanes; o *= 2) {
+    amax = max(amax, simd_shuffle_xor(amax, ushort(o)));
+  }
+  if (!valid) {
+    return;
+  }
+
+  const float inv = amax > 0 ? 127.0f / amax : 0.0f;
+  const float scale = amax / 127.0f;
+  vec<T, 8> r;
+#pragma clang loop unroll(full)
+  for (int j = 0; j < 8; j++) {
+    r[j] = static_cast<T>(rint(float(v[j]) * inv) * scale);
+  }
+  *(device vec<T, 8>*)(out + offset) = r;
+}

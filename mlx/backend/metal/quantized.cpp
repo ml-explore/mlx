@@ -718,6 +718,164 @@ void qmv_mma(
       MTL::Size(N / bn, 1, 1), MTL::Size(32, wk, 1));
 }
 
+// Quantizes the groups of x to signed 8 bits for qmm_int_nax. Returns the
+// values and, for each group, the scale and the sum of the dequantized values.
+// The rows are padded to a multiple of row_align.
+std::pair<array, array> quantize_rows_int8(
+    const array& x,
+    int group_size,
+    int bits,
+    int M,
+    int K,
+    int row_align,
+    metal::Device& d,
+    const Stream& s) {
+  auto& compute_encoder = metal::get_command_encoder(s);
+  int rows = ceildiv(M, row_align) * row_align;
+  array x_q({rows, K}, int8, nullptr, {});
+  x_q.set_data(allocator::malloc(x_q.nbytes()));
+  array x_s({rows, 2, K / group_size}, float32, nullptr, {});
+  x_s.set_data(allocator::malloc(x_s.nbytes()));
+  compute_encoder.add_temporaries({x_q, x_s});
+
+  std::string type_string = get_type_string(x.dtype());
+  std::string kname;
+  concatenate(
+      kname,
+      "affine_quantize_rows_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits);
+  auto kernel = get_qmm_nax_kernel_wrapped(
+      d, kname, "quantize_rows", "affine", type_string, group_size, bits);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(x, 0);
+  compute_encoder.set_output_array(x_q, 1);
+  compute_encoder.set_output_array(x_s, 2);
+  compute_encoder.set_bytes(K, 3);
+  // Padded rows are read but their outputs are not stored, so they stay unset
+  int tx = (K / 8 + 31) / 32 * 32;
+  compute_encoder.dispatch_threads(
+      MTL::Size(tx, M, 1), MTL::Size(std::min(tx, 256), 1, 1));
+  return {x_q, x_s};
+}
+
+// qmm_int_nax needs about 1.5 output tiles per GPU core (the K split fills the
+// rest), and groups of 64 or more values. Otherwise the fp-weight routes on the
+// dequantized x are as fast or faster.
+bool use_qmm_int_nax(
+    const array& x,
+    int M,
+    int N,
+    int K,
+    int group_size,
+    int bits) {
+  if (!metal::is_nax_available() || (bits != 4 && bits != 6 && bits != 8) ||
+      (group_size < 64) || (x.dtype() != float16 && x.dtype() != bfloat16) ||
+      (K % 64 != 0) || (N % 64 != 0) || (x.offset() % 16 != 0)) {
+    return false;
+  }
+  int cores = metal::gpu_core_count();
+  int tiles = (N / 64) * ceildiv(M, 64);
+  return (M >= 32) && (2 * tiles >= 3 * (cores > 0 ? cores : 16));
+}
+
+// K partitions for qmm_int_nax. Its threadgroups finish faster than the fp
+// ones, so it splits only up to about 4 threadgroups per GPU core.
+int qmm_int_nax_k_partitions(int M, int N, int K, int group_size) {
+  int tiles = (N / 64) * ceildiv(M, 64);
+  int k_align = std::max(64, group_size);
+  int cores = metal::gpu_core_count();
+  int max_tgs = cores > 0 ? 4 * cores : 64;
+  int split_k = 1;
+  while ((split_k < 8) && (tiles * split_k * 2 <= max_tgs) &&
+         (K % (split_k * 2 * k_align) == 0) && (K / (split_k * 2) >= 256)) {
+    split_k *= 2;
+  }
+  return split_k;
+}
+
+// x times transposed affine weights with 8-bit integer MMAs. x is quantized
+// to signed 8 bits first.
+void qmm_int_nax(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  constexpr int bm = 64;
+  int split_k = qmm_int_nax_k_partitions(M, N, K, group_size);
+  auto [x_q, x_s] = quantize_rows_int8(x, group_size, bits, M, K, bm, d, s);
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+  std::string type_string = get_type_string(x.dtype());
+  std::string kname;
+  concatenate(
+      kname,
+      split_k > 1 ? "affine_qmm_t_int_nax_splitk_" : "affine_qmm_t_int_nax_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits);
+  auto kernel = get_qmm_nax_kernel_wrapped(
+      d,
+      kname,
+      split_k > 1 ? "qmm_t_int_nax_splitk" : "qmm_t_int_nax",
+      "affine",
+      type_string,
+      group_size,
+      bits);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
+  compute_encoder.set_input_array(biases, 2);
+  compute_encoder.set_input_array(x_q, 3);
+  compute_encoder.set_input_array(x_s, 4);
+  compute_encoder.set_bytes(K, 6);
+  compute_encoder.set_bytes(N, 7);
+  compute_encoder.set_bytes(M, 8);
+  MTL::Size group_dims(128, 1, 1);
+  if (split_k == 1) {
+    compute_encoder.set_output_array(out, 5);
+    compute_encoder.dispatch_threadgroups(
+        MTL::Size(N / 64, ceildiv(M, bm), 1), group_dims);
+    return;
+  }
+
+  int k_partition_size = K / split_k;
+  int split_k_partition_stride = M * N;
+  array intermediate({split_k, M, N}, float32, nullptr, {});
+  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
+  compute_encoder.add_temporary(intermediate);
+  compute_encoder.set_output_array(intermediate, 5);
+  compute_encoder.set_bytes(k_partition_size, 9);
+  compute_encoder.set_bytes(split_k_partition_stride, 10);
+  compute_encoder.dispatch_threadgroups(
+      MTL::Size(N / 64, ceildiv(M, bm), split_k), group_dims);
+
+  auto accum_kname = "steel_gemm_splitk_accum_" + type_to_name(out) + "_" +
+      type_to_name(intermediate);
+  auto accum_kernel = get_steel_gemm_splitk_accum_kernel(
+      d, accum_kname, intermediate, out, false);
+  compute_encoder.set_compute_pipeline_state(accum_kernel);
+  compute_encoder.set_input_array(intermediate, 0);
+  compute_encoder.set_output_array(out, 1);
+  compute_encoder.set_bytes(split_k, 2);
+  compute_encoder.set_bytes(split_k_partition_stride, 3);
+  compute_encoder.set_bytes(N, 4);
+  compute_encoder.dispatch_threads(MTL::Size(N, M, 1), get_block_dims(N, M, 1));
+}
+
 void qvm_splitk(
     array x,
     const array& w,
@@ -2142,6 +2300,84 @@ void dispatch_qmv(
       mode);
 }
 
+// Routes a product with transposed quantized weights by its number of rows.
+void dispatch_qmm_t(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    int group_size,
+    int bits,
+    bool non_batched,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s,
+    QuantizationMode qmode) {
+  int vector_limit = get_qmv_batch_limit(K, N, d);
+  auto mode = quantization_mode_to_string(qmode);
+
+  // For few rows use qmv_mma when N/K is large enough.
+  if (non_batched && (M >= 6) && (M <= 16) &&
+      use_qmv_mma(x, w, scales, qmode, M, N, K, d)) {
+    qmv_mma(x, w, scales, out, group_size, bits, M, N, K, d, s, mode);
+    return;
+  }
+
+  // For mid rows use NAX qmm when output is large enough.
+  if (non_batched && (M >= 8) && (M < vector_limit) && (M * N >= 16384) &&
+      use_qmm_nax_splitk(x, biases, mode, M, N, K, group_size)) {
+    qmm_splitk_nax(
+        x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
+    return;
+  }
+
+  // It is a matrix matrix product.
+  if (M >= vector_limit) {
+    // Use split-K qmm for small M (non-batched only)
+    if (out.size() / M / N == 1) {
+      qmm_splitk(
+          x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
+      return;
+    }
+    qmm(x,
+        w,
+        scales,
+        biases,
+        std::nullopt,
+        out,
+        true,
+        group_size,
+        bits,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
+    return;
+  }
+
+  // Run of the mill qmv
+  dispatch_qmv(
+      x,
+      w,
+      scales,
+      biases,
+      std::nullopt,
+      out,
+      group_size,
+      bits,
+      M,
+      N,
+      K,
+      d,
+      s,
+      mode);
+}
+
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -2164,34 +2400,29 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int M = non_batched ? x.size() / K : x.shape(-2);
   int N = out.shape(-1);
 
-  int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
+  if (transpose_) {
+    dispatch_qmm_t(
+        x,
+        w,
+        scales,
+        biases,
+        out,
+        group_size_,
+        bits_,
+        non_batched,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode_);
+    return;
+  }
+
   auto mode = quantization_mode_to_string(mode_);
 
-  // For few rows use qmv_mma when N/K is large enough.
-  if (transpose_ && non_batched && (M >= 6) && (M <= 16) &&
-      use_qmv_mma(x, w, scales, mode_, M, N, K, d)) {
-    qmv_mma(x, w, scales, out, group_size_, bits_, M, N, K, d, s, mode);
-    return;
-  }
-
-  // For mid rows use NAX qmm when output is large enough.
-  if (transpose_ && non_batched && (M >= 8) && (M < vector_limit) &&
-      (M * N >= 16384) &&
-      use_qmm_nax_splitk(x, biases, mode, M, N, K, group_size_)) {
-    qmm_splitk_nax(
-        x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
-    return;
-  }
-
   // It is a matrix matrix product.
-  if (M >= vector_limit) {
-    // Use split-K qmm for small M with transposed weights (non-batched only)
-    int B = out.size() / M / N;
-    if (transpose_ && B == 1) {
-      qmm_splitk(
-          x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
-      return;
-    }
+  if (M >= 4) {
     qmm(x,
         w,
         scales,
@@ -2199,26 +2430,6 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         std::nullopt,
         out,
         transpose_,
-        group_size_,
-        bits_,
-        M,
-        N,
-        K,
-        d,
-        s,
-        mode);
-    return;
-  }
-
-  // Run of the mill qmv
-  if (transpose_) {
-    dispatch_qmv(
-        x,
-        w,
-        scales,
-        biases,
-        std::nullopt,
-        out,
         group_size_,
         bits_,
         M,
@@ -2371,6 +2582,99 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       mode);
 }
 
+// Quantizes w with the affine scheme. Returns w, scales and biases.
+std::vector<array>
+quantize_affine(const array& w, int group_size, int bits, const Stream& s) {
+  auto wq_shape = w.shape();
+  wq_shape.back() = w.shape(-1) * bits / 32;
+  auto scales_shape = w.shape();
+  scales_shape.back() = w.shape(-1) / group_size;
+  std::vector<array> outputs{
+      array(wq_shape, uint32, nullptr, {}),
+      array(scales_shape, w.dtype(), nullptr, {}),
+      array(scales_shape, w.dtype(), nullptr, {})};
+  metal::get_command_encoder(s).add_temporaries(outputs);
+  quantize_impl(
+      {w}, outputs, QuantizationMode::Affine, group_size, bits, false, s);
+  return outputs;
+}
+
+// Affine qqmm quantizes x to signed 8 bits, with one scale per group, whatever
+// the bits of w.
+void qqmm_affine(
+    const std::vector<array>& inputs,
+    array& out,
+    int group_size,
+    int bits,
+    metal::Device& d,
+    const Stream& s) {
+  array x = ensure_row_contiguous_matrix(inputs[0], d, s);
+  std::vector<array> w;
+  if (inputs[1].dtype() == uint32) {
+    for (int i = 1; i < 4; i++) {
+      w.push_back(ensure_row_contiguous_matrix(inputs[i], d, s));
+    }
+  } else {
+    w = quantize_affine(inputs[1], group_size, bits, s);
+  }
+  int K = x.shape(-1);
+  int M = x.size() / K;
+  int N = out.shape(-1);
+
+  if (use_qmm_int_nax(x, M, N, K, group_size, bits)) {
+    qmm_int_nax(x, w[0], w[1], w[2], out, group_size, bits, M, N, K, d, s);
+    return;
+  }
+
+  // Use the quantized_matmul routes on the dequantized x
+  if (x.offset() % (8 * x.itemsize()) != 0) {
+    x = contiguous_copy_gpu(x, s);
+    metal::get_command_encoder(s).add_temporary(x);
+  }
+  array x_hat(allocator::malloc(x.nbytes()), x.shape(), x.dtype());
+  auto& compute_encoder = metal::get_command_encoder(s);
+  compute_encoder.add_temporary(x_hat);
+  std::string type_string = get_type_string(x.dtype());
+  std::string kname;
+  concatenate(
+      kname,
+      "affine_int8_quantize_dequantize_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_8");
+  auto kernel = get_quantized_kernel_wrapped(
+      d,
+      kname,
+      "int8_quantize_dequantize",
+      "affine",
+      type_string,
+      group_size,
+      8);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(x, 0);
+  compute_encoder.set_output_array(x_hat, 1);
+  compute_encoder.set_bytes(K, 2);
+  int tx = (K / 8 + 31) / 32 * 32;
+  compute_encoder.dispatch_threads(
+      MTL::Size(tx, M, 1), MTL::Size(std::min(tx, 256), 1, 1));
+  dispatch_qmm_t(
+      x_hat,
+      w[0],
+      w[1],
+      w[2],
+      out,
+      group_size,
+      bits,
+      true,
+      M,
+      N,
+      K,
+      d,
+      s,
+      QuantizationMode::Affine);
+}
+
 void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -2380,6 +2684,11 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto mode = quantization_mode_to_string(mode_);
 
   out.set_data(allocator::malloc(out.nbytes()));
+
+  if (mode_ == QuantizationMode::Affine) {
+    qqmm_affine(inputs, out, group_size_, bits_, d, s);
+    return;
+  }
 
   // - 2 inputs: x, w (non-quantized w)
   // - 3 inputs: x, w, scales_w (quantized w)
@@ -2413,8 +2722,27 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int K = x.shape(-1);
   int M = non_batched ? x.size() / K : x.shape(-2);
   int N = out.shape(-1);
-  if (has_global_scales && w_quantized && non_batched &&
-      x.dtype() == bfloat16 && K % 32 == 0 &&
+
+  // Use the quantized_matmul routes, which do not take a global scale.
+  if (!has_global_scales) {
+    dispatch_qmm_t(
+        x,
+        w_q,
+        scales_w,
+        std::nullopt,
+        out,
+        group_size_,
+        bits_,
+        non_batched,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode_);
+    return;
+  }
+  if (w_quantized && non_batched && x.dtype() == bfloat16 && K % 32 == 0 &&
       M >= get_qmv_batch_limit(K, N, d)) {
     qmm(x,
         w_q,
