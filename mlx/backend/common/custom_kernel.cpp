@@ -1,9 +1,8 @@
 // Copyright © 2024 Apple Inc.
 
+#include <fmt/format.h>
 #include <iostream>
-#include <mutex>
 #include <sstream>
-#include <unordered_map>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/metal.h"
@@ -200,55 +199,37 @@ std::string write_template(
   return template_def.str();
 }
 
-std::string make_template_hash(const std::string& template_def) {
-  std::string template_hash;
-  template_hash.reserve(template_def.size());
-  for (size_t i = 0; i < template_def.size(); ++i) {
-    auto c = template_def[i];
-    if (c == '<' || c == '>' || c == '-') {
-      template_hash += '_';
-    } else if (
-        c == ',' && i + 1 < template_def.size() && template_def[i + 1] == ' ') {
-      template_hash += '_';
-      ++i;
-    } else {
-      template_hash += c;
-    }
-  }
-  template_hash.pop_back();
-  return template_hash;
-}
-
-// Generated source and its hash per kernel variant. Each variant is generated
-// and hashed one time, not on each call.
-struct GeneratedSource {
-  std::string source;
-  std::size_t hash;
-};
-
-class GeneratedSourceCache {
- public:
-  // Entries are never erased, and rehashing does not move the elements of an
-  // unordered_map, so the returned reference stays valid.
-  template <typename F>
-  const GeneratedSource& get(const std::string& name, F make) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    auto it = cache_.find(name);
-    if (it != cache_.end()) {
-      return it->second;
-    }
-    auto source = make();
-    auto hash = std::hash<std::string>{}(source);
-    return cache_.emplace(name, GeneratedSource{std::move(source), hash})
-        .first->second;
-  }
-
- private:
-  std::mutex mutex_;
-  std::unordered_map<std::string, GeneratedSource> cache_;
-};
-
 } // namespace
+
+std::string template_arguments_hash(
+    const std::vector<std::pair<std::string, TemplateArg>>& template_args) {
+  if (template_args.empty()) {
+    return "";
+  }
+
+  std::string hash;
+  hash.reserve(512);
+
+  for (const auto& [name, arg] : template_args) {
+    if (std::holds_alternative<int>(arg)) {
+      std::string number = std::to_string(std::get<int>(arg));
+      for (char& c : number) {
+        if (c == '-') {
+          c = '_';
+        }
+      }
+      hash += "_";
+      hash += number;
+    } else if (std::holds_alternative<bool>(arg)) {
+      hash += (std::get<bool>(arg)) ? "_t" : "_f";
+    } else if (std::holds_alternative<Dtype>(arg)) {
+      hash += "_";
+      hash += get_type_string(std::get<Dtype>(arg));
+    }
+  }
+
+  return hash;
+}
 
 CustomKernelFunction metal_kernel(
     const std::string& name,
@@ -301,9 +282,8 @@ CustomKernelFunction metal_kernel(
     }
   }
 
-  auto generated = std::make_shared<GeneratedSourceCache>();
-
   return [=,
+          cache = std::make_shared<GeneratedSourceCache>(),
           shape_infos = std::move(shape_infos),
           attributes = std::move(attributes)](
              const std::vector<array>& inputs,
@@ -331,14 +311,8 @@ CustomKernelFunction metal_kernel(
 
     auto s = resolve_metal_kernel_stream(s_);
 
-    std::string kernel_name = "custom_kernel_" + name;
-    std::string template_def = "";
-    if (!template_args.empty()) {
-      template_def = write_template(template_args);
-      auto template_hash = make_template_hash(template_def);
-      kernel_name += "_";
-      kernel_name += template_hash;
-    }
+    std::string kernel_name =
+        "custom_kernel_" + name + template_arguments_hash(template_args);
 
     // The generated source depends on the dtypes of the inputs and outputs
     // and on how each input is passed (see `write_signature`). Include them
@@ -357,17 +331,7 @@ CustomKernelFunction metal_kernel(
       kernel_name += get_type_string(dtype);
     }
 
-    // The signature also depends on the template parameter names and types.
-    // The kernel name does not contain them (int 1 and bool true are both 1).
-    std::string cache_key = kernel_name;
-    for (const auto& [param, arg] : template_args) {
-      cache_key += ":";
-      cache_key += param;
-      cache_key += ":";
-      cache_key += std::to_string(arg.index());
-    }
-
-    const auto& entry = generated->get(cache_key, [&] {
+    const auto& [kernel_source, source_hash] = cache->get(kernel_name, [&] {
       std::string kernel_source = write_signature(
           kernel_name,
           header,
@@ -382,7 +346,7 @@ CustomKernelFunction metal_kernel(
           atomic_outputs);
 
       if (!template_args.empty()) {
-        template_def = kernel_name + template_def;
+        std::string template_def = kernel_name + write_template(template_args);
         kernel_source += "\ntemplate [[host_name(\"";
         kernel_source += kernel_name;
         kernel_source += "\")]] [[kernel]] decltype(";
@@ -391,10 +355,8 @@ CustomKernelFunction metal_kernel(
         kernel_source += template_def;
         kernel_source += ";\n";
       }
-
       return kernel_source;
     });
-    const std::string& kernel_source = entry.source;
 
     if (verbose) {
       std::cout << "Generated source code for `" << name << "`:" << std::endl
@@ -410,7 +372,7 @@ CustomKernelFunction metal_kernel(
             s,
             std::move(kernel_name),
             kernel_source,
-            entry.hash,
+            source_hash,
             grid,
             threadgroup,
             shape_infos,

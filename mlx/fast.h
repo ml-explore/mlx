@@ -3,10 +3,9 @@
 #pragma once
 
 #include <optional>
-#include <variant>
 
 #include "mlx/api.h"
-#include "mlx/backend/common/metal_kernel.h"
+#include "mlx/backend/common/custom_kernel.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::fast {
@@ -75,9 +74,6 @@ MLX_API std::vector<array> gated_delta_update(
     const std::optional<array>& initial_state = std::nullopt,
     const std::optional<array>& mask = std::nullopt,
     StreamOrDevice s = {});
-
-using TemplateArg = std::variant<int, bool, Dtype>;
-using ScalarArg = std::variant<bool, int, float>;
 
 using CustomKernelFunction = std::function<std::vector<array>(
     const std::vector<array>&,

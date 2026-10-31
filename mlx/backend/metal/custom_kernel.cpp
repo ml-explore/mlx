@@ -1,6 +1,6 @@
 // Copyright © 2024 Apple Inc.
 
-#include "mlx/backend/common/metal_kernel.h"
+#include "mlx/backend/common/custom_kernel.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/utils.h"
