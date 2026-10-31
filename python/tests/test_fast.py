@@ -1325,7 +1325,8 @@ class TestFast(mlx_tests.MLXTestCase):
             name="double_it",
             input_names=["inp"],
             output_names=["out"],
-            source="out[thread_position_in_grid.x] = inp[thread_position_in_grid.x] * 2.0f;",
+            source="out[thread_position_in_grid.x] = "
+            + "inp[thread_position_in_grid.x] * 2.0f;",
         )
 
         def body(a):
@@ -1359,7 +1360,7 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(grad_out, mx.full((8,), 2.0)))
 
         _, jvp_out = mx.jvp(f, [x], [x])
-        self.assertTrue(mx.allclose(jvp_out, mx.full((8,), 2.0)))
+        self.assertTrue(mx.allclose(jvp_out[0], mx.full((8,), 2.0)))
 
         vmap_out = mx.vmap(f)(mx.ones((4, 8)))
         self.assertEqual(vmap_out.shape, (4, 8))
