@@ -1264,6 +1264,11 @@ class TestConv(mlx_tests.MLXTestCase):
                 dilate(x, dilation), w, stride=stride, padding=padding
             )
             self.assertEqual(out.shape, expected.shape)
+            print(mx.allclose(out, expected, atol=1e-4, rtol=1e-4))
+            print(mx.allclose(out, expected, atol=1e-3, rtol=1e-3))
+            print(mx.allclose(out, expected, atol=1e-2, rtol=1e-2))
+            print(out)
+            print(expected)
             self.assertTrue(mx.allclose(out, expected, atol=1e-4, rtol=1e-4))
             expected = mx.grad(dilated_loss, argnums=(0, 1))(x, w, *args)
             grads = mx.grad(conv_loss, argnums=(0, 1))(x, w, *args)
