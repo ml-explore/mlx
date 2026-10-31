@@ -23,29 +23,6 @@ constexpr const char* default_header = R"(
 
 )";
 
-std::string template_arguments_hash(
-    const std::vector<std::pair<std::string, TemplateArg>>& template_args) {
-  if (template_args.empty()) {
-    return "";
-  }
-
-  std::string hash;
-  hash.reserve(512);
-
-  for (const auto& [name, arg] : template_args) {
-    if (std::holds_alternative<int>(arg)) {
-      hash += fmt::format("_{}", std::get<int>(arg));
-    } else if (std::holds_alternative<bool>(arg)) {
-      hash += (std::get<bool>(arg)) ? "_t" : "_f";
-    } else if (std::holds_alternative<Dtype>(arg)) {
-      hash += "_";
-      hash += get_type_string(std::get<Dtype>(arg));
-    }
-  }
-
-  return hash;
-}
-
 std::string build_kernel(
     const std::string& func_name,
     const std::string& header,
@@ -161,7 +138,9 @@ CustomKernelFunction cuda_kernel(
     shape_infos.push_back(shape_info);
   }
 
-  return [=, shape_infos = std::move(shape_infos)](
+  return [=,
+          cache = std::make_shared<GeneratedSourceCache>(),
+          shape_infos = std::move(shape_infos)](
              const std::vector<array>& inputs,
              const std::vector<Shape>& output_shapes,
              const std::vector<Dtype>& output_dtypes,
@@ -201,16 +180,19 @@ CustomKernelFunction cuda_kernel(
 
     std::string kernel_name =
         "custom_kernel_" + name + template_arguments_hash(template_args);
-    std::string kernel_source = build_kernel(
-        kernel_name,
-        header,
-        source,
-        input_names,
-        inputs,
-        output_names,
-        output_dtypes,
-        template_args,
-        shape_infos);
+
+    const auto& [kernel_source, source_hash] = cache->get(kernel_name, [&] {
+      return build_kernel(
+          kernel_name,
+          header,
+          source,
+          input_names,
+          inputs,
+          output_names,
+          output_dtypes,
+          template_args,
+          shape_infos);
+    });
 
     if (verbose) {
       std::cout << "Generated source code for `" << kernel_name
@@ -226,7 +208,8 @@ CustomKernelFunction cuda_kernel(
         std::make_shared<CustomKernel>(
             s,
             std::move(kernel_name),
-            std::move(kernel_source),
+            kernel_source,
+            source_hash,
             grid,
             threadgroup,
             shape_infos,
@@ -261,6 +244,7 @@ std::vector<array> precompiled_cuda_kernel(
           to_stream(s),
           name,
           compiled_source,
+          std::hash<std::string>{}(compiled_source),
           grid,
           threadgroup,
           shape_infos,
@@ -310,8 +294,7 @@ void CustomKernel::eval_gpu(
   // Compile the custom kernel
   std::string kernel_name =
       (is_precompiled_) ? name_ : "mlx::core::cu::" + name_;
-  std::string module_name =
-      fmt::format("{}_{:x}", name_, std::hash<std::string>{}(source_));
+  std::string module_name = fmt::format("{}_{:x}", name_, source_hash_);
   cu::JitModule& mod = cu::get_jit_module(
       encoder.device(),
       module_name,
