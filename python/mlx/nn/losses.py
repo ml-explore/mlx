@@ -95,6 +95,7 @@ def cross_entropy(
             f"Targets shape {targets.shape} does not match logits shape {logits.shape}."
         )
 
+    # TODO: also fix softmax collapse in use use_fast path
     use_fast = (
         mx.default_device() == mx.gpu
         and not targets_as_probs
@@ -109,23 +110,30 @@ def cross_entropy(
     else:
         logits = logits - mx.stop_gradient(mx.max(logits, axis=axis, keepdims=True))
 
-        if targets_as_probs:
-            score = mx.sum(logits * targets, axis=axis)
-        else:
-            score = mx.take_along_axis(
-                logits, mx.expand_dims(targets, axis), axis
-            ).squeeze(axis)
+    if targets_as_probs:
+        # TODO: verify softmax cancellation issue in Soft-target cross-entropy
+        score = mx.sum(logits * targets, axis=axis)
+        target_idx = mx.argmax(targets, axis=axis)
+    else:
+        score = mx.take_along_axis(
+            logits, mx.expand_dims(targets, axis), axis
+        ).squeeze(axis)
+        target_idx = mx.expand_dims(targets, axis)
+    
+    indices = mx.arange(logits.shape[axis])
+    other_logits = mx.where(
+            indices == target_idx,
+            -float("inf"),
+            logits,
+        )
 
-        logsumexp_logits = mx.logsumexp(logits, axis=axis)
-        if label_smoothing > 0:
-            adjusted_score = (1 - label_smoothing) * score
+    relative_logits = other_logits - score if targets_as_probs else mx.expand_dims(score, axis)
 
-            mean_logits = logits.mean(axis=axis)
-            smoothed_loss = -mean_logits * label_smoothing
+    logsumexp_logits = mx.logsumexp(relative_logits, axis=axis)
+    loss = mx.logaddexp(0.0, logsumexp_logits) # softplus
 
-            loss = logsumexp_logits - adjusted_score + smoothed_loss
-        else:
-            loss = logsumexp_logits - score
+    if label_smoothing > 0:
+        loss = loss + label_smoothing * (score - logits.mean(axis=axis))
 
     # Apply weights if provided
     if weights is not None:
