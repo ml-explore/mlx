@@ -175,6 +175,7 @@ In detail:
    value_and_grad
    quantize
    average_gradients
+   utils.checkpoint
 
 .. toctree::
 

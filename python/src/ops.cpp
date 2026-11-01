@@ -2918,7 +2918,7 @@ void init_ops(nb::module_& m) {
       "correction"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def var(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, stream: StreamOrDevice = None) -> array"),
+          "def var(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, correction: int | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Compute the variance(s) over the given axes.
 
@@ -2931,6 +2931,8 @@ void init_ops(nb::module_& m) {
               singleton dimensions, defaults to `False`.
             ddof (int, optional): The divisor to compute the variance
               is ``N - ddof``, defaults to 0.
+            correction (int, optional): If set, overrides ``ddof``.
+              Default: ``None``.
 
         Returns:
             array: The output array of variances.
@@ -2954,7 +2956,7 @@ void init_ops(nb::module_& m) {
       "correction"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def std(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, stream: StreamOrDevice = None) -> array"),
+          "def std(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, correction: int | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Compute the standard deviation(s) over the given axes.
 
@@ -2967,6 +2969,8 @@ void init_ops(nb::module_& m) {
               singleton dimensions, defaults to `False`.
             ddof (int, optional): The divisor to compute the variance
               is ``N - ddof``, defaults to 0.
+            correction (int, optional): If set, overrides ``ddof``.
+              Default: ``None``.
 
         Returns:
             array: The output array of standard deviations.
@@ -5077,7 +5081,6 @@ void init_ops(nb::module_& m) {
 
         Returns:
             array: The result of the multiplication of quantized ``x`` with quantized ``w``.
-            needed).
       )pbdoc");
   m.def(
       "segmented_mm",
@@ -6265,7 +6268,7 @@ void init_ops(nb::module_& m) {
         If ``w`` is expected to receive gradients, it must be provided in
         non-quantized form.
 
-        If ``x`` and `w`` are not quantized, their data types must be ``float32``,
+        If ``x`` and ``w`` are not quantized, their data types must be ``float32``,
         ``float16``, or ``bfloat16``.
         If ``w`` is quantized, it must be packed in unsigned integers.
         ``global_scale_x`` and ``global_scale_w`` are only used for ``nvfp4`` quantization.
@@ -6284,13 +6287,12 @@ void init_ops(nb::module_& m) {
         mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
           Supported modes are ``nvfp4`` and ``mxfp8``. See the
           :ref:`table of quantization modes <quantize-modes>` for details.
-        global_scale (array, optional): The per-input float32 scale used for x
+        global_scale_x (array, optional): The per-input float32 scale used for x
             with ``"nvfp4"`` quantization. Default: ``None``.
         global_scale_w (array, optional): The per-input float32 scale used for w
             with ``"nvfp4"`` quantization. Default: ``None``.
       Returns:
         array: The result of the multiplication of quantized ``x`` with quantized ``w``.
-        needed).
   )pbdoc");
   m.def(
       "from_fp8",

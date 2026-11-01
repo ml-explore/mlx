@@ -13,6 +13,7 @@ Devices and Streams
    ThreadLocalStream
    default_device
    set_default_device
+   is_available
    default_stream
    new_stream
    new_thread_local_stream

@@ -414,18 +414,27 @@ void init_fast(nb::module_& parent_module) {
       "mask"_a = nb::none(), // optional, defaults to None
       "stream"_a = nb::none(), // optional, defaults to None
       R"(
-            Chunked gated delta network forward pass.
+            Gated delta network forward pass.
+
+            The number of value heads ``Hv`` must be a multiple of the number
+            of query and key heads ``Hk``.
 
             Args:
-                q: Queries [B, T, Hk, Dk]
-                k: Keys [B, T, Hk, Dk]
-                v: Values [B, T, Hv, Dv]
-                gamma: Decay rate in linear space [B, T, Hv]
-                beta: Delta update rates [B, T, Hv]
-                initial_state: Optional initial hidden state [B, T, Hk, Dv]
-                mask: Optional
+                q (array): Queries with shape ``[B, T, Hk, Dk]``.
+                k (array): Keys with shape ``[B, T, Hk, Dk]``.
+                v (array): Values with shape ``[B, T, Hv, Dv]``.
+                gamma (array): Decay rates in linear space with shape
+                    ``[B, T, Hv]`` or ``[B, T, Hv, Dk]``.
+                beta (array): Delta update rates with shape ``[B, T, Hv]``.
+                initial_state (array, optional): Initial state with shape
+                    ``[B, Hv, Dv, Dk]``. Default: zeros.
+                mask (array, optional): Boolean mask with shape ``[B, T]``.
+                    False entries leave the state unchanged and produce zero
+                    output. Default: ``None``.
+
             Returns:
-                Tuple of (output [B, T, Hv, Dv], final_state [B, T, Hk, Dv])
+                list(array): The output with shape ``[B, T, Hv, Dv]`` and the
+                final state with shape ``[B, Hv, Dv, Dk]`` and dtype ``float32``.
         )");
 
   m.def(
