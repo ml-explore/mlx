@@ -86,6 +86,24 @@
   instantiate_grouped_qmm(affine_gather_qmm_rhs_nax, type, group_size, bits, 1, 64, 64)
 
 ///////////////////////////////////////////////////////////////////////////////
+// affine_qmv_nax
+///////////////////////////////////////////////////////////////////////////////
+
+#define instantiate_qmv_nax(type, group_size, bits)                            \
+  instantiate_kernel(                                                          \
+      "affine_qmv_nax_" #type "_gs_" #group_size "_b_" #bits "_wk_8_bn_32",    \
+      affine_qmv_nax,                                                          \
+      type,                                                                    \
+      group_size,                                                              \
+      bits,                                                                    \
+      8,                                                                       \
+      32)
+
+#define instantiate_qmv_nax_all(group_size, bits) \
+  instantiate_qmv_nax(float16_t, group_size, bits)  \
+  instantiate_qmv_nax(bfloat16_t, group_size, bits)
+
+///////////////////////////////////////////////////////////////////////////////
 // Instantiation
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -107,7 +125,12 @@
   instantiate_quantized_all(group_size, 4)         \
   instantiate_quantized_all(group_size, 5)         \
   instantiate_quantized_all(group_size, 6)         \
-  instantiate_quantized_all(group_size, 8)
+  instantiate_quantized_all(group_size, 8)         \
+  instantiate_qmv_nax_all(group_size, 3)           \
+  instantiate_qmv_nax_all(group_size, 4)           \
+  instantiate_qmv_nax_all(group_size, 5)           \
+  instantiate_qmv_nax_all(group_size, 6)           \
+  instantiate_qmv_nax_all(group_size, 8)
 
 instantiate_quantized_all_bits(32)
 instantiate_quantized_all_bits(64)

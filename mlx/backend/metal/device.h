@@ -271,4 +271,7 @@ NS::SharedPtr<NS::AutoreleasePool> new_scoped_memory_pool();
 
 bool is_nax_available();
 
+// Number of GPU cores, or 0 when it is not known.
+int gpu_core_count();
+
 } // namespace mlx::core::metal

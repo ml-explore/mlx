@@ -635,14 +635,13 @@ inline bool use_qmv_mma(
     const array& w,
     const array& scales,
     QuantizationMode mode,
+    int group_size,
+    int bits,
     int M,
     int N,
     int K,
     metal::Device& d) {
   if (K % 128 != 0) {
-    return false;
-  }
-  if (mode == QuantizationMode::Affine) {
     return false;
   }
   // Require aligned vector load.
@@ -651,21 +650,36 @@ inline bool use_qmv_mma(
     return false;
   }
   // Route for large K/N.
-  if (metal::is_nax_available()) {
-    return (env::enable_tf32() || x.dtype() != float32) && (N >= 2048) &&
-        (K >= 2048) && (N % 32 == 0);
+  bool nax = metal::is_nax_available();
+  if (mode == QuantizationMode::Affine) {
+    // Only qmv_nax reads affine weights, with 3 to 8 bits.
+    return nax && (bits >= 3 && bits != 7) && (group_size >= 32) &&
+        (x.dtype() == float16 || x.dtype() == bfloat16) && (N >= 512) &&
+        (K >= 1024) && (N % 32 == 0);
+  } else { // fp quantization
+    if (nax) {
+      // Below 2048, nvfp4 with few rows is faster on qmv_wide, which runs for
+      // M < 8 or M * N < 16384.
+      bool nvfp4_wide = (mode == QuantizationMode::Nvfp4) &&
+          (M < 8 || (M < 12 && M * N < 16384));
+      int min_size = nvfp4_wide ? 2048 : 1024;
+      return (env::enable_tf32() || x.dtype() != float32) && (N >= min_size) &&
+          (K >= min_size) && (N % 32 == 0);
+    } else { // non-nax
+      if (d.get_architecture().back() == 'd') {
+        return (N >= 4096) && (K >= 4096) && (N % 16 == 0);
+      }
+      return (N >= 512) && (K >= 512) &&
+          (int64_t(N) * K >= (int64_t(1) << 22)) && (N % 16 == 0);
+    }
   }
-  if (d.get_architecture().back() == 'd') {
-    return (N >= 4096) && (K >= 4096) && (N % 16 == 0);
-  }
-  return (N >= 512) && (K >= 512) && (int64_t(N) * K >= (int64_t(1) << 22)) &&
-      (N % 16 == 0);
 }
 
 void qmv_mma(
     const array& x,
     const array& w,
     const array& scales,
+    const std::optional<array>& biases,
     array& out,
     int group_size,
     int bits,
@@ -707,13 +721,17 @@ void qmv_mma(
 
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
-  compute_encoder.set_input_array(w, 0);
-  compute_encoder.set_input_array(scales, 1);
-  compute_encoder.set_input_array(x, 2);
-  compute_encoder.set_output_array(out, 3);
-  compute_encoder.set_bytes(K, 4);
-  compute_encoder.set_bytes(N, 5);
-  compute_encoder.set_bytes(M, 6);
+  int c = 0;
+  compute_encoder.set_input_array(w, c++);
+  compute_encoder.set_input_array(scales, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
+  }
+  compute_encoder.set_input_array(x, c++);
+  compute_encoder.set_output_array(out, c++);
+  compute_encoder.set_bytes(K, c++);
+  compute_encoder.set_bytes(N, c++);
+  compute_encoder.set_bytes(M, c++);
   compute_encoder.dispatch_threadgroups(
       MTL::Size(N / bn, 1, 1), MTL::Size(32, wk, 1));
 }
@@ -919,8 +937,8 @@ bool use_qmm_t_nax_staged(
     const array& x,
     bool transpose,
     bool aligned_n,
-    const std::string& mode) {
-  return transpose && aligned_n && (mode == "affine") &&
+    bool has_global_scale) {
+  return transpose && aligned_n && !has_global_scale &&
       (x.dtype() == float16 || x.dtype() == bfloat16) && (x.offset() % 8 == 0);
 }
 
@@ -952,7 +970,7 @@ void qmm_nax(
   int bk = 64;
 
   bool aligned_n = transpose && (N % bn == 0);
-  if (use_qmm_t_nax_staged(x, transpose, aligned_n, mode)) {
+  if (use_qmm_t_nax_staged(x, transpose, aligned_n, global_scale.has_value())) {
     wm = 4;
     wn = 1;
     bm = 64;
@@ -1255,21 +1273,11 @@ void qmm(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-bool use_qmm_nax_splitk(
-    const array& x,
-    const std::optional<array>& biases,
-    const std::string& mode,
-    int M,
-    int N,
-    int K,
-    int group_size) {
-  if (!biases) {
-    return false;
-  }
-  // Use split-k for transposed affine weights with aligned N and K.
+bool use_qmm_nax_splitk(const array& x, int M, int N, int K, int group_size) {
+  // Use split-k for transposed weights with aligned N and K.
   if (!metal::is_nax_available() ||
-      (x.dtype() == float32 && !env::enable_tf32() || (mode != "affine") ||
-       (N % 64 != 0) || (K % 64 != 0) || (K % group_size != 0))) {
+      (x.dtype() == float32 && !env::enable_tf32() || (N % 64 != 0) ||
+       (K % 64 != 0) || (K % group_size != 0))) {
     return false;
   }
   // A two-way K split must fit within 256 threadgroups.
@@ -1282,10 +1290,15 @@ bool use_qmm_nax_splitk(
 int qmm_nax_k_partitions(int M, int N, int K, int group_size) {
   int tiles = (N / 64) * ceildiv(M, 64);
   int k_align = std::max(64, group_size);
+  int max_tgs = 256; // fallback
+  if (int cores = metal::gpu_core_count(); cores > 0) {
+    // About 6 threadgroups per GPU core, more for long K, at most 256.
+    max_tgs = std::min(256, 6 * cores * std::max(K, 2048) / 2048);
+  }
   int split_k = 1;
-  // Double up to 4 while the grid stays within 256 threadgroups and every
+  // Double up to 4 while the grid stays within max_tgs threadgroups and every
   // partition keeps at least 256 columns.
-  while ((split_k < 4) && (tiles * split_k * 2 <= 256) &&
+  while ((split_k < 4) && (tiles * split_k * 2 <= max_tgs) &&
          (K % (split_k * 2 * k_align) == 0) && (K / (split_k * 2) >= 256)) {
     split_k *= 2;
   }
@@ -1322,7 +1335,7 @@ void qmm_splitk_nax(
   int wn = 2;
   MTL::Size group_dims(32, wn, wm);
 
-  if (use_qmm_t_nax_staged(x, true, true, mode)) {
+  if (use_qmm_t_nax_staged(x, true, true, false)) {
     bm = 64;
     wm = 4;
     wn = 1;
@@ -1398,7 +1411,10 @@ void qmm_splitk_nax(
   int c = 0;
   compute_encoder.set_input_array(w, c++);
   compute_encoder.set_input_array(scales, c++);
-  compute_encoder.set_input_array(*biases, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c);
+  }
+  c++;
   compute_encoder.set_input_array(x, c++);
   compute_encoder.set_output_array(intermediate, c++);
   compute_encoder.set_bytes(K, c++);
@@ -1438,7 +1454,7 @@ void qmm_splitk(
     const Stream& s,
     const std::string& mode) {
   // The split-K NAX route.
-  if (use_qmm_nax_splitk(x, biases, mode, M, N, K, group_size)) {
+  if (use_qmm_nax_splitk(x, M, N, K, group_size)) {
     return qmm_splitk_nax(
         x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
   }
@@ -2169,15 +2185,14 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // For few rows use qmv_mma when N/K is large enough.
   if (transpose_ && non_batched && (M >= 6) && (M <= 16) &&
-      use_qmv_mma(x, w, scales, mode_, M, N, K, d)) {
-    qmv_mma(x, w, scales, out, group_size_, bits_, M, N, K, d, s, mode);
+      use_qmv_mma(x, w, scales, mode_, group_size_, bits_, M, N, K, d)) {
+    qmv_mma(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
     return;
   }
 
   // For mid rows use NAX qmm when output is large enough.
   if (transpose_ && non_batched && (M >= 8) && (M < vector_limit) &&
-      (M * N >= 16384) &&
-      use_qmm_nax_splitk(x, biases, mode, M, N, K, group_size_)) {
+      (M * N >= 16384) && use_qmm_nax_splitk(x, M, N, K, group_size_)) {
     qmm_splitk_nax(
         x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
     return;
