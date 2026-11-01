@@ -189,3 +189,61 @@ TEST_CASE("test export import with metadata") {
   }
   CHECK(import_function(file_path).metadata() == metadata);
 }
+
+TEST_CASE("test import rejects mismatched trace input arrays") {
+  // .mlxfn stores trace_input_ids and trace_inputs as parallel arrays. A
+  // crafted file with fewer ids than inputs makes the import loop index the
+  // ids vector out of bounds (an empty ids vector even reads through a null
+  // data pointer), so the counts must be validated before the first lookup.
+  std::vector<char> blob;
+  auto push_u64 = [&](uint64_t v) {
+    for (int i = 0; i < 8; i++) {
+      blob.push_back((v >> (8 * i)) & 0xff);
+    }
+  };
+  auto push_i32 = [&](int32_t v) {
+    for (int i = 0; i < 4; i++) {
+      blob.push_back((v >> (8 * i)) & 0xff);
+    }
+  };
+  auto push_string = [&](const std::string& s) {
+    push_u64(s.size());
+    blob.insert(blob.end(), s.begin(), s.end());
+  };
+
+  // Header + one function whose trace inputs are preceded by n_ids input
+  // ids. Each trace input is a scalar float32 array (shape [] + dtype).
+  auto write_file = [&](const std::string& name, size_t n_ids, size_t n_inputs) {
+    blob.clear();
+    push_string("x"); // mlx version
+    push_i32(1); // function count
+    blob.push_back(0); // shapeless
+    push_string(""); // metadata
+    push_u64(0); // kwarg keys
+    push_u64(n_ids);
+    for (size_t i = 0; i < n_ids; i++) {
+      push_u64(i + 1);
+    }
+    push_u64(n_inputs);
+    for (size_t i = 0; i < n_inputs; i++) {
+      push_u64(0); // scalar shape
+      push_i32(10); // dtype val float32
+      blob.push_back(4); // dtype size
+    }
+    push_u64(0); // trace output ids
+    push_u64(0); // tape size
+    std::string path = get_temp_file(name);
+    io::FileWriter out(path);
+    out.open();
+    out.write(blob.data(), blob.size());
+    return path;
+  };
+
+  // Empty ids with one input crashes without the count validation
+  auto path = write_file("evil_input_ids_0.mlxfn", 0, 1);
+  CHECK_THROWS_AS(import_function(path), std::runtime_error);
+
+  // More ids than inputs is likewise corrupt and must be rejected
+  path = write_file("evil_input_ids_2.mlxfn", 2, 1);
+  CHECK_THROWS_AS(import_function(path), std::runtime_error);
+}
