@@ -31,3 +31,29 @@ To disable Winograd, set :envvar:`MLX_CONV_WINOGRAD` to ``0``:
 .. code-block:: shell
 
   MLX_CONV_WINOGRAD=0 python my_script.py
+
+8-bit Quantized Matmul
+----------------------
+
+Quantized matmuls dequantize the weights to the type of the input and
+multiply in floating point. On hardware with dedicated
+matrix-multiplication units MLX can instead round the weights and the input
+to 8 bits and multiply those, which is faster and less precise. This is off
+by default.
+
+For affine quantized weights set :envvar:`MLX_QMM_INT8`. The weights and the
+input are rounded to 8-bit integers with one scale per row. With ``1`` the
+scale of the input is refined for every block of 64 elements, with ``4`` for
+every four blocks, and ``2`` uses the row scale alone. Other values keep the
+default path:
+
+.. code-block:: shell
+
+  MLX_QMM_INT8=1 python my_script.py
+
+Expect a relative difference of one to a few percent from the floating point
+result. Only products of 64 rows or more with transposed weights take this
+path. Like the other variables it is read once, when the first quantized
+matmul with transposed affine weights is built; to change it later use :func:`mlx.core.config.update` or
+:func:`mlx.core.config.scoped_update`, which apply to the quantized matmuls
+built afterwards.
