@@ -1,4 +1,5 @@
 // Copyright © 2023-2026 Apple Inc.
+#include <algorithm>
 #include <cassert>
 #include <numeric>
 
@@ -1283,6 +1284,150 @@ std::vector<Shape> Quantize::output_shapes(const std::vector<array>& inputs) {
 bool ConvertFP8::is_equivalent(const Primitive& other) const {
   const ConvertFP8& a_other = static_cast<const ConvertFP8&>(other);
   return to_fp8_ == a_other.to_fp8_;
+}
+
+namespace {
+
+// Per-axis sampling parameters, matching nn.Upsample's linear mode.
+struct AxisParams {
+  int out_size;
+  float step;
+  float start;
+};
+
+AxisParams upsample_axis_params(int in_size, double scale, bool align_corners) {
+  int out_size = static_cast<int>(scale * in_size);
+  double step, start;
+  if (align_corners) {
+    step = static_cast<double>(in_size - 1) / std::max(out_size - 1, 1);
+    start = 0.0;
+  } else {
+    step = 1.0 / scale;
+    start = ((out_size - 1) * step - in_size + 1) / 2.0;
+  }
+  return {out_size, static_cast<float>(step), static_cast<float>(start)};
+}
+
+// Interpolate along one spatial axis with the same float32 arithmetic as the
+// forward and backward kernels.
+array upsample_axis(
+    const array& x,
+    int axis,
+    int in_size,
+    const AxisParams& p,
+    StreamOrDevice s) {
+  auto idx = subtract(
+      multiply(arange(p.out_size, float32, s), array(p.step, float32), s),
+      array(p.start, float32),
+      s);
+  idx = clip(idx, array(0.0f), array(static_cast<float>(in_size - 1)), s);
+  auto idx_l = floor(idx, s);
+  auto idx_r = ceil(idx, s);
+  auto t = subtract(idx, idx_l, s);
+  Shape t_shape(x.ndim(), 1);
+  t_shape[axis] = p.out_size;
+  t = reshape(t, t_shape, s);
+  auto lo = take(x, astype(idx_l, uint32, s), axis, s);
+  auto hi = take(x, astype(idx_r, uint32, s), axis, s);
+  return add(
+      multiply(lo, subtract(array(1.0f), t, s), s), multiply(hi, t, s), s);
+}
+
+} // namespace
+
+array upsample_bilinear(
+    const array& x,
+    std::pair<double, double> scale_factor,
+    bool align_corners /* = false */,
+    StreamOrDevice s_ /* = {} */) {
+  if (x.ndim() != 4) {
+    std::ostringstream msg;
+    msg << "[upsample_bilinear] Input must be 4D (B, H, W, C) but got input "
+           "with "
+        << x.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (issubdtype(x.dtype(), complexfloating)) {
+    throw std::invalid_argument(
+        "[upsample_bilinear] Complex input is not supported.");
+  }
+  auto [scale_h, scale_w] = scale_factor;
+  if (scale_h <= 0 || scale_w <= 0) {
+    throw std::invalid_argument(
+        "[upsample_bilinear] scale_factor must be positive.");
+  }
+
+  int H = x.shape(1);
+  int W = x.shape(2);
+  auto ph = upsample_axis_params(H, scale_h, align_corners);
+  auto pw = upsample_axis_params(W, scale_w, align_corners);
+
+  auto s = to_stream(s_);
+  auto out_type = issubdtype(x.dtype(), floating) ? x.dtype() : float32;
+
+  auto fallback =
+      [ph, pw, H, W, out_type, s](const std::vector<array>& inputs) {
+        auto y = astype(inputs[0], float32, s);
+        y = upsample_axis(y, 1, H, ph, s);
+        y = upsample_axis(y, 2, W, pw, s);
+        return std::vector<array>{astype(y, out_type, s)};
+      };
+
+  int64_t out_elements =
+      static_cast<int64_t>(x.shape(0)) * ph.out_size * pw.out_size * x.shape(3);
+  bool large =
+      x.size() >= (int64_t(1) << 31) || out_elements >= (int64_t(1) << 31);
+  bool empty = x.size() == 0 || out_elements == 0;
+
+  if (!large && !empty && !UpsampleBilinear::use_fallback(s)) {
+    return array(
+        {x.shape(0), ph.out_size, pw.out_size, x.shape(3)},
+        out_type,
+        std::make_shared<UpsampleBilinear>(
+            s,
+            fallback,
+            ph.out_size,
+            pw.out_size,
+            ph.step,
+            ph.start,
+            pw.step,
+            pw.start),
+        {astype(x, out_type, s)});
+  }
+  return fallback({x})[0];
+}
+
+std::vector<array> UpsampleBilinear::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  if (argnums.size() != 1 || argnums[0] != 0) {
+    throw std::invalid_argument(
+        "[upsample_bilinear] vjp is only supported with respect to the "
+        "input.");
+  }
+  auto& x = primals[0];
+  auto s = stream();
+  auto in_shape = x.shape();
+  auto in_dtype = x.dtype();
+  int in_h = in_shape[1];
+  int in_w = in_shape[2];
+
+  auto fwd_fallback = fallback_;
+  auto vjp_fallback =
+      [fwd_fallback, in_shape, in_dtype, s](const std::vector<array>& inputs) {
+        auto zero_x = zeros(in_shape, in_dtype, s);
+        auto [_, vjps] = mlx::core::vjp(fwd_fallback, {zero_x}, {inputs[0]});
+        return vjps;
+      };
+
+  return {array(
+      in_shape,
+      in_dtype,
+      std::make_shared<UpsampleBilinearVJP>(
+          s, vjp_fallback, in_h, in_w, step_h_, start_h_, step_w_, start_w_),
+      {astype(cotangents[0], in_dtype, s)})};
 }
 
 } // namespace mlx::core::fast
