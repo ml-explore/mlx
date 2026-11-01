@@ -131,6 +131,30 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_hat = mx.dequantize(w_q, scales, mode="mxfp4")
         self.assertTrue(mx.all(w_hat == 0))
 
+    def test_fp4_quantize_ties_to_even(self):
+        vals = [0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0, 0.0]
+        vals = vals + [-v for v in vals]
+        expected = mx.array(
+            [0, 2, 2, 4, 4, 6, 6, 0, 8, 10, 10, 12, 12, 14, 14, 8], dtype=mx.uint32
+        )
+        shifts = mx.arange(0, 32, 4, dtype=mx.uint32)
+
+        devices = [mx.cpu]
+        if mx.is_available(mx.gpu):
+            devices.append(mx.gpu)
+        for mode, gs in [("mxfp4", 32), ("nvfp4", 16)]:
+            # Each group has 6.0, so the scale is 1
+            w = mx.zeros((len(vals), gs))
+            w[:, 0] = mx.array(vals)
+            w[:, 1] = 6.0
+            for dtype, device in product(
+                [mx.float32, mx.float16, mx.bfloat16], devices
+            ):
+                with self.subTest(mode=mode, dtype=dtype, device=device):
+                    w_q, _ = mx.quantize(w.astype(dtype), mode=mode, stream=device)
+                    codes = (w_q[:, 0:1] >> shifts)[:, 0] & 0xF
+                    self.assertTrue(mx.array_equal(codes, expected))
+
     def test_mxfp8_quantize_dequantize(self):
         w = 2 * mx.random.uniform(shape=(512, 32)) - 1
         w = w.astype(mx.bfloat16)

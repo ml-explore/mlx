@@ -5345,27 +5345,31 @@ std::vector<array> fp_quantize(
       scales = astype(add(scales, array(127, int32), s), uint8, s);
     }
     if (bits == 4) {
-      auto lut = array({
-          +0.0f,
-          +0.5f,
-          +1.0f,
-          +1.5f,
-          +2.0f,
-          +3.0f,
-          +4.0f,
-          +6.0f,
-          -0.0f,
-          -0.5f,
-          -1.0f,
-          -1.5f,
-          -2.0f,
-          -3.0f,
-          -4.0f,
-          -6.0f,
-      });
-      lut = astype(lut, w.dtype(), s);
-      wq = argmin(
-          abs(subtract(expand_dims(wq, -1, s), lut, s), s), -1, false, s);
+      // Round to nearest E2M1 with ties to even, same as fp4_e2m1 in Metal
+      constexpr std::pair<float, bool> bounds[] = {
+          {0.25f, false},
+          {0.75f, true},
+          {1.25f, false},
+          {1.75f, true},
+          {2.5f, false},
+          {3.5f, true},
+          {5.0f, false},
+      };
+      auto absw = abs(wq, s);
+      auto code = array(0, uint32);
+      for (auto [b, inclusive] : bounds) {
+        auto bound = array(b, wq.dtype());
+        auto above =
+            inclusive ? greater_equal(absw, bound, s) : greater(absw, bound, s);
+        code = add(code, astype(above, uint32, s), s);
+      }
+      // Read the sign bit so that -0 also gets the sign
+      auto int_type = size_of(wq.dtype()) == 2
+          ? int16
+          : (size_of(wq.dtype()) == 4 ? int32 : int64);
+      auto negative = less(view(wq, int_type, s), array(0, int_type), s);
+      code = where(negative, add(code, array(8, uint32), s), code, s);
+      wq = where(isnan(wq, s), array(7, uint32), code, s);
       auto shifts = power(array(2, uint32), arange(0, 32, 4, uint32, s), s);
       wq = reshape(wq, {-1, 4, 8}, s);
       wq = sum(multiply(wq, shifts, s), -1, false, s);
