@@ -3157,6 +3157,18 @@ class TestOps(mlx_tests.MLXTestCase):
             b_mx = mx.sort(a_mx)
             self.assertTrue(np.array_equal(b_np, b_mx))
 
+            # Several rows that each need more than 1024 blocks
+            a_np = np.random.normal(20, 20, size=(2, 2**22)).astype(np.float32)
+            a_mx = mx.array(a_np)
+
+            b_np = np.sort(a_np, axis=-1)
+            b_mx = mx.sort(a_mx, axis=-1)
+            self.assertTrue(np.array_equal(b_np, b_mx))
+
+            c_mx = mx.argsort(a_mx, axis=-1)
+            c_np = np.take_along_axis(a_np, np.array(c_mx), axis=-1)
+            self.assertTrue(np.array_equal(b_np, c_np))
+
         # 1D strided sort
         a = mx.array([[4, 3], [2, 1], [5, 4], [3, 2]])
         out = mx.argsort(a[:, 1])

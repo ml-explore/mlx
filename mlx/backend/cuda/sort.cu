@@ -533,8 +533,8 @@ __global__ void mb_block_sort_kernel(
       int64_t(blockIdx.y), nc_shape.data(), nc_strides.data(), nc_dim);
 
   inp += block_idx;
-  out_vals += blockIdx.y * size_sorted_axis;
-  out_idxs += blockIdx.y * size_sorted_axis;
+  out_vals += int64_t(blockIdx.y) * size_sorted_axis;
+  out_idxs += int64_t(blockIdx.y) * size_sorted_axis;
 
   __shared__ ValT tgp_vals[sort_kernel::N_PER_BLOCK];
   __shared__ IdxT tgp_idxs[sort_kernel::N_PER_BLOCK];
@@ -571,9 +571,9 @@ __global__ void mb_block_partition_kernel(
 
   (void)dev_idxs;
 
-  block_partitions += blockIdx.y * blockDim.x;
-  dev_vals += blockIdx.y * size_sorted_axis;
-  dev_idxs += blockIdx.y * size_sorted_axis;
+  block_partitions += blockIdx.y * (n_blocks + 1);
+  dev_vals += int64_t(blockIdx.y) * size_sorted_axis;
+  dev_idxs += int64_t(blockIdx.y) * size_sorted_axis;
 
   for (int i = threadIdx.x; i <= n_blocks; i += blockDim.x) {
     int merge_group = i / merge_tiles;
@@ -626,10 +626,10 @@ __global__ void mb_block_merge_kernel(
   using block_sort_t = typename sort_kernel::block_merge_sort_t;
 
   block_partitions += blockIdx.y * (num_tiles + 1);
-  dev_vals_in += blockIdx.y * size_sorted_axis;
-  dev_idxs_in += blockIdx.y * size_sorted_axis;
-  dev_vals_out += blockIdx.y * size_sorted_axis;
-  dev_idxs_out += blockIdx.y * size_sorted_axis;
+  dev_vals_in += int64_t(blockIdx.y) * size_sorted_axis;
+  dev_idxs_in += int64_t(blockIdx.y) * size_sorted_axis;
+  dev_vals_out += int64_t(blockIdx.y) * size_sorted_axis;
+  dev_idxs_out += int64_t(blockIdx.y) * size_sorted_axis;
 
   int block_idx = blockIdx.x;
   int merge_group = block_idx / merge_tiles;
