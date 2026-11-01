@@ -28,6 +28,19 @@ array ensure_row_contiguous(
   }
 };
 
+// Row accumulator for the non-transposed affine kernel, taken from the
+// allocator so it is served by the buffer cache. Empty when transposed.
+array qmm_accumulator(
+    const array& out,
+    bool transposed_w,
+    cpu::CommandEncoder& encoder) {
+  array acc({transposed_w ? 0 : out.shape(-1)}, float32, nullptr, {});
+  acc.set_data(allocator::malloc(acc.nbytes()));
+  encoder.add_temporary(acc);
+  encoder.set_input_array(acc);
+  return acc;
+}
+
 const static float FP4_LUT[16] = {
     +0.0f,
     +0.5f,
@@ -103,23 +116,22 @@ void _qmm(
     const T* biases,
     int M,
     int N,
-    int K) {
+    int K,
+    float* acc) {
   constexpr int bitmask = (1 << bits) - 1;
   constexpr int pack_factor = get_pack_factor(bits, 8);
   constexpr int bytes_per_pack = get_bytes_per_pack(bits);
   constexpr int packs_in_group = group_size / pack_factor;
-
-  std::vector<float> acc(N);
 
   for (int m = 0; m < M; m++) {
     const uint8_t* w_local = (const uint8_t*)w;
     const T* scales_local = scales;
     const T* biases_local = biases;
 
-    std::fill(acc.begin(), acc.end(), 0);
+    std::fill(acc, acc + N, 0.0f);
 
     for (int k = 0; k < K; k++) {
-      float* result_local = acc.data();
+      float* result_local = acc;
       T xi = *x++;
 
       for (int n = 0; n < N; n += group_size) {
@@ -150,7 +162,7 @@ void _qmm(
       }
     }
 
-    std::copy(acc.begin(), acc.end(), result);
+    std::copy(acc, acc + N, result);
     result += N;
   }
 }
@@ -297,7 +309,8 @@ void _qmm_dispatch_transpose(
     int M,
     int N,
     int K,
-    bool transposed_w) {
+    bool transposed_w,
+    float* acc) {
   if (transposed_w) {
     // the simd size must be a multiple of the number of elements per word
     if constexpr (32 % bits == 0 && simd::max_size<T> % (32 / bits) == 0) {
@@ -306,7 +319,7 @@ void _qmm_dispatch_transpose(
       _qmm_t<T, bits, group_size>(result, x, w, scales, biases, M, N, K);
     }
   } else {
-    _qmm<T, bits, group_size>(result, x, w, scales, biases, M, N, K);
+    _qmm<T, bits, group_size>(result, x, w, scales, biases, M, N, K, acc);
   }
 }
 
@@ -321,19 +334,20 @@ void _qmm_dispatch_group(
     int N,
     int K,
     int group_size,
-    bool transposed_w) {
+    bool transposed_w,
+    float* acc) {
   switch (group_size) {
     case 32:
       _qmm_dispatch_transpose<T, bits, 32>(
-          result, x, w, scales, biases, M, N, K, transposed_w);
+          result, x, w, scales, biases, M, N, K, transposed_w, acc);
       break;
     case 64:
       _qmm_dispatch_transpose<T, bits, 64>(
-          result, x, w, scales, biases, M, N, K, transposed_w);
+          result, x, w, scales, biases, M, N, K, transposed_w, acc);
       break;
     case 128:
       _qmm_dispatch_transpose<T, bits, 128>(
-          result, x, w, scales, biases, M, N, K, transposed_w);
+          result, x, w, scales, biases, M, N, K, transposed_w, acc);
       break;
     default:
       throw std::invalid_argument(
@@ -353,35 +367,36 @@ void _qmm_dispatch_typed(
     int K,
     int group_size,
     int bits,
-    bool transposed_w) {
+    bool transposed_w,
+    float* acc) {
   switch (bits) {
     case 1:
       _qmm_dispatch_group<T, 1>(
-          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w, acc);
       break;
     case 2:
       _qmm_dispatch_group<T, 2>(
-          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w, acc);
       break;
     case 3:
       _qmm_dispatch_group<T, 3>(
-          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w, acc);
       break;
     case 4:
       _qmm_dispatch_group<T, 4>(
-          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w, acc);
       break;
     case 5:
       _qmm_dispatch_group<T, 5>(
-          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w, acc);
       break;
     case 6:
       _qmm_dispatch_group<T, 6>(
-          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w, acc);
       break;
     case 8:
       _qmm_dispatch_group<T, 8>(
-          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w, acc);
       break;
     default:
       throw std::invalid_argument(
@@ -398,7 +413,8 @@ void _qmm_dispatch_typed(
     const array& biases,
     int bits,
     int group_size,
-    bool transposed_w) {
+    bool transposed_w,
+    array& acc) {
   int K = x.shape(-1);
   int M = x.ndim() > 1 ? x.shape(-2) : 1;
   int N = out.shape(-1);
@@ -423,7 +439,8 @@ void _qmm_dispatch_typed(
         K,
         bits,
         group_size,
-        transposed_w);
+        transposed_w,
+        acc.data<float>());
   }
 }
 
@@ -435,19 +452,20 @@ void _qmm_dispatch(
     const array& biases,
     int bits,
     int group_size,
-    bool transposed_w) {
+    bool transposed_w,
+    array& acc) {
   switch (x.dtype()) {
     case float32:
       _qmm_dispatch_typed<float>(
-          out, x, w, scales, biases, bits, group_size, transposed_w);
+          out, x, w, scales, biases, bits, group_size, transposed_w, acc);
       break;
     case float16:
       _qmm_dispatch_typed<float16_t>(
-          out, x, w, scales, biases, bits, group_size, transposed_w);
+          out, x, w, scales, biases, bits, group_size, transposed_w, acc);
       break;
     case bfloat16:
       _qmm_dispatch_typed<bfloat16_t>(
-          out, x, w, scales, biases, bits, group_size, transposed_w);
+          out, x, w, scales, biases, bits, group_size, transposed_w, acc);
       break;
     default:
       throw std::invalid_argument(
@@ -717,7 +735,8 @@ void _bs_qmm_dispatch_typed(
     const array& rhs_indices,
     int bits,
     int group_size,
-    bool transposed_w) {
+    bool transposed_w,
+    array& acc) {
   int K = x.shape(-1);
   int M = x.shape(-2);
   int N = out.shape(-1);
@@ -751,7 +770,8 @@ void _bs_qmm_dispatch_typed(
         K,
         bits,
         group_size,
-        transposed_w);
+        transposed_w,
+        acc.data<float>());
   }
 }
 
@@ -765,7 +785,8 @@ void _bs_qmm_dispatch(
     const array& rhs_indices,
     int bits,
     int group_size,
-    bool transposed_w) {
+    bool transposed_w,
+    array& acc) {
   switch (x.dtype()) {
     case float32:
       _bs_qmm_dispatch_typed<float>(
@@ -778,7 +799,8 @@ void _bs_qmm_dispatch(
           rhs_indices,
           bits,
           group_size,
-          transposed_w);
+          transposed_w,
+          acc);
       break;
     case float16:
       _bs_qmm_dispatch_typed<float16_t>(
@@ -791,7 +813,8 @@ void _bs_qmm_dispatch(
           rhs_indices,
           bits,
           group_size,
-          transposed_w);
+          transposed_w,
+          acc);
       break;
     case bfloat16:
       _bs_qmm_dispatch_typed<bfloat16_t>(
@@ -804,7 +827,8 @@ void _bs_qmm_dispatch(
           rhs_indices,
           bits,
           group_size,
-          transposed_w);
+          transposed_w,
+          acc);
       break;
     default:
       throw std::invalid_argument(
@@ -949,15 +973,18 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   if (mode_ == QuantizationMode::Affine) {
     auto biases = ensure_row_contiguous(inputs[3], encoder, stream());
     encoder.set_input_array(biases);
+    auto acc = qmm_accumulator(out, transpose_, encoder);
     encoder.dispatch([out = array::unsafe_weak_copy(out),
                       x = array::unsafe_weak_copy(x),
                       w = array::unsafe_weak_copy(w),
                       scales = array::unsafe_weak_copy(scales),
                       biases = array::unsafe_weak_copy(biases),
+                      acc = array::unsafe_weak_copy(acc),
                       group_size_ = group_size_,
                       bits_ = bits_,
                       transpose_ = transpose_]() mutable {
-      _qmm_dispatch(out, x, w, scales, biases, group_size_, bits_, transpose_);
+      _qmm_dispatch(
+          out, x, w, scales, biases, group_size_, bits_, transpose_, acc);
     });
   } else {
     encoder.dispatch([out = array::unsafe_weak_copy(out),
@@ -1009,6 +1036,7 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   if (mode_ == QuantizationMode::Affine) {
     auto biases = ensure_row_contiguous_last_dims(inputs[3]);
     encoder.set_input_array(biases);
+    auto acc = qmm_accumulator(out, transpose_, encoder);
     encoder.dispatch([out = array::unsafe_weak_copy(out),
                       x = array::unsafe_weak_copy(x),
                       w = array::unsafe_weak_copy(w),
@@ -1016,6 +1044,7 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
                       biases = array::unsafe_weak_copy(biases),
                       lhs_indices = array::unsafe_weak_copy(lhs_indices),
                       rhs_indices = array::unsafe_weak_copy(rhs_indices),
+                      acc = array::unsafe_weak_copy(acc),
                       group_size_ = group_size_,
                       bits_ = bits_,
                       transpose_ = transpose_]() mutable {
@@ -1029,7 +1058,8 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
           rhs_indices,
           group_size_,
           bits_,
-          transpose_);
+          transpose_,
+          acc);
     });
   } else {
     encoder.dispatch([out = array::unsafe_weak_copy(out),

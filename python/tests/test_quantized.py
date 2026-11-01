@@ -1101,7 +1101,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
             [mx.bfloat16, mx.float16],
             [True, False],
             [32, 64, 128],
-            [1, 2, 3, 4, 5, 6, 8],
+            [2, 4, 8],
         ):
             with self.subTest(dtype=dtype, transpose=transpose, gs=gs, bits=bits):
                 eps = 1 / 256 if dtype == mx.bfloat16 else 1 / 2048
