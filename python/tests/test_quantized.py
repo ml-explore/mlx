@@ -684,6 +684,120 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertLess((y_ref - y).abs().max(), 1e-3)
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_narrow_affine_constants(self):
+        for dtype, bits, gs, n in product(
+            [mx.float16, mx.bfloat16], [1, 2, 3, 4, 5, 6, 8], [32, 64, 128], [1, 16, 17]
+        ):
+            k = 1536 if bits in [3, 6] else 2048
+            with self.subTest(dtype=dtype, bits=bits, gs=gs, n=n):
+                key_x, key_w = mx.random.split(mx.random.key(7))
+                x = mx.random.normal((1, k), key=key_x)
+                w = mx.random.normal((n, k), key=key_w).astype(dtype)
+                wq, scales, biases = mx.quantize(w, group_size=gs, bits=bits)
+                actual = mx.quantized_matmul(
+                    x, wq, scales, biases, group_size=gs, bits=bits, stream=mx.gpu
+                )
+                expected = mx.quantized_matmul(
+                    x,
+                    wq,
+                    scales.astype(mx.float32),
+                    biases.astype(mx.float32),
+                    group_size=gs,
+                    bits=bits,
+                    stream=mx.gpu,
+                )
+                self.assertEqual(actual.dtype, mx.float32)
+                self.assertTrue(mx.array_equal(actual, expected))
+
+    def test_qmm_narrow_affine_fallbacks(self):
+        for dtype, m, k, transpose in product(
+            [mx.float16, mx.bfloat16], [1, 2, 33], [128, 768], [False, True]
+        ):
+            with self.subTest(dtype=dtype, m=m, k=k, transpose=transpose):
+                x = mx.random.normal((m, k))
+                shape = (128, k) if transpose else (k, 128)
+                wq, scales, biases = mx.quantize(
+                    mx.random.normal(shape).astype(dtype), group_size=32, bits=4
+                )
+                for device in [mx.cpu, mx.default_device()]:
+                    actual = mx.quantized_matmul(
+                        x, wq, scales, biases, transpose, 32, 4, stream=device
+                    )
+                    expected = mx.quantized_matmul(
+                        x,
+                        wq,
+                        scales.astype(mx.float32),
+                        biases.astype(mx.float32),
+                        transpose,
+                        32,
+                        4,
+                        stream=device,
+                    )
+                    self.assertTrue(mx.array_equal(actual, expected))
+
+    def test_qmm_narrow_affine_layouts(self):
+        for dtype in [mx.float16, mx.bfloat16]:
+            wq, scales, biases = mx.quantize(
+                mx.random.normal((2, 34, 1024)).astype(dtype), group_size=64, bits=2
+            )
+            wq, scales, biases = wq[:, ::2], scales[:, ::2], biases[:, ::2]
+            x = mx.random.normal((2, 1, 2048))[..., ::2]
+            for inputs in [
+                (x, wq, scales, biases),
+                (x[0, 0], wq[0], scales[0], biases[0]),
+            ]:
+                a, w, s, b = inputs
+                actual = mx.quantized_matmul(a, w, s, b, True, 64, 2)
+                expected = mx.quantized_matmul(
+                    a, w, s.astype(mx.float32), b.astype(mx.float32), True, 64, 2
+                )
+                self.assertTrue(mx.array_equal(actual, expected))
+
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_narrow_affine_transforms(self):
+        for dtype in [mx.float16, mx.bfloat16]:
+            x = mx.random.normal((1, 1024))
+            wq, scales, biases = mx.quantize(
+                mx.random.normal((9, 1024)).astype(dtype), group_size=64, bits=4
+            )
+
+            def narrow(x, scales, biases):
+                return mx.quantized_matmul(x, wq, scales, biases, True, 64, 4)
+
+            def widened(x, scales, biases):
+                return narrow(x, scales.astype(mx.float32), biases.astype(mx.float32))
+
+            actual = mx.grad(lambda x, s, b: narrow(x, s, b).sum(), (0, 1, 2))(
+                x, scales, biases
+            )
+            expected = mx.grad(lambda x, s, b: widened(x, s, b).sum(), (0, 1, 2))(
+                x, scales, biases
+            )
+            for a, e in zip(actual, expected):
+                self.assertEqual(a.dtype, e.dtype)
+                self.assertTrue(mx.array_equal(a, e))
+
+            compiled = mx.compile(narrow)
+            x_new = mx.random.normal(x.shape, key=mx.random.key(29))
+            s_new = scales * mx.array(0.75, dtype=dtype)
+            b_new = biases + mx.array(0.03125, dtype=dtype)
+            self.assertTrue(
+                mx.array_equal(
+                    compiled(x_new, s_new, b_new), widened(x_new, s_new, b_new)
+                )
+            )
+            compiled_grad = mx.compile(
+                mx.grad(lambda x, s, b: narrow(x, s, b).sum(), (0, 1, 2))
+            )
+            actual = compiled_grad(x_new, s_new, b_new)
+            expected = mx.grad(lambda x, s, b: widened(x, s, b).sum(), (0, 1, 2))(
+                x_new, s_new, b_new
+            )
+            for a, e in zip(actual, expected):
+                self.assertEqual(a.dtype, e.dtype)
+                self.assertTrue(mx.array_equal(a, e))
+
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_qmm_splitk_precision(self):
         # Split-K sums the partitions in float32 and rounds the result to the
         # input type once. Rounding each partition first gives two to three
