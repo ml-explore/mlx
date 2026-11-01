@@ -649,26 +649,30 @@ inline bool use_qmv_mma(
       (scales.offset() % 2)) {
     return false;
   }
-  // Only qmv_nax reads affine weights, with 3 to 8 bits.
+  // Route for large K/N.
+  bool nax = metal::is_nax_available();
   if (mode == QuantizationMode::Affine) {
-    return metal::is_nax_available() && (bits >= 3 && bits != 7) &&
-        (group_size >= 32) && (x.dtype() == float16 || x.dtype() == bfloat16) &&
-        (N >= 512) && (K >= 1024) && (N % 32 == 0);
+    // Only qmv_nax reads affine weights, with 3 to 8 bits.
+    return nax && (bits >= 3 && bits != 7) && (group_size >= 32) &&
+        (x.dtype() == float16 || x.dtype() == bfloat16) && (N >= 512) &&
+        (K >= 1024) && (N % 32 == 0);
+  } else { // fp quantization
+    if (nax) {
+      // Below 2048, nvfp4 with few rows is faster on qmv_wide, which runs for
+      // M < 8 or M * N < 16384.
+      bool nvfp4_wide = (mode == QuantizationMode::Nvfp4) &&
+          (M < 8 || (M < 12 && M * N < 16384));
+      int min_size = nvfp4_wide ? 2048 : 1024;
+      return (env::enable_tf32() || x.dtype() != float32) && (N >= min_size) &&
+          (K >= min_size) && (N % 32 == 0);
+    } else { // non-nax
+      if (d.get_architecture().back() == 'd') {
+        return (N >= 4096) && (K >= 4096) && (N % 16 == 0);
+      }
+      return (N >= 512) && (K >= 512) &&
+          (int64_t(N) * K >= (int64_t(1) << 22)) && (N % 16 == 0);
+    }
   }
-  // Route for large K/N. Below 2048, nvfp4 with few rows is faster on
-  // qmv_wide, which runs for M < 8 or M * N < 16384.
-  if (metal::is_nax_available()) {
-    bool nvfp4_wide = (mode == QuantizationMode::Nvfp4) &&
-        (M < 8 || (M < 12 && M * N < 16384));
-    int min_size = nvfp4_wide ? 2048 : 1024;
-    return (env::enable_tf32() || x.dtype() != float32) && (N >= min_size) &&
-        (K >= min_size) && (N % 32 == 0);
-  }
-  if (d.get_architecture().back() == 'd') {
-    return (N >= 4096) && (K >= 4096) && (N % 16 == 0);
-  }
-  return (N >= 512) && (K >= 512) && (int64_t(N) * K >= (int64_t(1) << 22)) &&
-      (N % 16 == 0);
 }
 
 void qmv_mma(
@@ -1286,10 +1290,11 @@ bool use_qmm_nax_splitk(const array& x, int M, int N, int K, int group_size) {
 int qmm_nax_k_partitions(int M, int N, int K, int group_size) {
   int tiles = (N / 64) * ceildiv(M, 64);
   int k_align = std::max(64, group_size);
-  // About 6 threadgroups per GPU core, more for long K, at most 256.
-  int cores = metal::gpu_core_count();
-  int max_tgs =
-      cores > 0 ? std::min(256, 6 * cores * std::max(K, 2048) / 2048) : 256;
+  int max_tgs = 256; // fallback
+  if (int cores = metal::gpu_core_count(); cores > 0) {
+    // About 6 threadgroups per GPU core, more for long K, at most 256.
+    max_tgs = std::min(256, 6 * cores * std::max(K, 2048) / 2048);
+  }
   int split_k = 1;
   // Double up to 4 while the grid stays within max_tgs threadgroups and every
   // partition keeps at least 256 columns.

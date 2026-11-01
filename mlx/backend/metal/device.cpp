@@ -3,12 +3,12 @@
 #include <cstdlib>
 #include <sstream>
 
+#include <fmt/format.h>
+
 #include <TargetConditionals.h>
 #if TARGET_OS_OSX
 #include <IOKit/IOKitLib.h>
 #endif
-
-#include <fmt/format.h>
 
 #define NS_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
@@ -1065,7 +1065,7 @@ bool is_nax_available() {
 }
 
 int gpu_core_count() {
-  auto _count = []() {
+  static int count = []() {
     int count = 0;
 #if TARGET_OS_OSX
     io_iterator_t it;
@@ -1090,11 +1090,10 @@ int gpu_core_count() {
       }
     }
     IOObjectRelease(it);
-#endif
+#endif // TARGET_OS_OSX
     return count;
-  };
-  static int count_ = _count();
-  return count_;
+  }();
+  return count;
 }
 
 } // namespace mlx::core::metal
