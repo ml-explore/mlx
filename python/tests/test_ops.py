@@ -1700,6 +1700,11 @@ class TestOps(mlx_tests.MLXTestCase):
         mx.eval(t)
         self.assertTrue(mx.array_equal(t[ids], expected))
 
+        # Slice update with reduction into a large target.
+        t = mx.zeros((rows, stride), mx.uint8).at[:, :cols].add(v)
+        mx.eval(t)
+        self.assertTrue(mx.array_equal(t[ids, :cols], expected))
+
     def test_along_axis_invalid_axis(self):
         # Negative out of bounds axes used to slip past the bounds check
         # (unsigned arithmetic made it dead code) and either raise an internal
