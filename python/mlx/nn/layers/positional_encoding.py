@@ -26,6 +26,15 @@ class RoPE(Module):
             each dimension in the positional encodings. Default: ``10000``.
         scale (float, optional): The scale used to scale the positions.
             Default: ``1.0``.
+        freqs (array, optional): The wavelength of each rotated pair of
+            features, of shape ``(dims // 2,)``. When given it takes
+            precedence over ``base``. Use it to express rotary encodings that
+            are not a plain power law, for example the scaled and partial
+            rotary encodings used by recent models. Default: ``None``.
+        partial_rotary_factor (float, optional): If set, only the first
+            ``int(dims * partial_rotary_factor)`` features are rotated and the
+            remaining ones are left unchanged. Must be in ``(0, 1]``. Default:
+            ``None``.
     """
 
     def __init__(
@@ -34,24 +43,76 @@ class RoPE(Module):
         traditional: bool = False,
         base: float = 10000,
         scale: float = 1.0,
+        freqs: Optional[mx.array] = None,
+        partial_rotary_factor: Optional[float] = None,
     ):
         super().__init__()
+        if dims % 2 != 0:
+            raise ValueError(f"[RoPE] dims must be even but got {dims}.")
+
         self.dims = dims
         self.traditional = traditional
         self.base = base
         self.scale = scale
+        self._partial_rotary_factor = partial_rotary_factor
+
+        if freqs is not None and partial_rotary_factor is not None:
+            raise ValueError(
+                "[RoPE] freqs and partial_rotary_factor cannot be used together."
+            )
+
+        if freqs is not None:
+            freqs = freqs if isinstance(freqs, mx.array) else mx.array(freqs)
+            if freqs.ndim != 1 or freqs.shape[0] != dims // 2:
+                raise ValueError(
+                    "[RoPE] freqs must be one dimensional with size "
+                    f"{dims // 2} but got shape {freqs.shape}."
+                )
+        elif partial_rotary_factor is not None:
+            if not 0 < partial_rotary_factor <= 1:
+                raise ValueError(
+                    "[RoPE] partial_rotary_factor must be in (0, 1] but got "
+                    f"{partial_rotary_factor}."
+                )
+            # The features that are not rotated get an infinite wavelength
+            # which makes their inverse frequency zero and leaves them
+            # unchanged.
+            rotated_dims = int(dims * partial_rotary_factor)
+            exponents = mx.arange(0, rotated_dims, 2, dtype=mx.float32) / dims
+            freqs = mx.concatenate(
+                [
+                    base**exponents,
+                    mx.full(((dims - rotated_dims) // 2,), mx.inf),
+                ]
+            )
+
+        self._freqs = freqs
 
     def _extra_repr(self):
-        return f"{self.dims}, traditional={self.traditional}"
+        s = f"{self.dims}, traditional={self.traditional}"
+        if self._partial_rotary_factor is not None:
+            s += f", partial_rotary_factor={self._partial_rotary_factor}"
+        return s
 
     def __call__(self, x, offset: int = 0):
+        freqs = self._freqs
+        if freqs is None:
+            return mx.fast.rope(
+                x,
+                self.dims,
+                traditional=self.traditional,
+                base=self.base,
+                scale=self.scale,
+                offset=offset,
+            )
         return mx.fast.rope(
             x,
             self.dims,
             traditional=self.traditional,
-            base=self.base,
+            base=None,
             scale=self.scale,
             offset=offset,
+            freqs=freqs,
         )
 
 
