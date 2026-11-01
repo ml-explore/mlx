@@ -53,6 +53,8 @@ NO_GPU_MULTI(Eigh)
 namespace fast {
 NO_GPU_MULTI(GatedDeltaUpdate)
 NO_GPU_MULTI(GatedDeltaUpdateVJP)
+NO_GPU_USE_FALLBACK(UpsampleBilinear)
+NO_GPU_MULTI(UpsampleBilinearVJP)
 } // namespace fast
 
 namespace distributed {

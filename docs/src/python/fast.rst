@@ -12,6 +12,7 @@ Fast
   layer_norm
   cross_entropy
   rope
+  upsample_bilinear
   scaled_dot_product_attention
   metal_kernel
   cuda_kernel

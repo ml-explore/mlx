@@ -508,6 +508,122 @@ class Quantize : public Custom {
   bool dequantize_;
 };
 
+// step/start define each output index's source coordinate on one spatial axis;
+// the Metal backend turns them into per-axis lookup tables.
+class UpsampleBilinear : public Custom {
+ public:
+  UpsampleBilinear(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      int out_h,
+      int out_w,
+      float step_h,
+      float start_h,
+      float step_w,
+      float start_w)
+      : Custom(stream, std::move(fallback)),
+        out_h_(out_h),
+        out_w_(out_w),
+        step_h_(step_h),
+        start_h_(start_h),
+        step_w_(step_w),
+        start_w_(start_w) {}
+
+  static bool use_fallback(Stream s);
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_NAME(UpsampleBilinear)
+  bool is_equivalent(const Primitive& other) const override {
+    auto& o = static_cast<const UpsampleBilinear&>(other);
+    return out_h_ == o.out_h_ && out_w_ == o.out_w_ && step_h_ == o.step_h_ &&
+        start_h_ == o.start_h_ && step_w_ == o.step_w_ &&
+        start_w_ == o.start_w_;
+  }
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    auto shape = inputs[0].shape();
+    shape[1] = out_h_;
+    shape[2] = out_w_;
+    return {shape};
+  }
+  auto state() const {
+    return std::make_tuple(
+        nullptr, out_h_, out_w_, step_h_, start_h_, step_w_, start_w_);
+  }
+
+ private:
+  int out_h_;
+  int out_w_;
+  float step_h_;
+  float start_h_;
+  float step_w_;
+  float start_w_;
+};
+
+class UpsampleBilinearVJP : public Custom {
+ public:
+  UpsampleBilinearVJP(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      int in_h,
+      int in_w,
+      float step_h,
+      float start_h,
+      float step_w,
+      float start_w)
+      : Custom(stream, std::move(fallback)),
+        in_h_(in_h),
+        in_w_(in_w),
+        step_h_(step_h),
+        start_h_(start_h),
+        step_w_(step_w),
+        start_w_(start_w) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(UpsampleBilinearVJP)
+  bool is_equivalent(const Primitive& other) const override {
+    auto& o = static_cast<const UpsampleBilinearVJP&>(other);
+    return in_h_ == o.in_h_ && in_w_ == o.in_w_ && step_h_ == o.step_h_ &&
+        start_h_ == o.start_h_ && step_w_ == o.step_w_ &&
+        start_w_ == o.start_w_;
+  }
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    auto shape = inputs[0].shape();
+    shape[1] = in_h_;
+    shape[2] = in_w_;
+    return {shape};
+  }
+  auto state() const {
+    return std::make_tuple(
+        nullptr, in_h_, in_w_, step_h_, start_h_, step_w_, start_w_);
+  }
+
+ private:
+  int in_h_;
+  int in_w_;
+  float step_h_;
+  float start_h_;
+  float step_w_;
+  float start_w_;
+};
+
 using ScalarArg = std::variant<bool, int, float>;
 
 class CustomKernel : public Primitive {

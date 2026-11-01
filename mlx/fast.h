@@ -75,6 +75,13 @@ MLX_API std::vector<array> gated_delta_update(
     const std::optional<array>& mask = std::nullopt,
     StreamOrDevice s = {});
 
+/** Fused 2D bilinear upsample. Input x has shape (B, H, W, C). */
+MLX_API array upsample_bilinear(
+    const array& x,
+    std::pair<double, double> scale_factor,
+    bool align_corners = false,
+    StreamOrDevice s = {});
+
 using CustomKernelFunction = std::function<std::vector<array>(
     const std::vector<array>&,
     const std::vector<Shape>&,
