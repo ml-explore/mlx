@@ -54,7 +54,7 @@ class RoPE(Module):
         self.traditional = traditional
         self.base = base
         self.scale = scale
-        self.partial_rotary_factor = partial_rotary_factor
+        self._partial_rotary_factor = partial_rotary_factor
 
         if freqs is not None and partial_rotary_factor is not None:
             raise ValueError(
@@ -86,13 +86,12 @@ class RoPE(Module):
                 ]
             )
 
-        # The frequencies are constants, keep them out of the parameters.
-        object.__setattr__(self, "_freqs", freqs)
+        self._freqs = freqs
 
     def _extra_repr(self):
         s = f"{self.dims}, traditional={self.traditional}"
-        if self.partial_rotary_factor is not None:
-            s += f", partial_rotary_factor={self.partial_rotary_factor}"
+        if self._partial_rotary_factor is not None:
+            s += f", partial_rotary_factor={self._partial_rotary_factor}"
         return s
 
     def __call__(self, x, offset: int = 0):

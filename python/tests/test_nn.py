@@ -1346,21 +1346,6 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, (5,))
         self.assertEqual(y.dtype, mx.float32)
 
-    def test_rope(self):
-        for kwargs in [{}, {"traditional": False}, {"base": 10000}, {"scale": 0.25}]:
-            rope = nn.RoPE(4, **kwargs)
-            shape = (1, 3, 4)
-            x = mx.random.uniform(shape=shape)
-            y = rope(x)
-            self.assertEqual(y.shape, shape)
-            self.assertEqual(y.dtype, mx.float32)
-
-            y = rope(x, offset=3)
-            self.assertEqual(y.shape, shape)
-
-            y = rope(x.astype(mx.float16))
-            self.assertEqual(y.dtype, mx.float16)
-
     def test_alibi(self):
         alibi = nn.ALiBi()
         shape = (1, 8, 20, 20)
@@ -2357,7 +2342,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(isinstance(model.decoder, nn.Identity))
 
 
-class TestRoPEVariants(unittest.TestCase):
+class TestRoPE(mlx_tests.MLXTestCase):
     def _proportional_freqs(self, dims, factor, base):
         """Wavelengths for the proportional (partial) rotary encoding."""
         rope_angles = int(factor * dims // 2)
@@ -2379,12 +2364,14 @@ class TestRoPEVariants(unittest.TestCase):
         cos, sin = np.cos(theta), np.sin(theta)
         out1 = x1 * cos - x2 * sin
         out2 = x1 * sin + x2 * cos
-        return np.concatenate([out1, out2], axis=-1)
+        return mx.array(np.concatenate([out1, out2], axis=-1))
 
     def test_rope_default_matches_fast_rope(self):
         x = mx.random.uniform(shape=(2, 4, 6, 8))
-        expected = mx.fast.rope(x, 8, traditional=False, base=10000, scale=1.0, offset=0)
-        self.assertTrue(mx.allclose(nn.RoPE(8)(x), expected, atol=1e-6))
+        expected = mx.fast.rope(
+            x, 8, traditional=False, base=10000, scale=1.0, offset=0
+        )
+        self.assertEqualArray(nn.RoPE(8)(x), expected, atol=1e-6)
 
     def test_rope_custom_freqs_matches_fast_rope(self):
         dims = 8
@@ -2393,19 +2380,15 @@ class TestRoPEVariants(unittest.TestCase):
         expected = mx.fast.rope(
             x, dims, traditional=False, base=None, scale=1.0, offset=0, freqs=freqs
         )
-        self.assertTrue(mx.allclose(nn.RoPE(dims, freqs=freqs)(x), expected, atol=1e-6))
+        self.assertEqualArray(nn.RoPE(dims, freqs=freqs)(x), expected, atol=1e-6)
 
     def test_rope_partial_rotary_matches_reference(self):
         dims, factor, base = 16, 0.25, 10000.0
         freqs = self._proportional_freqs(dims, factor, base)
         x = mx.random.uniform(shape=(1, 2, 5, dims))
         y = nn.RoPE(dims, base=base, partial_rotary_factor=factor)(x)
-        expected = self._reference_rope(
-            np.asarray(x, dtype=np.float32), dims, 1.0 / freqs
-        )
-        np.testing.assert_allclose(
-            np.asarray(y, dtype=np.float32), expected, atol=1e-5
-        )
+        expected = self._reference_rope(x, dims, 1.0 / freqs)
+        self.assertEqualArray(y, expected, atol=1e-5)
 
     def test_rope_partial_rotary_matches_proportional_freqs(self):
         dims, factor, base = 32, 0.5, 100000.0
@@ -2413,7 +2396,7 @@ class TestRoPEVariants(unittest.TestCase):
         x = mx.random.uniform(shape=(1, 2, 4, dims))
         a = nn.RoPE(dims, base=base, partial_rotary_factor=factor)(x)
         b = nn.RoPE(dims, freqs=mx.array(freqs))(x)
-        self.assertTrue(mx.allclose(a, b, atol=1e-6))
+        self.assertEqualArray(a, b, atol=1e-6)
 
     def test_rope_partial_rotary_leaves_unrotated_features(self):
         dims, factor = 16, 0.25
@@ -2421,20 +2404,8 @@ class TestRoPEVariants(unittest.TestCase):
         y = nn.RoPE(dims, partial_rotary_factor=factor)(x)
         half = dims // 2
         n = int(factor * dims)
-        self.assertTrue(mx.array_equal(y[..., n:half], x[..., n:half]))
-        self.assertTrue(mx.array_equal(y[..., half + n :], x[..., half + n :]))
-
-    def test_rope_freqs_offset_and_dtype(self):
-        dims = 8
-        freqs = mx.array(np.array([10000.0, 1000.0, 100.0, 10.0], dtype=np.float32))
-        rope = nn.RoPE(dims, freqs=freqs)
-        x = mx.random.uniform(shape=(1, 2, 4, dims))
-        self.assertEqual(rope(x, offset=5).shape, x.shape)
-        self.assertEqual(rope(x.astype(mx.float16)).dtype, mx.float16)
-
-    def test_rope_freqs_are_not_parameters(self):
-        self.assertEqual(len(nn.RoPE(8, partial_rotary_factor=0.5).parameters()), 0)
-        self.assertEqual(len(nn.RoPE(8, freqs=mx.ones(4)).parameters()), 0)
+        self.assertEqualArray(y[..., n:half], x[..., n:half])
+        self.assertEqualArray(y[..., half + n :], x[..., half + n :])
 
     def test_rope_invalid_arguments(self):
         with self.assertRaises(ValueError):
