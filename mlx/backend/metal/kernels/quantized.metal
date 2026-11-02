@@ -196,6 +196,26 @@
   instantiate_qmv_wide_batched(affine_qmv_wide, type, group_size, bits, 8, 8)
 
 ///////////////////////////////////////////////////////////////////////////////
+// affine_qmv_mma
+///////////////////////////////////////////////////////////////////////////////
+
+#define instantiate_qmv_mma(name, type, group_size, bits, wk, bn, tm) \
+  instantiate_kernel( \
+      #name "_" #type "_gs_" #group_size "_b_" #bits "_wk_" #wk "_bn_" #bn "_tm_" #tm, \
+      name,           \
+      type,           \
+      group_size,     \
+      bits,           \
+      wk,             \
+      bn,             \
+      tm)
+
+#define instantiate_qmv_mma_all(type, group_size, bits)               \
+  instantiate_qmv_mma(affine_qmv_mma, type, group_size, bits, 4, 16, 1) \
+  instantiate_qmv_mma(affine_qmv_mma, type, group_size, bits, 4, 16, 2) \
+  instantiate_qmv_mma(affine_qmv_mma, type, group_size, bits, 4, 32, 1)
+
+///////////////////////////////////////////////////////////////////////////////
 // Instantiation
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -216,7 +236,9 @@
   instantiate_quantized_all(type, group_size, 4)         \
   instantiate_quantized_all(type, group_size, 5)         \
   instantiate_quantized_all(type, group_size, 6)         \
-  instantiate_quantized_all(type, group_size, 8)
+  instantiate_quantized_all(type, group_size, 8)         \
+  instantiate_qmv_mma_all(type, group_size, 4)           \
+  instantiate_qmv_mma_all(type, group_size, 8)
 
 #define instantiate_quantized_all_groups(type) \
   instantiate_quantized_all_bits(type, 32)     \

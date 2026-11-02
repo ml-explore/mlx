@@ -849,7 +849,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertLess(rel_err(out, x @ w_hat.swapaxes(-1, -2)), 3e-2)
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
-    def test_qmm_few_rows(self):
+    def test_fp_qmm_few_rows(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("Covers GPU kernels only")
         mx.random.seed(0)
@@ -883,6 +883,43 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 with self.subTest(N=N, mode=mode, dtype=dtype, offset=name):
                     out = mx.quantized_matmul(xv, w_q, sv, mode=mode)
                     self.assertLess(rel_err(out, xv @ w_hat.T), tol)
+
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_affine_qmm_few_rows(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        mx.random.seed(0)
+
+        def rel_err(got, expected):
+            d = mx.abs(got.astype(mx.float32) - expected.astype(mx.float32))
+            return d.max() / mx.abs(expected.astype(mx.float32)).max()
+
+        for (K, N), M, bits, gs, dtype in product(
+            [
+                (4224, 4128),
+                (512, 4096),  # smallest K: one K step per simdgroup
+            ],
+            [3, 8, 9],
+            [4, 8],
+            [32, 64, 128],
+            [mx.bfloat16, mx.float16, mx.float32],
+        ):
+            with self.subTest(M=M, N=N, K=K, bits=bits, gs=gs, dtype=dtype):
+                tol = 1e-5 if dtype == mx.float32 else 3e-2
+                x = (mx.random.normal((M, K)) / K**0.5).astype(dtype)
+                w = mx.random.normal((N, K), dtype=dtype)
+                w_q, scales, biases = mx.quantize(w, group_size=gs, bits=bits)
+                w_hat = mx.dequantize(w_q, scales, biases, group_size=gs, bits=bits)
+                y_ref = x @ w_hat.T
+                out = mx.quantized_matmul(
+                    x,
+                    w_q,
+                    scales,
+                    biases,
+                    group_size=gs,
+                    bits=bits,
+                )
+                self.assertLess(rel_err(out, y_ref), tol)
 
     def test_qmm_vjp(self):
         key = mx.random.key(0)
