@@ -4983,7 +4983,14 @@ array quantized_matmul(
     throw std::invalid_argument(msg.str());
   }
   std::vector<array> inputs;
-  if (qmode == QuantizationMode::Affine) {
+  bool narrow_constants = qmode == QuantizationMode::Affine &&
+      x.dtype() == float32 &&
+      (scales.dtype() == float16 || scales.dtype() == bfloat16) &&
+      biases->dtype() == scales.dtype() && to_stream(s).device == Device::gpu &&
+      metal::is_available();
+  if (narrow_constants) {
+    inputs = {x, w, scales, *biases};
+  } else if (qmode == QuantizationMode::Affine) {
     inputs = {
         astype(x, dtype, s),
         w,

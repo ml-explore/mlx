@@ -847,11 +847,16 @@ METAL_FUNC void qmv_quad_impl(
   }
 }
 
-template <typename T, int group_size, int bits, bool partial_rows = false>
+template <
+    typename T,
+    int group_size,
+    int bits,
+    bool partial_rows = false,
+    typename S = T>
 METAL_FUNC void qmv_fast_impl(
     const device uint32_t* w,
-    const device T* scales,
-    const device T* biases,
+    const device S* scales,
+    const device S* biases,
     const device T* x,
     device T* y,
     const constant int& in_vec_size,
@@ -911,8 +916,8 @@ METAL_FUNC void qmv_fast_impl(
         src = min(row, last_row);
       }
       auto wl = (const device uint8_t*)(ws + src * in_vec_size_w);
-      const device T* sl = scales + src * in_vec_size_g;
-      const device T* bl = biases + src * in_vec_size_g;
+      const device S* sl = scales + src * in_vec_size_g;
+      const device S* bl = biases + src * in_vec_size_g;
 
       U s = sl[0];
       U b = bl[0];
@@ -942,8 +947,8 @@ METAL_FUNC void qmv_fast_impl(
           src = min(row, last_row);
         }
         auto wl = (const device uint8_t*)(ws + src * in_vec_size_w);
-        const device T* sl = scales + src * in_vec_size_g;
-        const device T* bl = biases + src * in_vec_size_g;
+        const device S* sl = scales + src * in_vec_size_g;
+        const device S* bl = biases + src * in_vec_size_g;
 
         U s = sl[0];
         U b = bl[0];
@@ -1737,6 +1742,31 @@ template <typename T, int group_size, int bits, int D, bool batched>
       tid,
       quad_gid,
       quad_lid);
+}
+
+template <typename S, int group_size, int bits, bool partial_rows>
+[[kernel]] void affine_qmv_fast_mixed(
+    const device uint32_t* w [[buffer(0)]],
+    const device S* scales [[buffer(1)]],
+    const device S* biases [[buffer(2)]],
+    const device float* x [[buffer(3)]],
+    device float* y [[buffer(4)]],
+    const constant int& in_vec_size [[buffer(5)]],
+    const constant int& out_vec_size [[buffer(6)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  qmv_fast_impl<float, group_size, bits, partial_rows, S>(
+      w,
+      scales,
+      biases,
+      x,
+      y,
+      in_vec_size,
+      out_vec_size,
+      tid,
+      simd_gid,
+      simd_lid);
 }
 
 template <
