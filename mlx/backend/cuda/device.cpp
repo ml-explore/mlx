@@ -41,7 +41,7 @@ inline bool is_empty_dim(dim3 dim) {
 template <typename F>
 std::string kernel_node_type(F func, dim3 cluster_dim) {
   if (is_empty_dim(cluster_dim)) {
-    return "K";
+    return fmt::format("K@{:x}", reinterpret_cast<uintptr_t>(func));
   }
   return fmt::format(
       "K{}x{}x{}@{:x}",
@@ -405,10 +405,10 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
   // Constructs a key representing the nodes of a sub-graph.
   // Also checks if the sub-graph is updatable as CUDA graphs do not get
   // updated correctly if a kernel node getting updated has a different cluster
-  // shape than the node it's being updated with. Updating a clustered node to a
-  // different function can also keep the old cluster shape (cuBLAS nvjet 2x2f
-  // to 2x1 runs in 4-CTA clusters and hangs), so clustered nodes key on the
-  // function.
+  // shape than the node it's being updated with. Updating a kernel node to a
+  // different function can also keep launch settings of the old function
+  // (cuBLAS nvjet 2x2f to 2x1 keeps 4-CTA clusters and hangs), so kernel nodes
+  // key on the function.
   std::string key = "(";
   size_t num_nodes = 0;
   CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, nullptr, &num_nodes));
@@ -450,14 +450,12 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
         } else {
           key += "K";
           key += std::to_string(cluster_dim.clusterDim.x);
-          if (cluster_dim.clusterDim.x > 1) {
-            CUDA_KERNEL_NODE_PARAMS params = {};
-            CHECK_CUDA_ERROR(cuGraphKernelNodeGetParams(node, &params));
-            key += fmt::format(
-                "@{:x}.{:x}",
-                reinterpret_cast<uintptr_t>(params.func),
-                reinterpret_cast<uintptr_t>(params.kern));
-          }
+          CUDA_KERNEL_NODE_PARAMS params = {};
+          CHECK_CUDA_ERROR(cuGraphKernelNodeGetParams(node, &params));
+          key += fmt::format(
+              "@{:x}.{:x}",
+              reinterpret_cast<uintptr_t>(params.func),
+              reinterpret_cast<uintptr_t>(params.kern));
         }
         break;
       }
