@@ -1916,8 +1916,6 @@ template <
       simd_lid);
 }
 
-// Few rows of x times transposed affine weights, as fp_qmv_mma. 4 and 8 bits
-// only: a lane's 32 values are nibble or byte aligned and decode through half.
 template <typename T, int group_size, int bits, int WK, int BN, int TM>
 [[kernel]] void affine_qmv_mma(
     const device uint32_t* w,
