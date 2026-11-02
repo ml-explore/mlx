@@ -28,6 +28,13 @@ template <typename T, int N>
 Simd<T, N> exp(Simd<T, N> in) {
   if constexpr (is_complex<T>) {
     return Simd<T, 1>{std::exp(in.value)};
+  } else if constexpr (std::is_same_v<T, double>) {
+    // The path below computes in float32.
+    Simd<T, N> out;
+    for (int i = 0; i < N; ++i) {
+      out[i] = std::exp(in[i]);
+    }
+    return out;
   } else {
     Simd<float, N> x_init = in;
     auto x = x_init * 1.442695f; // multiply with log_2(e)
@@ -121,6 +128,14 @@ Simd<T, N> sincos(Simd<T, N> in) {
 // to libm instead. 2^23 keeps x * 4/pi under 2^24 with room to spare.
 template <bool Sine, typename T, int N>
 Simd<T, N> sincos_checked(Simd<T, N> x) {
+  if constexpr (std::is_same_v<T, double>) {
+    // The path below computes in float32.
+    Simd<T, N> out;
+    for (int i = 0; i < N; ++i) {
+      out[i] = Sine ? std::sin(x[i]) : std::cos(x[i]);
+    }
+    return out;
+  }
   Simd<float, N> xf = x;
   if (any(abs(xf) > Simd<float, N>(8388608.0f))) {
     Simd<T, N> out;
@@ -153,6 +168,14 @@ Simd<T, N> cos(Simd<T, N> x) {
 
 template <typename T, int N>
 Simd<T, N> erf(Simd<T, N> x) {
+  if constexpr (std::is_same_v<T, double>) {
+    // The path below computes in float32.
+    Simd<T, N> out;
+    for (int i = 0; i < N; ++i) {
+      out[i] = std::erf(x[i]);
+    }
+    return out;
+  }
   // https://github.com/pytorch/pytorch/blob/abf28982a8cb43342e7669d859de9543fd804cc9/aten/src/ATen/cpu/vec/vec256/vec256_float.h#L175
   Simd<float, N> v = x;
   auto t = recip(fma(Simd<float, N>(0.3275911f), abs(v), 1.0f));

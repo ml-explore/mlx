@@ -31,7 +31,7 @@ struct TransformAdd {
   }
 
   static METAL_FUNC OutT apply(InT x, OutT c) {
-    return static_cast<OutT>(x) + c;
+    return static_cast<OutT>(x + static_cast<InT>(c));
   }
 };
 
@@ -49,7 +49,8 @@ struct TransformAxpby {
 
   METAL_FUNC OutT apply(InT x, OutT c) const thread {
     return static_cast<OutT>(
-        x * static_cast<InT>(alpha) + (static_cast<OutT>(beta) * c));
+        x * static_cast<InT>(alpha) +
+        static_cast<InT>(beta) * static_cast<InT>(c));
   }
 };
 

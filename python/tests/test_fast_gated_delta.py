@@ -1,5 +1,6 @@
 import os
 import unittest
+from itertools import product
 
 import mlx.core as mx
 import mlx_tests
@@ -32,7 +33,7 @@ def gated_delta_oracle(
         k: [B, T, H, K]
         v: [B, T, H, V]
         beta: [B, T, H]
-        g: [B, T, H]                    <--- Difference: with out kernel:
+        g: [B, T, H] or [B, T, H, K]    <--- Difference: with out kernel:
                                             this is expected as a log.
         scale: float, optional          <--- Difference: This is done by the
                                             qwen3_5 model.
@@ -60,7 +61,12 @@ def gated_delta_oracle(
         b_q = q[:, :, i]
         b_k = k[:, :, i]
         b_v = v[:, :, i].clone()
-        h = h.clone() * g[:, :, i].exp()[..., None, None]
+        gate = g[:, :, i].exp()
+        if gate.ndim == 3:
+            gate = gate[..., None]
+        else:
+            gate = gate[..., None, None]
+        h = h.clone() * gate
         b_beta = beta[:, :, i]
         b_v = b_v - (h.clone() * b_k[..., None]).sum(-2)
         b_v = b_v * b_beta[..., None]
@@ -73,7 +79,7 @@ def gated_delta_oracle(
     return o, h
 
 
-def runner(dims, stream=mx.gpu, reference=True):
+def runner(dims, stream=mx.gpu, reference=True, vectorized_g=False):
     B, Hk, Hv, T, Dk, Dv = dims
 
     assert Hv % Hk == 0
@@ -83,7 +89,8 @@ def runner(dims, stream=mx.gpu, reference=True):
     k = mx.random.normal(shape=(B, T, Hk, Dk))
     k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
     v = mx.random.normal(shape=(B, T, Hv, Dv))
-    g = mx.random.uniform(shape=(B, T, Hv))
+    g_shape = (B, T, Hv, Dk) if vectorized_g else (B, T, Hv)
+    g = mx.random.uniform(shape=g_shape)
     b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
     h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
 
@@ -259,6 +266,17 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
             )
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_gated_delta_vectorized_g(self):
+        for dims in self.gpu_dims:
+            mx.random.seed(0)
+            (out, hf), (out_ref, hf_ref) = runner(
+                dims, reference=has_torch, vectorized_g=True
+            )
+            mx.eval(out, hf, out_ref, hf_ref)
+            self.assertTrue(mx.allclose(out_ref, out, atol=1e-4, rtol=1e-4))
+            self.assertTrue(mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_simdgroup(self):
         os.environ["GATED_DELTA_CHUNK"] = "8"
         for dims in self.gpu_dims:
@@ -286,7 +304,7 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_gated_delta_vjp(self):
-        for dims in self.vjp_dims:
+        for dims, vectorized_g in product(self.vjp_dims, (True, False)):
             B, Hk, Hv, T, Dk, Dv = dims
 
             mx.random.seed(0)
@@ -294,7 +312,8 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
             k = mx.random.normal(shape=(B, T, Hk, Dk))
             k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
             v = mx.random.normal(shape=(B, T, Hv, Dv))
-            g = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
+            g_shape = (B, T, Hv, Dk) if vectorized_g else (B, T, Hv)
+            g = mx.sigmoid(mx.random.normal(shape=g_shape))
             b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
             h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
             primals = [q, k, v, g, b, h0]
@@ -309,9 +328,9 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 return out, state
 
             def run(fallback, chunk):
-                with mlx_tests.scoped_env(
-                    GATED_DELTA_VJP_FALLBACK="1" if fallback else "0",
-                    GATED_DELTA_CHUNK_VJP=str(chunk),
+                with mx.config.scoped_update(
+                    GATED_DELTA_VJP_FALLBACK=1 if fallback else 0,
+                    GATED_DELTA_CHUNK_VJP=chunk,
                 ):
                     outs, vjps = mx.vjp(f, primals, cotans)
                     mx.eval(outs, vjps)
@@ -322,17 +341,19 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
             for chunk in (0, 16):
                 rtol = 1e-5 if chunk == 0 else 1e-2
                 atol = 1e-5 if chunk == 0 else 1e-2
-                with self.subTest(dims=dims, chunk=chunk):
+                with self.subTest(dims=dims, vectorized_g=vectorized_g, chunk=chunk):
                     o_out, vjp_out = run(False, chunk)
                     for i in range(len(o_ref)):
                         self.assertTrue(
                             mx.allclose(o_ref[i], o_out[i], rtol=rtol, atol=atol),
-                            msg=f"Output {i}, dims={dims}, chunk={chunk}",
+                            msg=f"Output {i}, dims={dims}, "
+                            f"vectorized_g={vectorized_g}, chunk={chunk}",
                         )
                     for i in range(len(vjp_ref)):
                         self.assertTrue(
                             mx.allclose(vjp_ref[i], vjp_out[i], rtol=rtol, atol=atol),
-                            msg=f"Grad {i}, dims={dims}, chunk={chunk}",
+                            msg=f"Grad {i}, dims={dims}, "
+                            f"vectorized_g={vectorized_g}, chunk={chunk}",
                         )
             mx.clear_cache()
 

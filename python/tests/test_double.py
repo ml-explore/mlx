@@ -54,6 +54,17 @@ class TestDouble(mlx_tests.MLXTestCase):
                 mx.allclose(y, y_double.astype(mx.float32, mx.cpu), equal_nan=True)
             )
 
+    def test_unary_ops_keep_double_precision(self):
+        # CPU exp, sin, cos and erf used to go through a float32 path, which
+        # also flushed results below the float32 range to zero
+        with mx.stream(mx.cpu):
+            vals = np.array([-94.8, -20.0, -1.0, 0.3, 1.0, 2.5, 10.0])
+            x = mx.array(vals, dtype=mx.float64)
+            for op, ref in [(mx.exp, np.exp), (mx.sin, np.sin), (mx.cos, np.cos)]:
+                self.assertTrue(np.allclose(op(x), ref(vals), rtol=1e-12, atol=0))
+            expected = np.array([math.erf(v) for v in vals])
+            self.assertTrue(np.allclose(mx.erf(x), expected, rtol=1e-12, atol=0))
+
     def test_binary_ops(self):
         shape = (3, 3)
         a = mx.random.normal(shape=shape)

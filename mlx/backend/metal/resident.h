@@ -25,8 +25,8 @@ namespace mlx::core::metal {
 // size of each set bounds the cost of one such event. Every set holds a
 // standing requestResidency() and is attached to every command queue.
 //
-// MLX_RESIDENCY_SET_MAX_PCT (env::residency_set_max_pct) sets the per-set cap.
-// The total wired budget is unaffected by it: that is still `set_wired_limit`.
+// MLX_RESIDENCY_SET_MAX_PCT sets the per-set cap. The total wired budget is
+// unaffected by it: that is still `set_wired_limit`.
 class ResidencySets {
  public:
   ResidencySets(MTL::Device* d);

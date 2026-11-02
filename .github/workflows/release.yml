@@ -141,7 +141,7 @@ jobs:
     strategy:
       matrix:
         python-version: *pyver
-    runs-on: 'macos-26-xlarge'
+    runs-on: [self-hosted, macos]
     env: *build-env
     steps:
       - uses: actions/checkout@v7
@@ -168,6 +168,12 @@ jobs:
         uses: ./.github/actions/build-wheel
         with:
           macos-target: '26.2'
+          cmake-args: ${{ steps.setup.outputs.cmake-args }}
+          build-backend: ${{ matrix.python-version == '3.10' }}
+      - name: Build macOS 27 package
+        uses: ./.github/actions/build-wheel
+        with:
+          macos-target: '27.0'
           cmake-args: ${{ steps.setup.outputs.cmake-args }}
           build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Display content of the wheels
@@ -214,7 +220,7 @@ jobs:
     runs-on: |-
       ${{ case(matrix.os == 'Windows', case(matrix.arch == 'aarch64', 'windows-11-arm',
                                             'windows-2022'),
-               matrix.os == 'macOS', 'macos-26-xlarge',
+               matrix.os == 'macOS', fromJson('["self-hosted","macos"]'),
                case(matrix.arch == 'x86_64' && startsWith(matrix.toolkit, 'cuda'), 'gpu-t4-4-core',
                     matrix.arch == 'aarch64', 'ubuntu-22.04-arm',
                     'ubuntu-22.04'))

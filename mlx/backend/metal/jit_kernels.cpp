@@ -1075,48 +1075,35 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const array& x,
+    const std::string& mode,
     int group_size,
     int bits,
-    const std::string& mode,
+    bool has_global_scale,
+    bool transpose,
     int bm,
     int bn,
     int bk,
     int wm,
-    int wn,
-    bool transpose,
-    bool has_global_scale) {
+    int wn) {
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
     std::string kernel_source;
     concatenate(
         kernel_source, metal::utils(), metal::quantized_utils(), metal::gemm());
-    bool is_affine = mode == "affine";
-    // Only the fp kernel takes a global scale.
-    auto template_def = is_affine ? get_template_definition(
-                                        lib_name,
-                                        "affine_gather_qmm_rhs",
-                                        get_type_string(x.dtype()),
-                                        group_size,
-                                        bits,
-                                        bm,
-                                        bn,
-                                        bk,
-                                        wm,
-                                        wn,
-                                        transpose)
-                                  : get_template_definition(
-                                        lib_name,
-                                        "fp_gather_qmm_rhs",
-                                        get_type_string(x.dtype()),
-                                        group_size,
-                                        bits,
-                                        bm,
-                                        bn,
-                                        bk,
-                                        wm,
-                                        wn,
-                                        transpose,
-                                        has_global_scale);
+    bool is_affine = (mode == "affine");
+    auto template_def = get_template_definition(
+        lib_name,
+        is_affine ? "affine_gather_qmm_rhs" : "fp_gather_qmm_rhs",
+        get_type_string(x.dtype()),
+        group_size,
+        bits,
+        has_global_scale,
+        transpose,
+        bm,
+        bn,
+        bk,
+        wm,
+        wn);
     concatenate(
         kernel_source,
         is_affine ? metal::quantized() : metal::fp_quantized(),
@@ -1311,16 +1298,16 @@ MTL::ComputePipelineState* get_gather_qmm_nax_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const array& x,
+    const std::string& mode,
     int group_size,
     int bits,
-    const std::string& mode,
+    bool has_global_scale,
+    bool transpose,
     int bm,
     int bn,
     int bk,
     int wm,
-    int wn,
-    bool transpose,
-    bool has_global_scale) {
+    int wn) {
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
     std::string kernel_source;
@@ -1329,33 +1316,20 @@ MTL::ComputePipelineState* get_gather_qmm_nax_kernel(
         metal::utils(),
         metal::gemm_nax(),
         metal::quantized_utils());
-    bool is_affine = mode == "affine";
-    // Only the fp kernel takes a global scale.
-    auto template_def = is_affine ? get_template_definition(
-                                        lib_name,
-                                        "affine_gather_qmm_rhs_nax",
-                                        get_type_string(x.dtype()),
-                                        group_size,
-                                        bits,
-                                        bm,
-                                        bn,
-                                        bk,
-                                        wm,
-                                        wn,
-                                        transpose)
-                                  : get_template_definition(
-                                        lib_name,
-                                        "fp_gather_qmm_rhs_nax",
-                                        get_type_string(x.dtype()),
-                                        group_size,
-                                        bits,
-                                        bm,
-                                        bn,
-                                        bk,
-                                        wm,
-                                        wn,
-                                        transpose,
-                                        has_global_scale);
+    bool is_affine = (mode == "affine");
+    auto template_def = get_template_definition(
+        lib_name,
+        is_affine ? "affine_gather_qmm_rhs_nax" : "fp_gather_qmm_rhs_nax",
+        get_type_string(x.dtype()),
+        group_size,
+        bits,
+        has_global_scale,
+        transpose,
+        bm,
+        bn,
+        bk,
+        wm,
+        wn);
     concatenate(
         kernel_source,
         is_affine ? metal::quantized_nax() : metal::fp_quantized_nax(),

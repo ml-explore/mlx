@@ -75,20 +75,20 @@ struct PyCustomKernelFunction {
   const char* tag_;
 };
 
-mx::MathMode parse_metal_math_mode(const std::string& math_mode) {
+mx::fast::MathMode parse_metal_math_mode(const std::string& math_mode) {
   if (math_mode == "safe") {
-    return mx::MathMode::Safe;
+    return mx::fast::MathMode::Safe;
   } else if (math_mode == "relaxed") {
-    return mx::MathMode::Relaxed;
+    return mx::fast::MathMode::Relaxed;
   } else if (math_mode == "fast") {
-    return mx::MathMode::Fast;
+    return mx::fast::MathMode::Fast;
   }
   throw std::invalid_argument(
       "[metal_kernel] Expected math_mode to be 'safe', 'relaxed', or 'fast'.");
 }
 
-mx::CompileOptions parse_compile_options(const nb::object& obj) {
-  mx::CompileOptions result;
+mx::fast::CompileOptions parse_compile_options(const nb::object& obj) {
+  mx::fast::CompileOptions result;
   if (obj.is_none()) {
     return result;
   }

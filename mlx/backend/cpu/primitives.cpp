@@ -91,7 +91,7 @@ void AsStrided::eval_cpu(const std::vector<array>& inputs, array& out) {
     eval(inputs[0], out);
   } else {
     auto copy = contiguous_copy_cpu(inputs[0], stream());
-    cpu::get_command_encoder(stream()).add_temporary(copy);
+    // Donated to out.
     eval(copy, out);
   }
 }

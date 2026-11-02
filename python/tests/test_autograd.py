@@ -1687,6 +1687,22 @@ class TestAutograd(mlx_tests.MLXTestCase):
             expected = cotangent * mx.conj(deriv(z))
             self.assertTrue(mx.allclose(vjp, expected, atol=1e-5), msg=str(fn))
 
+    def test_complex_power_vjps(self):
+        mx.random.seed(0)
+        z = mx.random.normal((3, 4, 5), dtype=mx.complex64) + 2.0
+        w = 0.5 * mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        cotangent = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        dz = w * mx.power(z, w - 1)
+        dw = mx.log(z) * mx.power(z, w)
+
+        _, (jvp,) = mx.jvp(mx.power, [z, w], [cotangent, cotangent])
+        expected = cotangent * (dz + dw)
+        self.assertTrue(mx.allclose(jvp, expected, atol=1e-4))
+
+        _, (vjp_z, vjp_w) = mx.vjp(mx.power, [z, w], [cotangent])
+        self.assertTrue(mx.allclose(vjp_z, cotangent * mx.conj(dz), atol=1e-4))
+        self.assertTrue(mx.allclose(vjp_w, cotangent * mx.conj(dw), atol=1e-4))
+
     def test_complex_abs_grad(self):
         mx.random.seed(0)
         primal = mx.random.normal((3, 4, 5), dtype=mx.complex64)

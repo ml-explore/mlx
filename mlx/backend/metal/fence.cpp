@@ -15,7 +15,7 @@ struct FenceImpl {
     if (!d->supportsFamily(MTL::GPUFamilyMetal3)) {
       use_fast = false;
     } else if (__builtin_available(macOS 15, iOS 18, *)) {
-      use_fast = env::metal_fast_synch();
+      use_fast = config::get("MLX_METAL_FAST_SYNCH", 0);
     }
 
     if (!use_fast) {

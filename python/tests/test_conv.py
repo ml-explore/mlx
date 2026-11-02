@@ -1219,6 +1219,59 @@ class TestConv(mlx_tests.MLXTestCase):
             self.assertEqual(grad.shape, x.shape)
             self.assertTrue(mx.allclose(grad, expected, atol=1e-4, rtol=1e-4))
 
+    @unittest.skipIf(mx.metal.is_available(), "FIXME Flaky in Metal")
+    def test_input_dilation_grad(self):
+        def dilate(x, dilation):
+            shape = [(n - 1) * d + 1 for n, d in zip(x.shape[1:-1], dilation)]
+            idx = (slice(None),) + tuple(slice(None, None, d) for d in dilation)
+            return mx.zeros([x.shape[0], *shape, x.shape[-1]]).at[idx].add(x)
+
+        def conv_loss(x, w, stride, padding, dilation):
+            out = mx.conv_general(
+                x, w, stride=stride, padding=padding, input_dilation=dilation
+            )
+            return mx.sum(out * out)
+
+        def dilated_loss(x, w, stride, padding, dilation):
+            out = mx.conv_general(
+                dilate(x, dilation), w, stride=stride, padding=padding
+            )
+            return mx.sum(out * out)
+
+        for in_shape, w_shape, stride, padding, dilation in [
+            ((1, 5, 1), (1, 1, 1), (1,), ([0], [1]), (2,)),
+            ((1, 5, 1), (1, 1, 1), (1,), ([1], [0]), (2,)),
+            ((1, 5, 1), (1, 2, 1), (2,), ([0], [0]), (2,)),
+            ((1, 5, 1), (1, 3, 1), (2,), ([1], [0]), (3,)),
+            ((1, 6, 2), (3, 2, 2), (1,), ([4], [3]), (3,)),
+            ((1, 3, 1), (1, 1, 1), (2,), ([2], [1]), (2,)),
+            ((1, 3, 1), (1, 3, 1), (3,), ([0], [0]), (2,)),
+            ((2, 5, 4, 3), (4, 2, 3, 3), (2, 1), ([1, 0], [0, 2]), (2, 3)),
+            (
+                (1, 3, 4, 3, 2),
+                (2, 2, 2, 2, 2),
+                (1, 2, 1),
+                ([0, 1, 0], [1, 0, 2]),
+                (2, 2, 3),
+            ),
+        ]:
+            x = mx.random.normal(in_shape)
+            w = mx.random.normal(w_shape)
+            args = (stride, padding, dilation)
+            out = mx.conv_general(
+                x, w, stride=stride, padding=padding, input_dilation=dilation
+            )
+            expected = mx.conv_general(
+                dilate(x, dilation), w, stride=stride, padding=padding
+            )
+            self.assertEqual(out.shape, expected.shape)
+            self.assertTrue(mx.allclose(out, expected, atol=1e-4, rtol=1e-4))
+            expected = mx.grad(dilated_loss, argnums=(0, 1))(x, w, *args)
+            grads = mx.grad(conv_loss, argnums=(0, 1))(x, w, *args)
+            for grad, exp in zip(grads, expected):
+                self.assertEqual(grad.shape, exp.shape)
+                self.assertTrue(mx.allclose(grad, exp, atol=1e-4, rtol=1e-4))
+
     @unittest.skipIf(mx.cuda.is_available() and "CI" in os.environ, "flaky in CI")
     def test_conv_1d_with_2d(self):
         x = mx.random.uniform(shape=(2, 10, 16))
@@ -1452,7 +1505,7 @@ class TestConv(mlx_tests.MLXTestCase):
         )
 
         def run(x, w, env={}):
-            with mlx_tests.scoped_env(**env):
+            with mx.config.scoped_update(**env):
                 y = mx.conv2d(x, w, padding=1)
                 mx.eval(y)
                 return np.array(y)
@@ -1477,12 +1530,12 @@ class TestConv(mlx_tests.MLXTestCase):
             # final tile.
             for tile in (1, 3):
                 with self.subTest(in_shape=in_shape, tile=tile):
-                    tiled = run(x, w, {tile_key: str(tile)})
+                    tiled = run(x, w, {tile_key: tile})
                     self.assertTrue(np.array_equal(untiled, tiled))
 
                     # A consumer op checks the output is fenced across
                     # command encoders.
-                    with mlx_tests.scoped_env(MLX_CONV_WINOGRAD_TILE_BATCH=str(tile)):
+                    with mx.config.scoped_update(MLX_CONV_WINOGRAD_TILE_BATCH=tile):
                         fused = mx.conv2d(x, w, padding=1) + b
                         mx.eval(fused)
                     self.assertTrue(np.allclose(untiled, fused, atol=1e-4))
@@ -1498,20 +1551,20 @@ class TestConv(mlx_tests.MLXTestCase):
             )
             used = (n * iH * iW * (C + OC) + 64 * C * OC) * 4
             with self.subTest(in_shape=in_shape, budget="tiled"):
-                budget = str(int((used + 5 * per_n // 2) / 0.75))
+                budget = int((used + 5 * per_n // 2) / 0.75)
                 tiled = run(x, w, {ws_key: budget})
                 self.assertTrue(np.array_equal(untiled, tiled))
 
             # Too small for even one batch element: must fall back.
             with self.subTest(in_shape=in_shape, budget="infeasible"):
-                fallback = run(x, w, {ws_key: "1"})
+                fallback = run(x, w, {ws_key: 1})
                 self.assertFalse(np.array_equal(untiled, fallback))
                 self.assertTrue(np.allclose(fallback, cpu_ref, atol=1e-3))
 
             # A forced tile is capped by the budget, so this must still
             # fall back.
             with self.subTest(in_shape=in_shape, budget="forced+infeasible"):
-                capped = run(x, w, {ws_key: "1", tile_key: "1"})
+                capped = run(x, w, {ws_key: 1, tile_key: 1})
                 self.assertFalse(np.array_equal(untiled, capped))
                 self.assertTrue(np.allclose(capped, cpu_ref, atol=1e-3))
 
@@ -1529,7 +1582,7 @@ class TestConv(mlx_tests.MLXTestCase):
         winograd = np.array(mx.conv2d(xb, w, padding=1))
         self.assertFalse(np.array_equal(winograd[0], single[0]))
 
-        with mlx_tests.scoped_env(MLX_CONV_WINOGRAD="0"):
+        with mx.config.scoped_update(MLX_CONV_WINOGRAD=0):
             gemm = np.array(mx.conv2d(xb, w, padding=1))
         for i in range(3):
             self.assertTrue(np.array_equal(gemm[i], single[0]))

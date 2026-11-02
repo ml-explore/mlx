@@ -12,7 +12,7 @@ runs:
   steps:
     - name: Install tests dependencies
       shell: bash
-      run: uv pip install tensorflow
+      run: uv pip install pytest pytest-xdist tensorflow
 
     - name: Run tests
       shell: bash
@@ -20,65 +20,54 @@ runs:
         METAL_DEBUG_ERROR_MODE: 0
         METAL_DEVICE_WRAPPER_TYPE: 1
       run: |
-        run_tests() {
-          for WHEEL in dist/*.whl; do
-            break
-          done
-
+        for WHEEL in dist/*.whl; do
           echo "::group::Install $WHEEL"
           uv pip install $WHEEL
           echo "::endgroup::"
+          break
+        done
 
-          echo "::group::Run CPP tests"
-          ./build/tests/tests
-          echo "::endgroup::"
+        echo "::group::Run CPP tests"
+        ./build/*/mlx.core/tests/tests
+        echo "::endgroup::"
 
-          echo "::group::Run distributed tests"
-          # TODO: Re-enable for GPU after openmpi updating their libprrte
-          # dependency: https://github.com/openpmix/prrte/issues/2416
-          if ${{ inputs.toolkit == 'cpu' }} ; then
-            mpirun --bind-to none -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib uv run python/tests/mpi_test_distributed.py
-          fi
-          mlx.launch --verbose -n 8 uv run python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
-          if $(grep "\[WARN\]" stderr.log); then
-            echo "Distributed ring test failed"
-            exit 1
-          fi
-          echo "::endgroup::"
+        echo "::group::Run distributed tests"
+        # TODO: Re-enable for GPU after openmpi updating their libprrte
+        # dependency: https://github.com/openpmix/prrte/issues/2416
+        if ${{ inputs.toolkit == 'cpu' }} ; then
+          mpirun --bind-to none -host localhost:8 -np 8 -x \
+            MLX_MPI_LIBNAME=/opt/homebrew/lib/libmpi.dylib \
+            uv run python/tests/mpi_test_distributed.py
+        fi
+        mlx.launch --verbose -n 8 uv run python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
+        if $(grep "\[WARN\]" stderr.log); then
+          echo "Distributed ring test failed"
+          exit 1
+        fi
+        echo "::endgroup::"
 
-          echo "::group::Run Python tests"
-          uv run python/tests/run.py -v
-          echo "::endgroup::"
-
-          if ${{ inputs.toolkit != 'cpu' }} ; then
-            echo "::group::Build example extension"
-            pushd examples/cmake_extension
-            uv pip install -r requirements.txt
-            uv run setup.py build_ext --inplace
-            uv run test.py
-            popd
-            echo "::endgroup::"
-
-            echo "::group::Build Metal extension example"
-            pushd examples/metal_extension
-            uv pip install -r requirements.txt
-            uv run setup.py build_ext --inplace
-            uv run test.py
-            popd
-            echo "::endgroup::"
-          fi
-        }
-
-        if [[ -d artifact ]] ; then
-          for SUBDIR in artifact/*; do
-            rm -rf build dist
-            mv $SUBDIR/* .
-            # Downloaded binaries all lose executable permission.
-            find build -type f -exec chmod 755 {} \;
-            # Path to metallib is hard-coded so move it besides executable.
-            mv build/mlx/backend/metal/kernels/mlx.metallib build/tests
-            run_tests
-          done
+        echo "::group::Run Python tests"
+        if ${{ inputs.toolkit == 'cpu' || runner.environment == 'self-hosted' }} ; then
+          uv run pytest --durations=10 -n 4 || uv run pytest --last-failed
         else
-          run_tests
+          uv run pytest --durations=10
+        fi
+        echo "::endgroup::"
+
+        if ${{ inputs.toolkit != 'cpu' }} ; then
+          echo "::group::Build example extension"
+          pushd examples/cmake_extension
+          uv pip install -r requirements.txt
+          uv run setup.py build_ext --inplace
+          uv run test.py
+          popd
+          echo "::endgroup::"
+
+          echo "::group::Build Metal extension example"
+          pushd examples/metal_extension
+          uv pip install -r requirements.txt
+          uv run setup.py build_ext --inplace
+          uv run test.py
+          popd
+          echo "::endgroup::"
         fi

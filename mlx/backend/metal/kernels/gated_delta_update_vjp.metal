@@ -1,5 +1,4 @@
 #include "mlx/backend/metal/kernels/gated_delta_update_vjp.h"
-#include "mlx/backend/metal/kernels/gated_delta_update.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
 using namespace metal;

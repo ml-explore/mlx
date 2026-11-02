@@ -658,10 +658,6 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   array mask_flat = (mask.ndim() == 1)
       ? reshape_in_eval(mask, {mask.shape(0), 1}, s)
       : flatten_in_eval(mask, 1, -1, s);
-  if (mask_flat.data<void>() != mask.data<void>()) {
-    compute_encoder.add_temporary(mask_flat);
-  }
-
   if (!mask_flat.flags().row_contiguous) {
     mask_flat = contiguous_copy_gpu(mask_flat, s);
     compute_encoder.add_temporary(mask_flat);
@@ -802,7 +798,7 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto [ds, rc, cc] = check_contiguity(shape, strides[1]);
   bool out_contiguous = rc;
-  bool large = exceeds_int32(upd);
+  bool large = exceeds_int32(upd) || exceeds_int32(out);
   std::string kernel_name = fmt::format(
       "slice_update_{0}_{1}{2}_{3}_{4}_{5}_nw{6}_nd{7}",
       op_name,

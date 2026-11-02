@@ -4,9 +4,11 @@ Environment Variables
 =====================
 
 MLX uses environment variables to configure compilation, numerical precision,
-backend behavior, and distributed execution. Set them before starting the
-process. Many variables are read when the corresponding subsystem is first
-initialized and changing them later may have no effect.
+backend behavior, and distributed execution. They must be set before invoking
+any MLX API, and can not be changed later.
+
+For dynamically changing the configurations in the middle of program, use the
+:func:`mlx.core.config.update` API.
 
 Boolean variables use ``0`` to disable and a nonzero integer to enable unless
 otherwise noted.
@@ -47,6 +49,16 @@ sets them.
 
    Enable verbose logging for the Ring backend. This variable is enabled by
    its presence.
+
+.. envvar:: MLX_RING_SOURCE_IPS
+
+   A comma-separated list of local IP addresses, without spaces, that the Ring
+   backend binds its outgoing connections to. The ``i``-th address is used for
+   the connection to the ``i``-th address of the next rank in the host file, so
+   the list must have one entry per address of the next rank. The operating
+   system still selects the port. When unset, the operating system also selects
+   the source address. Each process usually needs its own value because the
+   addresses belong to the local host.
 
 .. envvar:: MLX_IBV_DEVICES
 

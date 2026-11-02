@@ -1506,53 +1506,19 @@ std::vector<array> Convolution::vjp(
         padding_hi[i] = safe_cast(in_size - out_size + padding_lo_[i], "conv");
       }
 
-      // Check for negative padding
-      bool has_neg_padding = false;
-      for (auto& pd : padding_lo) {
-        has_neg_padding |= (pd < 0);
-      }
-      for (auto& pd : padding_hi) {
-        has_neg_padding |= (pd < 0);
-      }
-
-      // Negative padding is cropped from the output below
-      std::vector<int> conv_padding_lo = padding_lo;
-      std::vector<int> conv_padding_hi = padding_hi;
-      for (int i = 0; i < conv_padding_lo.size(); ++i) {
-        conv_padding_lo[i] = std::max(conv_padding_lo[i], 0);
-        conv_padding_hi[i] = std::max(conv_padding_hi[i], 0);
-      }
-
+      // conv_general crops any negative padding from the cotangent
       auto wt_trans = group_transpose(wt, 0, 1, -1);
       auto grad = conv_general(
           /* const array& input = */ cotan,
           /* const array& weight = */ wt_trans,
           /* std::vector<int> stride = */ input_dilation_,
-          /* std::vector<int> padding_lo = */ conv_padding_lo,
-          /* std::vector<int> padding_hi = */ conv_padding_hi,
+          /* std::vector<int> padding_lo = */ padding_lo,
+          /* std::vector<int> padding_hi = */ padding_hi,
           /* std::vector<int> kernel_dilation = */ kernel_dilation_,
           /* std::vector<int> input_dilation = */ kernel_strides_,
           /* int groups = */ groups_,
           /* bool flip = */ !flip_,
           stream());
-
-      // Handle negative padding
-      if (has_neg_padding) {
-        Shape starts(grad.ndim(), 0);
-        auto stops = grad.shape();
-
-        for (int i = 0; i < grad.ndim() - 2; i++) {
-          if (padding_lo[i] < 0) {
-            starts[i + 1] = safe_cast(
-                starts[i + 1] - static_cast<int64_t>(padding_lo[i]), "conv");
-          }
-          if (padding_hi[i] < 0) {
-            stops[i + 1] += padding_hi[i];
-          }
-        }
-
-        grad = slice(grad, std::move(starts), std::move(stops), stream());
-      }
 
       grads.push_back(grad);
     }
@@ -3545,7 +3511,8 @@ std::vector<array> Power::vjp(
       // 0 * log 0 -> 0
       vjps.push_back(where(exp, exp_vjp, array(0.0f, exp.dtype()), stream()));
     }
-    vjps.back() = multiply(cotangents[0], vjps.back(), stream());
+    vjps.back() =
+        multiply(cotangents[0], conjugate(vjps.back(), stream()), stream());
   }
   return vjps;
 }
@@ -3554,13 +3521,20 @@ std::vector<array> Power::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
+  // Undo the conjugate that the vjp applies to its multiplier.
   auto output = power(primals[0], primals[1], stream());
-  auto jvp = vjp(primals, {tangents[0]}, {argnums[0]}, {output})[0];
+  auto jvp = vjp(
+      primals, {conjugate(tangents[0], stream())}, {argnums[0]}, {output})[0];
   for (int i = 1; i < argnums.size(); ++i) {
-    jvp = add(
-        jvp, vjp(primals, {tangents[i]}, {argnums[i]}, {output})[0], stream());
+    jvp =
+        add(jvp,
+            vjp(primals,
+                {conjugate(tangents[i], stream())},
+                {argnums[i]},
+                {output})[0],
+            stream());
   }
-  return {jvp};
+  return {conjugate(jvp, stream())};
 }
 
 std::pair<std::vector<array>, std::vector<int>> Power::vmap(
@@ -5216,6 +5190,9 @@ std::pair<std::vector<array>, std::vector<int>> SliceUpdate::vmap(
   // Broadcast upd
   if (upd_ax == -1) {
     upd = expand_dims(upd, src_ax, stream());
+    auto shape = upd.shape();
+    shape[src_ax] = src.shape(src_ax);
+    upd = broadcast_to(upd, shape, stream());
     upd_ax = src_ax;
   }
 
@@ -5462,6 +5439,9 @@ std::pair<std::vector<array>, std::vector<int>> DynamicSliceUpdate::vmap(
   // Broadcast upd
   if (upd_ax == -1) {
     upd = expand_dims(upd, src_ax, stream());
+    auto shape = upd.shape();
+    shape[src_ax] = src.shape(src_ax);
+    upd = broadcast_to(upd, shape, stream());
     upd_ax = src_ax;
   }
 

@@ -1,5 +1,6 @@
 // Copyright © 2024 Apple Inc.
 
+#include <fmt/format.h>
 #include <iostream>
 #include <sstream>
 
@@ -198,26 +199,37 @@ std::string write_template(
   return template_def.str();
 }
 
-std::string make_template_hash(const std::string& template_def) {
-  std::string template_hash;
-  template_hash.reserve(template_def.size());
-  for (size_t i = 0; i < template_def.size(); ++i) {
-    auto c = template_def[i];
-    if (c == '<' || c == '>' || c == '-') {
-      template_hash += '_';
-    } else if (
-        c == ',' && i + 1 < template_def.size() && template_def[i + 1] == ' ') {
-      template_hash += '_';
-      ++i;
-    } else {
-      template_hash += c;
+} // namespace
+
+std::string template_arguments_hash(
+    const std::vector<std::pair<std::string, TemplateArg>>& template_args) {
+  if (template_args.empty()) {
+    return "";
+  }
+
+  std::string hash;
+  hash.reserve(512);
+
+  for (const auto& [name, arg] : template_args) {
+    if (std::holds_alternative<int>(arg)) {
+      std::string number = std::to_string(std::get<int>(arg));
+      for (char& c : number) {
+        if (c == '-') {
+          c = '_';
+        }
+      }
+      hash += "_";
+      hash += number;
+    } else if (std::holds_alternative<bool>(arg)) {
+      hash += (std::get<bool>(arg)) ? "_t" : "_f";
+    } else if (std::holds_alternative<Dtype>(arg)) {
+      hash += "_";
+      hash += get_type_string(std::get<Dtype>(arg));
     }
   }
-  template_hash.pop_back();
-  return template_hash;
-}
 
-} // namespace
+  return hash;
+}
 
 CustomKernelFunction metal_kernel(
     const std::string& name,
@@ -271,6 +283,7 @@ CustomKernelFunction metal_kernel(
   }
 
   return [=,
+          cache = std::make_shared<GeneratedSourceCache>(),
           shape_infos = std::move(shape_infos),
           attributes = std::move(attributes)](
              const std::vector<array>& inputs,
@@ -298,14 +311,8 @@ CustomKernelFunction metal_kernel(
 
     auto s = resolve_metal_kernel_stream(s_);
 
-    std::string kernel_name = "custom_kernel_" + name;
-    std::string template_def = "";
-    if (!template_args.empty()) {
-      template_def = write_template(template_args);
-      auto template_hash = make_template_hash(template_def);
-      kernel_name += "_";
-      kernel_name += template_hash;
-    }
+    std::string kernel_name =
+        "custom_kernel_" + name + template_arguments_hash(template_args);
 
     // The generated source depends on the dtypes of the inputs and outputs
     // and on how each input is passed (see `write_signature`). Include them
@@ -324,29 +331,32 @@ CustomKernelFunction metal_kernel(
       kernel_name += get_type_string(dtype);
     }
 
-    std::string kernel_source = write_signature(
-        kernel_name,
-        header,
-        source,
-        input_names,
-        inputs,
-        output_names,
-        output_dtypes,
-        template_args,
-        attributes,
-        shape_infos,
-        atomic_outputs);
+    const auto& [kernel_source, source_hash] = cache->get(kernel_name, [&] {
+      std::string kernel_source = write_signature(
+          kernel_name,
+          header,
+          source,
+          input_names,
+          inputs,
+          output_names,
+          output_dtypes,
+          template_args,
+          attributes,
+          shape_infos,
+          atomic_outputs);
 
-    if (!template_args.empty()) {
-      template_def = kernel_name + template_def;
-      kernel_source += "\ntemplate [[host_name(\"";
-      kernel_source += kernel_name;
-      kernel_source += "\")]] [[kernel]] decltype(";
-      kernel_source += template_def;
-      kernel_source += ") ";
-      kernel_source += template_def;
-      kernel_source += ";\n";
-    }
+      if (!template_args.empty()) {
+        std::string template_def = kernel_name + write_template(template_args);
+        kernel_source += "\ntemplate [[host_name(\"";
+        kernel_source += kernel_name;
+        kernel_source += "\")]] [[kernel]] decltype(";
+        kernel_source += template_def;
+        kernel_source += ") ";
+        kernel_source += template_def;
+        kernel_source += ";\n";
+      }
+      return kernel_source;
+    });
 
     if (verbose) {
       std::cout << "Generated source code for `" << name << "`:" << std::endl
@@ -361,7 +371,8 @@ CustomKernelFunction metal_kernel(
         std::make_shared<CustomKernel>(
             s,
             std::move(kernel_name),
-            std::move(kernel_source),
+            kernel_source,
+            source_hash,
             grid,
             threadgroup,
             shape_infos,

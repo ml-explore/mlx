@@ -4,6 +4,9 @@
 #include "jaccl/reduction_ops.h"
 #include "jaccl/types.h"
 
+#include <algorithm>
+#include <ranges>
+
 namespace jaccl {
 
 MeshGroup::MeshGroup(
@@ -25,6 +28,11 @@ MeshGroup::MeshGroup(
   for (auto& names : device_names) {
     connections_.push_back(create_connections(names));
   }
+  std::ranges::for_each(
+      connections_ | std::views::join,
+      [failure = std::make_shared<FailureState>()](Connection& c) {
+        c.share_failure(failure);
+      });
 
   // Initialize all the connections and allocate buffers
   initialize();

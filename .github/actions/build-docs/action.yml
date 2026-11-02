@@ -2,7 +2,7 @@ name: 'Build Documentation'
 description: 'Build documentation'
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Setup machine
       id: setup
@@ -15,17 +15,11 @@ runs:
       shell: bash
       env:
         CMAKE_ARGS: ${{ steps.setup.outputs.cmake-args }}
-      run: |
-        sudo apt-get install -y doxygen
-        uv pip install -r docs/requirements.txt
-        uv pip install . -v
+      run: uv pip install -v .[docs]
 
     - name: Build documentation
       shell: bash
-      run: |
-        cd docs
-        doxygen
-        make html O=-W
+      run: uv run sphinx-build -M html docs/src/ docs/build
 
     - name: Create artifact tar
       shell: bash

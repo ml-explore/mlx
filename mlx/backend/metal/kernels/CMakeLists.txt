@@ -160,7 +160,7 @@ if(NOT MLX_METAL_JIT)
   build_kernel(steel/gemm/kernels/steel_gemm_masked ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_splitk ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_segmented ${STEEL_HEADERS})
-  build_kernel(gemv steel/utils.h)
+  build_kernel(gemv gemv.h steel/utils.h)
   build_kernel(gemv_masked steel/utils.h)
   build_kernel(steel/attn/kernels/steel_attention ${STEEL_ATTN_HEADERS})
 
