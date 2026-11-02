@@ -43,7 +43,7 @@ runs:
       shell: bash
       env:
         DEVICE: gpu
-      run: uv run pytest --durations=10
+      run: uv run pytest --durations=10 --maxfail=2
 
     - name: Run CPP tests - CPU
       shell: bash
