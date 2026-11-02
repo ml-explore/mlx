@@ -283,9 +283,9 @@ DnnGraph build_sdpa_backward_graph(
                      .set_name("sdpa_backward_cudnn")
                      .set_attn_scale(graph.scalar("Scale", SCALE, float32));
   if (do_causal) {
-    // For pretraining, set_causal_mask (top left mask) should be ~x1.8
-    // for ~4B model (depeds on the model size, for bigger models the difference is smaller 
-    // since FFNs takes more flops) faster compared to bottom up
+    // For pretraining, set_causal_mask (top-left mask) is ~1.8x faster than
+    // the bottom-right mask for a ~4B model (it depends on the model size: for
+    // bigger models the difference is smaller since the FFNs take more FLOPs)
     if (q.shape(2) == k.shape(2)) {
       options.set_causal_mask(do_causal);
     } else {
