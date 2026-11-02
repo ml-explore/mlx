@@ -140,6 +140,23 @@ TEST_CASE("test graph built in another thread evaluates on this thread") {
     })({evaluated});
     outs.insert(outs.end(), vg.first.begin(), vg.first.end());
     outs.insert(outs.end(), vg.second.begin(), vg.second.end());
+    // operator* / operator== drop the stream. Complex norm and scatter
+    // max/min VJP both go through those.
+    outs.push_back(
+        linalg::norm(astype(x, complex64, s), std::vector<int>{1}, false, s));
+    auto scatter_src = ones({4}, float32, s);
+    auto scatter_idx = zeros({3}, int32, s);
+    auto scatter_updates = ones({3, 1}, float32, s);
+    auto scatter_ct = ones({4}, float32, s);
+    grads = vjp(
+                [&](const std::vector<array>& in) {
+                  return std::vector<array>{scatter_max(
+                      in[0], scatter_idx, scatter_updates, 0, s)};
+                },
+                {scatter_src},
+                {scatter_ct})
+                .second;
+    outs.insert(outs.end(), grads.begin(), grads.end());
     clear_streams();
   });
   t.join();
