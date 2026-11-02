@@ -51,6 +51,38 @@ TEST_CASE("test random split") {
        1946702221u},
       {3, 2});
   CHECK(array_equal(keys, expected).item<bool>());
+
+  // A concrete key and an unevaluated key must split to the same values.
+  std::vector<Device> devices = {Device::cpu};
+  if (gpu::is_available()) {
+    devices.push_back(Device::gpu);
+  }
+  for (auto d : devices) {
+    for (uint64_t seed = 0; seed < 10; ++seed) {
+      auto k = random::key(seed * 2654435761u);
+      auto rows = random::split(k, 2, d);
+      auto [k1, k2] = random::split(k, d);
+      CHECK(!k1.has_primitive());
+      CHECK(array_equal(k1, take(rows, 0, 0, d)).item<bool>());
+      CHECK(array_equal(k2, take(rows, 1, 0, d)).item<bool>());
+
+      auto lazy = take(rows, 1, 0, d);
+      auto [l1, l2] = random::split(lazy, d);
+      CHECK(l1.has_primitive());
+      eval(lazy);
+      auto [c1, c2] = random::split(lazy, d);
+      CHECK(array_equal(l1, c1).item<bool>());
+      CHECK(array_equal(l2, c2).item<bool>());
+    }
+  }
+}
+
+TEST_CASE("test random key sequence") {
+  random::seed(7);
+  for (int i = 0; i < 10; ++i) {
+    random::bits({2});
+  }
+  CHECK(!random::KeySequence::default_().next().has_primitive());
 }
 
 TEST_CASE("test random bits") {

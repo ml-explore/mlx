@@ -10,6 +10,8 @@
 #include "mlx/random.h"
 #include "mlx/utils.h"
 
+#include "mlx/backend/common/threefry.h"
+
 namespace mlx::core::random {
 
 KeySequence::KeySequence(uint64_t seed) : key_(key(seed)) {}
@@ -78,9 +80,18 @@ array bits(
 }
 
 std::pair<array, array> split(const array& key, StreamOrDevice s /* = {} */) {
+  // Split concrete keys on the host so a lazy key sequence keeps no graph.
+  if (!key.is_tracer() && key.dtype() == uint32 && key.shape() == Shape{2} &&
+      key.is_available()) {
+    auto* kptr = key.data<uint32_t>();
+    auto k = std::make_pair(kptr[0], kptr[key.strides()[0]]);
+    auto a = threefry2x32_hash(k, {0, 2});
+    auto b = threefry2x32_hash(k, {1, 3});
+    return {array({a.first, b.first}), array({a.second, b.second})};
+  }
   auto stream = to_stream(s);
-  auto out = mlx::core::split(random::split(key, 2, stream), 2, stream);
-  return {reshape(out[0], {2}, stream), reshape(out[1], {2}, stream)};
+  auto out = mlx::core::split(bits({4}, 4, key, stream), 2, stream);
+  return {out[0], out[1]};
 }
 
 array split(const array& key, int num, StreamOrDevice s /* = {} */) {

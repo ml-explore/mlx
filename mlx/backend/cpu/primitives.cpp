@@ -9,11 +9,11 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/slicing.h"
+#include "mlx/backend/common/threefry.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/arange.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
-#include "mlx/backend/cpu/threefry.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
