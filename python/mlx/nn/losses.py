@@ -95,7 +95,7 @@ def cross_entropy(
             f"Targets shape {targets.shape} does not match logits shape {logits.shape}."
         )
 
-    # TODO: also fix softmax collapse in use use_fast path
+    # TODO: also fix softmax collapse in use_fast path (i.e. metal, cuda)
     use_fast = (
         mx.default_device() == mx.gpu
         and not targets_as_probs
@@ -108,32 +108,47 @@ def cross_entropy(
     if use_fast:
         loss = mx.fast.cross_entropy(logits, targets).astype(logits.dtype)
     else:
-        logits = logits - mx.stop_gradient(mx.max(logits, axis=axis, keepdims=True))
+        max_idx = mx.stop_gradient(mx.argmax(logits, axis=axis, keepdims=True))
+        max_logit = mx.take_along_axis(logits, max_idx, axis=axis) # avoide redundant reduce
+        index_shape = [1] * logits.ndim
+        index_shape[axis] = logits.shape[axis]
+        indices = mx.arange(logits.shape[axis]).reshape(index_shape)
+        is_max = indices == max_idx
+
+        # shifted logits and exact 0.0 at argmax
+        logits = mx.where(is_max, 0.0, logits - max_logit)
 
         if targets_as_probs:
-            # TODO: verify softmax cancellation issue in Soft-target cross-entropy
+            # Fix log-softmax style softmax collapse, see https://arxiv.org/abs/2610.31642
+            # TODO: verify softmax cancellation issue in soft-target cross-entropy loss (require target logits instead)
             score = mx.sum(logits * targets, axis=axis)
-            target_idx = mx.argmax(targets, axis=axis)
+
+            non_max_exp = mx.where(
+                    is_max,
+                    0.0,
+                    mx.exp(logits)
+                )
+            
+            loss = mx.log1p(mx.sum(non_max_exp, axis=axis)) - score
         else:
+            # Fix Softmax collapse for hard-target cross-entropy loss, see https://arxiv.org/abs/2610.31642
             score = mx.take_along_axis(
                 logits, mx.expand_dims(targets, axis), axis
             ).squeeze(axis)
+
             target_idx = mx.expand_dims(targets, axis)
-        
-        indices = mx.arange(logits.shape[axis])
-        other_logits = mx.where(
-                indices == target_idx,
-                -float("inf"),
-                logits,
-            )
+            other_logits = mx.where(
+                    indices == target_idx, # exclude true label
+                    -float("inf"),
+                    logits,
+                )
+            relative_logits = other_logits - mx.expand_dims(score, axis)
+            other_logsumexp_logits = mx.logsumexp(relative_logits, axis=axis)
 
-        relative_logits = other_logits - score if targets_as_probs else mx.expand_dims(score, axis)
+            loss = mx.logaddexp(0.0, other_logsumexp_logits) # softplus
 
-        logsumexp_logits = mx.logsumexp(relative_logits, axis=axis)
-        loss = mx.logaddexp(0.0, logsumexp_logits) # softplus
-
-    if label_smoothing > 0:
-        loss = loss + label_smoothing * (score - logits.mean(axis=axis))
+        if label_smoothing > 0:
+            loss = loss + label_smoothing * (score - logits.mean(axis=axis))
 
     # Apply weights if provided
     if weights is not None:
