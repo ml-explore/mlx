@@ -26,13 +26,22 @@ def time_fn(fn, *args, **kwargs):
     print(f"{msec:.5f} msec")
 
 
-def measure_runtime(fn, **kwargs):
+def measure_runtime(fn, *, warmup=5, iters=100, **kwargs):
+    """Return mean runtime in milliseconds, evaluating returned MLX arrays.
+
+    Other return values are ignored. Callbacks for other backends must sync
+    their own device work. Remaining keyword arguments are passed to fn.
+    """
+    if not isinstance(warmup, int) or not isinstance(iters, int):
+        raise TypeError("warmup and iters must be integers")
+    if warmup < 0 or iters <= 0:
+        raise ValueError("warmup must be nonnegative and iters must be positive")
+
     # Warmup
-    for _ in range(5):
-        fn(**kwargs)
+    for _ in range(warmup):
+        mx.eval(fn(**kwargs))
 
     tic = time.perf_counter()
-    iters = 100
     for _ in range(iters):
-        fn(**kwargs)
+        mx.eval(fn(**kwargs))
     return (time.perf_counter() - tic) * 1000 / iters
