@@ -1232,8 +1232,12 @@ void qmm(
   int bk = 32;
   int bn = 32;
 
-  // Tune for larger tile with Fp4HalfLoader.
-  if (use_fp4_half_loader(x, mode, global_scale, bits) && transpose) {
+  int min_affine_m = (bits == 4) ? 512 : 2048;
+  bool large_affine = (mode == "affine") && !metal::is_nax_available() &&
+      (bits == 4 || bits == 8) && (B == 1) && (M >= min_affine_m);
+  // Tune for larger tiles with Fp4HalfLoader and large affine products.
+  if (transpose &&
+      (use_fp4_half_loader(x, mode, global_scale, bits) || large_affine)) {
     bool ultra = d.get_architecture().back() == 'd';
     bool pad_free = (ceildiv(M, 32) % 2) == 0;
     bool pad_ok = M > ((d.get_architecture_gen() < 15 && !ultra) ? 256 : 2048);
