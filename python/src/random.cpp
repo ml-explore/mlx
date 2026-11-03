@@ -237,6 +237,10 @@ void init_random(nb::module_& parent_module) {
         real numbers and $\text{Re}(x),\text{Im}(x) \sim \mathcal{N}(0,
         \frac{1}{2})$ for complex numbers.
 
+        .. note::
+           Outputs are deterministic for a given key on a given machine, but
+           they are not guaranteed to be bit-exact across GPU architectures.
+
         Args:
             shape (list(int), optional): Shape of the output. Default: ``()``.
             dtype (Dtype, optional): Type of the output. Default: ``float32``.
@@ -248,15 +252,6 @@ void init_random(nb::module_& parent_module) {
 
         Returns:
             array: The output array of random values.
-
-        .. note::
-           Outputs are deterministic for a given key on a given machine, but
-           they are not guaranteed to be bit-exact across GPU architectures.
-           On Apple silicon, the M1 family (``applegpu_g13``) and later
-           families (M3, M5) produce different outputs for the same key because the
-           ``erfinv`` step of this function evaluates differently on each.
-           ``uniform``, ``key`` and ``split`` are unaffected. See
-           `issue #3568 <https://github.com/ml-explore/mlx/issues/3568>`_.
       )pbdoc");
   m.def(
       "multivariate_normal",
