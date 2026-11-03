@@ -93,7 +93,6 @@ Operations
    from_fp8
    gather_mm
    gather_qmm
-   gather_qqmm
    greater
    greater_equal
    hadamard_transform
