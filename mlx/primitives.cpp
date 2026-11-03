@@ -184,8 +184,8 @@ bool is_transposed_matrix(const array& x) {
   if (!x.has_primitive()) {
     return false;
   }
-  auto t = dynamic_cast<const Transpose*>(&x.primitive());
-  if (t == nullptr) {
+  auto& p = x.primitive();
+  if (typeid(p) != typeid(Transpose)) {
     return false;
   }
   auto axes = t->state();
