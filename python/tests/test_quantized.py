@@ -489,6 +489,116 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 )
                 self.assertLess(relative_error, 3e-2)
 
+    def test_qqmm_matrix_kernels(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Not implemented for CPU")
+            return
+
+        mx.random.seed(0)
+        dtype = mx.bfloat16
+        for M, N, K, mode in product(
+            [12, 32, 256],
+            [1024],
+            [1024],
+            ["nvfp4", "mxfp4", "mxfp8"],
+        ):
+            with self.subTest(shape=(M, N, K), mode=mode):
+                x = mx.random.normal((M, K)).astype(dtype)
+                w = mx.random.normal((N, K)).astype(dtype)
+                x_hat = mx.dequantize(
+                    *mx.quantize(x, mode=mode), mode=mode, dtype=mx.float32
+                )
+                w_q, scales = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(w_q, scales, mode=mode, dtype=mx.float32)
+
+                expected = x_hat @ mx.swapaxes(w_hat, -1, -2)
+                actual = mx.qqmm(x, w_q, scales, mode=mode)
+                delta = mx.abs(actual.astype(mx.float32) - expected)
+                relative_error = delta.max() / mx.abs(expected).max()
+                self.assertLess(relative_error, 3e-2)
+
+    @unittest.skipIf(
+        not mx.metal.is_available(), "Affine qqmm is only supported on Metal"
+    )
+    def test_qqmm_affine(self):
+        mx.random.seed(0)
+        for M, N, K, bits, group_size, dtype in product(
+            [8, 256],
+            [128, 4096],
+            [512],
+            [4, 6, 8],
+            [32, 64, 128],
+            [mx.float16, mx.bfloat16],
+        ):
+            with self.subTest(
+                shape=(M, N, K), bits=bits, group_size=group_size, dtype=dtype
+            ):
+                x = mx.random.normal((M, K)).astype(dtype)
+                w = mx.random.normal((N, K)).astype(dtype)
+                # x is quantized to signed 8 bits whatever the bits of w
+                xg = x.astype(mx.float32).reshape(M, -1, group_size)
+                amax = mx.abs(xg).max(axis=-1, keepdims=True)
+                inv = mx.where(amax > 0, 127 / amax, 0)
+                x_hat = (mx.round(xg * inv) * (amax / 127)).reshape(M, K)
+                w_q, scales, biases = mx.quantize(w, group_size=group_size, bits=bits)
+                w_hat = mx.dequantize(
+                    w_q,
+                    scales,
+                    biases,
+                    group_size=group_size,
+                    bits=bits,
+                    dtype=mx.float32,
+                )
+                expected = x_hat @ mx.swapaxes(w_hat, -1, -2)
+                kw = dict(group_size=group_size, bits=bits, mode="affine")
+                for actual in (
+                    mx.qqmm(x, w_q, scales, biases=biases, **kw),
+                    mx.qqmm(x, w, **kw),
+                ):
+                    delta = mx.abs(actual.astype(mx.float32) - expected)
+                    relative_error = delta.max() / mx.abs(expected).max()
+                    self.assertLess(relative_error, 1e-2)
+
+        x = mx.random.normal((8, 512))
+        w = mx.random.normal((128, 512))
+        w_q, scales, biases = mx.quantize(w)
+        with self.assertRaises(ValueError):
+            mx.qqmm(x, w_q, scales, mode="affine")
+        w_q, scales = mx.quantize(w, mode="nvfp4")
+        with self.assertRaises(ValueError):
+            mx.qqmm(x, w_q, scales, mode="nvfp4", biases=scales)
+
+    def test_qqmm_vjp_quantized_w(self):
+        # With quantized w, the gradient wrt x is the one with the dequantized w
+        mx.random.seed(0)
+        M, N, K = 64, 256, 512
+        modes = [("nvfp4", None, None), ("mxfp8", None, None)]
+        if mx.metal.is_available():
+            modes += [("affine", 64, 4), ("affine", 64, 8)]
+        for mode, group_size, bits in modes:
+            with self.subTest(mode=mode, bits=bits):
+                x = mx.random.normal((M, K)).astype(mx.bfloat16)
+                w = mx.random.normal((N, K)).astype(mx.bfloat16)
+                c = mx.random.normal((M, N)).astype(mx.bfloat16)
+                w_q, scales, *biases = mx.quantize(w, group_size, bits, mode=mode)
+                biases = biases[0] if biases else None
+                w_hat = mx.dequantize(
+                    w_q, scales, biases, group_size, bits, mode=mode, dtype=mx.bfloat16
+                )
+                kw = dict(group_size=group_size, bits=bits, mode=mode)
+                _, (dx,) = mx.vjp(
+                    lambda x: mx.qqmm(x, w_q, scales, biases=biases, **kw), (x,), (c,)
+                )
+                _, (dx_hat,) = mx.vjp(lambda x: mx.qqmm(x, w_hat, **kw), (x,), (c,))
+                self.assertTrue(mx.array_equal(dx, dx_hat))
+                if biases is not None:
+                    with self.assertRaises(ValueError):
+                        mx.vjp(
+                            lambda b: mx.qqmm(x, w_q, scales, biases=b, **kw),
+                            (biases,),
+                            (c,),
+                        )
+
     def test_qmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)

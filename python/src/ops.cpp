@@ -6247,10 +6247,11 @@ void init_ops(nb::module_& m) {
       "mode"_a = "nvfp4",
       "global_scale_x"_a = nb::none(),
       "global_scale_w"_a = nb::none(),
+      "biases"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def qqmm(x: array, w: array, scales: array | None = None, group_size: int | None = None, bits: int | None = None, mode: str = 'nvfp4', global_scale_x: array | None = None, global_scale_w: array | None = None, *, stream: StreamOrDevice = None) -> array"),
+          "def qqmm(x: array, w: array, scales: array | None = None, group_size: int | None = None, bits: int | None = None, mode: str = 'nvfp4', global_scale_x: array | None = None, global_scale_w: array | None = None, biases: array | None = None, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Perform a matrix multiplication using a possibly quantized weight matrix
       ``w`` and a non-quantized input ``x``. The input ``x`` is quantized on the
@@ -6269,6 +6270,9 @@ void init_ops(nb::module_& m) {
         ``float16``, or ``bfloat16``.
         If ``w`` is quantized, it must be packed in unsigned integers.
         ``global_scale_x`` and ``global_scale_w`` are only used for ``nvfp4`` quantization.
+        With ``affine`` quantization, ``x`` is quantized to signed 8-bit
+        integers whatever the value of ``bits``, with one scale per
+        ``group_size`` elements: the largest absolute value over 127.
 
       Args:
         x (array): Input array.
@@ -6282,12 +6286,14 @@ void init_ops(nb::module_& m) {
           ``x`` and ``w``. See supported values and defaults in the
           :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
         mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
-          Supported modes are ``nvfp4`` and ``mxfp8``. See the
+          Supported modes are ``nvfp4``, ``mxfp8`` and ``affine``. See the
           :ref:`table of quantization modes <quantize-modes>` for details.
         global_scale (array, optional): The per-input float32 scale used for x
             with ``"nvfp4"`` quantization. Default: ``None``.
         global_scale_w (array, optional): The per-input float32 scale used for w
             with ``"nvfp4"`` quantization. Default: ``None``.
+        biases (array, optional): The biases of ``w`` if ``w`` is quantized with
+            ``"affine"`` quantization. Default: ``None``.
       Returns:
         array: The result of the multiplication of quantized ``x`` with quantized ``w``.
         needed).
