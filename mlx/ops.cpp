@@ -5329,28 +5329,16 @@ std::vector<array> fp_quantize(
     }
     if (bits == 4) {
       // Round to nearest E2M1 with ties to even, same as fp4_e2m1 in Metal
-      constexpr std::pair<float, bool> bounds[] = {
-          {0.25f, false},
-          {0.75f, true},
-          {1.25f, false},
-          {1.75f, true},
-          {2.5f, false},
-          {3.5f, true},
-          {5.0f, false},
-      };
+      auto bounds = astype(
+          array({0.25f, 0.75f, 1.25f, 1.75f, 2.5f, 3.5f, 5.0f}),
+          wq.dtype(),
+          s);
       auto absw = abs(wq, s);
-      auto code = array(0, uint32);
-      for (auto [b, inclusive] : bounds) {
-        auto bound = array(b, wq.dtype());
-        auto above =
-            inclusive ? greater_equal(absw, bound, s) : greater(absw, bound, s);
-        code = add(code, astype(above, uint32, s), s);
-      }
-      // Read the sign bit so that -0 also gets the sign
-      auto int_type = size_of(wq.dtype()) == 2
-          ? int16
-          : (size_of(wq.dtype()) == 4 ? int32 : int64);
-      auto negative = less(view(wq, int_type, s), array(0, int_type), s);
+      auto lo = searchsorted(bounds, absw, "left", s);
+      auto hi = searchsorted(bounds, absw, "right", s);
+      // On a tie lo and hi differ by 1, so select the even one
+      auto code = where(bitwise_and(lo, array(1, uint32), s), hi, lo, s);
+      auto negative = less(sign(wq, s), array(0, wq.dtype()), s);
       code = where(negative, add(code, array(8, uint32), s), code, s);
       wq = where(isnan(wq, s), array(7, uint32), code, s);
       auto shifts = power(array(2, uint32), arange(0, 32, 4, uint32, s), s);
