@@ -443,7 +443,7 @@ class AsStrided : public UnaryPrimitive {
   Strides strides_;
   size_t offset_;
 
-  void eval(const std::vector<array>& inputs, array& out);
+  void eval(const array& in, array& out);
 };
 
 class BitwiseBinary : public UnaryPrimitive {

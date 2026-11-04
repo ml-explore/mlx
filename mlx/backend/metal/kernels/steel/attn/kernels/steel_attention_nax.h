@@ -8,7 +8,7 @@
 using namespace mlx::steel;
 
 ///////////////////////////////////////////////////////////////////////////////
-// GEMM kernels
+// Attention kernels
 ///////////////////////////////////////////////////////////////////////////////
 
 constant bool align_Q [[function_constant(200)]];
@@ -18,6 +18,8 @@ constant bool has_mask [[function_constant(300)]];
 constant bool do_causal [[function_constant(301)]];
 constant bool has_sinks [[function_constant(302)]];
 constant bool save_lse [[function_constant(303)]];
+constant int window_size [[function_constant(304)]];
+constant bool has_window = window_size > 0;
 
 template <typename T>
 struct TransformScale {
@@ -188,14 +190,44 @@ template <
   int kb_lim = params->NK;
   int kb_min_causal = params->NK;
 
+  // Blocks before this are ignored
+  int kb_start = 0;
+
+  // First block with no masked block edge
+  int kb_win_lo = 0;
+  // Last block with no masked block edge
+  int kb_win_hi = params->NK;
+
+  // Query positions covered by this block are [q_min, q_max)
+  const int q_max = (tid.x + 1) * BQ + params->qL_off;
+  const int q_min = max(0, int(tid.x) * BQ + params->qL_off);
+
   if (do_causal) {
-    int q_max = (tid.x + 1) * BQ + params->qL_off;
     kb_lim = (q_max + BK - 1) / BK;
     kb_lim = min(params->NK, kb_lim);
 
-    int q_min = tid.x * BQ + params->qL_off;
-    q_min = max(0, q_min);
     kb_min_causal = (q_min / BK);
+  } else if (has_window) {
+    int k_max = q_max + window_size - 1;
+    kb_lim = (k_max + BK - 1) / BK;
+    kb_lim = min(params->NK, kb_lim);
+  }
+
+  if (has_window) {
+    // The smallest k this block attends to is decided by the window
+    int k_min = max(0, q_min - window_size + 1);
+    kb_start = k_min / BK;
+
+    // Move the K and V pointers to the first key block
+    K += kb_start * BK * params->K_strides[2];
+    V += kb_start * BK * params->V_strides[2];
+
+    // All queries in the block [q_min, q_max) attend to
+    // keys [common_k_min, common_k_max)
+    auto common_k_min = max(0, q_max - window_size);
+    auto common_k_max = q_min + window_size;
+    kb_win_lo = (common_k_min + BK - 1) / BK;
+    kb_win_hi = common_k_max / BK;
   }
 
   const bool is_last_bq = int(tid.x) == (params->NQ_aligned);
@@ -206,7 +238,7 @@ template <
   const short lim_rows_k = params->kL_rem;
 
   // Loop over KV seq length
-  for (int kb = 0; kb < kb_lim; kb++) {
+  for (int kb = kb_start; kb < kb_lim; kb++) {
     const int is_last_k = (kb == (params->NK_aligned));
 
     // Do S = Q @ K.T
@@ -291,8 +323,12 @@ template <
       }
     }
 
-    // Mask out if causal
-    if (do_causal && kb >= kb_min_causal) {
+    // Mask out if causal or at the window edge
+    const bool is_causal_masked = do_causal && (kb >= kb_min_causal);
+    const bool is_win_lo_masked = has_window && (kb < kb_win_lo);
+    const bool is_win_hi_masked = has_window && !do_causal && (kb >= kb_win_hi);
+
+    if (is_causal_masked || is_win_lo_masked || is_win_hi_masked) {
       constexpr auto neg_inf = Limits<AccumType>::finite_min;
 
       const int base_row = tid.x * BQ + params->qL_off + tm;
@@ -312,7 +348,20 @@ template <
                   base_row + iq * kU + ii * stile_t::kFragRowsJump + sm;
               const auto c = base_col + ik * kU + jj + sn;
               const auto loc = ii * stile_t::kFragThrCols + jj;
-              fg[loc] = (r < c) ? neg_inf : fg[loc];
+
+              if (has_window) {
+                if (is_causal_masked) {
+                  fg[loc] = (r < c) ? neg_inf : fg[loc];
+                }
+                if (is_win_lo_masked) {
+                  fg[loc] = ((r - c) >= window_size) ? neg_inf : fg[loc];
+                }
+                if (is_win_hi_masked) {
+                  fg[loc] = ((c - r) >= window_size) ? neg_inf : fg[loc];
+                }
+              } else if (do_causal) {
+                fg[loc] = (r < c) ? neg_inf : fg[loc];
+              }
             }
           }
         }
@@ -633,14 +682,44 @@ template <
   int kb_lim = params->NK;
   int kb_min_causal = params->NK;
 
+  // Blocks before this are ignored
+  int kb_start = 0;
+
+  // First block with no masked block edge
+  int kb_win_lo = 0;
+  // Last block with no masked block edge
+  int kb_win_hi = params->NK;
+
+  // Query positions covered by this block are [q_min, q_max)
+  const int q_max = (tid.x + 1) * BQ + params->qL_off;
+  const int q_min = max(0, int(tid.x) * BQ + params->qL_off);
+
   if (do_causal) {
-    int q_max = (tid.x + 1) * BQ + params->qL_off;
     kb_lim = (q_max + BK - 1) / BK;
     kb_lim = min(params->NK, kb_lim);
 
-    int q_min = tid.x * BQ + params->qL_off;
-    q_min = max(0, q_min);
     kb_min_causal = (q_min / BK);
+  } else if (has_window) {
+    int k_max = q_max + window_size - 1;
+    kb_lim = (k_max + BK - 1) / BK;
+    kb_lim = min(params->NK, kb_lim);
+  }
+
+  if (has_window) {
+    // The smallest k this block attends to is decided by the window
+    int k_min = max(0, q_min - window_size + 1);
+    kb_start = k_min / BK;
+
+    // Move the K and V pointers to the first key block
+    K += kb_start * BK * params->K_strides[2];
+    V += kb_start * BK * params->V_strides[2];
+
+    // All queries in the block [q_min, q_max) attend to
+    // keys [common_k_min, common_k_max)
+    auto common_k_min = max(0, q_max - window_size);
+    auto common_k_max = q_min + window_size;
+    kb_win_lo = (common_k_min + BK - 1) / BK;
+    kb_win_hi = common_k_max / BK;
   }
 
   const bool is_last_q = int(tid.x) == (params->NQ_aligned);
@@ -673,7 +752,7 @@ template <
   const short sn = simd_coord.x;
 
   // Loop over KV seq length
-  for (int kb = 0; kb < kb_lim; kb++) {
+  for (int kb = kb_start; kb < kb_lim; kb++) {
     const int is_last_k = (kb == (params->NK_aligned));
 
     stile_t Stile;
@@ -761,8 +840,12 @@ template <
       }
     }
 
-    // Mask out if causal
-    if (do_causal && kb >= kb_min_causal) {
+    // Mask out if causal or at the window edge
+    const bool is_causal_masked = do_causal && (kb >= kb_min_causal);
+    const bool is_win_lo_masked = has_window && (kb < kb_win_lo);
+    const bool is_win_hi_masked = has_window && !do_causal && (kb >= kb_win_hi);
+
+    if (is_causal_masked || is_win_lo_masked || is_win_hi_masked) {
       constexpr auto neg_inf = Limits<AccumType>::finite_min;
 
       const int base_row = tid.x * BQ + params->qL_off + tm;
@@ -779,7 +862,20 @@ template <
             const auto r = base_row + ii * stile_t::kFragRowsJump + sm;
             const auto c = base_col + ik * kU + jj + sn;
             const auto loc = ii * stile_t::kFragThrCols + jj;
-            fg[loc] = (r < c) ? neg_inf : fg[loc];
+
+            if (has_window) {
+              if (is_causal_masked) {
+                fg[loc] = (r < c) ? neg_inf : fg[loc];
+              }
+              if (is_win_lo_masked) {
+                fg[loc] = ((r - c) >= window_size) ? neg_inf : fg[loc];
+              }
+              if (is_win_hi_masked) {
+                fg[loc] = ((c - r) >= window_size) ? neg_inf : fg[loc];
+              }
+            } else if (do_causal) {
+              fg[loc] = (r < c) ? neg_inf : fg[loc];
+            }
           }
         }
       }
@@ -947,4 +1043,292 @@ template <
   } else {
     Otile.store(O, int(params->O_strides[2]));
   }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Split KV attention kernel
+///////////////////////////////////////////////////////////////////////////////
+
+// clang-format off
+template <
+    typename T,
+    int BK,
+    int BD,
+    int WN,
+    typename AccumType = float>
+[[kernel, max_total_threads_per_threadgroup(WN * 32)]] void attention_split_nax(
+    const device T* Q [[buffer(0)]],
+    const device T* K [[buffer(1)]],
+    const device T* V [[buffer(2)]],
+    device float* O [[buffer(3)]],
+    device float* sums [[buffer(4)]],
+    device float* maxs [[buffer(5)]],
+    const constant AttnParams* params [[buffer(6)]],
+    const constant int& split_blocks [[buffer(7)]],
+    uint simd_lane_id [[thread_index_in_simdgroup]],
+    uint simd_group_id [[simdgroup_index_in_threadgroup]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 tpg [[threadgroups_per_grid]]) { // clang-format on
+
+  constexpr short kU = 16;
+  constexpr int BDh = BD / WN;
+  constexpr int TDh = BDh / kU;
+  constexpr short TK = BK / kU;
+
+  static_assert(WN == 1 || WN == 2, "The split kernel needs WN == 1 or 2");
+  static_assert(TDh % 2 == 0, "P@V accumulates output fragments in pairs");
+  static_assert(TK % 2 == 0, "S fragments are computed pair by pair");
+
+  const int qL = params->qL;
+  const int gqa = params->gqa_factor;
+  const int n_rows = gqa * qL;
+  const int row_groups = (n_rows + kU - 1) / kU;
+
+  const int split = tid.x / row_groups;
+  const int blocks = tpg.x / row_groups;
+  const int tm = kU * (tid.x % row_groups);
+  const int kv_head = tid.y;
+  const int batch = tid.z;
+  const short d_group = simd_group_id;
+
+  using otile_t = NAXTile<AccumType, 1, TDh>;
+  using stile_t = NAXTile<AccumType, 1, TK>;
+  constexpr short kRowsPT = otile_t::kRowsPerThread;
+  constexpr short kElemsPT = stile_t::kElemsPerTile;
+
+  const short2 simd_coord = otile_t::NAXFrag_t::get_coord();
+  const short sm = simd_coord.y;
+  const short sn = simd_coord.x;
+
+  NAXTile<T, 1, 1> Qtiles[TDh];
+  int q_pos[kRowsPT];
+  STEEL_PRAGMA_UNROLL
+  for (short i = 0; i < kRowsPT; i++) {
+    const int row = tm + i * otile_t::kFragRowsJump + sm;
+    const int r = row % qL;
+    q_pos[i] = params->qL_off + r;
+    if (row < n_rows) {
+      const device T* q = Q + batch * params->Q_strides[0] +
+          (kv_head * gqa + row / qL) * params->Q_strides[1] +
+          r * params->Q_strides[2] + d_group * BDh + sn;
+      STEEL_PRAGMA_UNROLL
+      for (short id = 0; id < TDh; id++) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < otile_t::kFragThrCols; j++) {
+          Qtiles[id].elems()[i * otile_t::kFragThrCols + j] = q[id * kU + j];
+        }
+      }
+    } else {
+      STEEL_PRAGMA_UNROLL
+      for (short id = 0; id < TDh; id++) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < otile_t::kFragThrCols; j++) {
+          Qtiles[id].elems()[i * otile_t::kFragThrCols + j] = T(0);
+        }
+      }
+    }
+  }
+
+  const int kb_start = split * split_blocks;
+  const int kb_end = min(kb_start + split_blocks, params->NK);
+
+  K += batch * params->K_strides[0] + kv_head * params->K_strides[1] +
+      int64_t(kb_start) * BK * params->K_strides[2] + d_group * BDh;
+  V += batch * params->V_strides[0] + kv_head * params->V_strides[1] +
+      int64_t(kb_start) * BK * params->V_strides[2] + d_group * BDh;
+
+  const metal::uniform<float> scale2 =
+      make_uniform(params->scale) * make_uniform(1.44269504089f);
+
+  otile_t Otile;
+  Otile.clear();
+
+  metal::vec<AccumType, kRowsPT> max_score;
+  metal::vec<AccumType, kRowsPT> sum_score{0};
+
+  STEEL_PRAGMA_UNROLL
+  for (short i = 0; i < kRowsPT; ++i) {
+    max_score[i] = Limits<AccumType>::finite_min;
+  }
+
+  const short lim_rows_k = params->kL_rem;
+
+  threadgroup AccumType s_xchg[kElemsPT * 32];
+
+  for (int kb = kb_start; kb < kb_end; kb++) {
+    const bool is_last_k = (kb == params->NK_aligned);
+
+    stile_t Stile;
+    Stile.clear();
+
+    STEEL_PRAGMA_UNROLL
+    for (short ik = 0; ik < TK; ik += 2) {
+      STEEL_PRAGMA_UNROLL
+      for (short id = 0; id < TDh; id++) {
+        NAXTile<T, 2, 1> Ktile;
+        const int K_load_off = ik * kU * int(params->K_strides[2]) + id * kU;
+
+        if (!align_K && is_last_k) {
+          Ktile.load_rows(
+              K + K_load_off, int(params->K_strides[2]), lim_rows_k - ik * kU);
+        } else {
+          Ktile.load(K + K_load_off, int(params->K_strides[2]));
+        }
+
+        stile_t::NAXFrag_t::mma(
+            Stile.frag_at(0, ik),
+            Stile.frag_at(0, ik + 1),
+            Qtiles[id].frag_at(0, 0),
+            metal::false_type{},
+            Ktile.frag_at(0, 0),
+            Ktile.frag_at(1, 0),
+            metal::true_type{});
+      }
+    }
+
+    if constexpr (WN > 1) {
+      if (d_group == 1) {
+        STEEL_PRAGMA_UNROLL
+        for (short ii = 0; ii < kElemsPT; ii++) {
+          s_xchg[ii * 32 + simd_lane_id] = Stile.elems()[ii];
+        }
+      }
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      if (d_group == 0) {
+        STEEL_PRAGMA_UNROLL
+        for (short ii = 0; ii < kElemsPT; ii++) {
+          Stile.elems()[ii] += s_xchg[ii * 32 + simd_lane_id];
+          s_xchg[ii * 32 + simd_lane_id] = Stile.elems()[ii];
+        }
+      }
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      if (d_group == 1) {
+        STEEL_PRAGMA_UNROLL
+        for (short ii = 0; ii < kElemsPT; ii++) {
+          Stile.elems()[ii] = s_xchg[ii * 32 + simd_lane_id];
+        }
+      }
+    }
+
+    STEEL_PRAGMA_UNROLL
+    for (short ii = 0; ii < kElemsPT; ii++) {
+      Stile.elems()[ii] *= float(scale2);
+    }
+
+    constexpr auto neg_inf = Limits<AccumType>::finite_min;
+
+    if (!align_K && is_last_k) {
+      STEEL_PRAGMA_UNROLL
+      for (short ik = 0; ik < TK; ik++) {
+        const short col_pos = ik * kU + sn;
+        thread auto& fg = Stile.frag_at(0, ik);
+
+        STEEL_PRAGMA_UNROLL
+        for (short ii = 0; ii < stile_t::kFragThrRows; ii++) {
+          STEEL_PRAGMA_UNROLL
+          for (short jj = 0; jj < stile_t::kFragThrCols; jj++) {
+            const auto loc = ii * stile_t::kFragThrCols + jj;
+            fg[loc] = ((col_pos + jj) < lim_rows_k) ? fg[loc] : neg_inf;
+          }
+        }
+      }
+    }
+
+    if (do_causal && (kb + 1) * BK > params->qL_off + 1) {
+      STEEL_PRAGMA_UNROLL
+      for (short ik = 0; ik < TK; ik++) {
+        const int col_pos = kb * BK + ik * kU + sn;
+        thread auto& fg = Stile.frag_at(0, ik);
+
+        STEEL_PRAGMA_UNROLL
+        for (short ii = 0; ii < stile_t::kFragThrRows; ii++) {
+          STEEL_PRAGMA_UNROLL
+          for (short jj = 0; jj < stile_t::kFragThrCols; jj++) {
+            const auto loc = ii * stile_t::kFragThrCols + jj;
+            fg[loc] = (col_pos + jj > q_pos[ii]) ? neg_inf : fg[loc];
+          }
+        }
+      }
+    }
+
+    metal::vec<AccumType, kRowsPT> new_max;
+    metal::vec<AccumType, kRowsPT> factor;
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      new_max[i] = max_score[i];
+    }
+
+    Stile.template row_reduce<MaxOp>(new_max);
+    Stile.template row_bin_op<ExpSubOp>(new_max);
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      factor[i] = fast::exp2(max_score[i] - new_max[i]);
+      max_score[i] = new_max[i];
+    }
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      sum_score[i] = sum_score[i] * factor[i];
+    }
+
+    Stile.template row_reduce<SumOp>(sum_score);
+
+    Otile.template row_bin_op<MulOp>(factor);
+
+    simdgroup_barrier(mem_flags::mem_none);
+
+    STEEL_PRAGMA_UNROLL
+    for (short id = 0; id < TDh; id += 2) {
+      STEEL_PRAGMA_UNROLL
+      for (short ik = 0; ik < TK; ik++) {
+        NAXTile<T, 1, 2> Vtile;
+
+        const int V_load_off = ik * kU * int(params->V_strides[2]) + id * kU;
+
+        if (!align_K && is_last_k) {
+          Vtile.load_rows(
+              V + V_load_off, int(params->V_strides[2]), lim_rows_k - ik * kU);
+        } else {
+          Vtile.load(V + V_load_off, int(params->V_strides[2]));
+        }
+
+        otile_t::NAXFrag_t::mma(
+            Otile.frag_at(0, id),
+            Otile.frag_at(0, id + 1),
+            Stile.frag_at(0, ik),
+            metal::false_type{},
+            Vtile.frag_at(0, 0),
+            Vtile.frag_at(0, 1),
+            metal::false_type{});
+      }
+    }
+
+    K += BK * int(params->K_strides[2]);
+    V += BK * int(params->V_strides[2]);
+  }
+
+  metal::vec<AccumType, kRowsPT> keep;
+  STEEL_PRAGMA_UNROLL
+  for (short i = 0; i < kRowsPT; ++i) {
+    keep[i] = (max_score[i] == Limits<AccumType>::finite_min) ? 0 : 1;
+    sum_score[i] *= keep[i];
+  }
+  Otile.template row_bin_op<MulOp>(keep);
+
+  const int64_t row0 = (int64_t(batch) * params->H + kv_head * gqa) * qL;
+  if (d_group == 0 && sn == 0) {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      const int row = tm + i * otile_t::kFragRowsJump + sm;
+      if (row < n_rows) {
+        const int64_t idx = (row0 + row) * blocks + split;
+        sums[idx] = sum_score[i];
+        maxs[idx] = max_score[i] * M_LN2_F;
+      }
+    }
+  }
+
+  O += (row0 + tm) * blocks * BD + split * BD + d_group * BDh;
+  Otile.store_rows(O, blocks * BD, n_rows - tm);
 }

@@ -160,6 +160,58 @@ class TestLoad(mlx_tests.MLXTestCase):
         out = mx.load(save_file, stream=mx.cpu)
         self.assertTrue(np.array_equal(np.array(out), 3 * np.ones((4, 4))))
 
+    def test_save_over_unevaluated_load(self):
+        # The unevaluated array keeps the old file open during the save.
+        save_file = os.path.join(self.test_dir, "replace.safetensors")
+        mx.save_safetensors(save_file, {"a": mx.ones((4,))})
+        old = mx.load(save_file)["a"]
+        mx.save_safetensors(save_file, {"a": mx.zeros((4,))})
+        self.assertTrue(mx.array_equal(old, mx.ones((4,))))
+        self.assertTrue(mx.array_equal(mx.load(save_file)["a"], mx.zeros((4,))))
+
+    def test_failed_save_safetensors_keeps_the_existing_file(self):
+        save_dir = os.path.join(self.test_dir, "failed_safetensors")
+        os.mkdir(save_dir)
+        save_file = os.path.join(save_dir, "a.safetensors")
+        mx.save_safetensors(save_file, {"a": mx.ones((4,))})
+
+        # Safetensors has no float64, so this fails after the file is opened.
+        with mx.stream(mx.cpu):
+            with self.assertRaises(Exception):
+                mx.save_safetensors(save_file, {"a": mx.ones((4,), dtype=mx.float64)})
+        out = mx.load(save_file)["a"]
+        self.assertTrue(mx.array_equal(out, mx.ones((4,))))
+        self.assertEqual(os.listdir(save_dir), ["a.safetensors"])
+
+    @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
+    def test_failed_save_gguf_keeps_the_existing_file(self):
+        save_dir = os.path.join(self.test_dir, "failed_gguf")
+        os.mkdir(save_dir)
+        save_file = os.path.join(save_dir, "a.gguf")
+        mx.save_gguf(save_file, {"a": mx.ones((4,))})
+
+        # The metadata is rejected after the file is created.
+        with self.assertRaises(Exception):
+            mx.save_gguf(save_file, {"a": mx.ones((4,))}, {"m": mx.ones((2, 2))})
+        out = mx.load(save_file)["a"]
+        self.assertTrue(mx.array_equal(out, mx.ones((4,))))
+        self.assertEqual(os.listdir(save_dir), ["a.gguf"])
+
+    @unittest.skipIf(platform.system() == "Windows", "Needs symlinks and chmod")
+    def test_save_through_symlink(self):
+        save_dir = os.path.join(self.test_dir, "symlink_save")
+        os.mkdir(save_dir)
+        target = os.path.join(save_dir, "target.npy")
+        link = os.path.join(save_dir, "link.npy")
+        mx.save(target, mx.ones((4,)))
+        os.chmod(target, 0o600)
+        os.symlink(target, link)
+
+        mx.save(link, mx.zeros((4,)))
+        self.assertTrue(os.path.islink(link))
+        self.assertTrue(mx.array_equal(mx.load(target), mx.zeros((4,))))
+        self.assertEqual(os.stat(target).st_mode & 0o777, 0o600)
+
     def test_save_and_load_safetensors(self):
         test_file = os.path.join(self.test_dir, "test.safetensors")
         with self.assertRaises(Exception):

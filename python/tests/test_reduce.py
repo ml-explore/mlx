@@ -340,7 +340,31 @@ class TestReduce(mlx_tests.MLXTestCase):
                 getattr(np, op)(x_np, axis=1).tolist(),
             )
 
+    def test_and_or_small_ints(self):
+        # Even values have the low bit clear but are still nonzero
+        for dtype in ["int8", "uint8"]:
+            for shape, axis in [
+                ((70,), None),
+                ((4, 33), 1),
+                ((4096, 64), 1),
+                ((3, 7, 9), (1, 2)),
+                ((33, 4), 0),
+                ((8, 5000), 0),
+            ]:
+                with self.subTest(dtype=dtype, shape=shape, axis=axis):
+                    some = np.zeros(shape, dtype=dtype)
+                    some.reshape(-1)[::5] = 2
+                    for a_np in [some, some + 2]:
+                        a_mx = mx.array(a_np)
+                        for op in ["any", "all"]:
+                            out = getattr(mx, op)(a_mx, axis=axis)
+                            ref = getattr(np, op)(a_np, axis=axis)
+                            self.assertTrue(np.array_equal(out, ref))
+
     def test_large_offsets(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("too slow on CPU")
+
         # Row r holds r % 251 and row 2**15 starts at offset 2**31, so any
         # reduction that narrows offsets or sizes to 32 bits reads the wrong
         # rows. The views below have fewer than 2**31 elements themselves.
@@ -366,6 +390,21 @@ class TestReduce(mlx_tests.MLXTestCase):
         out = mx.all(mx.zeros((0, 4, 2**30), dtype=mx.bool_), axis=0)
         mx.eval(out)
         self.assertTrue(mx.all(out).item())
+
+    def test_minmax(self):
+        x = mx.array([[3.0, 1.0, 4.0], [2.0, 6.0, 5.0]])
+        out = mx.minmax(x)
+        self.assertIsInstance(out, tuple)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(tuple(a.item() for a in out), (1.0, 6.0))
+        for axis in (None, 0, (0, 1)):
+            for keepdims in (False, True):
+                with self.subTest(axis=axis, keepdims=keepdims):
+                    out = mx.minmax(x, axis=axis, keepdims=keepdims)
+                    for actual, op in zip(out, (mx.min, mx.max)):
+                        expected = op(x, axis=axis, keepdims=keepdims)
+                        self.assertEqual(actual.shape, expected.shape)
+                        self.assertTrue(mx.array_equal(actual, expected))
 
 
 if __name__ == "__main__":

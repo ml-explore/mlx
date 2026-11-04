@@ -15,7 +15,7 @@ struct FenceImpl {
     if (!d->supportsFamily(MTL::GPUFamilyMetal3)) {
       use_fast = false;
     } else if (__builtin_available(macOS 15, iOS 18, *)) {
-      use_fast = env::metal_fast_synch();
+      use_fast = config::get("MLX_METAL_FAST_SYNCH", 0);
     }
 
     if (!use_fast) {
@@ -66,6 +66,8 @@ void Fence::wait(Stream stream, const array& x, uint32_t value) {
   auto& d = metal::device(stream.device);
   auto& compute_encoder = metal::get_command_encoder(stream);
 
+  compute_encoder.end_encoding();
+
   // Register outputs to ensure that no kernels which depends on the
   // output starts before this one is done
   compute_encoder.register_output_array(x);
@@ -77,6 +79,7 @@ void Fence::wait(Stream stream, const array& x, uint32_t value) {
   compute_encoder.set_buffer(f.buffer(), 0);
   compute_encoder.set_bytes(value, 1);
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
+  compute_encoder.end_encoding(true);
 
   compute_encoder.get_command_buffer()->addCompletedHandler(
       [fence_ = fence_](MTL::CommandBuffer* cbuf) {});

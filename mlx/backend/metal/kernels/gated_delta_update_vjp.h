@@ -9,13 +9,15 @@
 
 using namespace metal;
 
+constant bool vectorized_g [[function_constant(201)]];
+
 template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
 [[kernel]] void gated_delta_vjp_seq(
     const device InT* q [[buffer(0)]], // [B, T, Hk, Dk]
     const device InT* k [[buffer(1)]], // [B, T, Hk, Dk]
     const device InT* v [[buffer(2)]], // [B, T, Hv, Dv]
-    const device InT* g [[buffer(3)]], // [B, T, Hv]
-    const device InT* b [[buffer(4)]], // [B, T, Hv]
+    const device float* g [[buffer(3)]], // [B, T, Hv]
+    const device float* b [[buffer(4)]], // [B, T, Hv]
     const device InT* cot_o [[buffer(5)]], // [B, T, Hv, Dv]
     const device float* cot_h [[buffer(6)]], // [B, Hv, Dv, Dk]
     const device float* state_cache [[buffer(7)]], // [B*Hv, n_ckpt, Dv, Dk]
@@ -40,7 +42,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
 
   const int qk_stride = Hk * Dk;
   const int v_stride = Hv * Dv;
-  const int g_stride = Hv;
+  const int g_stride = vectorized_g ? (Hv * Dk) : Hv;
 
   auto q_base = q + b_idx * T * qk_stride + hk_idx * Dk;
   auto k_base = k + b_idx * T * qk_stride + hk_idx * Dk;
@@ -51,10 +53,11 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
   auto dv_base = dv + b_idx * T * v_stride + hv_idx * Dv;
   auto co_base = cot_o + b_idx * T * v_stride + hv_idx * Dv;
 
-  auto g_base = g + b_idx * T * g_stride + hv_idx;
-  auto b_base = b + b_idx * T * g_stride + hv_idx;
-  auto dg_base = dg + b_idx * T * g_stride + hv_idx;
-  auto db_base = db + b_idx * T * g_stride + hv_idx;
+  auto g_offset = vectorized_g ? (hv_idx * Dk) : hv_idx;
+  auto g_base = g + b_idx * T * g_stride + g_offset;
+  auto b_base = b + b_idx * T * Hv + hv_idx;
+  auto dg_base = dg + b_idx * T * g_stride + g_offset;
+  auto db_base = db + b_idx * T * Hv + hv_idx;
 
   const int n_ckpt = (T + Ckpt - 1) / Ckpt;
 
@@ -92,14 +95,15 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
         seg[j][i] = s[i];
       }
 
-      float gamma = static_cast<float>(g_base[t * g_stride]);
-      float beta = static_cast<float>(b_base[t * g_stride]);
+      auto g_t = g_base + t * g_stride;
+      float beta = static_cast<float>(b_base[t * Hv]);
 
       auto k_t = k_base + t * qk_stride;
 
       float kv_mem = 0.0f;
       for (int i = 0; i < n_per_t; ++i) {
         const int s_idx = n_per_t * dk_idx + i;
+        float gamma = static_cast<float>(vectorized_g ? g_t[s_idx] : g_t[0]);
         s[i] *= gamma;
         kv_mem += s[i] * static_cast<float>(k_t[s_idx]);
       }
@@ -117,8 +121,9 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
     for (int j = seg_len - 1; j >= 0; --j) {
       const int t = t0 + j;
 
-      float gamma = static_cast<float>(g_base[t * g_stride]);
-      float beta = static_cast<float>(b_base[t * g_stride]);
+      auto g_t = g_base + t * g_stride;
+      auto dg_t = dg_base + t * g_stride;
+      float beta = static_cast<float>(b_base[t * Hv]);
 
       auto q_t = q_base + t * qk_stride;
       auto k_t = k_base + t * qk_stride;
@@ -130,6 +135,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
       float w = 0.0f;
       for (int i = 0; i < n_per_t; i++) {
         const int s_idx = n_per_t * dk_idx + i;
+        float gamma = static_cast<float>(vectorized_g ? g_t[s_idx] : g_t[0]);
         s_prev[i] = seg[j][i];
         s_dec[i] = s_prev[i] * gamma;
         kv_mem += s_dec[i] * static_cast<float>(k_t[s_idx]);
@@ -149,7 +155,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
       float delta = beta * u;
 
       if (thread_index_in_simdgroup == 0) {
-        mlx_atomic_fetch_add_explicit(db_base + t * g_stride, w * u, 0);
+        mlx_atomic_fetch_add_explicit(db_base + t * Hv, w * u, 0);
       }
 
       float dgamma = 0.0f;
@@ -164,14 +170,23 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
 
         s_hat[i] -= beta * w * static_cast<float>(k_t[s_idx]);
 
-        dgamma += s_hat[i] * s_prev[i];
+        float dg_i = s_hat[i] * s_prev[i];
+        if (vectorized_g) {
+          mlx_atomic_fetch_add_explicit(dg_t, dg_i, s_idx);
+        } else {
+          dgamma += dg_i;
+        }
       }
-      dgamma = simd_sum(dgamma);
-      if (thread_index_in_simdgroup == 0) {
-        mlx_atomic_fetch_add_explicit(dg_base + t * g_stride, dgamma, 0);
+      if (!vectorized_g) {
+        dgamma = simd_sum(dgamma);
+        if (thread_index_in_simdgroup == 0) {
+          mlx_atomic_fetch_add_explicit(dg_t, dgamma, 0);
+        }
       }
 
       for (int i = 0; i < n_per_t; ++i) {
+        const int s_idx = n_per_t * dk_idx + i;
+        float gamma = static_cast<float>(vectorized_g ? g_t[s_idx] : g_t[0]);
         s_hat[i] *= gamma;
       }
     }

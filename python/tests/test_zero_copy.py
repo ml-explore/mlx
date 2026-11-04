@@ -55,6 +55,16 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
         with self.assertRaises(Exception):
             mx.asarray(a, dtype=mx.float32, copy=False)
 
+    def test_dtype_mismatch_same_width_converts(self):
+        # Same item size, different dtype: values must be converted, not reinterpreted
+        a = np.arange(16, dtype=np.int32)
+        x = mx.asarray(a, dtype=mx.float32)
+        self.assertTrue(np.array_equal(np.array(x), a.astype(np.float32)))
+        y = mx.array([1.5, 2.5]) + np.array([1, 2], dtype=np.int32)
+        self.assertTrue(mx.array_equal(y, mx.array([2.5, 4.5])))
+        with self.assertRaisesRegex(ValueError, "Cannot convert array"):
+            mx.asarray(a, dtype=mx.float32, copy=False)
+
     def test_misaligned_source_copies(self):
         # Pointer not aligned to the item size
         raw = np.arange(64, dtype=np.uint8)

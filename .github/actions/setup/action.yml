@@ -49,11 +49,13 @@ runs:
       if: runner.os == 'macOS'
       shell: bash
       run: |
-        brew update
-        brew trust aws/tap # suppress warning in github actions
-        brew install openmpi
+        brew install openmpi ninja
         xcodebuild -showComponent MetalToolchain
         sysctl -a | grep machdep.cpu
+        if ${{ runner.environment == 'self-hosted' }} ; then
+          echo DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer >> $GITHUB_ENV
+          echo SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk >> $GITHUB_ENV
+        fi
 
     - name: Setup Windows environment
       if: runner.os == 'Windows'

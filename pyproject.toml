@@ -6,6 +6,9 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
+[tool.pytest]
+testpaths = ["python/tests"]
+
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 

@@ -404,6 +404,49 @@ class TestVmap(mlx_tests.MLXTestCase):
         expected = mx.addmm(mx.moveaxis(c, 2, 0), a, mx.moveaxis(b, 1, 0))
         self.assertTrue(mx.allclose(out, expected))
 
+    def test_vmap_slice_update(self):
+        src = mx.arange(24, dtype=mx.float32).reshape(3, 4, 2)
+        upd = mx.array([[100.0, 200.0]])
+        start = mx.array([1, 0])
+
+        def dynamic(s, u, k):
+            return mx.slice_update(s, u, k, axes=(0, 1))
+
+        def static(s, u):
+            s = s + 0
+            s[1:2, 0:2] = u
+            return s
+
+        for ax in range(3):
+            # Batched src, unbatched update
+            s = mx.moveaxis(src, 0, ax)
+            out = mx.vmap(dynamic, in_axes=(ax, None, None))(s, upd, start)
+            expected = mx.stack([dynamic(src[i], upd, start) for i in range(3)])
+            self.assertTrue(mx.array_equal(out, expected))
+
+            out = mx.vmap(static, in_axes=(ax, None))(s, upd)
+            expected = mx.stack([static(src[i], upd) for i in range(3)])
+            self.assertTrue(mx.array_equal(out, expected))
+
+        # Batched update, unbatched src
+        u = mx.stack([upd + i for i in range(3)])
+        out = mx.vmap(dynamic, in_axes=(None, 0, None))(src[0], u, start)
+        expected = mx.stack([dynamic(src[0], u[i], start) for i in range(3)])
+        self.assertTrue(mx.array_equal(out, expected))
+
+        out = mx.vmap(static, in_axes=(None, 0))(src[0], u)
+        expected = mx.stack([static(src[0], u[i]) for i in range(3)])
+        self.assertTrue(mx.array_equal(out, expected))
+
+        # Both batched
+        out = mx.vmap(dynamic, in_axes=(0, 0, None))(src, u, start)
+        expected = mx.stack([dynamic(src[i], u[i], start) for i in range(3)])
+        self.assertTrue(mx.array_equal(out, expected))
+
+        out = mx.vmap(static, in_axes=(0, 0))(src, u)
+        expected = mx.stack([static(src[i], u[i]) for i in range(3)])
+        self.assertTrue(mx.array_equal(out, expected))
+
     def test_vmap_svd(self):
         a = mx.random.uniform(shape=(3, 4, 2))
 
@@ -493,6 +536,21 @@ class TestVmap(mlx_tests.MLXTestCase):
                     a[:, i, :] @ invs[i], mx.eye(a.shape[0]), rtol=1e-4, atol=1e-5
                 )
             )
+
+    def test_vmap_tri_inverse(self):
+        mx.random.seed(42)
+        a = mx.random.normal(shape=(3, 4, 4)) + 4 * mx.eye(4)
+
+        for upper in (False, True):
+
+            def cpu_tri_inv(x):
+                return mx.linalg.tri_inv(x, upper=upper, stream=mx.cpu)
+
+            expected = cpu_tri_inv(a)
+            out = mx.vmap(cpu_tri_inv, in_axes=(0,))(a)
+            self.assertTrue(mx.allclose(out, expected, rtol=1e-4, atol=1e-5))
+            out = mx.vmap(cpu_tri_inv, in_axes=(1,))(a.swapaxes(0, 1))
+            self.assertTrue(mx.allclose(out, expected, rtol=1e-4, atol=1e-5))
 
     def test_vmap_gather(self):
         def gather(a, idx):

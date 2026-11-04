@@ -10,7 +10,7 @@
 #include <unordered_set>
 
 #include "mlx/array.h"
-#include "mlx/backend/common/metal_kernel.h"
+#include "mlx/backend/common/custom_kernel.h"
 #include "mlx/backend/metal/resident.h"
 #include "mlx/device.h"
 
@@ -94,12 +94,18 @@ class MLX_API CommandEncoder {
   }
 
   void barrier();
-  void end_encoding();
+  void end_encoding(bool wait_in_flight = false);
   void wait_event(Event event, uint64_t value);
   void signal_event(Event event, uint64_t value);
   bool needs_commit() const;
   void commit(std::function<void()> completion = nullptr);
   void synchronize();
+#ifndef NDEBUG
+  void verify_graph(
+      const char* primitive_name,
+      const std::vector<array>& inputs,
+      const std::vector<array>& outputs);
+#endif
 
   MTL::CommandBuffer* get_command_buffer() const {
     return buffer_.get();
@@ -143,6 +149,9 @@ class MLX_API CommandEncoder {
   std::unordered_set<MTL::Resource*> concurrent_outputs_;
   std::unordered_set<const void*> all_inputs_;
   std::unordered_set<const void*> all_outputs_;
+#ifndef NDEBUG
+  std::vector<void*> registered_data_ptrs_;
+#endif
 
   // A map of prior command encoder outputs to their corresponding fence.
   std::unordered_map<const void*, NS::SharedPtr<MTL::Fence>> prev_ce_outputs_;
@@ -166,7 +175,7 @@ class MLX_API Device {
   int get_architecture_gen() const {
     return arch_gen_;
   }
-  std::tuple<int, int> get_max_ops_mb_per_buffer() const {
+  std::tuple<int, int> get_default_max_ops_mb_per_buffer() const {
     return std::make_tuple(max_ops_per_buffer_, max_mb_per_buffer_);
   }
 
@@ -176,7 +185,7 @@ class MLX_API Device {
 
   MTL::Library* get_library(
       const std::string& name,
-      const CompileOptions& compile_options,
+      const fast::CompileOptions& compile_options,
       const std::function<std::string(void)>& builder);
 
   MTL::Library* get_library(
@@ -207,7 +216,7 @@ class MLX_API Device {
  private:
   NS::SharedPtr<MTL::Library> build_library_(
       const std::string& source_string,
-      const CompileOptions& compile_options = {});
+      const fast::CompileOptions& compile_options = {});
 
   NS::SharedPtr<MTL::Function> get_function_(
       const std::string& name,
@@ -261,5 +270,8 @@ std::unordered_map<int, CommandEncoder>& get_global_command_encoders();
 NS::SharedPtr<NS::AutoreleasePool> new_scoped_memory_pool();
 
 bool is_nax_available();
+
+// Number of GPU cores, or 0 when it is not known.
+int gpu_core_count();
 
 } // namespace mlx::core::metal

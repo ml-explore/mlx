@@ -4,6 +4,7 @@
 #include "mlx/backend/metal/kernels/utils.h"
 
 constant bool save_state [[function_constant(200)]];
+constant bool vectorized_g [[function_constant(201)]];
 
 #define AT(TILE, IDX) TILE.thread_elements()[IDX]
 #define SUB(TILE0, TILE1, TILE2)                \
@@ -172,8 +173,8 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
     const device InT* k [[buffer(1)]],
     const device InT* v [[buffer(2)]],
     const device float* state_in [[buffer(3)]],
-    const device InT* g [[buffer(4)]],
-    const device InT* beta [[buffer(5)]],
+    const device float* g [[buffer(4)]],
+    const device float* beta [[buffer(5)]],
     device InT* y [[buffer(6)]],
     device float* state_out [[buffer(7)]],
     constant int& T [[buffer(8)]],
@@ -274,8 +275,8 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
     const device InT* k [[buffer(1)]],
     const device InT* v [[buffer(2)]],
     const device float* state_in [[buffer(3)]],
-    const device InT* g [[buffer(4)]], // [B, T, Hv]
-    const device InT* beta [[buffer(5)]], // [B, T, Hv]
+    const device float* g [[buffer(4)]], // [B, T, Hv]
+    const device float* beta [[buffer(5)]], // [B, T, Hv]
     device InT* y [[buffer(6)]], // [B, T, Hv, Dv]
     device float* state_out [[buffer(7)]], // [B, Hv, Dv, Dk]
     constant int& T [[buffer(8)]],
@@ -310,8 +311,8 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
     state[i] = static_cast<float>(i_state[s_idx]);
   }
 
-  // g: [B, T, Hv]
-  auto g_ = g + b_idx * T * Hv;
+  // g: [B, T, Hv] or [B, T, Hv, Dk]
+  auto g_ = g + (vectorized_g ? (b_idx * T * Hv * Dk) : (b_idx * T * Hv));
   auto beta_ = beta + b_idx * T * Hv;
 
   // Checkpoint every Ckpt-th step rather than every step: at T = 4096 with
@@ -334,7 +335,8 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
     float kv_mem = 0.0f;
     for (int i = 0; i < n_per_t; ++i) {
       auto s_idx = n_per_t * dk_idx + i;
-      state[i] = state[i] * g_[hv_idx];
+      auto g_idx = vectorized_g ? (hv_idx * Dk + s_idx) : hv_idx;
+      state[i] = state[i] * g_[g_idx];
       kv_mem += state[i] * k_[s_idx];
     }
     kv_mem = simd_sum(kv_mem);
@@ -356,7 +358,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
     k_ += Hk * Dk;
     v_ += Hv * Dv;
     y += Hv * Dv;
-    g_ += Hv;
+    g_ += vectorized_g ? (Hv * Dk) : Hv;
     beta_ += Hv;
   }
   for (int i = 0; i < n_per_t; ++i) {

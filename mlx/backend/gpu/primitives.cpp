@@ -8,6 +8,9 @@
 
 #if defined(MLX_USE_CUDA)
 #include <nvtx3/nvtx3.hpp>
+#include "mlx/backend/cuda/device.h"
+#else
+#include "mlx/backend/metal/device.h"
 #endif
 
 #include <cassert>
@@ -22,7 +25,14 @@ namespace mlx::core {
 
 void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("AsStrided::eval_gpu");
-  eval(inputs, out);
+  assert(inputs.size() == 1);
+  if (inputs[0].flags().row_contiguous) {
+    eval(inputs[0], out);
+  } else {
+    auto copy = contiguous_copy_gpu(inputs[0], stream());
+    // Donated to out.
+    eval(copy, out);
+  }
 }
 
 void AsType::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -169,7 +179,7 @@ void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Flatten::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("Flatten::eval_gpu");
-  reshape_gpu(inputs[0], out, stream());
+  reshape_gpu(inputs[0], out, false, stream());
 }
 
 void NumberOfElements::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -195,7 +205,7 @@ void Pad::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("Reshape::eval_gpu");
-  reshape_gpu(inputs[0], out, stream());
+  reshape_gpu(inputs[0], out, false, stream());
 }
 
 void Split::eval_gpu(
@@ -234,7 +244,7 @@ void Transpose::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Unflatten::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("Unflatten::eval_gpu");
-  reshape_gpu(inputs[0], out, stream());
+  reshape_gpu(inputs[0], out, false, stream());
 }
 
 void View::eval_gpu(const std::vector<array>& inputs, array& out) {

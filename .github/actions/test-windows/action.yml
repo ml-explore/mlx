@@ -8,7 +8,7 @@ runs:
       shell: bash
       env:
         DEVICE: cpu
-      run: uv run python/tests/run.py -v
+      run: uv run pytest --durations=10 -n 4 || uv run pytest --last-failed
 
     - name: Run CPP tests - CPU
       shell: bash

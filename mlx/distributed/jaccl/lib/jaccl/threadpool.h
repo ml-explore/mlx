@@ -22,7 +22,10 @@
 //    distribution.
 #pragma once
 
+#include <atomic>
+#include <concepts>
 #include <condition_variable>
+#include <exception>
 #include <functional>
 #include <future>
 #include <memory>
@@ -135,34 +138,40 @@ inline void ThreadPool::start_threads(size_t threads) {
 }
 
 // Run fn(lw) for each wire, the first n_wires - 1 on the pool and the last
-// inline, then wait for the pool calls before returning.
-template <typename Fn>
+// inline. Wait for all of them, then rethrow the first failure.
+template <std::invocable<int> Fn>
 void dispatch_wires(ThreadPool* pool, int n_wires, Fn&& fn) {
-  if (n_wires <= 1 || pool == nullptr) {
+  if (n_wires <= 1 || !pool) {
     for (int lw = 0; lw < n_wires; lw++) {
       fn(lw);
     }
     return;
   }
 
+  std::atomic<bool> failed{false};
+  std::exception_ptr first_error;
+  auto run = [&failed, &first_error, &fn](int lw) {
+    try {
+      fn(lw);
+    } catch (...) {
+      if (!failed.exchange(true)) {
+        first_error = std::current_exception();
+      }
+    }
+  };
+
   std::vector<std::future<void>> futures;
   futures.reserve(n_wires - 1);
   for (int lw = 0; lw < n_wires - 1; lw++) {
-    futures.emplace_back(pool->enqueue(fn, lw));
+    futures.emplace_back(pool->enqueue(run, lw));
   }
-
-  // Wait for the pool calls even if the inline one throws, so they never
-  // outlive this frame.
-  try {
-    fn(n_wires - 1);
-  } catch (...) {
-    for (auto& f : futures) {
-      f.wait();
-    }
-    throw;
-  }
+  run(n_wires - 1);
   for (auto& f : futures) {
     f.wait();
+  }
+
+  if (first_error) {
+    std::rethrow_exception(first_error);
   }
 }
 

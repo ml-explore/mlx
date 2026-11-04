@@ -128,6 +128,7 @@ instantiate_init_min_max(max, Max)
 
 #define instantiate_and_or(name, op)                                 \
   instantiate_reduce_functions(name, bool_, bool, bool, op)          \
+  instantiate_reduce_functions(name, int8, int8_t, bool, op)         \
   instantiate_reduce_functions(name, int16, int16_t, bool, op)       \
   instantiate_reduce_functions(name, int32, int32_t, bool, op)       \
   instantiate_reduce_functions(name, int64, int64_t, bool, op)       \

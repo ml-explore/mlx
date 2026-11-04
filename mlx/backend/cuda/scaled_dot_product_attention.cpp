@@ -283,7 +283,14 @@ DnnGraph build_sdpa_backward_graph(
                      .set_name("sdpa_backward_cudnn")
                      .set_attn_scale(graph.scalar("Scale", SCALE, float32));
   if (do_causal) {
-    options.set_causal_mask_bottom_right(do_causal);
+    // For pretraining, set_causal_mask (top-left mask) is ~1.8x faster than
+    // the bottom-right mask for a ~4B model (it depends on the model size: for
+    // bigger models the difference is smaller since the FFNs take more FLOPs)
+    if (q.shape(2) == k.shape(2)) {
+      options.set_causal_mask(do_causal);
+    } else {
+      options.set_causal_mask_bottom_right(do_causal);
+    }
   }
   if (mask_arr) {
     options.set_bias(graph.tensor("BIAS", BIAS, *mask_arr));
@@ -319,10 +326,7 @@ bool supports_sdpa_cudnn(
     bool has_arr_mask,
     bool do_causal,
     Stream s) {
-  static bool enabled = env::get_var("MLX_CUDA_USE_CUDNN_SDPA", 1);
-  if (!enabled) {
-    return false;
-  }
+  bool enabled = config::get("MLX_CUDA_USE_CUDNN_SDPA", 1);
 
   // cuDNN SDPA requires Ampere and later.
   if (cu::device(s.device).compute_capability_major() < 8) {
@@ -557,11 +561,19 @@ std::tuple<bool, std::string> has_fused_kernel(
     const array& v,
     bool has_arr_mask,
     bool do_causal,
+    int window_size,
     bool output_logsumexp,
     Stream s) {
   if (s.device != Device::gpu) {
     return {false, "the fused kernels require a GPU stream."};
   }
+  if (window_size > 0) {
+    return {false, "window attention support for CUDA is NYI"};
+  }
+  if (output_logsumexp && window_size > 0) {
+    return {false, "window support for backward attention is NYI"};
+  }
+
   if (!supports_sdpa_cudnn(q, k, v, has_arr_mask, do_causal, s) &&
       !supports_sdpa_vector(q, k, v, has_arr_mask, output_logsumexp)) {
     std::ostringstream msg;
@@ -584,12 +596,13 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_arr_mask,
     bool do_causal,
     bool has_sinks,
+    int window_size,
     bool is_training,
     bool output_logsumexp,
     bool force_fused,
     Stream s) {
-  auto [has_fused, reason] =
-      has_fused_kernel(q, k, v, has_arr_mask, do_causal, output_logsumexp, s);
+  auto [has_fused, reason] = has_fused_kernel(
+      q, k, v, has_arr_mask, do_causal, window_size, output_logsumexp, s);
   if (force_fused) {
     if (!has_fused) {
       std::ostringstream msg;

@@ -549,24 +549,20 @@ Building and Binding
 
 Let's look at the overall directory structure first.
 
-| extensions
+| cmake_extension
 | ├── axpby
 | │   ├── axpby.cpp
 | │   ├── axpby.h
 | │   └── axpby.metal
-| ├── mlx_sample_extensions
-| │   └── __init__.py
 | ├── bindings.cpp
 | ├── CMakeLists.txt
 | └── setup.py
 
-* ``extensions/axpby/`` defines the C++ extension library
-* ``extensions/mlx_sample_extensions`` sets out the structure for the
-  associated Python package
-* ``extensions/bindings.cpp`` provides Python bindings for our operation
-* ``extensions/CMakeLists.txt`` holds CMake rules to build the library and
+* ``cmake_extension/axpby/`` defines the C++ extension library
+* ``cmake_extension/bindings.cpp`` provides Python bindings for our operation
+* ``cmake_extension/CMakeLists.txt`` holds CMake rules to build the library and
   Python bindings
-* ``extensions/setup.py`` holds the ``setuptools`` rules to build and install
+* ``cmake_extension/setup.py`` holds the ``setuptools`` rules to build and install
   the Python package
 
 Binding to Python
@@ -578,7 +574,7 @@ already provided, adding our :meth:`axpby` is simple.
 
 .. code-block:: C++
 
-   NB_MODULE(_ext, m) {
+   NB_MODULE(mlx_sample_extensions, m) {
         m.doc() = "Sample extension for MLX";
 
         m.def(
@@ -610,13 +606,6 @@ already provided, adding our :meth:`axpby` is simple.
 
 Most of the complexity in the above example comes from additional bells and
 whistles such as the literal names and doc-strings.
-
-.. warning::
-
-    :mod:`mlx.core` must be imported before importing
-    :mod:`mlx_sample_extensions` as defined by the nanobind module above to
-    ensure that the casters for :mod:`mlx.core` components like
-    :class:`mlx.core.array` are available.
 
 .. _Building with CMake:
 
@@ -678,19 +667,18 @@ Finally, we build the nanobind_ bindings
 .. code-block:: cmake
 
     nanobind_add_module(
-      _ext
+      mlx_sample_extensions
       NB_STATIC FREE_THREADED LTO NOMINSIZE
       NB_DOMAIN mlx
       ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp
     )
-    target_link_libraries(_ext PRIVATE mlx_ext)
-
-    if(BUILD_SHARED_LIBS)
-      target_link_options(_ext PRIVATE -Wl,-rpath,@loader_path)
-    endif()
+    target_link_libraries(mlx_sample_extensions PRIVATE mlx_ext)
 
 Building with ``setuptools``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Building with a ``CMakeLists.txt``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Once we have set out the CMake build rules as described above, we can use the
 build utilities defined in :mod:`mlx.extension`:
@@ -705,42 +693,167 @@ build utilities defined in :mod:`mlx.extension`:
             name="mlx_sample_extensions",
             version="0.0.0",
             description="Sample C++ and Metal extensions for MLX primitives.",
-            ext_modules=[extension.CMakeExtension("mlx_sample_extensions._ext")],
+            ext_modules=[extension.CMakeExtension("mlx_sample_extensions")],
             cmdclass={"build_ext": extension.CMakeBuild},
-            packages=["mlx_sample_extensions"],
-            package_data={"mlx_sample_extensions": ["*.so", "*.dylib", "*.metallib"]},
+            packages=[],
             extras_require={"dev":[]},
             zip_safe=False,
             python_requires=">=3.10",
         )
 
-.. note::
-    We treat ``extensions/mlx_sample_extensions`` as the package directory
-    even though it only contains a ``__init__.py`` to ensure the following:
+On macOS and Linux, ``CMakeBuild`` configures a relocatable runtime search path
+for all targets. It locates colocated libraries through ``@loader_path`` on
+macOS or ``$ORIGIN`` on Linux, and locates the MLX library under ``mlx/lib`` in
+the same ``site-packages`` directory. The extension module can therefore load
+without importing ``mlx.core`` first. Values provided through ``CMAKE_ARGS``
+can override this default.
 
-    * :mod:`mlx.core` must be imported before importing :mod:`_ext`
-    * The C++ extension library and the metal library are co-located with the python
-      bindings and copied together if the package is installed
+The extension name is the Python import name. This example builds the top-level
+module ``mlx_sample_extensions`` without a Python wrapper package. A suffix such
+as ``._ext`` is optional: use a dotted name such as ``my_package._ext`` only when
+placing the extension inside a Python package. For ``CMakeExtension``, the
+nanobind module name must match the final component of the extension name.
 
 To build the package, first install the build dependencies with ``pip install
 -r requirements.txt``.  You can then build inplace for development using
-``python setup.py build_ext -j8 --inplace`` (in ``extensions/``)
+``python setup.py build_ext -j8 --inplace`` (in ``cmake_extension/``)
 
 This results in the directory structure:
 
-| extensions
-| ├── mlx_sample_extensions
-| │   ├── __init__.py
-| │   ├── libmlx_ext.dylib # C++ extension library
-| │   ├── mlx_ext.metallib # Metal library
-| │   └── _ext.cpython-3x-darwin.so # Python Binding
+| cmake_extension
+| ├── libmlx_ext.dylib # C++ extension library
+| ├── mlx_ext.metallib # Metal library
+| ├── mlx_sample_extensions.cpython-3x-darwin.so # Python binding
 | ...
 
 When you try to install using the command ``python -m pip install .`` (in
-``extensions/``), the package will be installed with the same structure as
-``extensions/mlx_sample_extensions`` and the C++ and Metal library will be
-copied along with the Python binding since they are specified as
-``package_data``.
+``cmake_extension/``), the Python module and its C++ and Metal libraries are
+installed together directly under ``site-packages``.
+
+Building without a ``CMakeLists.txt``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For a source-list based build, use ``mlx.extension.MetalExtension`` with
+``mlx.extension.BuildExtension``. The helper builds the C++/nanobind module and
+a colocated Metal library without requiring a ``CMakeLists.txt`` in the
+extension project.
+
+.. code-block:: python
+
+    from importlib.metadata import version as package_version
+
+    from mlx import extension
+    from setuptools import setup
+
+    setup(
+        name="mlx_sample_metal_extension",
+        ext_modules=[
+            extension.MetalExtension(
+                "mlx_sample_metal_extension",
+                sources=[
+                    "activation.cpp",
+                    "silu_and_mul.metal",
+                ],
+                extra_compile_args={
+                    "cxx": ["-O3"],
+                    "metal": ["-O3"],
+                },
+            )
+        ],
+        cmdclass={"build_ext": extension.BuildExtension},
+        install_requires=[f"mlx=={package_version('mlx')}"],
+        packages=[],
+    )
+
+As with ``CMakeExtension``, a ``._ext`` suffix is not required. The final component
+of the extension name is also the default Metal library name. This example
+builds the top-level module ``mlx_sample_metal_extension``, with
+``mlx_sample_metal_extension.metallib`` and
+``mlx_sample_metal_extension.pyi`` beside it. These files are included in the
+wheel and installed together under ``site-packages``.
+
+A list passed as ``extra_compile_args`` applies to C++; a dictionary can provide
+separate ``cxx`` and ``metal`` options. To disable nanobind stub generation,
+configure the command class with
+``BuildExtension.with_options(generate_stubs=False)``.
+
+Pin the ``mlx`` install requirement to the version used for the build because
+MLX does not provide a stable C++ ABI across releases. Reading the version from
+the installed package metadata avoids importing ``mlx.core`` during setup.
+
+The generated extension uses a relocatable runtime search path to locate
+``libmlx.dylib`` under ``mlx/lib`` in the same ``site-packages`` directory. This
+avoids embedding the build machine's absolute MLX library path and lets the
+extension module load without importing ``mlx.core`` first.
+
+The build defines ``MLX_EXTENSION_NAME`` as the final component of the
+extension name and ``MLX_METAL_LIBRARY_NAME`` as its string form. Use them so
+the binding does not hard-code either the module or Metal library name:
+
+.. code-block:: C++
+
+    auto library =
+        device.get_library(MLX_METAL_LIBRARY_NAME, current_binary_dir());
+
+    NB_MODULE(MLX_EXTENSION_NAME, m) {
+      // bindings
+    }
+
+To choose Metal library names or build multiple libraries, pass
+``extension.MetalLibrary`` objects through ``metal_libraries``:
+
+.. code-block:: python
+
+    extension.MetalExtension(
+        "mlx_sample_metal_extension",
+        sources=["activation.cpp"],
+        metal_libraries=[
+            extension.MetalLibrary(
+                "activation",
+                sources=["silu_and_mul.metal"],
+                extra_compile_args=["-O3"],
+                deployment_target="14.0",
+            ),
+            extension.MetalLibrary(
+                "something_else",
+                sources=["something_else.metal"],
+            ),
+        ],
+    )
+
+When ``metal_libraries`` is set, put all ``.metal`` sources in those objects
+and keep only C++ sources in ``MetalExtension.sources``. Each library needs a
+unique name, given without a path or ``.metallib`` suffix. This example builds
+``activation.metallib`` and ``something_else.metallib`` beside the Python
+extension.
+
+Each library's ``extra_compile_args`` are added after the extension's shared
+``extra_compile_args["metal"]`` options. ``MLX_METAL_LIBRARY_NAME`` still
+contains the final component of the Python extension name. Load libraries
+explicitly by their configured names:
+
+.. code-block:: C++
+
+    auto library = device.get_library("activation", current_binary_dir());
+
+Debug builds include Metal line tables and recorded sources. Metal logging is
+enabled when the current ``xcrun metal`` compiler advertises support. The
+effective Python
+``MACOSX_DEPLOYMENT_TARGET`` is forwarded to CMake and applied to both AIR
+compilation and metallib linking. By default, the target recorded in the
+installed ``libmlx.dylib`` is used. Set ``MACOSX_DEPLOYMENT_TARGET`` or pass
+``CMAKE_OSX_DEPLOYMENT_TARGET`` through ``CMAKE_ARGS`` to override it. This can
+select a lower target for cross-building, provided the extension is used with
+an MLX build for that target at runtime. Explicit targets below macOS 14 are
+rejected.
+
+``BuildExtension`` uses CMake's platform default generator. To use Ninja,
+include ``ninja`` in the build requirements and configure the command class
+with ``BuildExtension.with_options(use_ninja=True)``. It falls back to the platform
+default generator if Ninja is not available.
+
+The complete standalone example is available in
+``examples/metal_extension/``.
 
 Usage
 -----
@@ -827,7 +940,7 @@ Scripts
 
 .. admonition:: Download the code
 
-   The full example code is available in `mlx <https://github.com/ml-explore/mlx/tree/main/examples/extensions/>`_.
+   The full example code is available in `mlx <https://github.com/ml-explore/mlx/tree/main/examples/cmake_extension/>`_.
 
 .. _Accelerate: https://developer.apple.com/documentation/accelerate/blas?language=objc
 .. _Metal: https://developer.apple.com/documentation/metal?language=objc

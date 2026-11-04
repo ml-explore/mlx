@@ -88,6 +88,9 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     (1, 1, 1, 0),
                     (3, 3, 1, 0),
                     (31, 5, 5, 2),
+                    (5, 2, 2, 2),
+                    (6, 3, 2, 3),
+                    (2, 1, 4, 1),
                 ):
                     run_conv_transpose_1D(
                         N, C, OC, iH, kH, stride, padding, dtype=dtype
@@ -221,6 +224,8 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     (1, 1, 1, 0),
                     (3, 3, 1, 0),
                     (31, 5, 5, 2),
+                    (5, 2, 2, 2),
+                    (6, 3, 2, 3),
                 ):
                     run_conv_transpose1D_grad(
                         N, C, OC, iH, kH, stride, padding, dtype=dtype
@@ -659,6 +664,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     (3, 2, 2, 0, 1),
                     (5, 3, 2, 1, 0),
                     (7, 4, 3, 1, 2),
+                    (3, 2, 3, 3, 1),
                 ):
                     run_conv_transpose_1d_output_padding(
                         N, C, OC, iH, kH, stride, padding, output_padding, dtype=dtype
@@ -836,10 +842,10 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     np.random.seed(0)
                     x = mx.array(np.random.normal(size=in_shape).astype(np.float32))
                     w = mx.array(np.random.normal(size=wt_shape).astype(np.float32))
-                    with mlx_tests.scoped_env(MLX_CONV_UNFOLD_TILE_ROWS=None):
+                    with mx.config.scoped_update(MLX_CONV_UNFOLD_TILE_ROWS=0):
                         untiled = conv(x, w, **kwargs)
                         mx.eval(untiled)
-                    with mlx_tests.scoped_env(MLX_CONV_UNFOLD_TILE_ROWS=str(tile_rows)):
+                    with mx.config.scoped_update(MLX_CONV_UNFOLD_TILE_ROWS=tile_rows):
                         tiled = conv(x, w, **kwargs)
                         mx.eval(tiled)
                     self.assertTrue(np.allclose(untiled, tiled, atol=1e-4))

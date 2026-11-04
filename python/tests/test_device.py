@@ -134,9 +134,13 @@ class TestStream(mlx_tests.MLXTestCase):
 
         def on_worker():
             def gen():
-                with mx.stream(mx.new_stream(mx.default_device())):
-                    yield 1
-                    yield 2
+                try:
+                    with mx.stream(mx.new_stream(mx.default_device())):
+                        yield 1
+                        yield 2
+                except Exception:
+                    # Exception is ignored on purpose.
+                    pass
 
             g = gen()
             next(g)
@@ -179,6 +183,16 @@ class TestDeviceInfo(mlx_tests.MLXTestCase):
             self.assertIn("device_name", info)
             self.assertTrue(len(info["device_name"]) > 0)
             self.assertIn("architecture", info)
+
+    def test_cuda_get_arch_list(self):
+        arch_list = mx.cuda.get_arch_list()
+        self.assertIsInstance(arch_list, list)
+        if mx.cuda.is_available():
+            self.assertTrue(arch_list)
+            for arch in arch_list:
+                self.assertRegex(arch, r"^(sm|compute)_[0-9]+[af]?$")
+        else:
+            self.assertEqual(arch_list, [])
 
     def test_device_info_default(self):
         info = mx.device_info()

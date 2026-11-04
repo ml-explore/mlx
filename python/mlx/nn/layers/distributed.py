@@ -1,12 +1,14 @@
 # Copyright © 2024 Apple Inc.
 
 import math
+from fractions import Fraction
 from functools import lru_cache, reduce
 from typing import Callable, Optional, Union
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.linear import Linear
+from mlx.nn.layers.quantized import QuantizedLinear
 from mlx.utils import tree_flatten, tree_map_with_path, tree_unflatten
 
 
@@ -104,6 +106,38 @@ def _sharded_to_all(segments):
     return _shard_fn
 
 
+def _quantized_fractions(segments, layer, group):
+    """Integer segments count input features, but a quantized layer packs its
+    inputs into words and groups. Return them as exact fractions of the input
+    size so that every parameter of the layer splits at the same feature."""
+    input_dims = (layer.weight.shape[-1] * 32) // layer.bits
+    edges = [0, *segments, input_dims]
+    chunk = group.size() * layer.group_size
+    if any((hi - lo) % chunk for lo, hi in zip(edges, edges[1:])):
+        raise ValueError(
+            f"Segments {segments} must split into whole groups of "
+            f"{layer.group_size} on each of {group.size()} ranks."
+        )
+    return [Fraction(s, input_dims) for s in segments]
+
+
+def _quantized_sharded_to_all(module, segments, group):
+    """Like _sharded_to_all for integer segments, but every quantized layer in
+    the module gets them as fractions of its own input size."""
+    fractions = {
+        name: _quantized_fractions(segments, layer, group)
+        for name, layer in module.named_modules()
+        if isinstance(layer, QuantizedLinear)
+    }
+
+    def _shard_fn(path, weight):
+        if path.endswith("bias"):
+            return None
+        return -1, fractions.get(path.rpartition(".")[0], segments)
+
+    return _shard_fn
+
+
 def _check_sharding(sharding):
     if sharding not in ("all-to-sharded", "sharded-to-all"):
         raise ValueError(
@@ -146,11 +180,13 @@ def shard_inplace(
     """
     if isinstance(sharding, str):
         _check_sharding(sharding)
-        sharding = (
-            _all_to_sharded(segments)
-            if sharding == "all-to-sharded"
-            else _sharded_to_all(segments)
-        )
+        if sharding == "all-to-sharded":
+            sharding = _all_to_sharded(segments)
+        elif isinstance(segments, int) or not isinstance(segments[0], int):
+            sharding = _sharded_to_all(segments)
+        else:
+            group = group or mx.distributed.init()
+            sharding = _quantized_sharded_to_all(module, segments, group)
     module.update(_shard(module.parameters(), sharding, group))
 
 
@@ -314,11 +350,7 @@ class ShardedToAllLinear(Module):
             shape=(output_dims, input_dims // N),
         )
         if bias:
-            self.bias = mx.random.uniform(
-                low=-scale,
-                high=scale,
-                shape=(output_dims,),
-            )
+            self.bias = mx.zeros((output_dims,))
 
     def _extra_repr(self) -> str:
         N = self.group.size()
@@ -597,6 +629,9 @@ class QuantizedShardedToAllLinear(Module):
         group = group or mx.distributed.init()
         output_dims, input_dims = quantized_linear_layer.weight.shape
         input_dims = (input_dims * 32) // quantized_linear_layer.bits
+
+        if not isinstance(segments, int) and isinstance(segments[0], int):
+            segments = _quantized_fractions(segments, quantized_linear_layer, group)
 
         sl = cls(
             input_dims,

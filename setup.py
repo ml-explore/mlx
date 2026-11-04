@@ -286,9 +286,19 @@ if __name__ == "__main__":
         "dev": [
             "ml_dtypes",
             "numpy>=2",
+            "pytest",
+            "pytest-xdist",
             "pre-commit",
             "torch>=2.9",
             "typing_extensions",
+        ],
+        "docs": [
+            "sphinx",
+            "sphinx-book-theme",
+            "sphinx-copybutton",
+            "clang",
+            "libclang",
+            "hawkmoth",
         ],
     }
     entry_points = {

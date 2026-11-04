@@ -36,4 +36,20 @@
 instantiate_attn_mask_helper(float16, half);
 instantiate_attn_mask_helper(bfloat16, bfloat);
 instantiate_attn_mask_helper(float32, float);
+
+#define instantiate_attn_split(tname, dtype, bk, bd, wn)             \
+  instantiate_kernel(                                                \
+      "steel_attention_split_" #tname "_bk" #bk "_bd" #bd "_wn" #wn, \
+  attention_split_nax, dtype, bk, bd, wn, float)
+
+#define instantiate_attn_split_helper(tname, dtype) \
+    instantiate_attn_split(tname, dtype, 32, 64, 1)  \
+    instantiate_attn_split(tname, dtype, 32, 96, 1)  \
+    instantiate_attn_split(tname, dtype, 32, 128, 1) \
+    instantiate_attn_split(tname, dtype, 32, 192, 1) \
+    instantiate_attn_split(tname, dtype, 32, 256, 2)
+
+instantiate_attn_split_helper(float16, half);
+instantiate_attn_split_helper(bfloat16, bfloat);
+instantiate_attn_split_helper(float32, float);
 // clang-format on

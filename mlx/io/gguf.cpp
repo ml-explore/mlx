@@ -7,6 +7,7 @@
 #include <numeric>
 
 #include "mlx/io/gguf.h"
+#include "mlx/io/load.h"
 #include "mlx/ops.h"
 
 namespace mlx::core {
@@ -96,6 +97,10 @@ std::tuple<allocator::Data, Dtype> extract_tensor_data(gguf_tensor* tensor) {
   }
   // Otherwise, we convert to float16.
   // TODO: Add other dequantization options.
+  if (tensor->num_weights >
+      std::numeric_limits<size_t>::max() / sizeof(int16_t)) {
+    tensor_error(*tensor, "has too many elements to convert to float16");
+  }
   int16_t* data = gguf_tensor_to_f16(tensor);
   if (data == NULL) {
     throw std::runtime_error("[load_gguf] gguf_tensor_to_f16 failed");
@@ -415,15 +420,12 @@ void append_kv_array(
   }
 }
 
-void save_gguf(
-    std::string file,
-    std::unordered_map<std::string, array> array_map,
-    std::unordered_map<std::string, GGUFMetaData> metadata /* = {} */) {
-  // Add .gguf to file name if it is not there
-  if (file.length() < 5 || file.substr(file.length() - 5, 5) != ".gguf") {
-    file += ".gguf";
-  }
+namespace {
 
+void write_gguf(
+    const std::string& file,
+    std::unordered_map<std::string, array> array_map,
+    std::unordered_map<std::string, GGUFMetaData> metadata) {
   std::unique_ptr<gguf_ctx, decltype(&gguf_close)> ctx(
       gguf_create(file.c_str(), GGUF_OVERWRITE), gguf_close);
   if (!ctx) {
@@ -589,6 +591,22 @@ void save_gguf(
       throw std::runtime_error("[save_gguf] gguf_append_tensor_data failed");
     }
   }
+}
+
+} // namespace
+
+void save_gguf(
+    std::string file,
+    std::unordered_map<std::string, array> array_map,
+    std::unordered_map<std::string, GGUFMetaData> metadata /* = {} */) {
+  // Add .gguf to file name if it is not there
+  if (file.length() < 5 || file.substr(file.length() - 5, 5) != ".gguf") {
+    file += ".gguf";
+  }
+
+  io::write_and_replace(file, [&array_map, &metadata](const std::string& path) {
+    write_gguf(path, array_map, metadata);
+  });
 }
 
 } // namespace mlx::core

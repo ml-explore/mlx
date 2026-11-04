@@ -12,10 +12,13 @@
 
 namespace mlx::core::cu {
 
+// Defined in kernel_utils.cu
+void* get_noop_kernel_ptr();
+
 namespace {
 
 bool use_cuda_graphs() {
-  static bool use_graphs = env::get_var("MLX_USE_CUDA_GRAPHS", true);
+  static bool use_graphs = config::get("MLX_USE_CUDA_GRAPHS", true);
   return use_graphs;
 }
 
@@ -157,6 +160,11 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
     }
   }
   active_deps_.clear();
+  if (force_single_root_ && deps.empty()) {
+    for (auto& node : nodes) {
+      roots_.push_back(node.node);
+    }
+  }
 
   for (auto o : active_outputs_) {
     for (auto& node : nodes) {
@@ -207,7 +215,12 @@ CommandEncoder::CommandEncoder(Device& d)
       stream_(d),
       graph_(d),
       worker_(std::make_shared<Worker>(d)),
-      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {
+      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400),
+      // DGX Spark / RTX Spark run memory-bound kernels slower in graphs that
+      // have several root nodes.
+      force_single_root_(
+          d.compute_capability_major() == 12 &&
+          d.compute_capability_minor() == 1) {
   std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits(d);
   worker_->start();
 }
@@ -232,16 +245,25 @@ void CommandEncoder::set_input_array(const array& arr) {
   bytes_in_graph_ += arr.data_size();
   auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
   active_deps_.push_back(id);
+#ifndef NDEBUG
+  if (arr.data_shared_ptr()->is_owned()) {
+    registered_data_ptrs_.push_back(gpu_ptr<void>(arr));
+  }
+#endif
 }
 
 void CommandEncoder::set_output_array(const array& arr) {
   if (!use_cuda_graphs()) {
     return;
   }
-
   auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
   active_deps_.push_back(id);
   active_outputs_.push_back(id);
+#ifndef NDEBUG
+  if (arr.data_shared_ptr()->is_owned()) {
+    registered_data_ptrs_.push_back(gpu_ptr<void>(arr));
+  }
+#endif
 }
 
 void CommandEncoder::add_kernel_node_raw(
@@ -501,11 +523,38 @@ void CommandEncoder::synchronize() {
   f.wait();
 }
 
+#ifndef NDEBUG
+void CommandEncoder::verify_graph(const char* primitive_name) {
+  if (allocator::allocator().has_invalid_memory(registered_data_ptrs_)) {
+    throw std::runtime_error(
+        fmt::format(
+            "There are invalid memory registered when calling {}::eval_gpu, "
+            "which is a bug that corrupts the graph, and usually caused by "
+            "temporary arrays not registered with \"add_temporary\" method.",
+            primitive_name));
+  }
+}
+#endif
+
 void CommandEncoder::commit_impl() {
   if (!temporaries_.empty()) {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
   }
   if (use_cuda_graphs() && node_count_ > 0) {
+    // Give a graph with several roots a single no-op root.
+    if (roots_.size() > 1) {
+      cudaKernelNodeParams params = {};
+      params.func = get_noop_kernel_ptr();
+      params.gridDim = dim3(1);
+      params.blockDim = dim3(1);
+      cudaGraphNode_t root;
+      CHECK_CUDA_ERROR(cudaGraphAddKernelNode(&root, graph_, NULL, 0, &params));
+      for (auto node : roots_) {
+        from_nodes_.push_back(root);
+        to_nodes_.push_back(node);
+      }
+      graph_nodes_key_ += "R-";
+    }
     if (!from_nodes_.empty()) {
 #if CUDART_VERSION >= 13000
       CHECK_CUDA_ERROR(cudaGraphAddDependencies(
@@ -579,6 +628,10 @@ void CommandEncoder::clear_graph_state() {
   active_deps_.clear();
   active_outputs_.clear();
   concurrent_nodes_.clear();
+  roots_.clear();
+#ifndef NDEBUG
+  registered_data_ptrs_.clear();
+#endif
   is_graph_updatable_ = true;
 }
 

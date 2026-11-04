@@ -18,8 +18,8 @@ void KeySequence::seed(uint64_t seed) {
   key_ = key((seed));
 }
 
-array KeySequence::next() {
-  auto out = split(key_);
+array KeySequence::next(StreamOrDevice s) {
+  auto out = split(key_, s);
   key_ = out.first;
   return out.second;
 }
@@ -43,7 +43,7 @@ array bits(
     throw std::invalid_argument("[bits] Negative dimensions not allowed.");
   }
 
-  auto key = key_ ? *key_ : KeySequence::default_().next();
+  auto key = key_ ? *key_ : KeySequence::default_().next(s);
   if (key.dtype() != uint32) {
     std::ostringstream msg;
     msg << "[bits] Expected key type uint32 but received " << key.dtype()
@@ -183,6 +183,19 @@ array normal(
     const std::optional<array>& scale,
     const std::optional<array>& key,
     StreamOrDevice s /* = {} */) {
+  auto out_shape = shape;
+  if (loc) {
+    out_shape = broadcast_shapes(out_shape, loc->shape());
+  }
+  if (scale) {
+    out_shape = broadcast_shapes(out_shape, scale->shape());
+  }
+  if (out_shape != shape) {
+    std::ostringstream msg;
+    msg << "[normal] Cannot generate random values of shape " << shape
+        << " from broadcasted shape " << out_shape << ".";
+    throw std::invalid_argument(msg.str());
+  }
   if (dtype == complex64) {
     return complex_normal(shape, loc, scale, key, s);
   } else if (!issubdtype(dtype, floating)) {
@@ -461,7 +474,7 @@ array categorical(
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
   axis = get_valid_axis(axis, logits_.ndim());
-  auto logits = expand_dims(logits_, -1);
+  auto logits = expand_dims(logits_, -1, s);
   auto shape = logits.shape();
   shape.erase(shape.begin() + axis);
   shape.back() = num_samples;

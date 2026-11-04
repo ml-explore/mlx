@@ -355,6 +355,17 @@ TEST_CASE("test gguf tensor dimension validation") {
   }
 }
 
+TEST_CASE("test gguf tensor to f16 size overflow") {
+  // A non-equivalent dtype (BF16) tensor whose element count times
+  // sizeof(int16_t) overflows size_t. num_weights = 2^63 makes the
+  // gguf_tensor_to_f16 malloc size wrap to 0 while the dequant loop still
+  // writes 2^63 elements, a heap-buffer-overflow in libc malloc.
+  const uint32_t bf16 = 30;
+  std::string file_path = get_temp_file("test_gguf_f16_overflow.gguf");
+  write_raw_gguf_dims(file_path, {1ull << 31, 1ull << 32}, bf16, 0);
+  CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+}
+
 // Writes a metadata-only GGUF (no tensors) whose metadata KV section is
 // `kv_section` verbatim, so a caller can encode values whose lengths exceed the
 // file to exercise check_metadata_value_in_file(). `kv_count` must match the

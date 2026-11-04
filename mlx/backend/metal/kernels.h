@@ -318,16 +318,16 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const array& x,
+    const std::string& mode,
     int group_size,
     int bits,
-    const std::string& mode,
+    bool has_global_scale,
+    bool transpose,
     int bm,
     int bn,
     int bk,
     int wm,
-    int wn,
-    bool transpose,
-    bool has_global_scale);
+    int wn);
 
 MTL::ComputePipelineState* get_steel_gemm_fused_nax_kernel(
     metal::Device& d,
@@ -405,16 +405,16 @@ MTL::ComputePipelineState* get_gather_qmm_nax_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const array& x,
+    const std::string& mode,
     int group_size,
     int bits,
-    const std::string& mode,
+    bool has_global_scale,
+    bool transpose,
     int bm,
     int bn,
     int bk,
     int wm,
-    int wn,
-    bool transpose,
-    bool has_global_scale);
+    int wn);
 
 MTL::ComputePipelineState* get_steel_attention_kernel(
     metal::Device& d,
@@ -444,6 +444,28 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     int wn,
     const array& m,
     bool split_d);
+
+MTL::ComputePipelineState* get_steel_attention_split_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& q,
+    int bq,
+    int bk,
+    int bd,
+    int wm,
+    int wn);
+
+MTL::ComputePipelineState* get_steel_attention_split_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& q,
+    int bk,
+    int bd,
+    int wn);
 
 MTL::ComputePipelineState* get_gated_delta_kernel(
     metal::Device& d,

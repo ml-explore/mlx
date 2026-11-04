@@ -101,7 +101,7 @@ array fft_impl(
   if (any_greater) {
     // Pad with zeros
     auto tmp = zeros(in_shape, a.dtype(), s);
-    in = slice_update(tmp, in, Shape(in.ndim(), 0), in.shape());
+    in = slice_update(tmp, in, Shape(in.ndim(), 0), in.shape(), s);
   }
 
   auto out_shape = in_shape;

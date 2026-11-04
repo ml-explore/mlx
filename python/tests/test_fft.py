@@ -2,6 +2,7 @@
 
 import itertools
 import unittest
+import warnings
 
 import mlx.core as mx
 import mlx_tests
@@ -200,6 +201,47 @@ class TestFFT(mlx_tests.MLXTestCase):
                         mx.allclose(output, expected, atol=atol, rtol=1e-4).item()
                     )
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_fft_partial_threadgroup_bounds(self):
+        # When the batch does not fill the last threadgroup, the GPU FFT must
+        # not read or write past the end of its input or output buffers.
+        # Allocating and freeing a buffer of the output size right before the
+        # FFT lets the output reuse it, with `victim` placed right behind it.
+        # Clearing the cache first keeps buffers left by earlier tests from
+        # changing that placement.
+        rng = np.random.default_rng(0)
+        cases = (
+            (mx.fft.fft, (5, 41)),
+            (mx.fft.ifft, (5, 41)),
+        )
+        expected = np.arange(1000, 1441, dtype=np.int32)
+        for transform, shape in cases:
+            with (
+                self.subTest(transform=transform.__name__, shape=shape),
+                mx.stream(mx.gpu),
+            ):
+                x_np = (
+                    rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+                ).astype(np.complex64)
+                x = mx.array(x_np)
+                mx.eval(x)
+                outputs = []
+                for _ in range(10):
+                    mx.clear_cache()
+                    hole = mx.zeros(shape, mx.complex64)
+                    mx.eval(hole)
+                    victim = mx.array(expected)
+                    mx.eval(victim)
+                    del hole
+                    y = transform(x)
+                    mx.eval(y)
+                    outputs.append(y)
+                    np.testing.assert_array_equal(np.array(victim), expected)
+                np_transform = getattr(np.fft, transform.__name__)
+                np.testing.assert_allclose(
+                    np.array(outputs[-1]), np_transform(x_np), atol=1e-3, rtol=1e-4
+                )
+
     @unittest.skip("Too slow for CI but useful for local testing.")
     def test_fft_exhaustive(self):
         nums = range(2, 4097)
@@ -273,6 +315,26 @@ class TestFFT(mlx_tests.MLXTestCase):
         out_mx = mx.abs(mx.fft.fft(mx.tile(mx.reshape(mx.array(b_np), (1, 4)), (4, 1))))
         out_np = np.abs(np.fft.fft(np.tile(np.reshape(np.array(b_np), (1, 4)), (4, 1))))
         np.testing.assert_allclose(out_mx, out_np, atol=1e-5, rtol=1e-5)
+
+    def test_fftn_size_one_axes(self):
+        shapes = [(4, 1, 8), (1, 8), (8, 1), (1, 1, 8), (2, 1, 3, 1), (1, 1, 1)]
+        for shape in shapes:
+            r = np.arange(np.prod(shape), dtype=np.float32).reshape(shape) + 1
+            c = r + 1j * r
+            for axes in [tuple(range(len(shape))), tuple(reversed(range(len(shape))))]:
+                sizes = tuple(shape[axis] for axis in axes)
+                for op in ["fftn", "ifftn", "rfftn", "irfftn"]:
+                    with self.subTest(shape=shape, axes=axes, op=op):
+                        x = r if op == "rfftn" else c
+                        if op == "irfftn":
+                            x = np.fft.rfftn(r, axes=axes)
+                        self.check_mx_np(
+                            getattr(mx.fft, op),
+                            getattr(np.fft, op),
+                            x,
+                            axes=axes,
+                            s=sizes,
+                        )
 
     def test_fft_into_ifft(self):
         n_fft = 8193
@@ -533,18 +595,20 @@ class TestFFT(mlx_tests.MLXTestCase):
                 norm=norm,
                 onesided=one,
             )
-            z_pt = torch.stft(
-                torch.tensor(x_np),
-                n_fft=n_fft,
-                hop_length=hop,
-                win_length=win_len,
-                window=win_pt,
-                center=center,
-                pad_mode="replicate" if pad_mode == "edge" else pad_mode,
-                normalized=(norm == "ortho"),
-                onesided=one,
-                return_complex=True,
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                z_pt = torch.stft(
+                    torch.tensor(x_np),
+                    n_fft=n_fft,
+                    hop_length=hop,
+                    win_length=win_len,
+                    window=win_pt,
+                    center=center,
+                    pad_mode="replicate" if pad_mode == "edge" else pad_mode,
+                    normalized=(norm == "ortho"),
+                    onesided=one,
+                    return_complex=True,
+                )
             np.testing.assert_allclose(
                 np.array(z_mx), z_pt.numpy(), atol=1e-4, rtol=1e-4
             )
@@ -586,16 +650,18 @@ class TestFFT(mlx_tests.MLXTestCase):
                 onesided=one,
                 length=length,
             )
-            y_pt = torch.istft(
-                torch.tensor(np.array(z)),
-                n_fft=n_fft,
-                hop_length=hop,
-                window=win_pt,
-                center=center,
-                normalized=(norm == "ortho"),
-                onesided=one,
-                length=length,
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                y_pt = torch.istft(
+                    torch.tensor(np.array(z)),
+                    n_fft=n_fft,
+                    hop_length=hop,
+                    window=win_pt,
+                    center=center,
+                    normalized=(norm == "ortho"),
+                    onesided=one,
+                    length=length,
+                )
             np.testing.assert_allclose(
                 np.array(y_mx), y_pt.numpy(), atol=1e-4, rtol=1e-4
             )
