@@ -18,7 +18,7 @@ cmake_policy(SET CMP0135 NEW)
 
 find_package(
   Python 3.10
-  COMPONENTS Interpreter Development.Module
+  COMPONENTS Interpreter Development.Module Development.SABIModule
   REQUIRED)
 FetchContent_Declare(
   nanobind
@@ -72,8 +72,8 @@ endif()
 # ----------------------------- Python Bindings -----------------------------
 nanobind_add_module(
   mlx_sample_extensions
-  NB_STATIC
-  FREE_THREADED
+  BACKEND_MODULE
+  nanobind_backend
   LTO
   NOMINSIZE
   NB_DOMAIN

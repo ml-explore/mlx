@@ -10,15 +10,24 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Get Python version
+    - name: Get frontend ABI
       id: python
       shell: bash
-      run: python -c "import sys; print(f'version={sys.version_info.major}.{sys.version_info.minor}')" >> $GITHUB_OUTPUT
+      run: |
+        python - <<'PY' >> "$GITHUB_OUTPUT"
+        import sys
+        import sysconfig
+
+        if sysconfig.get_config_var("Py_GIL_DISABLED"):
+            print(f"abi=py{sys.version_info.major}.{sys.version_info.minor}t")
+        else:
+            print("abi=abi3")
+        PY
 
     - name: Download frontend packages
       uses: actions/download-artifact@v8
       with:
-        pattern: frontend-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.version }}
+        pattern: frontend-${{ runner.os }}-${{ runner.arch }}-${{ steps.python.outputs.abi }}
         path: wheelhouse
 
     - name: Download backend packages

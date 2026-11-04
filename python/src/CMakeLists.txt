@@ -1,7 +1,13 @@
+# Free-threaded builds use linked mode; regular CPython uses split mode.
+if(MLX_PYTHON_FREE_THREADED)
+  set(MLX_NANOBIND_MODE NB_STATIC FREE_THREADED)
+else()
+  set(MLX_NANOBIND_MODE BACKEND_MODULE nanobind_backend)
+endif()
+
 nanobind_add_module(
   core
-  NB_STATIC
-  FREE_THREADED
+  ${MLX_NANOBIND_MODE}
   LTO
   NOMINSIZE
   NB_DOMAIN
