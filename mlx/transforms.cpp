@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <deque>
 #include <future>
+#include <iostream>
 #include <numeric>
 #include <ranges>
 #include <set>
@@ -273,6 +274,76 @@ array eval_impl(std::vector<array> outputs, bool async) {
         tape.push_back(in);
       }
     }
+  }
+
+  auto crosses = [&needs_fence](const array& a, Device from) {
+    for (auto& in : a.inputs()) {
+      if (needs_fence.count(in.id()) && in.primitive().device() == from) {
+        return true;
+      }
+    }
+    return false;
+  };
+  bool has_cross_device =
+      std::any_of(needs_fence.begin(), needs_fence.end(), [](const auto& nf) {
+        return nf.second.cross_device;
+      });
+
+  if (has_cross_device && config::get("MLX_DEFER_COLLECTIVE_READERS", 0)) {
+    std::deque<array> order; // execution order, first to run at the front
+    std::vector<array> held;
+    std::unordered_set<std::uintptr_t> held_ids;
+    auto release = [&]() {
+      for (auto& h : held) {
+        order.push_back(std::move(h));
+      }
+      held.clear();
+      held_ids.clear();
+    };
+    for (auto it = tape.rbegin(); it != tape.rend(); ++it) {
+      auto& a = *it;
+      auto device = a.primitive().device();
+      bool depends = std::any_of(
+          a.inputs().begin(), a.inputs().end(), [&](const array& in) {
+            return held_ids.count(in.id()) > 0;
+          });
+      if (depends || (device == Device::gpu && crosses(a, Device::cpu))) {
+        held_ids.insert(a.id());
+        for (auto& s : a.siblings()) {
+          held_ids.insert(s.id());
+        }
+        held.push_back(std::move(a));
+        continue;
+      }
+      bool issues_collective = device == Device::cpu && crosses(a, Device::gpu);
+      order.push_back(std::move(a));
+      if (issues_collective) {
+        release();
+      }
+    }
+    release();
+    // The loop below runs the tape from the back.
+    tape.assign(
+        std::make_move_iterator(order.rbegin()),
+        std::make_move_iterator(order.rend()));
+  }
+
+  if (has_cross_device && config::get("MLX_PRINT_EVAL_ORDER", 0)) {
+    std::ostringstream msg;
+    msg << "[eval order] " << tape.size() << " ops\n";
+    int i = 0;
+    for (auto it = tape.rbegin(); it != tape.rend(); ++it, ++i) {
+      auto device = it->primitive().device();
+      msg << i << (device == Device::gpu ? " gpu " : " cpu ")
+          << it->primitive().name() << " " << it->shape();
+      if (device == Device::gpu && crosses(*it, Device::cpu)) {
+        msg << "  <- waits for cpu";
+      } else if (device == Device::cpu && crosses(*it, Device::gpu)) {
+        msg << "  -> reads gpu";
+      }
+      msg << "\n";
+    }
+    std::cerr << msg.str();
   }
 
   std::set<Stream> open_streams;
