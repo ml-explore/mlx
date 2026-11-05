@@ -280,8 +280,8 @@ struct KernelMergeSort {
       uint3 tid [[threadgroup_position_in_grid]],
       uint3 lid [[thread_position_in_threadgroup]]) {
     // tid.y tells us the segment index
-    inp += tid.y * in_stride_segment_axis;
-    out += tid.y * out_stride_segment_axis;
+    inp += int64_t(tid.y) * in_stride_segment_axis;
+    out += int64_t(tid.y) * out_stride_segment_axis;
 
     // Copy into threadgroup memory
     for (short i = lid.x; i < N_PER_BLOCK; i += BLOCK_THREADS) {
@@ -538,8 +538,8 @@ template <
   // Signed offset: a non-sorted axis may have a negative stride.
   auto block_idx = elem_to_loc<int64_t>(tid.y, nc_shape, nc_strides, nc_dim);
   inp += block_idx;
-  out_vals += tid.y * size_sorted_axis;
-  out_idxs += tid.y * size_sorted_axis;
+  out_vals += int64_t(tid.y) * size_sorted_axis;
+  out_idxs += int64_t(tid.y) * size_sorted_axis;
 
   threadgroup ValT tgp_vals[sort_kernel::N_PER_BLOCK];
   threadgroup IdxT tgp_idxs[sort_kernel::N_PER_BLOCK];
@@ -579,9 +579,9 @@ template <
       BLOCK_THREADS,
       N_PER_THREAD>;
 
-  block_partitions += tid.y * tgp_dims.x;
-  dev_vals += tid.y * size_sorted_axis;
-  dev_idxs += tid.y * size_sorted_axis;
+  block_partitions += tid.y * (n_blocks + 1);
+  dev_vals += int64_t(tid.y) * size_sorted_axis;
+  dev_idxs += int64_t(tid.y) * size_sorted_axis;
 
   for (int i = lid.x; i <= n_blocks; i += tgp_dims.x) {
     // Find location in merge step
@@ -638,10 +638,10 @@ mb_block_merge(
   using block_sort_t = typename sort_kernel::block_merge_sort_t;
 
   block_partitions += tid.y * (num_tiles + 1);
-  dev_vals_in += tid.y * size_sorted_axis;
-  dev_idxs_in += tid.y * size_sorted_axis;
-  dev_vals_out += tid.y * size_sorted_axis;
-  dev_idxs_out += tid.y * size_sorted_axis;
+  dev_vals_in += int64_t(tid.y) * size_sorted_axis;
+  dev_idxs_in += int64_t(tid.y) * size_sorted_axis;
+  dev_vals_out += int64_t(tid.y) * size_sorted_axis;
+  dev_idxs_out += int64_t(tid.y) * size_sorted_axis;
 
   int block_idx = tid.x;
   int merge_group = block_idx / merge_tiles;
