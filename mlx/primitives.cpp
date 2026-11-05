@@ -188,7 +188,7 @@ bool is_transposed_matrix(const array& x) {
   if (typeid(p) != typeid(Transpose)) {
     return false;
   }
-  auto axes = t->state();
+  auto axes = static_cast<Transpose*>(&p)->state();
   int n = axes.size();
   for (int i = 0; i < n - 2; ++i) {
     if (axes[i] != i) {
@@ -197,6 +197,7 @@ bool is_transposed_matrix(const array& x) {
   }
   return axes[n - 2] == n - 1 && axes[n - 1] == n - 2;
 }
+
 array matmul_vjp_a(
     const array& cotan,
     const array& a,
