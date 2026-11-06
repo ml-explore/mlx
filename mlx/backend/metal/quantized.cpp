@@ -641,7 +641,15 @@ inline bool use_qmv_mma(
     int N,
     int K,
     metal::Device& d) {
-  if (K % 128 != 0) {
+  bool nax = metal::is_nax_available();
+  bool affine = mode == QuantizationMode::Affine;
+  // affine_qmv_mma beats qmv from 3 rows below gen 15 and qmv_wide from 4
+  // rows above; the other paths from 6.
+  int min_rows = 6;
+  if (affine && !nax) {
+    min_rows = d.get_architecture_gen() >= 15 ? 4 : 3;
+  }
+  if ((M < min_rows) || (K % 128 != 0)) {
     return false;
   }
   // Require aligned vector load.
@@ -650,12 +658,22 @@ inline bool use_qmv_mma(
     return false;
   }
   // Route for large K/N.
-  bool nax = metal::is_nax_available();
-  if (mode == QuantizationMode::Affine) {
-    // Only qmv_nax reads affine weights, with 3 to 8 bits.
-    return nax && (bits >= 3 && bits != 7) && (group_size >= 32) &&
-        (x.dtype() == float16 || x.dtype() == bfloat16) && (N >= 512) &&
-        (K >= 1024) && (N % 32 == 0);
+  if (affine) {
+    if (nax) {
+      // qmv_nax reads affine weights with 3 to 8 bits.
+      return (bits >= 3 && bits != 7) &&
+          (x.dtype() == float16 || x.dtype() == bfloat16) && (N >= 512) &&
+          (K >= 1024) && (N % 32 == 0);
+    } else { // non-nax
+      // Ultra keeps the vector kernels.
+      if (d.get_architecture().back() == 'd') {
+        return false;
+      }
+      // Only 4 and 8 bits are instantiated; affine pays off from a smaller N *
+      // K than fp.
+      return (bits == 4 || bits == 8) && (N >= 512) && (K >= 512) &&
+          (int64_t(N) * K >= (int64_t(1) << 21)) && (N % 16 == 0);
+    }
   } else { // fp quantization
     if (nax) {
       // Below 2048, nvfp4 with few rows is faster on qmv_wide, which runs for
@@ -690,8 +708,25 @@ void qmv_mma(
     const Stream& s,
     const std::string& mode) {
   bool nax = metal::is_nax_available();
-  int wk = nax || d.get_architecture_gen() >= 15 ? 8 : 4;
-  int bn = nax ? 32 : 16;
+  bool affine = (mode == "affine");
+  int wk = 4;
+  int bn = 16;
+  int tm = (M > 8) ? 2 : 1;
+  if (nax) {
+    wk = 8;
+    bn = 32;
+  } else { // non-nax
+    // Affine stays at wk 4 on gen-15+ too (wk 8 was no faster on M4).
+    if (!affine && (d.get_architecture_gen() >= 15)) {
+      wk = 8;
+    }
+    // Below gen 15, affine with one row tile is faster at 32 columns (M2 Pro).
+    if (affine && (d.get_architecture_gen() < 15) && (tm == 1) &&
+        (N % 32 == 0)) {
+      bn = 32;
+    }
+  }
+
   std::string type_string = get_type_string(x.dtype());
   std::string kname;
   kname.reserve(64);
@@ -713,7 +748,6 @@ void qmv_mma(
     kernel = get_qmm_nax_kernel_wrapped(
         d, kname, "qmv_nax", mode, type_string, group_size, bits, wk, bn);
   } else {
-    int tm = M > 8 ? 2 : 1;
     concatenate(kname, "_tm_", tm);
     kernel = get_quantized_kernel_wrapped(
         d, kname, "qmv_mma", mode, type_string, group_size, bits, wk, bn, tm);
@@ -2158,6 +2192,84 @@ void dispatch_qmv(
       mode);
 }
 
+// Routes a product with transposed quantized weights by its number of rows.
+void dispatch_qmm_t(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    int group_size,
+    int bits,
+    bool non_batched,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s,
+    QuantizationMode qmode) {
+  int vector_limit = get_qmv_batch_limit(K, N, d);
+  auto mode = quantization_mode_to_string(qmode);
+
+  // For few rows use qmv_mma when N/K is large enough.
+  if (non_batched && (M <= 16) &&
+      use_qmv_mma(x, w, scales, qmode, group_size, bits, M, N, K, d)) {
+    qmv_mma(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
+    return;
+  }
+
+  // For mid rows use NAX qmm when output is large enough.
+  if (non_batched && (M >= 8) && (M < vector_limit) && (M * N >= 16384) &&
+      use_qmm_nax_splitk(x, M, N, K, group_size)) {
+    qmm_splitk_nax(
+        x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
+    return;
+  }
+
+  // It is a matrix matrix product.
+  if (M >= vector_limit) {
+    // Use split-K qmm for small M (non-batched only)
+    if (out.size() / M / N == 1) {
+      qmm_splitk(
+          x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
+      return;
+    }
+    qmm(x,
+        w,
+        scales,
+        biases,
+        std::nullopt,
+        out,
+        true,
+        group_size,
+        bits,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
+    return;
+  }
+
+  // Run of the mill qmv
+  dispatch_qmv(
+      x,
+      w,
+      scales,
+      biases,
+      std::nullopt,
+      out,
+      group_size,
+      bits,
+      M,
+      N,
+      K,
+      d,
+      s,
+      mode);
+}
+
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -2175,38 +2287,34 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   // Extract the matmul shapes
-  bool non_batched = w.ndim() == 2 && x.flags().row_contiguous;
+  bool non_batched = (w.ndim() == 2) && x.flags().row_contiguous;
   int K = x.shape(-1);
   int M = non_batched ? x.size() / K : x.shape(-2);
   int N = out.shape(-1);
 
-  int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
+  if (transpose_) {
+    dispatch_qmm_t(
+        x,
+        w,
+        scales,
+        biases,
+        out,
+        group_size_,
+        bits_,
+        non_batched,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode_);
+    return;
+  }
+
   auto mode = quantization_mode_to_string(mode_);
 
-  // For few rows use qmv_mma when N/K is large enough.
-  if (transpose_ && non_batched && (M >= 6) && (M <= 16) &&
-      use_qmv_mma(x, w, scales, mode_, group_size_, bits_, M, N, K, d)) {
-    qmv_mma(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
-    return;
-  }
-
-  // For mid rows use NAX qmm when output is large enough.
-  if (transpose_ && non_batched && (M >= 8) && (M < vector_limit) &&
-      (M * N >= 16384) && use_qmm_nax_splitk(x, M, N, K, group_size_)) {
-    qmm_splitk_nax(
-        x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
-    return;
-  }
-
   // It is a matrix matrix product.
-  if (M >= vector_limit) {
-    // Use split-K qmm for small M with transposed weights (non-batched only)
-    int B = out.size() / M / N;
-    if (transpose_ && B == 1) {
-      qmm_splitk(
-          x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
-      return;
-    }
+  if (M >= 4) {
     qmm(x,
         w,
         scales,
@@ -2214,26 +2322,6 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         std::nullopt,
         out,
         transpose_,
-        group_size_,
-        bits_,
-        M,
-        N,
-        K,
-        d,
-        s,
-        mode);
-    return;
-  }
-
-  // Run of the mill qmv
-  if (transpose_) {
-    dispatch_qmv(
-        x,
-        w,
-        scales,
-        biases,
-        std::nullopt,
-        out,
         group_size_,
         bits_,
         M,
@@ -2424,13 +2512,32 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   array x = quantize_dequantize_input(
       x_pre, global_scale_x, mode, group_size_, bits_, d, s);
 
-  bool non_batched = w_q.ndim() == 2;
+  bool non_batched = (w_q.ndim() == 2);
   int K = x.shape(-1);
   int M = non_batched ? x.size() / K : x.shape(-2);
   int N = out.shape(-1);
-  if (has_global_scales && w_quantized && non_batched &&
-      x.dtype() == bfloat16 && K % 32 == 0 &&
-      M >= get_qmv_batch_limit(K, N, d)) {
+
+  // Use the quantized_matmul routes, which do not take a global scale.
+  if (!has_global_scales) {
+    dispatch_qmm_t(
+        x,
+        w_q,
+        scales_w,
+        std::nullopt,
+        out,
+        group_size_,
+        bits_,
+        non_batched,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode_);
+    return;
+  }
+  if (w_quantized && non_batched && (x.dtype() == bfloat16) && (K % 32 == 0) &&
+      (M >= get_qmv_batch_limit(K, N, d))) {
     qmm(x,
         w_q,
         scales_w,
