@@ -46,6 +46,20 @@
       32,         \
       32)
 
+#define instantiate_qmm_64(name, type, group_size, bits, aligned_n) \
+  instantiate_kernel( \
+      #name "_" #type "_gs_" #group_size "_b_" #bits "_hgs_0_alN_" #aligned_n "_batch_0_bm_64_bn_64", \
+      name,       \
+      type,       \
+      group_size, \
+      bits,       \
+      false,      \
+      aligned_n,  \
+      false,      \
+      64,         \
+      32,         \
+      64)
+
 #define instantiate_qmm_aligned(name, type, group_size, bits) \
   instantiate_qmm(name, type, group_size, bits, 0, 0)         \
   instantiate_qmm(name, type, group_size, bits, 1, 0)
@@ -245,7 +259,21 @@
   instantiate_quantized_all_bits(type, 64)     \
   instantiate_quantized_all_bits(type, 128)
 
+#define instantiate_affine_qmm_64(type, group_size)        \
+  instantiate_qmm_64(affine_qmm_t, type, group_size, 4, 0) \
+  instantiate_qmm_64(affine_qmm_t, type, group_size, 4, 1) \
+  instantiate_qmm_64(affine_qmm_t, type, group_size, 8, 0) \
+  instantiate_qmm_64(affine_qmm_t, type, group_size, 8, 1)
+
+#define instantiate_affine_qmm_64_groups(type) \
+  instantiate_affine_qmm_64(type, 32)          \
+  instantiate_affine_qmm_64(type, 64)          \
+  instantiate_affine_qmm_64(type, 128)
+
 instantiate_quantized_all_groups(float)
 instantiate_quantized_all_groups(float16_t)
 instantiate_quantized_all_groups(bfloat16_t)
+instantiate_affine_qmm_64_groups(float)
+instantiate_affine_qmm_64_groups(float16_t)
+instantiate_affine_qmm_64_groups(bfloat16_t)
 // clang-format on
