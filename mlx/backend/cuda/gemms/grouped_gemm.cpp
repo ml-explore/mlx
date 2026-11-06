@@ -1,7 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/gemms/grouped_gemm.h"
-#include "mlx/backend/cuda/cudnn_utils.h"
+#include "mlx/backend/cuda/device.h"
 
 #include <stdexcept>
 
@@ -13,12 +13,11 @@ void grouped_mm(
     const array& offsets,
     array& out,
     cu::CommandEncoder& encoder) {
-#if CUDNN_VERSION >= 91800
+  if (encoder.device().compute_capability_major() < 8) {
+    throw std::runtime_error(
+        "[grouped_mm] Grouped matmul requires sm80 or newer.");
+  }
   cudnn_grouped_mm(a, b, offsets, out, encoder);
-#else
-  throw std::runtime_error(
-      "[grouped_mm] Grouped matmul requires cuDNN 9.18 or newer.");
-#endif
 }
 
 } // namespace mlx::core

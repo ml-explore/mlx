@@ -13,8 +13,6 @@
 
 namespace mlx::core {
 
-#if CUDNN_VERSION >= 91800
-
 namespace {
 
 constexpr int GMM_NDIM = 3;
@@ -135,7 +133,5 @@ void cudnn_grouped_mm(
       {O, gpu_ptr<void>(out)}};
   CHECK_CUDNN_ERROR(graph.encode_graph(encoder, std::move(variant_pack)));
 }
-
-#endif
 
 } // namespace mlx::core
