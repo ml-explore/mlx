@@ -257,7 +257,7 @@ void init_ops(nb::module_& m) {
 
         Args:
             a (array): Input array.
-            axes (int or tuple(int)): The index of the inserted dimensions.
+            axis (int or tuple(int)): The index of the inserted dimensions.
 
         Returns:
             array: The array with inserted dimensions.
