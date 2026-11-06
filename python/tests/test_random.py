@@ -19,6 +19,25 @@ class TestRandom(mlx_tests.MLXTestCase):
         self.assertEqual(a.item(), x.item())
         self.assertEqual(y.item(), b.item())
 
+    def test_global_rng_sequence(self):
+        mx.random.seed(0)
+        for _ in range(3):
+            mx.random.uniform()
+        x = mx.random.uniform(shape=(2,))
+        mx.eval(x)
+        for _ in range(2):
+            mx.random.normal()
+
+        key = mx.random.key(0)
+        subkeys = []
+        for _ in range(6):
+            key, sub = mx.random.split(key)
+            subkeys.append(sub)
+        self.assertTrue(mx.array_equal(mx.random.state[0], key))
+        self.assertTrue(
+            mx.array_equal(x, mx.random.uniform(shape=(2,), key=subkeys[3]))
+        )
+
     def test_key(self):
         k1 = mx.random.key(0)
         k2 = mx.random.key(0)
