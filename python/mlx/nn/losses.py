@@ -123,13 +123,13 @@ def cross_entropy(
             # TODO: verify softmax cancellation issue in soft-target cross-entropy loss (require target logits instead)
             score = mx.sum(logits * targets, axis=axis)
 
-            non_max_exp = mx.where(
+            non_max_exps = mx.where(
                     is_max,
                     0.0,
                     mx.exp(logits)
                 )
             
-            loss = mx.log1p(mx.sum(non_max_exp, axis=axis)) - score
+            loss = mx.log1p(mx.sum(non_max_exps, axis=axis)) - score
         else:
             # Fix Softmax collapse for hard-target cross-entropy loss, see https://arxiv.org/abs/2610.31642
             score = mx.take_along_axis(
@@ -137,15 +137,14 @@ def cross_entropy(
             ).squeeze(axis)
 
             target_idx = mx.expand_dims(targets, axis)
-            other_logits = mx.where(
-                    indices == target_idx, # exclude true label
+            non_target_logits = mx.where(
+                    indices == target_idx,
                     -float("inf"),
-                    logits,
+                    logits
                 )
-            relative_logits = other_logits - mx.expand_dims(score, axis)
-            other_logsumexp_logits = mx.logsumexp(relative_logits, axis=axis)
+            other_logsumexp = mx.logsumexp(non_target_logits, axis=axis)
 
-            loss = mx.logaddexp(0.0, other_logsumexp_logits) # softplus
+            loss = mx.logaddexp(0.0, other_logsumexp-score) # softplus
 
         if label_smoothing > 0:
             loss = loss + label_smoothing * (score - logits.mean(axis=axis))
