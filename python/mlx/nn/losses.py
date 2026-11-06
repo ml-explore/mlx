@@ -144,7 +144,7 @@ def cross_entropy(
                 )
             other_logsumexp = mx.logsumexp(non_target_logits, axis=axis)
 
-            loss = mx.logaddexp(0.0, other_logsumexp-score) # softplus
+            loss = mx.logaddexp(other_logsumexp-score, 0.0) # softplus
 
         if label_smoothing > 0:
             loss = loss + label_smoothing * (score - logits.mean(axis=axis))
