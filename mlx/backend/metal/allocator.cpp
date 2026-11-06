@@ -196,7 +196,12 @@ void MetalAllocator::free(Buffer buffer) {
 
   std::unique_lock lk(mutex_);
   active_memory_ -= buf->length();
-  if (get_cache_memory() < max_pool_size_) {
+  if (buf->length() <= max_pool_size_) {
+    const size_t available = max_pool_size_ - buf->length();
+    if (get_cache_memory() > available) {
+      num_resources_ -= buffer_cache_.release_cached_buffers(
+          get_cache_memory() - available);
+    }
     buffer_cache_.recycle_to_cache(buf);
   } else {
     num_resources_--;
