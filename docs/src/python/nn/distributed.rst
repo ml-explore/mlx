@@ -17,6 +17,12 @@ create sharded layers from existing :class:`Modules <mlx.nn.Module>`.
    shard_inplace
    fully_shard
 
+.. currentmodule:: mlx.nn.utils
+.. autosummary::
+   :toctree: _autosummary
+
+   clip_grad_norm_sharded
+
 Layers
 ^^^^^^
 
