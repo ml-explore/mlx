@@ -1,9 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
-import os
 import unittest
-from itertools import permutations
 
 import mlx.core as mx
 import mlx_tests
@@ -14,7 +12,7 @@ try:
     import torch.nn.functional as F
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 
@@ -24,7 +22,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
         def run_conv_transpose_1D(
             N,
             C,
-            O,
+            OC,
             iH,
             kH,
             stride,
@@ -39,7 +37,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 dtype=dtype,
                 N=N,
                 C=C,
-                O=O,
+                O=OC,
                 iH=iH,
                 kH=kH,
                 stride=stride,
@@ -50,7 +48,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 np_dtype = getattr(np, dtype)
                 np.random.seed(0)
                 in_np = np.random.normal(0, 1.0 / C, (N, iH, C)).astype(np_dtype)
-                wt_np = np.random.normal(0, 1.0 / C, (O, kH, int(C / groups))).astype(
+                wt_np = np.random.normal(0, 1.0 / C, (OC, kH, int(C / groups))).astype(
                     np_dtype
                 )
 
@@ -80,7 +78,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 self.assertTrue(np.allclose(out_pt.numpy(), out_mx, atol=atol))
 
         for dtype in ("float32",):
-            for N, C, O in (
+            for N, C, OC in (
                 (1, 1, 1),
                 (1, 6, 1),
                 (1, 1, 6),
@@ -90,11 +88,16 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     (1, 1, 1, 0),
                     (3, 3, 1, 0),
                     (31, 5, 5, 2),
+                    (5, 2, 2, 2),
+                    (6, 3, 2, 3),
+                    (2, 1, 4, 1),
                 ):
-                    run_conv_transpose_1D(N, C, O, iH, kH, stride, padding, dtype=dtype)
+                    run_conv_transpose_1D(
+                        N, C, OC, iH, kH, stride, padding, dtype=dtype
+                    )
 
         # Groups tests
-        N, C, O = (4, 32, 64)
+        N, C, OC = (4, 32, 64)
         for iH, kH, stride, padding in (
             (1, 1, 1, 0),
             (3, 3, 1, 0),
@@ -102,7 +105,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
         ):
             for group in (1,):
                 run_conv_transpose_1D(
-                    N, C, O, iH, kH, stride, padding, groups=group, dtype=dtype
+                    N, C, OC, iH, kH, stride, padding, groups=group, dtype=dtype
                 )
 
         # Strided inputs tests
@@ -133,7 +136,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
         def run_conv_transpose1D_grad(
             N,
             C,
-            O,
+            OC,
             iH,
             kH,
             stride,
@@ -147,7 +150,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 dtype=dtype,
                 N=N,
                 C=C,
-                O=O,
+                O=OC,
                 iH=iH,
                 kH=kH,
                 stride=stride,
@@ -160,7 +163,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 # oH = 1 + ((iH + 2 * padding - dilation * (kH - 1) - 1) // stride)
 
                 in_np = np.random.normal(0, 1.0 / C, (N, iH, C)).astype(np_dtype)
-                wt_np = np.random.normal(0, 1.0 / C, (O, kH, C)).astype(np_dtype)
+                wt_np = np.random.normal(0, 1.0 / C, (OC, kH, C)).astype(np_dtype)
 
                 in_mx, wt_mx = map(mx.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 2, 1)).requires_grad_(True)
@@ -211,7 +214,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 self.assertTrue(np.allclose(pt_grad_wt, mx_grad_wt, atol=atol))
 
         for dtype in ("float32",):
-            for N, C, O in (
+            for N, C, OC in (
                 (1, 1, 1),
                 (1, 6, 1),
                 (1, 1, 6),
@@ -221,9 +224,11 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     (1, 1, 1, 0),
                     (3, 3, 1, 0),
                     (31, 5, 5, 2),
+                    (5, 2, 2, 2),
+                    (6, 3, 2, 3),
                 ):
                     run_conv_transpose1D_grad(
-                        N, C, O, iH, kH, stride, padding, dtype=dtype
+                        N, C, OC, iH, kH, stride, padding, dtype=dtype
                     )
 
     @unittest.skipIf(not has_torch, "requires Torch")
@@ -231,7 +236,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
         def run_conv_transpose2D(
             N,
             C,
-            O,
+            OC,
             idim,
             kdim,
             stride,
@@ -245,7 +250,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 dtype=dtype,
                 N=N,
                 C=C,
-                O=O,
+                O=OC,
                 idim=idim,
                 kdim=kdim,
                 stride=stride,
@@ -259,9 +264,9 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 kH, kW = kdim
                 scale = 1.0 / math.sqrt(kH * kW * C)
                 in_np = np.random.normal(0.0, scale, (N, iH, iW, C)).astype(np_dtype)
-                wt_np = np.random.normal(0.0, 1.0, (O, kH, kW, int(C / groups))).astype(
-                    np_dtype
-                )
+                wt_np = np.random.normal(
+                    0.0, 1.0, (OC, kH, kW, int(C / groups))
+                ).astype(np_dtype)
 
                 in_mx, wt_mx = map(mx.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 3, 1, 2)).to("cpu")
@@ -289,7 +294,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 self.assertTrue(np.allclose(out_pt, out_mx, atol=atol))
 
         for dtype in ("float32",):
-            for N, C, O in (
+            for N, C, OC in (
                 (1, 1, 1),
                 (1, 6, 1),
                 (1, 1, 6),
@@ -301,11 +306,11 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     ((31, 31), (5, 5), (5, 5), (2, 2)),
                 ):
                     run_conv_transpose2D(
-                        N, C, O, idim, kdim, stride, padding, dtype=dtype
+                        N, C, OC, idim, kdim, stride, padding, dtype=dtype
                     )
 
             # Groups tests
-            N, C, O = (4, 32, 64)
+            N, C, OC = (4, 32, 64)
             for idim, kdim, stride, padding in (
                 ((1, 1), (1, 1), (1, 1), (0, 0)),
                 ((3, 3), (3, 1), (1, 1), (0, 0)),
@@ -313,7 +318,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
             ):
                 for group in (1,):
                     run_conv_transpose2D(
-                        N, C, O, idim, kdim, stride, padding, groups=group, dtype=dtype
+                        N, C, OC, idim, kdim, stride, padding, groups=group, dtype=dtype
                     )
 
     @unittest.skipIf(not has_torch, "requires Torch")
@@ -321,7 +326,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
         def run_conv_transpose2D_grad(
             N,
             C,
-            O,
+            OC,
             idim,
             kdim,
             stride,
@@ -335,7 +340,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 dtype=dtype,
                 N=N,
                 C=C,
-                O=O,
+                O=OC,
                 idim=idim,
                 kdim=kdim,
                 stride=stride,
@@ -347,10 +352,10 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 np.random.seed(0)
                 iH, iW = idim
                 kH, kW = kdim
-                scale = 1.0 / math.sqrt(kH * kW * C * O)
+                scale = 1.0 / math.sqrt(kH * kW * C * OC)
 
                 in_np = np.random.normal(0.0, scale, (N, iH, iW, C)).astype(np_dtype)
-                wt_np = np.random.normal(0.0, scale, (O, kH, kW, C)).astype(np_dtype)
+                wt_np = np.random.normal(0.0, scale, (OC, kH, kW, C)).astype(np_dtype)
 
                 in_mx, wt_mx = map(mx.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 3, 1, 2)).requires_grad_(
@@ -400,7 +405,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 self.assertTrue(np.allclose(pt_grad_wt, mx_grad_wt, atol=atol))
 
         for dtype in ("float32",):
-            for N, C, O in ((1, 1, 1), (1, 6, 1), (1, 1, 6), (4, 32, 64), (4, 16, 32)):
+            for N, C, OC in ((1, 1, 1), (1, 6, 1), (1, 1, 6), (4, 32, 64), (4, 16, 32)):
                 for idim, kdim, stride, padding, dilation in (
                     ((1, 1), (1, 1), (1, 1), (0, 0), (1, 1)),
                     ((3, 3), (3, 1), (1, 1), (0, 0), (1, 1)),
@@ -410,7 +415,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     ((32, 32), (3, 3), (2, 2), (1, 1), (3, 2)),
                 ):
                     run_conv_transpose2D_grad(
-                        N, C, O, idim, kdim, stride, padding, dilation, dtype=dtype
+                        N, C, OC, idim, kdim, stride, padding, dilation, dtype=dtype
                     )
 
     @unittest.skipIf(not has_torch, "requires Torch")
@@ -418,7 +423,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
         def run_conv_transpose3D(
             N,
             C,
-            O,
+            OC,
             idim,
             kdim,
             stride,
@@ -432,7 +437,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 dtype=dtype,
                 N=N,
                 C=C,
-                O=O,
+                O=OC,
                 idim=idim,
                 kdim=kdim,
                 stride=stride,
@@ -444,11 +449,11 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 np.random.seed(0)
                 iD, iH, iW = idim
                 kD, kH, kW = kdim
-                scale = 1.0 / math.sqrt(kD * kH * kW * C * O)
+                scale = 1.0 / math.sqrt(kD * kH * kW * C * OC)
                 in_np = np.random.normal(0.0, scale, (N, iD, iH, iW, C)).astype(
                     np_dtype
                 )
-                wt_np = np.random.normal(0.0, 1.0, (O, kD, kH, kW, C)).astype(np_dtype)
+                wt_np = np.random.normal(0.0, 1.0, (OC, kD, kH, kW, C)).astype(np_dtype)
 
                 in_mx, wt_mx = map(mx.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 4, 1, 2, 3))
@@ -476,7 +481,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 self.assertTrue(np.allclose(out_pt, out_mx, atol=atol))
 
         for dtype in ("float32",):
-            for N, C, O in (
+            for N, C, OC in (
                 (1, 1, 1),
                 (1, 6, 1),
                 (1, 1, 6),
@@ -490,7 +495,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     ((3, 4, 5), (2, 2, 2), (2, 2, 2), (0, 0, 0)),
                 ):
                     run_conv_transpose3D(
-                        N, C, O, idim, kdim, stride, padding, dtype=dtype
+                        N, C, OC, idim, kdim, stride, padding, dtype=dtype
                     )
 
     @unittest.skipIf(not has_torch, "requires Torch")
@@ -498,7 +503,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
         def run_conv_transpose3D_grad(
             N,
             C,
-            O,
+            OC,
             idim,
             kdim,
             stride,
@@ -512,7 +517,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 dtype=dtype,
                 N=N,
                 C=C,
-                O=O,
+                O=OC,
                 idim=idim,
                 kdim=kdim,
                 stride=stride,
@@ -524,12 +529,12 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 np.random.seed(0)
                 iD, iH, iW = idim
                 kD, kH, kW = kdim
-                scale = 1.0 / math.sqrt(kD * kH * kW * C * O)
+                scale = 1.0 / math.sqrt(kD * kH * kW * C * OC)
 
                 in_np = np.random.normal(0.0, scale, (N, iD, iH, iW, C)).astype(
                     np_dtype
                 )
-                wt_np = np.random.normal(0.0, scale, (O, kD, kH, kW, C)).astype(
+                wt_np = np.random.normal(0.0, scale, (OC, kD, kH, kW, C)).astype(
                     np_dtype
                 )
 
@@ -586,7 +591,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 self.assertTrue(np.allclose(pt_grad_wt, mx_grad_wt, atol=atol))
 
         for dtype in ("float32",):
-            for N, C, O in ((1, 1, 1), (1, 6, 1), (1, 1, 6), (2, 4, 8), (2, 8, 16)):
+            for N, C, OC in ((1, 1, 1), (1, 6, 1), (1, 1, 6), (2, 4, 8), (2, 8, 16)):
                 for idim, kdim, stride, padding, dilation in (
                     ((1, 1, 1), (1, 1, 1), (1, 1, 1), (0, 0, 0), (1, 1, 1)),
                     ((3, 3, 3), (3, 1, 1), (1, 1, 1), (0, 0, 0), (1, 1, 1)),
@@ -596,19 +601,28 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     ((8, 8, 8), (3, 3, 3), (2, 2, 2), (1, 1, 1), (3, 2, 2)),
                 ):
                     run_conv_transpose3D_grad(
-                        N, C, O, idim, kdim, stride, padding, dilation, dtype=dtype
+                        N, C, OC, idim, kdim, stride, padding, dilation, dtype=dtype
                     )
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_tranpose_1d_output_padding(self):
         def run_conv_transpose_1d_output_padding(
-            N, C, O, iH, kH, stride, padding, output_padding, dtype="float32", atol=1e-5
+            N,
+            C,
+            OC,
+            iH,
+            kH,
+            stride,
+            padding,
+            output_padding,
+            dtype="float32",
+            atol=1e-5,
         ):
             with self.subTest(
                 dtype=dtype,
                 N=N,
                 C=C,
-                O=O,
+                O=OC,
                 iH=iH,
                 kH=kH,
                 stride=stride,
@@ -618,7 +632,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 np_dtype = getattr(np, dtype)
                 np.random.seed(0)
                 in_np = np.random.normal(0, 1.0 / C, (N, iH, C)).astype(np_dtype)
-                wt_np = np.random.normal(0, 1.0 / C, (O, kH, C)).astype(np_dtype)
+                wt_np = np.random.normal(0, 1.0 / C, (OC, kH, C)).astype(np_dtype)
 
                 in_mx, wt_mx = map(mx.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 2, 1))
@@ -645,14 +659,15 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 self.assertTrue(np.allclose(out_pt.numpy(), out_mx, atol=atol))
 
         for dtype in ("float32",):
-            for N, C, O in ((1, 1, 1), (1, 6, 1), (4, 32, 64)):
+            for N, C, OC in ((1, 1, 1), (1, 6, 1), (4, 32, 64)):
                 for iH, kH, stride, padding, output_padding in (
                     (3, 2, 2, 0, 1),
                     (5, 3, 2, 1, 0),
                     (7, 4, 3, 1, 2),
+                    (3, 2, 3, 3, 1),
                 ):
                     run_conv_transpose_1d_output_padding(
-                        N, C, O, iH, kH, stride, padding, output_padding, dtype=dtype
+                        N, C, OC, iH, kH, stride, padding, output_padding, dtype=dtype
                     )
 
     @unittest.skipIf(not has_torch, "requires Torch")
@@ -660,7 +675,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
         def run_conv_transpose_2d_output_padding(
             N,
             C,
-            O,
+            OC,
             idim,
             kdim,
             stride,
@@ -673,7 +688,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 dtype=dtype,
                 N=N,
                 C=C,
-                O=O,
+                O=OC,
                 idim=idim,
                 kdim=kdim,
                 stride=stride,
@@ -685,7 +700,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 iH, iW = idim
                 kH, kW = kdim
                 in_np = np.random.normal(0, 1.0 / C, (N, iH, iW, C)).astype(np_dtype)
-                wt_np = np.random.normal(0, 1.0 / C, (O, kH, kW, C)).astype(np_dtype)
+                wt_np = np.random.normal(0, 1.0 / C, (OC, kH, kW, C)).astype(np_dtype)
 
                 in_mx, wt_mx = map(mx.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 3, 1, 2))
@@ -712,7 +727,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 self.assertTrue(np.allclose(out_pt, out_mx, atol=atol))
 
         for dtype in ("float32",):
-            for N, C, O in ((1, 1, 1), (1, 6, 1), (4, 32, 64)):
+            for N, C, OC in ((1, 1, 1), (1, 6, 1), (4, 32, 64)):
                 for idim, kdim, stride, padding, output_padding in (
                     ((3, 3), (2, 2), (2, 2), (0, 0), (1, 1)),
                     ((5, 5), (3, 3), (2, 2), (1, 1), (0, 0)),
@@ -721,7 +736,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     run_conv_transpose_2d_output_padding(
                         N,
                         C,
-                        O,
+                        OC,
                         idim,
                         kdim,
                         stride,
@@ -735,7 +750,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
         def run_conv_transpose_3d_output_padding(
             N,
             C,
-            O,
+            OC,
             idim,
             kdim,
             stride,
@@ -748,7 +763,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 dtype=dtype,
                 N=N,
                 C=C,
-                O=O,
+                O=OC,
                 idim=idim,
                 kdim=kdim,
                 stride=stride,
@@ -762,7 +777,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 in_np = np.random.normal(0, 1.0 / C, (N, iD, iH, iW, C)).astype(
                     np_dtype
                 )
-                wt_np = np.random.normal(0, 1.0 / C, (O, kD, kH, kW, C)).astype(
+                wt_np = np.random.normal(0, 1.0 / C, (OC, kD, kH, kW, C)).astype(
                     np_dtype
                 )
 
@@ -790,7 +805,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 self.assertTrue(np.allclose(out_pt, out_mx, atol=atol))
 
         for dtype in ("float32",):
-            for N, C, O in ((1, 1, 1), (1, 6, 1), (4, 32, 64)):
+            for N, C, OC in ((1, 1, 1), (1, 6, 1), (4, 32, 64)):
                 for idim, kdim, stride, padding, output_padding in (
                     ((3, 3, 3), (2, 2, 2), (2, 2, 2), (0, 0, 0), (1, 1, 1)),
                     ((5, 5, 5), (3, 3, 3), (2, 2, 2), (1, 1, 1), (0, 0, 0)),
@@ -799,7 +814,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     run_conv_transpose_3d_output_padding(
                         N,
                         C,
-                        O,
+                        OC,
                         idim,
                         kdim,
                         stride,
@@ -827,10 +842,10 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     np.random.seed(0)
                     x = mx.array(np.random.normal(size=in_shape).astype(np.float32))
                     w = mx.array(np.random.normal(size=wt_shape).astype(np.float32))
-                    with mlx_tests.scoped_env(MLX_CONV_UNFOLD_TILE_ROWS=None):
+                    with mx.config.scoped_update(MLX_CONV_UNFOLD_TILE_ROWS=0):
                         untiled = conv(x, w, **kwargs)
                         mx.eval(untiled)
-                    with mlx_tests.scoped_env(MLX_CONV_UNFOLD_TILE_ROWS=str(tile_rows)):
+                    with mx.config.scoped_update(MLX_CONV_UNFOLD_TILE_ROWS=tile_rows):
                         tiled = conv(x, w, **kwargs)
                         mx.eval(tiled)
                     self.assertTrue(np.allclose(untiled, tiled, atol=1e-4))

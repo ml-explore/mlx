@@ -1,3 +1,4 @@
-src/python/_autosummary*/
-src/python/nn/_autosummary*/
-src/python/optimizers/_autosummary*/
+/build/
+/src/python/_autosummary*/
+/src/python/nn/_autosummary*/
+/src/python/optimizers/_autosummary*/

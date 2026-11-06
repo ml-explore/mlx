@@ -208,8 +208,8 @@ def tree_unflatten(tree: Union[List[Tuple[str, Any]], Dict[str, Any]]) -> Any:
         # {"hello": {"world": 42}}
 
     Args:
-        tree (list[tuple[str, Any]] or dict[str, Any]): The flat representation of a Python tree.
-           For instance as returned by :meth:`tree_flatten`.
+        tree (list[tuple[str, Any]] or dict[str, Any]): The flat representation of a
+           Python tree. For instance as returned by :meth:`tree_flatten`.
 
     Returns:
         A Python tree.
@@ -240,12 +240,12 @@ def tree_unflatten(tree: Union[List[Tuple[str, Any]], Dict[str, Any]]) -> Any:
         is_list = False
 
     if is_list:
-        l = []
+        items = []
         for i, k in sorted(keys.items()):
-            # if i <= len(l), no {} will be appended.
-            l.extend([{} for _ in range(i - len(l))])
-            l.append(tree_unflatten(children[k]))
-        return l
+            # if i <= len(items), no {} will be appended.
+            items.extend([{} for _ in range(i - len(items))])
+            items.append(tree_unflatten(children[k]))
+        return items
     else:
         return {k: tree_unflatten(v) for k, v in children.items()}
 

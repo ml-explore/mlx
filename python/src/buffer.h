@@ -88,9 +88,13 @@ extern "C" inline int getbuffer(PyObject* obj, Py_buffer* view, int flags) {
   std::memset(view, 0, sizeof(Py_buffer));
   auto a = nb::cast<mx::array>(nb::handle(obj));
 
-  {
+  // Exceptions can not propagate through the buffer protocol.
+  try {
     nb::gil_scoped_release nogil;
     a.eval();
+  } catch (const std::exception& e) {
+    PyErr_SetString(PyExc_RuntimeError, e.what());
+    return -1;
   }
 
   std::vector<Py_ssize_t> shape(a.shape().begin(), a.shape().end());

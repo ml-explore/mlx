@@ -384,6 +384,7 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(FFT),
       SERIALIZE_PRIMITIVE(Flatten),
       SERIALIZE_PRIMITIVE(Floor),
+      SERIALIZE_PRIMITIVE(FloorDivide),
       SERIALIZE_PRIMITIVE(Full),
       SERIALIZE_PRIMITIVE(Gather),
       SERIALIZE_PRIMITIVE(GatherAxis),
@@ -1096,6 +1097,13 @@ ImportedFunction::ImportedFunction(const std::string& file)
     std::unordered_map<uint64_t, array> array_map;
     auto trace_input_ids = deserialize<std::vector<uint64_t>>(is);
     auto trace_inputs = deserialize<std::vector<array>>(is);
+    if (trace_input_ids.size() != trace_inputs.size()) {
+      std::ostringstream msg;
+      msg << "[import_function] File is corrupted: expected "
+          << trace_inputs.size() << " trace input ids but got "
+          << trace_input_ids.size();
+      throw std::runtime_error(msg.str());
+    }
     for (int i = 0; i < trace_inputs.size(); ++i) {
       array_map.emplace(trace_input_ids[i], trace_inputs[i]);
     }

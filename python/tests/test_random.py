@@ -1,7 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
 import math
-import unittest
 
 import mlx.core as mx
 import mlx_tests
@@ -111,6 +110,16 @@ class TestRandom(mlx_tests.MLXTestCase):
             for hp in [mx.float16, mx.bfloat16]:
                 a = abs(distribution_sampler(shape=(10000,), loc=0, scale=1, dtype=hp))
                 self.assertTrue(mx.all(a < mx.inf))
+
+    def test_normal_loc_scale_shape(self):
+        msg = r"\[normal\] Cannot generate random values"
+        with self.assertRaisesRegex(ValueError, msg):
+            mx.random.normal(shape=(3,), loc=mx.zeros((2, 3)))
+        with self.assertRaisesRegex(ValueError, msg):
+            mx.random.normal(shape=(3,), scale=mx.ones((2, 3)))
+
+        x = mx.random.normal(shape=(2, 3), loc=mx.zeros((3,)), scale=mx.ones((2, 1)))
+        self.assertEqual(x.shape, (2, 3))
 
     def test_multivariate_normal(self):
         key = mx.random.key(0)

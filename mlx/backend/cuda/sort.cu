@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdint>
 
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
@@ -532,8 +533,8 @@ __global__ void mb_block_sort_kernel(
       int64_t(blockIdx.y), nc_shape.data(), nc_strides.data(), nc_dim);
 
   inp += block_idx;
-  out_vals += blockIdx.y * size_sorted_axis;
-  out_idxs += blockIdx.y * size_sorted_axis;
+  out_vals += int64_t(blockIdx.y) * size_sorted_axis;
+  out_idxs += int64_t(blockIdx.y) * size_sorted_axis;
 
   __shared__ ValT tgp_vals[sort_kernel::N_PER_BLOCK];
   __shared__ IdxT tgp_idxs[sort_kernel::N_PER_BLOCK];
@@ -570,9 +571,9 @@ __global__ void mb_block_partition_kernel(
 
   (void)dev_idxs;
 
-  block_partitions += blockIdx.y * blockDim.x;
-  dev_vals += blockIdx.y * size_sorted_axis;
-  dev_idxs += blockIdx.y * size_sorted_axis;
+  block_partitions += blockIdx.y * (n_blocks + 1);
+  dev_vals += int64_t(blockIdx.y) * size_sorted_axis;
+  dev_idxs += int64_t(blockIdx.y) * size_sorted_axis;
 
   for (int i = threadIdx.x; i <= n_blocks; i += blockDim.x) {
     int merge_group = i / merge_tiles;
@@ -625,10 +626,10 @@ __global__ void mb_block_merge_kernel(
   using block_sort_t = typename sort_kernel::block_merge_sort_t;
 
   block_partitions += blockIdx.y * (num_tiles + 1);
-  dev_vals_in += blockIdx.y * size_sorted_axis;
-  dev_idxs_in += blockIdx.y * size_sorted_axis;
-  dev_vals_out += blockIdx.y * size_sorted_axis;
-  dev_idxs_out += blockIdx.y * size_sorted_axis;
+  dev_vals_in += int64_t(blockIdx.y) * size_sorted_axis;
+  dev_idxs_in += int64_t(blockIdx.y) * size_sorted_axis;
+  dev_vals_out += int64_t(blockIdx.y) * size_sorted_axis;
+  dev_idxs_out += int64_t(blockIdx.y) * size_sorted_axis;
 
   int block_idx = blockIdx.x;
   int merge_group = block_idx / merge_tiles;
@@ -781,16 +782,24 @@ void single_block_sort(
   int64_t in_stride_sorted_axis = in.strides()[axis];
   int64_t out_stride_sorted_axis = out.strides()[axis];
 
+  // The contiguous kernel walks the rows with a single stride, so the axes
+  // that are not sorted have to collapse to a single dim.
+  auto single_dim =
+      [](const Shape& nc_shape, const Strides& nc_str, int64_t& stride) {
+        auto [shape, strides] = collapse_contiguous_dims(nc_shape, nc_str);
+        if (shape.size() > 1) {
+          return false;
+        }
+        if (shape.size() > 0) {
+          stride = strides[0];
+        }
+        return true;
+      };
+  int64_t in_stride_segment_axis = 0;
+  int64_t out_stride_segment_axis = 0;
   bool contiguous = in.flags().contiguous;
-  auto check_strides = [](const array& x, int64_t sort_stride) {
-    int64_t min_stride =
-        *std::min_element(x.strides().begin(), x.strides().end());
-    int64_t max_stride =
-        *std::max_element(x.strides().begin(), x.strides().end());
-    return sort_stride == min_stride || sort_stride == max_stride;
-  };
-  contiguous &= check_strides(in, in_stride_sorted_axis);
-  contiguous &= check_strides(out, out_stride_sorted_axis);
+  contiguous &= single_dim(nc_shape, in_nc_str, in_stride_segment_axis);
+  contiguous &= single_dim(nc_shape, out_nc_str, out_stride_segment_axis);
 
   auto& encoder = cu::get_command_encoder(s);
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
@@ -817,19 +826,9 @@ void single_block_sort(
                 ARG_SORT,
                 BLOCK_THREADS,
                 N_PER_THREAD>;
-            int64_t in_stride_segment_axis = INT64_MAX;
-            int64_t out_stride_segment_axis = INT64_MAX;
-            for (int i = 0; i < nc_shape.size(); i++) {
-              if (nc_shape[i] == 1) {
-                continue;
-              }
-              if (in_nc_str[i] > INT32_MAX || out_nc_str[i] > INT32_MAX) {
-                throw std::runtime_error("[Sort::eval_gpu] Stride too large.");
-              }
-              in_stride_segment_axis =
-                  std::min(in_stride_segment_axis, in_nc_str[i]);
-              out_stride_segment_axis =
-                  std::min(out_stride_segment_axis, out_nc_str[i]);
+            if (in_stride_segment_axis > INT32_MAX ||
+                out_stride_segment_axis > INT32_MAX) {
+              throw std::runtime_error("[Sort::eval_gpu] Stride too large.");
             }
             encoder.add_kernel_node(
                 kernel,

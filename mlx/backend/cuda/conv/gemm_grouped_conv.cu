@@ -163,6 +163,7 @@ void gemm_grouped_conv_nd(
   wt_view.copy_shared_buffer(
       wt, {wt.strides(0), 1, C_per_group}, wt.flags(), wt.size());
   array wt_reshaped = contiguous_copy_gpu(wt_view, s);
+  encoder.add_temporary(wt_reshaped);
 
   // Batch with size of groups.
   Shape batch_shape{params.groups};

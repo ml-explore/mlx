@@ -12,6 +12,8 @@ namespace mlx::core {
 
 void check_cuda_error(const char* name, cudaError_t err) {
   if (err != cudaSuccess) {
+    // Clear the error so it does not resurface in later checks.
+    cudaGetLastError();
     throw std::runtime_error(
         fmt::format("{} failed: {}", name, cudaGetErrorString(err)));
   }

@@ -24,7 +24,7 @@ class Dropout(Module):
         self._p_1 = 1 - p
 
     def _extra_repr(self) -> str:
-        return f"p={1-self._p_1}"
+        return f"p={1 - self._p_1}"
 
     def __call__(self, x: mx.array) -> mx.array:
         if self._p_1 == 1 or not self.training:
@@ -68,7 +68,7 @@ class Dropout2d(Module):
         self._p_1 = 1 - p
 
     def _extra_repr(self) -> str:
-        return f"p={1-self._p_1}"
+        return f"p={1 - self._p_1}"
 
     def __call__(self, x: mx.array) -> mx.array:
         if x.ndim not in (3, 4):
@@ -118,7 +118,7 @@ class Dropout3d(Module):
         self._p_1 = 1 - p
 
     def _extra_repr(self) -> str:
-        return f"p={1-self._p_1}"
+        return f"p={1 - self._p_1}"
 
     def __call__(self, x: mx.array) -> mx.array:
         if x.ndim not in (4, 5):

@@ -128,12 +128,14 @@ def average_gradients(
 
     if all_reduce_size <= 0:
         return tree_map(
-            lambda x: mx.distributed.all_sum(
-                x,
-                group=group,
-                stream=communication_stream,
-            )
-            / N,
+            lambda x: (
+                mx.distributed.all_sum(
+                    x,
+                    group=group,
+                    stream=communication_stream,
+                )
+                / N
+            ),
             gradients,
         )
 

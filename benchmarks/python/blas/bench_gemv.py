@@ -114,7 +114,8 @@ def bench_lens(in_vec_len, out_vec_len, np_dtype, transpose=False):
 
     if not np.allclose(c_mlx, c_npy, atol=2e-5):
         print(
-            f"Failed at {shape_mat} [transpose = {transpose}] with max(|a - b|) = {np.max(np.abs(c_npy - c_mlx))}"
+            f"Failed at {shape_mat} [transpose = {transpose}] with max(|a - b|) = "
+            f"{np.max(np.abs(c_npy - c_mlx))}"
         )
 
     return time_mlx, time_torch

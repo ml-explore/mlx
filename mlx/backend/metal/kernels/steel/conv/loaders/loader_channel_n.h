@@ -71,6 +71,7 @@ struct Conv2DInputBlockLoaderSmallChannels {
 
   // Rows / strided reads within the block
   STEEL_CONST short n_rows = BROWS / TROWS;
+  static_assert(n_rows > 0, "BM must be at least tgp_size * vec_size / BK");
 
   // Thread location indices
   const short thread_idx;
@@ -233,6 +234,7 @@ struct Conv2DWeightBlockLoaderSmallChannels {
   int weight_hw;
 
   const int read_n;
+  const int N;
   const bool do_read;
 
   /* Constructor */
@@ -253,6 +255,7 @@ struct Conv2DWeightBlockLoaderSmallChannels {
         params(params_),
         weight_hw(thread_idx % TCOLS),
         read_n(offsets.y + bi),
+        N(gemm_params_->N),
         do_read(read_n + BN <= gemm_params_->N) {}
 
   /* Load from device memory into threadgroup memory - without bound checking */
@@ -260,7 +263,7 @@ struct Conv2DWeightBlockLoaderSmallChannels {
     if (bi >= BROWS || bj >= BCOLS)
       return;
 
-    if (read_n >= params->O || weight_hw >= params->wS[1] * params->wS[0]) {
+    if (read_n >= N || weight_hw >= params->wS[1] * params->wS[0]) {
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < BROWS; i += TROWS) {
         STEEL_PRAGMA_UNROLL
@@ -274,7 +277,7 @@ struct Conv2DWeightBlockLoaderSmallChannels {
 
     const device T* curr_src = src + weight_hw * (params->C / params->groups);
 
-    if (BN != 8 || do_read) {
+    if (do_read) {
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < BROWS; i += TROWS) {
         STEEL_PRAGMA_UNROLL
@@ -289,7 +292,7 @@ struct Conv2DWeightBlockLoaderSmallChannels {
       }
     } else {
       for (short i = 0; i < BROWS; i += TROWS) {
-        if (((read_n + i) < params->O)) {
+        if (((read_n + i) < N)) {
           STEEL_PRAGMA_UNROLL
           for (short j = 0; j < n_channels; j++) {
             dst[i * dst_ld + j] = curr_src[i * src_ld + j];

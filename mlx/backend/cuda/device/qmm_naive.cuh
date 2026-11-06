@@ -269,6 +269,10 @@ void qmm_naive_kernel(
   // For gather, use index lookup for input batch slicing.
   uint32_t a_batch = lhs_indices ? lhs_indices[l_coord] : l_coord;
   uint32_t b_batch = rhs_indices ? rhs_indices[l_coord] : l_coord;
+  // The global scale is per gathered expert; a non-gathered call has one.
+  if (global_scale && rhs_indices) {
+    global_scale += b_batch;
+  }
 
   // Get batch slice.
   Tensor mA = mA_mkl(_,_,a_batch); // (M,K)

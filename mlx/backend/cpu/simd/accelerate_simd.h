@@ -243,6 +243,27 @@ Simd<T, N> divide(Simd<T, N> a, Simd<T, N> b) {
   }
 }
 
+// Signed types round the quotient towards minus infinity.
+template <typename T, int N>
+Simd<T, N> floor_divide(Simd<T, N> a, Simd<T, N> b) {
+  if constexpr (std::is_integral_v<T>) {
+    // Swap zero divisors for 1 before dividing so the quotient is defined.
+    auto zero = b == Simd<T, N>(0);
+    auto q = a / select(zero, Simd<T, N>(1), b);
+    q = select(zero, Simd<T, N>(0), q);
+    if constexpr (is_signed_v<T>) {
+      // a - b * q is the remainder and needs no division by zero.
+      auto mask = b != 0 && (a - b * q) != 0 && (a < 0 != b < 0);
+      q = select(mask, q - Simd<T, N>(1), q);
+    }
+    return q;
+  } else if constexpr (is_complex<T>) {
+    return a / b;
+  } else {
+    return floor(divide(a, b));
+  }
+}
+
 template <typename T, int N>
 Simd<T, N> remainder(Simd<T, N> a, Simd<T, N> b) {
   Simd<T, N> r;

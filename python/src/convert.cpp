@@ -1,12 +1,12 @@
 // Copyright © 2024 Apple Inc.
 
+#include <nanobind/stl/complex.h>
+#include <nanobind/stl/string.h>
+
 #include <algorithm>
 #include <limits>
 #include <sstream>
 #include <tuple>
-
-#include <nanobind/stl/complex.h>
-#include <nanobind/stl/string.h>
 
 #include "python/src/convert.h"
 #include "python/src/utils.h"
@@ -180,19 +180,22 @@ mx::array cpu_nd_array_to_mlx(
 // Try to adopt a CPU host buffer as an mlx array without copying. On unified
 // memory the host pointer is GPU-addressable, so we wrap it directly via the
 // allocator instead of copying. The bytes are reinterpreted rather than
-// converted, so the source element width must already match the destination
-// dtype. The source ndarray is kept alive for the lifetime of the returned
-// array.
+// converted, so the source dtype must already match the destination dtype.
+// The source ndarray is kept alive for the lifetime of the returned array.
 //
 // Returns std::nullopt when the buffer cannot be adopted (no Metal backend,
-// dtype width mismatch, or a pointer the platform will not wrap), so the caller
-// can fall back to a copy or raise.
+// dtype mismatch, a pointer not aligned to the item size, or a pointer
+// the platform will not wrap), so the caller can fall back to a copy or raise.
 std::optional<mx::array> cpu_nd_array_to_mlx_no_copy(
     nb::ndarray<nb::ro> nd_array,
     const mx::Shape& shape,
+    mx::Dtype src_dtype,
     mx::Dtype dst_dtype) {
-  if (!mx::metal::is_available() ||
-      nd_array.itemsize() != mx::size_of(dst_dtype)) {
+  // GPU kernels need aligned data
+  auto ptr = reinterpret_cast<uintptr_t>(nd_array.data());
+  if (!mx::metal::is_available() || src_dtype != dst_dtype ||
+      nd_array.itemsize() != mx::size_of(dst_dtype) ||
+      ptr % nd_array.itemsize() != 0) {
     return std::nullopt;
   }
 
@@ -206,19 +209,21 @@ std::optional<mx::array> cpu_nd_array_to_mlx_no_copy(
     return std::nullopt;
   }
 
+  auto byte_offset = nd_array.byte_offset();
   mx::array out(shape, dst_dtype, nullptr, {});
   out.set_data(
-      buf,
-      storage_size,
-      std::move(strides),
-      flags,
-      nd_array.byte_offset(),
       // The buffer wraps caller-owned memory, so release the wrapper rather
       // than returning it to the allocator's reuse pool, which must only
       // recycle buffers it allocated itself.
-      [owner = std::move(nd_array)](mx::allocator::Buffer b) {
-        mx::allocator::release(b);
-      });
+      mx::allocator::Data(
+          buf,
+          [owner = std::move(nd_array)](mx::allocator::Buffer b) {
+            mx::allocator::release(b);
+          }),
+      storage_size,
+      std::move(strides),
+      flags,
+      byte_offset);
   out.set_status(mx::array::Status::available);
   return out;
 }
@@ -238,19 +243,24 @@ mx::array metal_nd_array_to_mlx(
   }
   auto [storage_size, strides, flags] = get_strided_layout(nd_array, shape);
   auto data_handle = nd_array.data_handle();
+  auto byte_offset = nd_array.byte_offset();
   mx::array out(shape, src_dtype, nullptr, {});
   out.set_data(
-      mx::allocator::Buffer(data_handle),
+      mx::allocator::Data(
+          mx::allocator::Buffer(data_handle),
+          [owner = std::move(nd_array)](mx::allocator::Buffer) {}),
       storage_size,
       std::move(strides),
       flags,
-      nd_array.byte_offset(),
-      [owner = std::move(nd_array)](mx::allocator::Buffer) {});
+      byte_offset);
   out.set_status(mx::array::Status::available);
 
   if (copy) {
     auto result = mx::astype(out, dst_dtype, true, mx::Device::gpu);
-    result.eval();
+    {
+      nb::gil_scoped_release nogil;
+      result.eval();
+    }
     return result;
   }
   return out;
@@ -283,8 +293,8 @@ mx::array nd_array_to_mlx(
       // zero-copy adoption of the host buffer first. A copy is passed by value
       // so the source is preserved for the fallback below.
       if (!copy.value_or(false)) {
-        if (auto out =
-                cpu_nd_array_to_mlx_no_copy(nd_array, shape, dst_dtype)) {
+        if (auto out = cpu_nd_array_to_mlx_no_copy(
+                nd_array, shape, src_mlx_dtype, dst_dtype)) {
           return *out;
         }
         if (no_copy) {
@@ -631,6 +641,10 @@ mx::array array_from_list_impl(
         std::vector<uint32_t> vals;
         fill_vector(pl, vals);
         return mx::array(vals.begin(), shape, dtype);
+      } else if (dtype == mx::float64) {
+        std::vector<double> vals;
+        fill_vector(pl, vals);
+        return mx::array(vals.begin(), shape, dtype);
       } else if (mx::issubdtype(dtype, mx::inexact)) {
         std::vector<float> vals;
         fill_vector(pl, vals);
@@ -643,7 +657,7 @@ mx::array array_from_list_impl(
     }
     case pyfloat: {
       auto out_type = specified_type.value_or(mx::float32);
-      if (out_type == mx::float64) {
+      if (out_type == mx::float64 || !mx::issubdtype(out_type, mx::inexact)) {
         std::vector<double> vals;
         fill_vector(pl, vals);
         return mx::array(vals.begin(), shape, out_type);
@@ -738,7 +752,7 @@ mx::array create_array(
     return mx::array(val, t.value_or(default_type));
   } else if (nb::isinstance<nb::float_>(v)) {
     auto out_type = t.value_or(mx::float32);
-    if (out_type == mx::float64) {
+    if (out_type == mx::float64 || !mx::issubdtype(out_type, mx::inexact)) {
       return mx::array(nb::cast<double>(v), out_type);
     } else {
       return mx::array(nb::cast<float>(v), out_type);

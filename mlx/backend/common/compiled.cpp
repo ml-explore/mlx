@@ -110,7 +110,7 @@ void compiled_allocate_outputs(
     std::vector<array>& outputs,
     const std::function<bool(size_t)>& is_constant,
     bool contiguous,
-    const std::function<allocator::Buffer(size_t)>&
+    const std::function<allocator::Data(size_t)>&
         mallocfn /* = allocator::malloc */) {
   if (contiguous) {
     int o = 0;

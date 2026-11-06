@@ -20,6 +20,8 @@ FFT
   irfft2
   rfftn
   irfftn
+  stft
+  istft
   fftfreq
   rfftfreq
   fftshift

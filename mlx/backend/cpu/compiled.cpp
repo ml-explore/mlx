@@ -1,10 +1,12 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <dlfcn.h>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <list>
 #include <mutex>
+#include <random>
 #include <shared_mutex>
 
 #include <fmt/format.h>
@@ -97,11 +99,13 @@ void* compile(
     kernel_file_name = kernel_name;
   }
 
-  auto output_dir =
-      std::filesystem::temp_directory_path() / "mlx" / version() / "cpu";
-  if (!std::filesystem::exists(output_dir)) {
-    std::filesystem::create_directories(output_dir);
-  }
+  static const std::filesystem::path output_dir = [] {
+    if (auto dir = std::getenv("MLX_CPU_CACHE_DIR"); dir && *dir) {
+      return std::filesystem::absolute(dir);
+    }
+    return std::filesystem::temp_directory_path() / "mlx" / version() / "cpu";
+  }();
+  std::filesystem::create_directories(output_dir);
 
 #ifdef _WIN32
   std::string shared_lib_name = kernel_file_name + ".dll";
@@ -116,9 +120,14 @@ void* compile(
   }
 
   if (!lib_exists) {
-    // Open source file and write source code to it
-    std::string source_file_name = kernel_file_name + ".cpp";
-    auto source_file_path = (output_dir / source_file_name).string();
+    // Build under a unique name, then move the files into place. Other
+    // processes then never load a partly written library.
+    auto tmp_name = fmt::format("tmp_{:08x}", std::random_device{}());
+    std::string source_file_name = tmp_name + ".cpp";
+    std::string tmp_lib_name =
+        tmp_name + std::filesystem::path(shared_lib_name).extension().string();
+    auto source_file_path = output_dir / source_file_name;
+    auto tmp_lib_path = output_dir / tmp_lib_name;
 
     std::ofstream source_file(source_file_path);
     source_file << source_code;
@@ -127,13 +136,26 @@ void* compile(
     try {
       JitCompiler::exec(
           JitCompiler::build_command(
-              output_dir, source_file_name, shared_lib_name));
+              output_dir, source_file_name, tmp_lib_name));
     } catch (const std::exception& error) {
       throw std::runtime_error(
           fmt::format(
               "[Compile::eval_cpu] Failed to compile function {0}: {1}",
               kernel_name,
               error.what()));
+    }
+
+    std::error_code error;
+    std::filesystem::rename(
+        source_file_path, output_dir / (kernel_file_name + ".cpp"), error);
+    std::filesystem::rename(tmp_lib_path, shared_lib_path, error);
+    if (error) {
+      // On Windows the rename can fail while another process uses the file.
+      if (std::filesystem::exists(shared_lib_path, error)) {
+        std::filesystem::remove(tmp_lib_path, error);
+      } else {
+        shared_lib_path = tmp_lib_path.string();
+      }
     }
   }
 

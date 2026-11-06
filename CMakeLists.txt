@@ -234,6 +234,10 @@ if(MLX_BUILD_METAL)
     mlx PUBLIC $<BUILD_INTERFACE:${metal_cpp_SOURCE_DIR}>
                $<INSTALL_INTERFACE:include/metal_cpp>)
   target_link_libraries(mlx PUBLIC ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZ_LIB})
+  if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    find_library(IOKIT_LIB IOKit)
+    target_link_libraries(mlx PRIVATE ${IOKIT_LIB})
+  endif()
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -396,7 +400,7 @@ if(MLX_BUILD_PYTHON_BINDINGS)
   FetchContent_Declare(
     nanobind
     GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-    GIT_TAG v3.0.1
+    GIT_TAG v3.1.0
     GIT_SHALLOW TRUE
     EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(nanobind)

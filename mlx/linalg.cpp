@@ -491,8 +491,8 @@ array cross(
   out_shape[axis] = b_2d ? 2 : 3;
   auto b_ = broadcast_to(astype(b, out_type, s), out_shape, s);
 
-  auto a_splits = split(a_, a_2d ? 2 : 3, axis);
-  auto b_splits = split(b_, b_2d ? 2 : 3, axis);
+  auto a_splits = split(a_, a_2d ? 2 : 3, axis, s);
+  auto b_splits = split(b_, b_2d ? 2 : 3, axis, s);
 
   std::vector<array> outputs;
   if (a_2d && b_2d) {

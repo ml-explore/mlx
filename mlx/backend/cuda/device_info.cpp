@@ -5,6 +5,7 @@
 
 #include <cuda_runtime.h>
 #include <dlfcn.h>
+#include <sstream>
 
 #include <string>
 #include <unordered_map>
@@ -225,6 +226,15 @@ namespace cu {
 
 bool is_available() {
   return true;
+}
+
+std::vector<std::string> get_arch_list() {
+  std::vector<std::string> arch_list;
+  std::istringstream archs(MLX_CUDA_ARCH_LIST);
+  for (std::string arch; std::getline(archs, arch, ',');) {
+    arch_list.push_back(std::move(arch));
+  }
+  return arch_list;
 }
 
 } // namespace cu

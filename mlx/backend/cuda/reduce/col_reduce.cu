@@ -375,8 +375,7 @@ void col_reduce_two_pass(
       cu::malloc_async(intermediate.nbytes(), encoder),
       data_size,
       intermediate_strides,
-      fl,
-      allocator::free);
+      fl);
 
   encoder.add_temporary(intermediate);
   encoder.set_input_array(in);

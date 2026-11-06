@@ -89,6 +89,6 @@ class CudaAllocator : public allocator::Allocator {
 
 CudaAllocator& allocator();
 
-Buffer malloc_async(size_t size, CommandEncoder& encoder);
+allocator::Data malloc_async(size_t size, CommandEncoder& encoder);
 
 } // namespace mlx::core::cu

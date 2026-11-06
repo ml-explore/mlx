@@ -1,6 +1,5 @@
 # Copyright © 2024 Apple Inc.
 
-import unittest
 
 import mlx.core as mx
 import mlx_tests
@@ -8,7 +7,6 @@ import numpy as np
 
 
 class TestEinsum(mlx_tests.MLXTestCase):
-
     def test_simple_path(self):
         a = mx.zeros((5, 5))
         path = mx.einsum_path("ii", a)

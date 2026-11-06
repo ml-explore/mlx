@@ -1,7 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
 import io
-import unittest
 
 import mlx.core as mx
 import mlx_tests

@@ -134,6 +134,7 @@ Operations
    meshgrid
    min
    minimum
+   minmax
    moveaxis
    multiply
    nan_to_num
@@ -203,6 +204,7 @@ Operations
    triu
    trunc
    unflatten
+   unique
    unstack
    vecdot
    var

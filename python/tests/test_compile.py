@@ -7,6 +7,7 @@ import math
 import threading
 from functools import partial, wraps
 from io import StringIO
+from itertools import product
 
 import mlx.core as mx
 import mlx_tests
@@ -86,6 +87,15 @@ class TestCompile(mlx_tests.MLXTestCase):
             mx.eval(out)
             self.assertEqual(out[0].item(), 1.0)
             self.assertEqual(out[1].item(), float("-inf"))
+
+    def test_compile_float_constant_precision(self):
+        x = mx.ones((4,), dtype=mx.float32)
+        for constant in (1 / 3, 128**-0.5, 0.7071067811865476):
+
+            def fun(x, constant=constant):
+                return (x * x) * constant
+
+            self.assertTrue(mx.array_equal(mx.compile(fun)(x), fun(x)))
 
     def test_compile_tuple_output_in_thread(self):
         @mx.compile
@@ -294,7 +304,7 @@ class TestCompile(mlx_tests.MLXTestCase):
             buf = io.StringIO()
             mx.export_to_dot(buf, outputs)
             buf.seek(0)
-            return len([l for l in buf.read().split() if "label" in l])
+            return len([line for line in buf.read().split() if "label" in line])
 
         x = mx.array(1.0)
         cfun = mx.compile(fun)
@@ -651,6 +661,33 @@ class TestCompile(mlx_tests.MLXTestCase):
         cfun = mx.compile(fun, shapeless=True)
         self.assertTrue(mx.array_equal(fun(x2), cfun(x2)))
 
+    def test_shapeless_compile_scan(self):
+        ops = (mx.cumsum, mx.cumprod, mx.cummin, mx.cummax, mx.logcumsumexp)
+        for op, axis, reverse, inclusive in product(
+            ops, (0, 1, -1), (False, True), (False, True)
+        ):
+            with self.subTest(
+                op=op.__name__, axis=axis, reverse=reverse, inclusive=inclusive
+            ):
+                scan = partial(op, axis=axis, reverse=reverse, inclusive=inclusive)
+                trace_count = 0
+
+                def fun(x):
+                    nonlocal trace_count
+                    trace_count += 1
+                    return scan(x)
+
+                cfun = mx.compile(fun, shapeless=True)
+                for shape in ((3, 4), (5, 7), (1, 2), (2, 1)):
+                    with self.subTest(shape=shape):
+                        x = mx.arange(math.prod(shape), dtype=mx.float32)
+                        x = ((x % 7 - 3) / 4).reshape(shape)
+                        expected = scan(x)
+                        actual = cfun(x)
+                        self.assertEqual(actual.shape, x.shape)
+                        self.assertEqualArray(actual, expected, atol=1e-6, rtol=1e-6)
+                        self.assertEqual(trace_count, 1)
+
     def test_shapeless_compile_unflatten(self):
         x = mx.zeros((1, 1, 4 * 32))
 
@@ -727,6 +764,24 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         self.assertEqual(cfn(x4).shape, fn(x4).shape)
         self.assertEqual(cfn(x8).shape, fn(x8).shape)
+
+    def test_compile_scalar_constant_output(self):
+        for shapeless in [False, True]:
+            fun = mx.compile(lambda x: (x + 1.0, mx.array(1.0)), shapeless=shapeless)
+            out, c = fun(mx.array(3.0))
+            self.assertEqual(out.item(), 4.0)
+            self.assertEqual(c.item(), 1.0)
+
+        s = mx.array(7.0)
+        out, c = mx.compile(lambda x: (x + 7.0, s))(mx.array([1.0, 2.0]))
+        self.assertEqual(out.tolist(), [8.0, 9.0])
+        self.assertEqual(c.item(), 7.0)
+
+        # The gradient is the seed constant of the backward pass
+        fun = mx.compile(mx.value_and_grad(lambda x: x + 1.0))
+        value, grad = fun(mx.array(2.0))
+        self.assertEqual(value.item(), 3.0)
+        self.assertEqual(grad.item(), 1.0)
 
     def test_compile_with_constant(self):
         # Test float
@@ -868,10 +923,10 @@ class TestCompile(mlx_tests.MLXTestCase):
             return x + y.value
 
         with self.assertRaises(ValueError):
-            out = fun(mx.array(0.0), MyClass())
+            fun(mx.array(0.0), MyClass())
 
         with self.assertRaises(ValueError):
-            out = fun(mx.array(0.0), y=MyClass())
+            fun(mx.array(0.0), y=MyClass())
 
     def test_compile_create_list(self):
         @mx.compile
@@ -899,7 +954,7 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(expected[0], out[0]))
         self.assertTrue(mx.allclose(expected[1], out[1]))
 
-        def fun(w1, w2, x):
+        def fun(w1, w2, x):  # noqa: F811
             x = x @ w1
             y = x @ w2
             x = x + y * y
@@ -1309,14 +1364,13 @@ class TestCompile(mlx_tests.MLXTestCase):
 
     def test_double_constant(self):
         with mx.stream(mx.cpu):
-            x = mx.array(1.0, dtype=mx.float64)
+            x = mx.array([1.0], dtype=mx.float64)
+            constant = math.nextafter(1.0, 2.0)
 
             def fun(x):
-                return (x + math.pi) * 2.0
+                return (x * x) * constant
 
-            y = fun(x).item()
-            y_compiled = mx.compile(fun)(x).item()
-            self.assertEqual(y, y_compiled)
+            self.assertTrue(mx.array_equal(fun(x), mx.compile(fun)(x)))
 
     def test_shared_broadcast(self):
         def fun(x, y, z):
@@ -1511,7 +1565,7 @@ class TestCompile(mlx_tests.MLXTestCase):
         def transform_vector(t):
             return Vector([t[0] + 10, t[1] * 10])
 
-        x = State(mx.array(1), mx.array(2))
+        _x = State(mx.array(1), mx.array(2))
 
         compiled_transform = mx.compile(transform)
         compiled_transform_tuple = mx.compile(transform_tuple)
@@ -1634,7 +1688,9 @@ class TestCompile(mlx_tests.MLXTestCase):
 
     def test_compile_abs_unsigned(self):
         # abs has to compile for the wider unsigned types too
-        fun = lambda x: mx.abs(x) + 1
+        def fun(x):
+            return mx.abs(x) + 1
+
         for dtype in [mx.uint8, mx.uint16, mx.uint32, mx.uint64]:
             x = mx.array([1, 2, 3], dtype)
             self.assertTrue(mx.array_equal(mx.compile(fun)(x), fun(x)))

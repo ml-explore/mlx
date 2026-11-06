@@ -4,11 +4,13 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <numeric>
+#include <unordered_set>
 
 #include "doctest/doctest.h"
 
 #include "mlx/backend/cuda/cuda.h"
 #include "mlx/mlx.h"
+#include "mlx/primitives.h"
 
 using namespace mlx::core;
 
@@ -124,8 +126,9 @@ TEST_CASE("test reshape") {
   CHECK(x.flags().col_contiguous);
   y = reshape(x, {2, 5, 10});
   eval(y);
+  // Strides (5, 1, 10) are neither row nor col major
   CHECK(!y.flags().row_contiguous);
-  CHECK(y.flags().col_contiguous);
+  CHECK(!y.flags().col_contiguous);
   y = reshape(x, {2, 50});
   eval(y);
   CHECK(y.flags().row_contiguous);
@@ -358,6 +361,22 @@ TEST_CASE("test slice") {
   out = slice(x, {3, 0}, {-5, 2}, {-1, 1});
   eval(out);
   CHECK_EQ(out.data_size(), 8);
+
+  x = as_strided(square(arange(16, float32)), {3, 2, 2}, {1, 1, 5}, 0);
+  out = slice(x, {0, 0, 0}, {2, 2, 2});
+  eval(out);
+  CHECK_EQ(out.data_size(), 8);
+  CHECK_FALSE(out.flags().contiguous);
+  CHECK_EQ(sum(out).item<float>(), 152.0f);
+
+  x = reshape(arange(6), {2, 3});
+  x = slice(x, {1, 0}, {-3, 3}, {-1, 1});
+  out = slice(x, {1, 0}, {-3, 3}, {-1, 1});
+  eval(out);
+  CHECK(out.flags().contiguous);
+  CHECK(out.flags().row_contiguous);
+  CHECK(array_equal(reshape(transpose(out), {-1}), array({0, 3, 1, 4, 2, 5}))
+            .item<bool>());
 }
 
 TEST_CASE("test slice update") {
@@ -606,6 +625,71 @@ TEST_CASE("test split") {
   CHECK(array_equal(out[1], array({})).item<bool>());
   CHECK(array_equal(out[2], array({1})).item<bool>());
   CHECK(array_equal(out[3], array({2, 3, 4})).item<bool>());
+
+  // data_size is the distance between the first and the last element, so a
+  // split that leaves holes reports more than the output has elements.
+  x = ones({4, 4});
+  out = split(x, 2, 1);
+  eval(out);
+  CHECK_EQ(out[0].data_size(), 14);
+  CHECK_EQ(out[1].data_size(), 14);
+
+  // Splitting the first axis leaves no holes.
+  out = split(x, 2, 0);
+  eval(out);
+  CHECK_EQ(out[0].data_size(), 8);
+  CHECK_EQ(out[1].data_size(), 8);
+
+  x = ones({2, 3, 4});
+  out = split(x, Shape{2}, 2);
+  eval(out);
+  CHECK_EQ(out[0].data_size(), 22);
+  CHECK_EQ(out[1].data_size(), 22);
+
+  // A split output and the matching slice are the same view.
+  x = ones({1, 2, 8, 12});
+  out = split(x, Shape{8}, 3);
+  auto sliced = slice(x, {0, 0, 0, 8}, {1, 2, 8, 12});
+  eval(out);
+  eval(sliced);
+  CHECK_EQ(out[1].data_size(), sliced.data_size());
+  CHECK_EQ(out[1].data_size(), 184);
+
+  // (4, 4) array, but slice keeps the strides at (8, 1)
+  x = slice(reshape(arange(32), {4, 8}), {0, 0}, {4, 4});
+  // out[0] and out[1] are (4, 2)
+  out = split(x, Shape{2}, 1);
+  // same out out[1]
+  auto holey = slice(x, {0, 2}, {4, 4});
+  eval(out);
+  eval(holey);
+  CHECK_EQ(out[0].data_size(), 26);
+  CHECK_EQ(out[1].data_size(), 26);
+  CHECK_EQ(out[1].data_size(), holey.data_size());
+  CHECK_EQ(out[0].strides(), x.strides());
+  CHECK_EQ(out[1].strides(), holey.strides());
+  CHECK(array_equal(out[1], holey).item<bool>());
+
+  // A negative stride travels backwards, so it bounds the span from below.
+  // strides (-4, 1)
+  x = flip(reshape(arange(24), {6, 4}), 0);
+  out = split(x, Shape{2}, 0);
+  eval(out);
+  // no holes
+  CHECK_EQ(out[0].data_size(), 8);
+  CHECK_EQ(out[1].data_size(), 16);
+  CHECK_EQ(out[0].strides(), x.strides());
+  CHECK_EQ(out[1].strides(), x.strides());
+  CHECK(array_equal(out[0], slice(x, {0, 0}, {2, 4})).item<bool>());
+  CHECK(array_equal(out[1], slice(x, {2, 0}, {6, 4})).item<bool>());
+
+  // A zero-length axis empties every output. Splitting at 0 cannot get here,
+  // split() sends that to slice().
+  x = ones({0, 4});
+  out = split(x, Shape{2}, 1);
+  eval(out);
+  CHECK_EQ(out[0].data_size(), 0);
+  CHECK_EQ(out[1].data_size(), 0);
 }
 
 TEST_CASE("test flip") {
@@ -706,7 +790,7 @@ TEST_CASE("test transpose") {
   CHECK_EQ(y.shape(), Shape{1});
   CHECK_EQ(y.item<int>(), 1);
 
-  CHECK_THROWS_AS(transpose(x, {1}), std::invalid_argument);
+  CHECK_THROWS_AS(transpose(x, {1}), std::out_of_range);
   CHECK_THROWS_AS(transpose(x, {0, 0}), std::invalid_argument);
 
   // Works with empty array
@@ -893,6 +977,29 @@ TEST_CASE("test comparison ops") {
     expected = array({true, false, true, true}, {2, 2});
     z = less_equal(x, y);
     CHECK(array_equal(z, expected).item<bool>());
+  }
+}
+
+TEST_CASE("test float16 sigmoid mixed lanes") {
+  const float values[] = {-12, -4, -1, 0, 1, 4, 12, -2};
+  for (int size : {1, 7, 8, 9, 15, 16, 17}) {
+    for (int offset = 0; offset < 8; ++offset) {
+      std::vector<float> input(size);
+      for (int i = 0; i < size; ++i) {
+        input[i] = values[(i + offset) % 8];
+      }
+      auto result = sigmoid(array(input.begin(), {size}, float16), Device::cpu);
+      result.eval();
+      for (int i = 0; i < size; ++i) {
+        CAPTURE(size);
+        CAPTURE(offset);
+        CAPTURE(i);
+        auto expected = 1.0 / (1.0 + std::exp(-double(input[i])));
+        CHECK_EQ(
+            static_cast<float>(result.data<float16_t>()[i]),
+            doctest::Approx(expected).epsilon(0.002));
+      }
+    }
   }
 }
 
@@ -2006,9 +2113,10 @@ TEST_CASE("test arithmetic binary ops") {
   // Integer division by zero gives quotient 0 and remainder a.
   if (default_device() == Device::cpu) {
     for (auto dt : {int8, int16, int32, int64, uint8, uint16, uint32, uint64}) {
-      auto num = astype(array({7, 0, 5}, {3}), dt);
-      auto den = zeros({3}, dt);
-      CHECK(array_equal(floor_divide(num, den), zeros({3}, dt)).item<bool>());
+      auto num = astype(array({7, 0, 5, -7}, {4}), dt);
+      auto den = zeros({4}, dt);
+      auto q = floor_divide(num, den);
+      CHECK(array_equal(q, zeros({4}, dt)).item<bool>());
       CHECK(array_equal(remainder(num, den), num).item<bool>());
     }
   }
@@ -2893,10 +3001,27 @@ TEST_CASE("test as_strided op") {
   CHECK_EQ(y.data_size(), 10);
   CHECK_FALSE(y.flags().contiguous);
 
+  auto xf = square(arange(16, float32));
+  y = as_strided(xf, {2, 2, 2}, {1, 1, 5}, 0);
+  eval(y);
+  CHECK_EQ(y.data_size(), 8);
+  CHECK_FALSE(y.flags().contiguous);
+  CHECK_EQ(sum(y).item<float>(), 152.0f);
+
   x = reshape(x, {2, 5}); // 0 1 2 3 ...
   x = transpose(x, {1, 0}); // 0 5 1 6 2 7 ...
   y = as_strided(x, {3, 3}, {2, 1}, 1);
   expected = array({5, 1, 6, 6, 2, 7, 7, 3, 8}, {3, 3});
+  CHECK(array_equal(y, expected).item<bool>());
+
+  x = slice(arange(12), {10}, {0}, {-2});
+  y = as_strided(x, {2, 2}, {2, 1}, 1);
+  expected = array({8, 6, 4, 2}, {2, 2});
+  CHECK(array_equal(y, expected).item<bool>());
+
+  x = broadcast_to(array({1, 2, 3}), {2, 3});
+  y = as_strided(x, {2, 2}, {2, 1}, 1);
+  expected = array({2, 3, 1, 2}, {2, 2});
   CHECK(array_equal(y, expected).item<bool>());
 }
 
@@ -3629,6 +3754,25 @@ TEST_CASE("inner") {
   z = inner(eye(2), array(7.));
   expected = array({7., 0., 0., 7.}, {2, 2});
   CHECK(array_equal(z, expected).item<bool>());
+}
+
+TEST_CASE("test floor divide") {
+  // Signed integers round the quotient towards minus infinity.
+  auto x = array({4, 5, -1, -6});
+  auto y = array({-2, 3, 2, -3});
+  CHECK(array_equal(floor_divide(x, y), array({-2, 1, -1, 2})).item<bool>());
+
+  // Unsigned integers use the plain quotient.
+  auto ux = astype(array({7, 0, 5}, {3}), uint32);
+  auto uy = astype(array({2, 2, 3}, {3}), uint32);
+  auto expected = astype(array({3, 0, 1}, {3}), uint32);
+  CHECK(array_equal(floor_divide(ux, uy), expected).item<bool>());
+
+  // The dtype is kept and the result is one primitive.
+  auto out = floor_divide(astype(x, int8), astype(array(3), int8));
+  CHECK_EQ(out.dtype(), int8);
+  CHECK_EQ(std::string(out.primitive().name()), "FloorDivide");
+  CHECK(out.siblings().empty());
 }
 
 TEST_CASE("test divmod") {
@@ -4627,11 +4771,9 @@ TEST_CASE("test pad with an axes subset") {
   // An axis outside the array is rejected rather than indexed.
   for (auto mode : all) {
     CHECK_THROWS_AS(
-        pad(x, {5}, Shape{1}, Shape{1}, array(0.0f), mode),
-        std::invalid_argument);
+        pad(x, {5}, Shape{1}, Shape{1}, array(0.0f), mode), std::out_of_range);
     CHECK_THROWS_AS(
-        pad(x, {-5}, Shape{1}, Shape{1}, array(0.0f), mode),
-        std::invalid_argument);
+        pad(x, {-5}, Shape{1}, Shape{1}, array(0.0f), mode), std::out_of_range);
   }
 }
 
@@ -4706,4 +4848,189 @@ TEST_CASE("roll and tile shape overflow") {
   auto x = array({1, 2, 3, 4});
   auto rolled = roll(x, -2147483647 - 1);
   CHECK(array_equal(rolled, x).item<bool>());
+}
+
+TEST_CASE("test ops and their gradients keep the caller's stream") {
+  // Each node an op adds must run on the stream the op was given, including
+  // helper ops and the nodes a primitive's vjp or jvp builds.
+  auto check_stream = [](const array& out, const Stream& s) {
+    std::vector<array> stack{out};
+    std::unordered_set<std::uintptr_t> seen;
+    while (!stack.empty()) {
+      auto a = stack.back();
+      stack.pop_back();
+      if (!seen.insert(a.id()).second || !a.has_primitive()) {
+        continue;
+      }
+      CHECK_EQ(a.primitive().stream(), s);
+      for (auto& in : a.inputs()) {
+        stack.push_back(in);
+      }
+    }
+  };
+  auto check_all = [&](const std::vector<array>& outs, const Stream& s) {
+    for (auto& out : outs) {
+      check_stream(out, s);
+    }
+  };
+
+  auto s = new_stream(default_device());
+  auto a = ones({4, 5}, float32, s);
+
+  SUBCASE("vjps") {
+    auto y = full({4, 5}, 2.0f, float32, s);
+    auto ct = ones({4, 5}, float32, s);
+    auto vjp_of = [&](auto f, const std::vector<array>& primals) {
+      return vjp(f, primals, {ct}).second;
+    };
+    check_all(
+        vjp_of(
+            [&](const std::vector<array>& in) {
+              return std::vector<array>{arctan2(in[0], in[1], s)};
+            },
+            {a, y}),
+        s);
+    check_all(
+        vjp_of(
+            [&](const std::vector<array>& in) {
+              return std::vector<array>{logcumsumexp(in[0], 1, false, true, s)};
+            },
+            {a}),
+        s);
+    check_all(
+        vjp_of(
+            [&](const std::vector<array>& in) {
+              return std::vector<array>{
+                  softmax(in[0], std::vector<int>{-1}, false, s)};
+            },
+            {a}),
+        s);
+  }
+
+  SUBCASE("jvps") {
+    auto y = full({4, 5}, 2.0f, float32, s);
+    auto t = ones({4, 5}, float32, s);
+    auto cond = astype(ones({4, 5}, float32, s), bool_, s);
+    auto jvp_of = [&](auto f, const std::vector<array>& primals) {
+      std::vector<array> tangents(primals.size(), t);
+      return jvp(f, primals, tangents).second;
+    };
+    check_all(
+        jvp_of(
+            [&](const std::vector<array>& in) {
+              return std::vector<array>{where(cond, in[0], in[1], s)};
+            },
+            {a, y}),
+        s);
+    check_all(
+        jvp_of(
+            [&](const std::vector<array>& in) {
+              return std::vector<array>{logcumsumexp(in[0], 1, false, true, s)};
+            },
+            {a}),
+        s);
+    check_all(
+        jvp_of(
+            [&](const std::vector<array>& in) {
+              return std::vector<array>{
+                  softmax(in[0], std::vector<int>{-1}, false, s)};
+            },
+            {a}),
+        s);
+  }
+
+  SUBCASE("jvp of a fast op with a constant input") {
+    auto w = ones({5}, float32, s);
+    auto t = ones({4, 5}, float32, s);
+    check_all(
+        jvp(
+            [&](const std::vector<array>& in) {
+              return std::vector<array>{fast::rms_norm(in[0], w, 1e-5f, s)};
+            },
+            {a},
+            {t})
+            .second,
+        s);
+  }
+
+  SUBCASE("custom_function keeps the stream of its function") {
+    auto y = full({4, 5}, 2.0f, float32, s);
+    auto ct = ones({4, 5}, float32, s);
+    auto t = ones({4, 5}, float32, s);
+    std::function<std::vector<array>(const std::vector<array>&)> fun =
+        [&](const std::vector<array>& in) {
+          return std::vector<array>{multiply(in[0], in[1], s)};
+        };
+    std::function<std::vector<array>(
+        const std::vector<array>&,
+        const std::vector<array>&,
+        const std::vector<array>&)>
+        fun_vjp = [&](const std::vector<array>& primals,
+                      const std::vector<array>& cotangents,
+                      const std::vector<array>&) {
+          return std::vector<array>{
+              multiply(cotangents[0], primals[1], s),
+              multiply(cotangents[0], primals[0], s)};
+        };
+    auto f = custom_function(fun, fun_vjp);
+    check_all(f({a, y}), s);
+    check_all(
+        vjp([&](const std::vector<array>& in) { return f(in); }, {a, y}, {ct})
+            .second,
+        s);
+    check_all(
+        jvp([&](const std::vector<array>& in) { return f({in[0], y}); },
+            {a},
+            {t})
+            .second,
+        s);
+  }
+
+  SUBCASE("vmap output fix-ups follow the traced op") {
+    auto x = ones({2, 3}, float32, s);
+    eval(x);
+    auto dflt = default_stream(default_device());
+    // Identity with a moved output axis has no traced op: the active default.
+    auto id =
+        vmap([](const std::vector<array>& in) { return in; }, {0}, {1})({x});
+    CHECK_EQ(id[0].primitive().stream(), dflt);
+    // An op on s keeps the moved axis on s even with an evaluated input.
+    check_all(
+        vmap(
+            [&](const std::vector<array>& in) {
+              return std::vector<array>{abs(in[0], s)};
+            },
+            {0},
+            {1})({x}),
+        s);
+    // An output with no input dependency follows its own stream.
+    check_all(
+        vmap([&](const std::vector<array>& in) {
+          return std::vector<array>{ones({3}, float32, s)};
+        })({x}),
+        s);
+    // A constant with no stream at all lands on the active default.
+    auto other = new_stream(default_device());
+    set_default_stream(other);
+    auto c = vmap([](const std::vector<array>& in) {
+      return std::vector<array>{array({1.0f, 2.0f, 3.0f})};
+    })({x});
+    set_default_stream(dflt);
+    check_all(c, other);
+  }
+
+  SUBCASE("vmap passthrough outputs") {
+    auto p = full({3}, 2.0f, float32, s);
+    auto x = ones({2, 3}, float32, s);
+    auto f = [&](const std::vector<array>& in) {
+      return std::vector<array>{in[0], abs(in[1], s)};
+    };
+    // A lazy passthrough keeps its own stream.
+    check_all(vmap(f, {-1, 0}, {0, 0})({p, x}), s);
+    // An evaluated passthrough has no stream: the active default.
+    eval(p);
+    auto outs = vmap(f, {-1, 0}, {0, 0})({p, x});
+    check_stream(outs[0], default_stream(default_device()));
+    check_stream(outs[1], s);
+  }
 }

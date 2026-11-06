@@ -109,7 +109,11 @@ void fill_gpu(const array& in, array& out, const Stream& s) {
   copy_contiguous(encoder, CopyType::Scalar, in, out, 0, 0);
 }
 
-void reshape_gpu(const array& in, array& out, Stream s) {
+void reshape_gpu(
+    const array& in,
+    array& out,
+    bool add_out_to_temporary_on_allocation,
+    Stream s) {
   auto [copy_necessary, out_strides] = prepare_reshape(in, out);
   if (copy_necessary) {
     auto& encoder = cu::get_command_encoder(s);
@@ -124,6 +128,9 @@ void reshape_gpu(const array& in, array& out, Stream s) {
         0,
         CopyType::General,
         s);
+    if (add_out_to_temporary_on_allocation) {
+      encoder.add_temporary(out);
+    }
   } else {
     shared_buffer_reshape(in, out_strides, out);
   }

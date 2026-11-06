@@ -510,7 +510,9 @@ struct BlockMMA {
   }
 
   /* (BM, BK) X (BK, BN) multiply accumulate function */
-  METAL_FUNC void mma(const threadgroup T* As, const threadgroup T* Bs) thread {
+  template <typename TB = T>
+  METAL_FUNC void mma(const threadgroup T* As, const threadgroup TB* Bs)
+      thread {
     // Adjust for simdgroup and thread location
     As += As_offset;
     Bs += Bs_offset;
@@ -524,7 +526,7 @@ struct BlockMMA {
 
       simdgroup_barrier(mem_flags::mem_none);
 
-      Btile.template load<T, 1, WN, B_str_k, B_str_n>(Bs);
+      Btile.template load<TB, 1, WN, B_str_k, B_str_n>(Bs);
 
       simdgroup_barrier(mem_flags::mem_none);
 

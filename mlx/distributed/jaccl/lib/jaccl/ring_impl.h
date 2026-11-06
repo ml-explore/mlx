@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include <future>
 #include <span>
 
 #include "jaccl/rdma.h"
@@ -90,7 +89,7 @@ class RingImpl {
 
     // Split the reduce scatter + all gather across the available wires. Each
     // wire handles a contiguous slice of each chunk in every direction.
-    dispatch_wires(n_wires, [&](int lw) {
+    dispatch_wires(pool_, n_wires, [&](int lw) {
       all_reduce_wire<MAX_DIR>(
           in_ptr,
           out_ptr,
@@ -196,9 +195,13 @@ class RingImpl {
     // Split the all gather across the available wires. Each wire handles a
     // contiguous slice of every rank's data in both directions.
     size_t n_bytes_per_wire = (n_bytes + (2 * n_wires) - 1) / (2 * n_wires);
-    dispatch_wires(n_wires, [&](int lw) {
+    dispatch_wires(pool_, n_wires, [&](int lw) {
       all_gather_wire(
-          out_ptr, n_bytes, static_cast<int64_t>(n_bytes_per_wire), lw);
+          out_ptr,
+          n_bytes,
+          static_cast<int64_t>(n_bytes_per_wire),
+          n_wires,
+          lw);
     });
   }
 
@@ -215,14 +218,21 @@ class RingImpl {
       char* out_ptr,
       int64_t n_bytes,
       int64_t n_bytes_per_wire,
+      int n_wires,
       int lw) {
-    // Both directions send the same contiguous slice of each rank's region.
-    int64_t slice = static_cast<int64_t>(lw) * n_bytes_per_wire;
-    int64_t wire_offset[2] = {slice, slice};
-    // Clamp to this wire's slice end so the last frame can't spill into the
-    // next wire's slice.
-    int64_t wire_end_bytes = std::min(n_bytes, slice + n_bytes_per_wire);
-    int64_t wire_end[2] = {wire_end_bytes, wire_end_bytes};
+    // Each rank's region is divided into 2 directional halves, each split
+    // into n_wires contiguous slices - mirroring all_reduce_wire. Without
+    // the lr term both directions cover the same lower-half slice and the
+    // upper half of every peer's region is never transferred.
+    int64_t wire_offset[2];
+    int64_t wire_end[2];
+    for (int lr = 0; lr < 2; lr++) {
+      wire_offset[lr] = lr * n_wires * n_bytes_per_wire +
+          static_cast<int64_t>(lw) * n_bytes_per_wire;
+      int64_t region_end =
+          std::min(n_bytes, (lr + 1) * n_wires * n_bytes_per_wire);
+      wire_end[lr] = std::min(region_end, wire_offset[lr] + n_bytes_per_wire);
+    }
     int64_t send_offset[2] = {rank_ * n_bytes, rank_ * n_bytes};
     int64_t recv_offset[2] = {
         ((rank_ + size_ - 1) % size_) * n_bytes,
@@ -230,7 +240,7 @@ class RingImpl {
 
     ring_pass<2, char>(
         lw,
-        n_bytes,
+        n_bytes * size_,
         n_bytes,
         n_bytes * size_,
         n_bytes_per_wire,
@@ -262,7 +272,7 @@ class RingImpl {
     // Two directional regions, each split across the wires.
     int64_t size_per_wire = (chunk + (2 * n_wires) - 1) / (2 * n_wires);
 
-    dispatch_wires(n_wires, [&](int lw) {
+    dispatch_wires(pool_, n_wires, [&](int lw) {
       reduce_scatter_wire<T>(
           in_ptr, out_ptr, chunk, size_per_wire, n_wires, lw, reduce_op);
     });
@@ -584,7 +594,7 @@ class RingImpl {
 
     // Split the send across the available wires. Each wire handles the
     // contiguous slice [lw * bytes_per_wire, (lw + 1) * bytes_per_wire).
-    dispatch_wires(n_wires, [&](int lw) {
+    dispatch_wires(pool_, n_wires, [&](int lw) {
       send_wire(in_ptr, n_bytes, dir, bytes_per_wire, lw);
     });
   }
@@ -663,7 +673,7 @@ class RingImpl {
 
     // Split the recv across the available wires. Each wire handles the
     // contiguous slice [lw * bytes_per_wire, (lw + 1) * bytes_per_wire).
-    dispatch_wires(n_wires, [&](int lw) {
+    dispatch_wires(pool_, n_wires, [&](int lw) {
       recv_wire(out_ptr, n_bytes, dir, bytes_per_wire, lw);
     });
   }
@@ -767,38 +777,6 @@ class RingImpl {
         std::span<Connection>(&right_[wire], 1),
         num_completions,
         work_completions);
-  }
-
-  // Run fn(lw) for each wire, the first n_wires - 1 on the pool and the last
-  // inline, then wait for the pool calls before returning.
-  template <typename Fn>
-  void dispatch_wires(int n_wires, Fn&& fn) {
-    if (n_wires <= 1 || pool_ == nullptr) {
-      for (int lw = 0; lw < n_wires; lw++) {
-        fn(lw);
-      }
-      return;
-    }
-
-    std::vector<std::future<void>> futures;
-    futures.reserve(n_wires - 1);
-    for (int lw = 0; lw < n_wires - 1; lw++) {
-      futures.emplace_back(pool_->enqueue(fn, lw));
-    }
-
-    // Wait for the pool calls even if the inline one throws, so they never
-    // outlive this frame.
-    try {
-      fn(n_wires - 1);
-    } catch (...) {
-      for (auto& f : futures) {
-        f.wait();
-      }
-      throw;
-    }
-    for (auto& f : futures) {
-      f.wait();
-    }
   }
 
   int rank_;

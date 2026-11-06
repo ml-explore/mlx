@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
@@ -39,17 +40,24 @@ void single_block_sort(
   int in_stride_sorted_axis = in.strides()[axis];
   int out_stride_sorted_axis = out.strides()[axis];
 
-  // We can only use the contiguous kernel if the sorted axis
-  // has the largest or smallest stride.
-  // We also need the input to be contiguous
+  // The contiguous kernel walks the rows with a single stride, so the axes
+  // that are not sorted have to collapse to a single dim.
+  auto single_dim =
+      [](const Shape& nc_shape, const Strides& nc_str, int64_t& stride) {
+        auto [shape, strides] = collapse_contiguous_dims(nc_shape, nc_str);
+        if (shape.size() > 1) {
+          return false;
+        }
+        if (shape.size() > 0) {
+          stride = strides[0];
+        }
+        return true;
+      };
+  int64_t in_stride_segment_axis = 0;
+  int64_t out_stride_segment_axis = 0;
   bool contiguous = in.flags().contiguous;
-  auto check_strides = [](array x, int sort_stride) {
-    int min_stride = *std::min_element(x.strides().begin(), x.strides().end());
-    int max_stride = *std::max_element(x.strides().begin(), x.strides().end());
-    return sort_stride == min_stride || sort_stride == max_stride;
-  };
-  contiguous &= check_strides(in, in_stride_sorted_axis);
-  contiguous &= check_strides(out, out_stride_sorted_axis);
+  contiguous &= single_dim(nc_shape, in_nc_str, in_stride_segment_axis);
+  contiguous &= single_dim(nc_shape, out_nc_str, out_stride_segment_axis);
 
   // Prepare kernel name
   std::ostringstream kname;
@@ -74,22 +82,12 @@ void single_block_sort(
   compute_encoder.set_bytes(out_stride_sorted_axis, 4);
 
   if (contiguous) {
-    int in_stride_segment_axis = INT32_MAX;
-    int out_stride_segment_axis = INT32_MAX;
-    for (int i = 0; i < in_nc_str.size(); i++) {
-      if (nc_shape[i] == 1) {
-        continue;
-      }
-      if (in_nc_str[i] > INT32_MAX || out_nc_str[i] > INT32_MAX) {
-        throw std::runtime_error("[Sort::eval_gpu] Stride too large.");
-      }
-      in_stride_segment_axis =
-          std::min(in_stride_segment_axis, static_cast<int>(in_nc_str[i]));
-      out_stride_segment_axis =
-          std::min(out_stride_segment_axis, static_cast<int>(out_nc_str[i]));
+    if (in_stride_segment_axis > INT32_MAX ||
+        out_stride_segment_axis > INT32_MAX) {
+      throw std::runtime_error("[Sort::eval_gpu] Stride too large.");
     }
-    compute_encoder.set_bytes(in_stride_segment_axis, 5);
-    compute_encoder.set_bytes(out_stride_segment_axis, 6);
+    compute_encoder.set_bytes(static_cast<int>(in_stride_segment_axis), 5);
+    compute_encoder.set_bytes(static_cast<int>(out_stride_segment_axis), 6);
   } else {
     compute_encoder.set_bytes(nc_dim, 5);
     if (nc_shape.empty()) {

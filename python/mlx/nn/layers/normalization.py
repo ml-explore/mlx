@@ -13,7 +13,8 @@ class InstanceNorm(Module):
 
     .. math::
 
-        y = \frac{x - \mathrm{E}[x]}{ \sqrt{\mathrm{Var}[x] + \epsilon}} * \gamma + \beta,
+        y = \frac{x - \mathrm{E}[x]}{ \sqrt{\mathrm{Var}[x] + \epsilon}} * \gamma +
+        \beta,
 
     where :math:`\gamma` and :math:`\beta` are learned per feature dimension
     parameters initialized at 1 and 0 respectively. Both are of size :attr:`dims`,
@@ -21,7 +22,8 @@ class InstanceNorm(Module):
 
     Args:
         dims (int): The number of features of the input.
-        eps (float): A value added to the denominator for numerical stability. Default: ``1e-5``.
+        eps (float): A value added to the denominator for numerical stability. Default:
+            ``1e-5``.
         affine (bool): Default: ``False``.
 
     Shape:

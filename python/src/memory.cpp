@@ -1,8 +1,8 @@
 // Copyright © 2025-2026 Apple Inc.
 
-#include "mlx/memory.h"
 #include <nanobind/nanobind.h>
 
+#include "mlx/memory.h"
 #include "python/src/trees.h"
 
 namespace mx = mlx::core;

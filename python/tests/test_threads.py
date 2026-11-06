@@ -1,7 +1,6 @@
 # Copyright © 2026 Apple Inc.
 
 import threading
-import unittest
 
 import mlx.core as mx
 import mlx_tests

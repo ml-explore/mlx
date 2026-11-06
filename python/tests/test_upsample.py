@@ -12,7 +12,7 @@ try:
     import torch.nn.functional as F
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 
@@ -97,7 +97,9 @@ class TestUpsample(mlx_tests.MLXTestCase):
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_upsample_antialias(self):
-        """Test antialiased downsampling matches PyTorch F.interpolate(antialias=True)."""
+        """Test antialiased downsampling matches
+        PyTorch F.interpolate(antialias=True).
+        """
 
         def run_antialias(
             N,
@@ -146,7 +148,8 @@ class TestUpsample(mlx_tests.MLXTestCase):
                 self.assertEqual(out_pt.shape, out_mx.shape)
                 self.assertTrue(
                     np.allclose(out_pt, out_mx, atol=atol),
-                    f"antialias {mode} ac={align_corners} scale={scale_factor} max_diff="
+                    f"antialias {mode} ac={align_corners}"
+                    f" scale={scale_factor} max_diff="
                     f"{np.abs(out_pt - np.array(out_mx)).max():.2e}",
                 )
 

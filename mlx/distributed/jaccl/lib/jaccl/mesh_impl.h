@@ -10,6 +10,7 @@
 constexpr int MESH_MAX_PEERS = 8;
 constexpr int MESH_PIPELINE = 2;
 constexpr int64_t MAX_BUFFER_SIZE = FRAME_SIZE * (1 << (BUFFER_SIZES - 1));
+constexpr size_t MESH_MULTI_WIRE_MIN_BYTES = 512 * 1024;
 
 namespace jaccl {
 
@@ -201,17 +202,21 @@ class MeshImpl {
     }
   }
 
-  void all_gather(const char* in_ptr, char* out_ptr, int64_t n_bytes) {
+  void all_gather(
+      const char* in_ptr,
+      char* out_ptr,
+      int64_t n_bytes,
+      int64_t stride) {
     // Copy our data to the appropriate place. Skip when in place (the scatter
     // gather all reduce passes our own reduced shard which already lives at
-    // out_ptr + rank_ * n_bytes).
-    if (in_ptr != out_ptr + rank_ * n_bytes) {
-      std::memcpy(out_ptr + rank_ * n_bytes, in_ptr, n_bytes);
+    // out_ptr + rank_ * stride).
+    char* data = out_ptr;
+    char* our_data = out_ptr + rank_ * stride;
+    if (in_ptr != our_data) {
+      std::memcpy(our_data, in_ptr, n_bytes);
     }
 
     // Fully connected all gather
-    char* data = out_ptr;
-    char* our_data = out_ptr + rank_ * n_bytes;
     auto [sz, N] = buffer_size_from_message(n_bytes);
     constexpr int PIPELINE = 2;
     constexpr int WC_NUM = PIPELINE * MESH_MAX_PEERS * 2;
@@ -274,7 +279,7 @@ class MeshImpl {
               recv_buffer(sz, buff, rank).begin<char>(),
               recv_buffer(sz, buff, rank).begin<char>() +
                   std::min(N, total - write_offset[rank]),
-              data + rank * n_bytes + write_offset[rank]);
+              data + rank * stride + write_offset[rank]);
           write_offset[rank] += N;
           if (write_offset[rank] + N * (PIPELINE - 1) < total) {
             recv_from(sz, rank, buff);
@@ -286,20 +291,26 @@ class MeshImpl {
   }
 
   template <typename T, typename ReduceOp>
-  void sum_scatter(const T* in, T* out, int64_t count, ReduceOp reduce_op) {
+  void sum_scatter(
+      const T* in,
+      T* out,
+      int64_t count,
+      int64_t stride,
+      ReduceOp reduce_op) {
     // Fully connected reduce scatter.
     //
-    // The input holds size_ contiguous chunks of `count` elements each. Every
-    // rank keeps chunk rank_ and needs the elementwise reduction of that chunk
-    // across all ranks. To that end each rank p sends its chunk j to rank j and
-    // receives every peer's chunk rank_. The output is seeded with this rank's
-    // own chunk rank_ and every received chunk is reduced into it.
+    // The input holds size_ chunks of `count` elements each, `stride` elements
+    // apart. Every rank keeps chunk rank_ and needs the elementwise reduction
+    // of that chunk across all ranks. To that end each rank p sends its chunk j
+    // to rank j and receives every peer's chunk rank_. The output is seeded
+    // with this rank's own chunk rank_ and every received chunk is reduced
+    // into it.
     //
     // Unlike all_reduce/all_gather each peer receives a *different* chunk, so
     // we use the dedicated scatter buffers: per (sz, buff) tile there are size_
     // send slots (slot p -> peer p) and size_ recv slots (slot p <- peer p).
 
-    const T* our_chunk = in + static_cast<int64_t>(rank_) * count;
+    const T* our_chunk = in + static_cast<int64_t>(rank_) * stride;
 
     auto [sz, buffer_size] = buffer_size_from_message(count * sizeof(T));
     int64_t N = buffer_size / sizeof(T);
@@ -328,7 +339,7 @@ class MeshImpl {
         if (p == rank_) {
           continue;
         }
-        const T* src = in + static_cast<int64_t>(p) * count + read_offset;
+        const T* src = in + static_cast<int64_t>(p) * stride + read_offset;
         std::copy(
             src, src + elems, scatter_send_buffer(sz, buff, p).begin<T>());
       }
@@ -362,7 +373,8 @@ class MeshImpl {
               if (p == rank_) {
                 continue;
               }
-              const T* src = in + static_cast<int64_t>(p) * count + read_offset;
+              const T* src =
+                  in + static_cast<int64_t>(p) * stride + read_offset;
               std::copy(
                   src,
                   src + elems,
@@ -424,7 +436,7 @@ class MeshImpl {
       // output. sum_scatter only reads `in` and writes out + rank_ * chunk so
       // this is safe even when in aliases out.
       T* shard = out + static_cast<int64_t>(rank_) * chunk;
-      sum_scatter(in, shard, chunk, reduce_op);
+      sum_scatter(in, shard, chunk, chunk, reduce_op);
 
       // All gather every rank's reduced chunk into the output. Our own shard is
       // already in place so all_gather skips the self copy and only fills the
@@ -432,6 +444,7 @@ class MeshImpl {
       all_gather(
           reinterpret_cast<const char*>(shard),
           reinterpret_cast<char*>(out),
+          chunk * sizeof(T),
           chunk * sizeof(T));
     }
 

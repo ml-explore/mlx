@@ -1,5 +1,0 @@
-sphinx
-breathe
-sphinx-book-theme
-sphinx-copybutton
-mlx

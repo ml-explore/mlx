@@ -38,8 +38,8 @@ METAL_FUNC void scatter_impl(
   for (int j = 0; j < NWORK && ind_idx < idx_size; ++j, ind_idx++) {
     LocT out_idx = out_offset;
     for (int i = 0; i < NIDX; ++i) {
-      auto idx_loc = indices.row_contiguous[i]
-          ? ind_idx
+      LocT idx_loc = indices.row_contiguous[i]
+          ? LocT(ind_idx)
           : elem_to_loc<LocT>(
                 ind_idx,
                 &indices.shapes[indices.ndim * i],
@@ -50,7 +50,7 @@ METAL_FUNC void scatter_impl(
       out_idx +=
           static_cast<LocT>(idx_val) * static_cast<LocT>(out_strides[ax]);
     }
-    auto upd_idx = ind_idx * static_cast<LocT>(upd_size) + gid.x;
+    LocT upd_idx = ind_idx * static_cast<LocT>(upd_size) + gid.x;
     if constexpr (!UPD_ROW_CONTIG) {
       upd_idx = elem_to_loc<LocT>(upd_idx, upd_shape, upd_strides, upd_ndim);
     }

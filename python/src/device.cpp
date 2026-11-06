@@ -1,13 +1,13 @@
 // Copyright © 2023-2025 Apple Inc.
 
-#include <optional>
-#include <sstream>
-
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/variant.h>
+
+#include <optional>
+#include <sstream>
 
 #include "mlx/device.h"
 #include "mlx/utils.h"
@@ -43,13 +43,16 @@ void init_device(nb::module_& m) {
             os << d;
             return os.str();
           })
-      .def("__eq__", [](const mx::Device& d, const nb::object& other) {
-        if (!nb::isinstance<mx::Device>(other) &&
-            !nb::isinstance<mx::Device::DeviceType>(other)) {
-          return false;
-        }
-        return d == nb::cast<mx::Device>(other);
-      });
+      .def(
+          "__eq__",
+          [](const mx::Device& d, const nb::object& other) {
+            if (!nb::isinstance<mx::Device>(other) &&
+                !nb::isinstance<mx::Device::DeviceType>(other)) {
+              return false;
+            }
+            return d == nb::cast<mx::Device>(other);
+          })
+      .freeze();
 
   nb::implicitly_convertible<mx::Device::DeviceType, mx::Device>();
 

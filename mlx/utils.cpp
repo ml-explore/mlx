@@ -179,7 +179,7 @@ int normalize_axis_index(
     std::ostringstream msg;
     msg << msg_prefix << "Axis " << axis << " is out of bounds for array with "
         << ndim << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
   return axis < 0 ? axis + ndim : axis;
 }
@@ -288,26 +288,6 @@ std::ostream& operator<<(std::ostream& os, array a) {
   });
   return os;
 }
-
-namespace env {
-
-int get_var(const char* name, int default_value) {
-  if (const char* buff_str = std::getenv(name)) {
-    return atoi(buff_str);
-  } else {
-    return default_value;
-  }
-}
-
-std::string get_var(const char* name, const char* default_value) {
-  if (const char* buff_str = std::getenv(name)) {
-    return buff_str;
-  } else {
-    return default_value;
-  }
-}
-
-} // namespace env
 
 template <typename T>
 void set_finfo_limits(

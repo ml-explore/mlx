@@ -12,6 +12,7 @@
 
 #include "mlx/api.h"
 #include "mlx/array.h"
+#include "mlx/config.h"
 #include "mlx/device.h"
 #include "mlx/dtype.h"
 #include "mlx/stream.h"
@@ -182,59 +183,16 @@ inline int next_power_of_2(int n) {
 
 namespace env {
 
-int get_var(const char* name, int default_value);
-std::string get_var(const char* name, const char* default_value);
-
-inline int bfs_max_width() {
-  static int bfs_max_width_ = get_var("MLX_BFS_MAX_WIDTH", 20);
-  return bfs_max_width_;
-}
-
 inline int max_ops_per_buffer(int default_value) {
-  static int max_ops_per_buffer_ =
-      get_var("MLX_MAX_OPS_PER_BUFFER", default_value);
-  return max_ops_per_buffer_;
+  return config::get("MLX_MAX_OPS_PER_BUFFER", default_value);
 }
 
 inline int max_mb_per_buffer(int default_value) {
-  static int max_mb_per_buffer_ =
-      get_var("MLX_MAX_MB_PER_BUFFER", default_value);
-  return max_mb_per_buffer_;
-}
-
-// Per-set residency-set size, as a percentage of the device's recommended
-// max working-set size. Controls only how wired memory is distributed across
-// residency sets, never how much is wired; see metal::ResidencySets. A value
-// <= 0 or >= 100 puts everything in a single set.
-inline int residency_set_max_pct() {
-  static int residency_set_max_pct_ = get_var("MLX_RESIDENCY_SET_MAX_PCT", 5);
-  return residency_set_max_pct_;
-}
-
-// Log each residency set as it is created.
-inline bool residency_debug() {
-  static bool residency_debug_ = get_var("MLX_RESIDENCY_DEBUG", 0);
-  return residency_debug_;
-}
-
-inline bool metal_fast_synch() {
-  static bool metal_fast_synch = get_var("MLX_METAL_FAST_SYNCH", 0);
-  return metal_fast_synch;
+  return config::get("MLX_MAX_MB_PER_BUFFER", default_value);
 }
 
 inline bool enable_tf32() {
-  static bool enable_tf32_ = get_var("MLX_ENABLE_TF32", 1);
-  return enable_tf32_;
-}
-
-inline int nccl_timeout(int default_value) {
-  static int nccl_timeout = get_var("MLX_NCCL_TIMEOUT", default_value);
-  return nccl_timeout;
-}
-
-inline const std::string& metal_gpu_arch() {
-  static std::string gpu_arch_ = get_var("MLX_METAL_GPU_ARCH", "");
-  return gpu_arch_;
+  return config::get("MLX_ENABLE_TF32", 1);
 }
 
 } // namespace env

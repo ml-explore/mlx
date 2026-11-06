@@ -232,8 +232,7 @@ AtomicEvent::AtomicEvent(Device& d) {
     cuda_free = cudaFree;
     coherent_ = false;
   }
-  buf_ = std::shared_ptr<void>(
-      buf, [cuda_free](void* buf) { CHECK_CUDA_ERROR(cuda_free(buf)); });
+  buf_ = std::shared_ptr<void>(buf, [cuda_free](void* buf) { cuda_free(buf); });
   if (coherent_) {
     *ptr() = 0;
   } else {
@@ -341,7 +340,8 @@ void Event::wait() {
   } else {
     event.atomic->wait(value());
   }
-  CHECK_CUDA_ERROR(cudaPeekAtLastError());
+  // Check for errors during kernel execution and reset the error state.
+  CHECK_CUDA_ERROR(cudaGetLastError());
   check_error();
 }
 

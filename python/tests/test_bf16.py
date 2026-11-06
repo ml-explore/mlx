@@ -1,8 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
-import math
 import unittest
-from itertools import permutations
 
 import mlx.core as mx
 import mlx_tests
@@ -12,7 +10,7 @@ try:
     import torch
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 try:
@@ -71,8 +69,11 @@ class TestBF16(mlx_tests.MLXTestCase):
             ref_op = np_fn
             mlx_op = mlx_fn
 
-            ref_transform = lambda x: simple_transform(np_transform(x))
-            mlx_transform = lambda x: simple_transform(mx.array(x).astype(mx.bfloat16))
+            def ref_transform(x):
+                return simple_transform(np_transform(x))
+
+            def mlx_transform(x):
+                return simple_transform(mx.array(x).astype(mx.bfloat16))
 
             self.__test_ops(
                 ref_op,
@@ -92,9 +93,10 @@ class TestBF16(mlx_tests.MLXTestCase):
                     return out_bf16.to(torch.float32).numpy()
 
                 ref_op = torch_fn
-                ref_transform = lambda x: simple_transform(
-                    torch.from_numpy(x).to(torch.bfloat16)
-                )
+
+                def ref_transform(x):
+                    return simple_transform(torch.from_numpy(x).to(torch.bfloat16))
+
                 self.__test_ops(
                     ref_op,
                     mlx_op,

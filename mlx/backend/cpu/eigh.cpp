@@ -59,9 +59,9 @@ struct EighWork<
         vectors,
         &N,
         values,
-        static_cast<T*>(buffers[0].buffer.raw_ptr()),
+        static_cast<T*>(buffers[0].buffer().raw_ptr()),
         &lwork,
-        static_cast<int*>(buffers[1].buffer.raw_ptr()),
+        static_cast<int*>(buffers[1].buffer().raw_ptr()),
         &liwork,
         &info);
   }
@@ -116,11 +116,11 @@ struct EighWork<std::complex<float>> {
         vectors,
         &N,
         values,
-        static_cast<T*>(buffers[0].buffer.raw_ptr()),
+        static_cast<T*>(buffers[0].buffer().raw_ptr()),
         &lwork,
-        static_cast<R*>(buffers[1].buffer.raw_ptr()),
+        static_cast<R*>(buffers[1].buffer().raw_ptr()),
         &lrwork,
-        static_cast<int*>(buffers[2].buffer.raw_ptr()),
+        static_cast<int*>(buffers[2].buffer().raw_ptr()),
         &liwork,
         &info);
     if (jobz == 'V') {

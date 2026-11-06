@@ -115,7 +115,7 @@ class Module(dict):
             self.pop(key, None)
 
     def __delattr__(self, name):
-        if (val := self.get(name, None)) is not None:
+        if self.get(name, None) is not None:
             del self[name]
         else:
             super().__delattr__(name)
@@ -208,7 +208,8 @@ class Module(dict):
 
     def save_weights(self, file: str):
         """
-        Save the model's weights to a file. The saving method is determined by the file extension:
+        Save the model's weights to a file. The saving method is determined by the file
+        extension:
         - ``.npz`` will use :func:`mx.savez`
         - ``.safetensors`` will use :func:`mx.save_safetensors`
         """
@@ -306,8 +307,8 @@ class Module(dict):
         dict of dicts and lists.
 
         Commonly used by the optimizer to change the model to the updated
-        (optimized) parameters. Also used by the :meth:`mlx.nn.value_and_grad` to set the
-        tracers in the model in order to compute gradients.
+        (optimized) parameters. Also used by the :meth:`mlx.nn.value_and_grad` to set
+        the tracers in the model in order to compute gradients.
 
         The passed in parameters dictionary need not be a full dictionary
         similar to :meth:`parameters`. Only the provided locations will be
@@ -331,7 +332,8 @@ class Module(dict):
                         if isinstance(current_value, mx.array):
                             if strict and not isinstance(new_value, mx.array):
                                 raise ValueError(
-                                    f"Received invalid type: {type(new_value).__name__}."
+                                    f"Received invalid type: "
+                                    f"{type(new_value).__name__}."
                                 )
                             dst[k] = new_value
                         else:
@@ -478,8 +480,8 @@ class Module(dict):
         keys: Optional[Union[str, List[str]]] = None,
         strict: bool = False,
     ) -> Module:
-        """Freeze the Module's parameters or some of them. Freezing a parameter means not
-        computing gradients for it.
+        """Freeze the Module's parameters or some of them. Freezing a parameter means
+        not computing gradients for it.
 
         This function is idempotent i.e. freezing a frozen model is a no-op.
 
@@ -490,7 +492,9 @@ class Module(dict):
 
                 model = nn.Transformer()
                 model.freeze()
-                model.apply_to_modules(lambda k, v: v.unfreeze() if k.endswith("attention") else None)
+                model.apply_to_modules(
+                    lambda k, v: v.unfreeze() if k.endswith("attention") else None
+                )
 
         Args:
             recurse (bool, optional): If True then freeze the parameters of the
@@ -499,8 +503,8 @@ class Module(dict):
                 parameters will be frozen otherwise all the parameters of a
                 module. For instance freeze all biases by calling
                 ``module.freeze(keys="bias")``.
-            strict (bool, optional): If set to ``True`` validate that the passed keys exist.
-                Default: ``False``.
+            strict (bool, optional): If set to ``True`` validate that the passed keys
+                exist. Default: ``False``.
 
         Returns:
             The module instance after freezing the parameters.
@@ -511,8 +515,10 @@ class Module(dict):
             if local_keys is None:
                 local_keys = tree_flatten(
                     m.filter_and_map(
-                        lambda m, k, v: (not isinstance(v, Module))
-                        and m.valid_parameter_filter(m, k, v)
+                        lambda m, k, v: (
+                            (not isinstance(v, Module))
+                            and m.valid_parameter_filter(m, k, v)
+                        )
                     )
                 )
                 local_keys = [k for (k, v) in local_keys]
@@ -558,8 +564,8 @@ class Module(dict):
                 parameters will be unfrozen otherwise all the parameters of a
                 module. For instance unfreeze all biases by calling
                 ``module.unfreeze(keys="bias")``.
-            strict (bool, optional): If set to ``True`` validate that the passed keys exist.
-                Default: ``False``.
+            strict (bool, optional): If set to ``True`` validate that the passed keys
+                exist. Default: ``False``.
 
         Returns:
             The module instance after unfreezing the parameters.
@@ -627,7 +633,9 @@ class Module(dict):
               parameters to the new dtype.
         """
         if predicate is None:
-            predicate = lambda _: True
+
+            def predicate(_):
+                return True
 
         self.apply(lambda x: x.astype(dtype) if predicate(x.dtype) else x)
 

@@ -4,10 +4,16 @@
 
 #include <infiniband/verbs.h>
 
+#include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <span>
 #include <sstream>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -21,6 +27,9 @@ constexpr int MAX_RECV_WR = 32;
 constexpr int BUFFER_SIZES = 8;
 constexpr int NUM_BUFFERS = 2;
 constexpr int FRAME_SIZE = 4096;
+constexpr uint64_t STALL_CHECK_POLLS = 1024;
+constexpr std::chrono::milliseconds STALL_QUERY_INTERVAL{100};
+constexpr std::chrono::milliseconds STALL_WAKE_QUERY{2};
 
 namespace {
 
@@ -73,6 +82,7 @@ struct IBVWrapper {
 
   int (*query_port)(ibv_context*, uint8_t, ibv_port_attr*);
   int (*query_gid)(ibv_context*, uint8_t, int, ibv_gid*);
+  int (*query_qp)(ibv_qp*, ibv_qp_attr*, int, ibv_qp_init_attr*);
   int (*modify_qp)(ibv_qp*, ibv_qp_attr*, int);
   ibv_mr* (*reg_mr)(ibv_pd*, void*, size_t, int);
   int (*dereg_mr)(ibv_mr*);
@@ -146,6 +156,13 @@ class SharedBuffer {
   std::unordered_map<ibv_pd*, ibv_mr*> memory_regions_;
 };
 
+// Shared by all connections of a group. The first failure wins.
+struct FailureState {
+  std::atomic<bool> failed{false};
+  std::once_flag once;
+  std::string reason;
+};
+
 /**
  * Manipulates an RDMA connection. Enables (among other things)
  *
@@ -176,7 +193,13 @@ struct Connection {
   void queue_pair_rtr(const Destination& dst);
   void queue_pair_rts();
 
+  void share_failure(std::shared_ptr<FailureState> failure) {
+    failure_ = std::move(failure);
+  }
+
   void post_send(const SharedBuffer& buff, uint64_t work_request_id) {
+    throw_if_failed();
+
     ibv_send_wr work_request, *bad_work_request;
 
     auto entry = buff.to_scatter_gather_entry(protection_domain);
@@ -190,13 +213,13 @@ struct Connection {
     if (int status =
             ibv_post_send(queue_pair, &work_request, &bad_work_request);
         status != 0) {
-      std::ostringstream msg;
-      msg << "[jaccl] Send failed with error code " << status;
-      throw std::invalid_argument(msg.str());
+      fail("Send failed with error code " + std::to_string(status));
     }
   }
 
   void post_recv(const SharedBuffer& buff, uint64_t work_request_id) {
+    throw_if_failed();
+
     ibv_recv_wr work_request, *bad_work_request;
 
     auto entry = buff.to_scatter_gather_entry(protection_domain);
@@ -208,15 +231,75 @@ struct Connection {
     if (int status =
             ibv_post_recv(queue_pair, &work_request, &bad_work_request);
         status != 0) {
-      std::ostringstream msg;
-      msg << "[jaccl] Recv failed with error code " << status;
-      throw std::invalid_argument(msg.str());
+      fail("Recv failed with error code " + std::to_string(status));
     }
   }
 
-  int poll(int num_completions, ibv_wc* work_completions) {
-    return ibv_poll_cq(completion_queue, num_completions, work_completions);
+  int poll(int num_completions, ibv_wc* work_completions) const {
+    int n = ibv_poll_cq(completion_queue, num_completions, work_completions);
+    if (n > 0) {
+      check_completions({work_completions, static_cast<size_t>(n)});
+      if (empty_polls_ >= STALL_CHECK_POLLS) {
+        check_stall_end();
+      }
+      empty_polls_ = 0;
+    } else if (n < 0) {
+      fail(
+          "Polling the completion queue failed with error code " +
+          std::to_string(n));
+    } else if ((++empty_polls_ % STALL_CHECK_POLLS) == 0) {
+      check_stalled();
+    }
+    return n;
   }
+
+ private:
+  [[noreturn]] void fail(const std::string& reason) const {
+    std::call_once(failure_->once, [this, &reason] {
+      failure_->reason = "[jaccl] " + reason;
+      failure_->failed.store(true, std::memory_order_release);
+    });
+    throw std::runtime_error(failure_->reason);
+  }
+
+  void throw_if_failed() const {
+    if (failure_->failed.load(std::memory_order_acquire)) {
+      throw std::runtime_error(failure_->reason);
+    }
+  }
+
+  static constexpr int severity(const ibv_wc& wc) {
+    switch (wc.status) {
+      case IBV_WC_SUCCESS:
+        return 2;
+      case IBV_WC_WR_FLUSH_ERR:
+        return 1;
+      default:
+        return 0;
+    }
+  }
+
+  void check_completions(std::span<const ibv_wc> wcs) const {
+    const auto& worst = *std::ranges::min_element(wcs, {}, severity);
+    if (worst.status == IBV_WC_SUCCESS) {
+      return;
+    }
+    std::ostringstream msg;
+    msg << "Work completion failed with status "
+        << static_cast<int>(worst.status) << " (qp " << worst.qp_num
+        << ", wr_id " << worst.wr_id << ", opcode "
+        << static_cast<int>(worst.opcode) << ")";
+    fail(msg.str());
+  }
+
+  void check_stalled() const;
+  void check_stall_end() const;
+  void check_queue_pair() const;
+
+  std::shared_ptr<FailureState> failure_ = std::make_shared<FailureState>();
+  mutable uint64_t empty_polls_{0};
+  mutable std::chrono::steady_clock::time_point stall_start_{};
+  mutable std::chrono::steady_clock::time_point last_query_{};
 };
 
 std::vector<Connection> create_connections(
@@ -235,10 +318,8 @@ inline int poll(
       return completions;
     }
 
-    int n = ibv_poll_cq(
-        c.completion_queue,
-        num_completions - completions,
-        work_completions + completions);
+    int n =
+        c.poll(num_completions - completions, work_completions + completions);
 
     completions += n;
   }

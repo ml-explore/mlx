@@ -4,6 +4,8 @@
 #include "jaccl/reduction_ops.h"
 #include "jaccl/types.h"
 
+#include <algorithm>
+
 namespace jaccl {
 
 RingGroup::RingGroup(
@@ -25,6 +27,12 @@ RingGroup::RingGroup(
         << left_.size() << " were provided.";
     throw std::runtime_error(msg.str());
   }
+
+  auto share = [failure = std::make_shared<FailureState>()](Connection& c) {
+    c.share_failure(failure);
+  };
+  std::ranges::for_each(left_, share);
+  std::ranges::for_each(right_, share);
 
   // Initialize all the connections and allocate buffers
   initialize();

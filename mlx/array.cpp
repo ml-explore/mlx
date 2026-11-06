@@ -60,13 +60,11 @@ std::vector<array> array::make_arrays(
 array array::unsafe_weak_copy(const array& other) {
   auto cpy = array(other.shape(), other.dtype(), nullptr, {});
   cpy.set_data(
-      other.buffer(),
+      Data(other.buffer(), nullptr),
       other.data_size(),
       other.strides(),
       other.flags(),
-      0,
-      [](auto) {});
-  cpy.array_desc_->offset = other.array_desc_->offset;
+      other.offset());
   return cpy;
 }
 
@@ -104,14 +102,13 @@ array::array(
       allocator::release(buffer);
       return deleter(ptr);
     };
-    set_data(buffer, std::move(wrapped_deleter));
+    set_data(Data(buffer, std::move(wrapped_deleter)));
   }
 }
 
-/* Build an array from a shared buffer */
-array::array(allocator::Buffer data, Shape shape, Dtype dtype, Deleter deleter)
+array::array(allocator::Data data, Shape shape, Dtype dtype)
     : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
-  set_data(data, deleter);
+  set_data(std::move(data));
 }
 
 void array::detach() {
@@ -166,8 +163,8 @@ bool array::is_tracer() const {
       detail::retain_graph();
 }
 
-void array::set_data(allocator::Buffer buffer, Deleter d) {
-  array_desc_->data = std::make_shared<Data>(buffer, d);
+void array::set_data(allocator::Data data) {
+  array_desc_->data = std::make_shared<Data>(std::move(data));
   array_desc_->offset = 0;
   array_desc_->data_size = size();
   array_desc_->flags.contiguous = true;
@@ -177,13 +174,12 @@ void array::set_data(allocator::Buffer buffer, Deleter d) {
 }
 
 void array::set_data(
-    allocator::Buffer buffer,
+    allocator::Data data,
     size_t data_size,
     Strides strides,
     Flags flags,
-    int64_t offset,
-    Deleter d) {
-  array_desc_->data = std::make_shared<Data>(buffer, d);
+    int64_t offset) {
+  array_desc_->data = std::make_shared<Data>(std::move(data));
   array_desc_->offset = offset;
   array_desc_->data_size = data_size;
   array_desc_->strides = std::move(strides);

@@ -302,6 +302,13 @@ def upsample_linear(
             indices_fn=_linear_aa_indices,
             align_corners=align_corners,
         )
+    if not antialias and not align_corners:
+        return _interpolate_separable(
+            x=x,
+            scale_factor=scale_factor,
+            indices_fn=_linear_indices,
+            align_corners=align_corners,
+        )
     return _interpolate(
         x=x,
         scale_factor=scale_factor,
@@ -428,7 +435,8 @@ class Upsample(Module):
             raise ValueError(f"[Upsample] Got unsupported upsampling algorithm: {mode}")
         if antialias and mode == "nearest":
             raise ValueError(
-                "[Upsample] Antialiasing is not supported for nearest neighbor upsampling"
+                "[Upsample] Antialiasing is not supported for nearest neighbor "
+                "upsampling"
             )
         if isinstance(scale_factor, (list, tuple)):
             scale_factor = tuple(map(float, scale_factor))

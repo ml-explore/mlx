@@ -89,13 +89,16 @@ std::pair<Shape, Strides> collapse_contiguous_dims(
   Strides collapsed_strides;
 
   if (shape.size() > 0) {
-    collapsed_shape.push_back(shape[0]);
-    collapsed_strides.push_back(strides[0]);
-    for (int i = 1; i < shape.size(); i++) {
+    for (int i = 0; i < shape.size(); i++) {
       if (shape[i] == 1) {
         continue;
-      } else if (
-          strides[i] * shape[i] != collapsed_strides.back() ||
+      }
+      if (collapsed_shape.empty()) {
+        collapsed_shape.push_back(shape[i]);
+        collapsed_strides.push_back(strides[i]);
+        continue;
+      }
+      if (strides[i] * shape[i] != collapsed_strides.back() ||
           collapsed_shape.back() * static_cast<int64_t>(shape[i]) > size_cap) {
         collapsed_shape.push_back(shape[i]);
         collapsed_strides.push_back(strides[i]);
@@ -103,6 +106,10 @@ std::pair<Shape, Strides> collapse_contiguous_dims(
         collapsed_shape.back() *= shape[i];
         collapsed_strides.back() = strides[i];
       }
+    }
+    if (collapsed_shape.empty()) {
+      collapsed_shape.push_back(1);
+      collapsed_strides.push_back(1);
     }
   }
 

@@ -11,8 +11,7 @@ struct fp8_e4m3 {
     uint32_t sign = f_bits & 0x80000000;
     f_bits ^= sign;
     if (f_bits >= fp8_max) {
-      // Default behavior saturates to min/max
-      bits = 0x7E;
+      bits = (f_bits > 0x7F800000) ? 0x7F : 0x7E;
     } else {
       if (f_bits < (121 << 23)) {
         f_bits = as_type<uint32_t>(
@@ -67,12 +66,16 @@ struct fp8_e8m0 {
   }
 
   operator bfloat16_t() thread {
-    uint16_t out = (bits == 0 ? 0x40 : (static_cast<uint16_t>(bits) << 7));
+    uint16_t out = (bits == 0)
+        ? 0x40
+        : (bits == 0xFF ? 0x7FC0 : (static_cast<uint16_t>(bits) << 7));
     return as_type<bfloat16_t>(out);
   }
 
   operator float() thread {
-    uint32_t out = (bits == 0 ? 0x400000 : (static_cast<uint16_t>(bits) << 23));
+    uint32_t out = (bits == 0)
+        ? 0x400000
+        : (bits == 0xFF ? 0x7FC00000 : (static_cast<uint16_t>(bits) << 23));
     return as_type<float>(out);
   }
 

@@ -1,12 +1,17 @@
 // Copyright © 2023-2026 Apple Inc.
 #include <algorithm>
+#include <cerrno>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <limits>
+#include <random>
 #include <sstream>
 #include <thread>
+#include <vector>
 
-// Used by pread implementation.
 #ifdef _WIN32
 #include <windows.h>
 #endif // _WIN32
@@ -117,6 +122,7 @@ Dtype dtype_from_array_protocol(std::string_view t) {
 }
 
 #ifdef _WIN32
+
 // There is no pread on Windows, emulate it with ReadFile.
 int64_t pread(int fd, void* buf, uint64_t size, uint64_t offset) {
   HANDLE file = reinterpret_cast<HANDLE>(_get_osfhandle(fd));
@@ -137,7 +143,90 @@ int64_t pread(int fd, void* buf, uint64_t size, uint64_t offset) {
 
   return bytes_read;
 }
+
+// Share delete access, so that a save can replace the file while it is open.
+int open_for_read(const std::string& file_path) {
+  HANDLE file = CreateFileA(
+      file_path.c_str(),
+      GENERIC_READ,
+      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+      nullptr,
+      OPEN_EXISTING,
+      FILE_ATTRIBUTE_NORMAL,
+      nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
+    return -1;
+  }
+  int fd =
+      _open_osfhandle(reinterpret_cast<intptr_t>(file), _O_RDONLY | _O_BINARY);
+  if (fd < 0) {
+    CloseHandle(file);
+  }
+  return fd;
+}
+
+#if NTDDI_VERSION >= NTDDI_WIN10_RS1
+// MoveFileExW, which fs::rename uses, cannot replace a file that is open.
+// A rename with POSIX semantics can, if all open handles share delete access.
+bool posix_rename(
+    const std::filesystem::path& from,
+    const std::filesystem::path& to) {
+  HANDLE file = CreateFileW(
+      from.c_str(),
+      DELETE,
+      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+      nullptr,
+      OPEN_EXISTING,
+      FILE_ATTRIBUTE_NORMAL,
+      nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
+    return false;
+  }
+  std::error_code error;
+  auto target = std::filesystem::absolute(to, error);
+  if (error) {
+    CloseHandle(file);
+    return false;
+  }
+  std::wstring name = target.wstring();
+  auto name_size = static_cast<DWORD>(name.size() * sizeof(wchar_t));
+  std::vector<char> buffer(
+      offsetof(FILE_RENAME_INFO, FileName) + name_size + sizeof(wchar_t));
+  auto info = reinterpret_cast<FILE_RENAME_INFO*>(buffer.data());
+  info->Flags =
+      FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+  info->RootDirectory = nullptr;
+  info->FileNameLength = name_size;
+  std::memcpy(info->FileName, name.c_str(), name_size + sizeof(wchar_t));
+  bool renamed =
+      SetFileInformationByHandle(
+          file, FileRenameInfoEx, info, static_cast<DWORD>(buffer.size())) != 0;
+  CloseHandle(file);
+  return renamed;
+}
+#endif // NTDDI_VERSION >= NTDDI_WIN10_RS1
+
+#else // _WIN32
+
+int open_for_read(const std::string& file_path) {
+  return open(file_path.c_str(), O_RDONLY | O_BINARY);
+}
+
 #endif
+
+// Rename `from` over `to`, replacing `to` if it exists.
+void replace_file(
+    const std::filesystem::path& from,
+    const std::filesystem::path& to) {
+#ifdef _WIN32
+#if NTDDI_VERSION >= NTDDI_WIN10_RS1
+  if (posix_rename(from, to)) {
+    return;
+  }
+#endif // NTDDI_VERSION >= NTDDI_WIN10_RS1
+#endif // _WIN32
+  std::filesystem::rename(from, to);
+}
 
 } // namespace
 
@@ -227,7 +316,9 @@ void save(std::string file, array a) {
     file += ".npy";
 
   // Serialize array
-  save(std::make_shared<io::FileWriter>(std::move(file)), a);
+  io::write_and_replace(file, [&a](const std::string& path) {
+    save(std::make_shared<io::FileWriter>(path), a);
+  });
 }
 
 /** Load array from reader in .npy format */
@@ -291,10 +382,23 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
   size_t ed = header.find_last_of(')');
   std::string shape_str = header.substr(st, ed - st);
 
+  size_t max_size = std::numeric_limits<size_t>::max() / size_of(dtype);
+  size_t total_size = 1;
   while (!shape_str.empty()) {
     // Read current number and get position of comma
     size_t pos;
     int dim = std::stoi(shape_str, &pos);
+
+    // Reject negative dims and a total byte count that overflows size_t
+    if (dim < 0) {
+      throw std::runtime_error(
+          "[load] Negative dimension in shape in " + in_stream->label());
+    }
+    if (dim != 0 && total_size > max_size / dim) {
+      throw std::runtime_error(
+          "[load] Shape is too large in " + in_stream->label());
+    }
+    total_size *= dim;
     shape.push_back(dim);
 
     // Skip the comma and space and read the next number
@@ -373,11 +477,41 @@ std::shared_ptr<ThreadPool> acquire_batch_pool() {
 
 } // namespace
 
+void write_and_replace(
+    const std::string& file,
+    const std::function<void(const std::string&)>& write) {
+  namespace fs = std::filesystem;
+
+  // Replace the file a symlink points to, not the symlink.
+  std::error_code error;
+  auto target = fs::canonical(file, error);
+  bool exists = !error;
+  if (!exists) {
+    target = file;
+  }
+
+  // A unique name, so concurrent saves to the same file do not share it.
+  auto tmp = target.string() + ".tmp" + std::to_string(std::random_device{}());
+  try {
+    write(tmp);
+    if (exists) {
+      fs::permissions(tmp, fs::status(target).permissions());
+    }
+    replace_file(tmp, target);
+  } catch (...) {
+    fs::remove(tmp, error);
+    throw;
+  }
+}
+
 ThreadPool& thread_pool() {
   // Leak - see Scheduler singleton comment in scheduler.cpp.
   static ThreadPool* pool_ = new ThreadPool{4};
   return *pool_;
 }
+
+ParallelFileReader::ParallelFileReader(std::string file_path)
+    : fd_(open_for_read(file_path)), label_(std::move(file_path)) {}
 
 ThreadPool& ParallelFileReader::thread_pool() {
   std::call_once(pool_once_, [this]() { pool_ = acquire_batch_pool(); });
@@ -387,7 +521,15 @@ ThreadPool& ParallelFileReader::thread_pool() {
 void ParallelFileReader::read(char* data, size_t n) {
   while (n != 0) {
     auto m = ::read(fd_, data, std::min(n, static_cast<size_t>(INT32_MAX)));
-    if (m <= 0) {
+    if (m < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      std::ostringstream msg;
+      msg << "[read] Unable to read " << n << " bytes from file.";
+      throw std::runtime_error(msg.str());
+    }
+    if (m == 0) {
       std::ostringstream msg;
       msg << "[read] Unable to read " << n << " bytes from file.";
       throw std::runtime_error(msg.str());
@@ -401,11 +543,18 @@ void ParallelFileReader::read(char* data, size_t n, size_t offset) {
   auto readfn = [fd = fd_](size_t offset, size_t size, char* buffer) -> bool {
     while (size != 0) {
       auto m = pread(fd, buffer, size, offset);
-      if (m <= 0) {
+      if (m < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        return false;
+      }
+      if (m == 0) {
         return false;
       }
       buffer += m;
       size -= m;
+      offset += m;
     }
     return true;
   };

@@ -98,7 +98,7 @@ void Recv::eval_cpu(
 void ReduceScatter::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  assert(inputs.size() == 0);
+  assert(inputs.size() == 1);
   assert(outputs.size() == 1);
 
   auto [in, copied] = ensure_row_contiguous(inputs[0], stream());

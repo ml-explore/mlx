@@ -35,7 +35,7 @@ inline int max_unfold_rows(metal::Device& d, size_t row_bytes, int total_rows) {
   size_t max_buffer = d.mtl_device()->maxBufferLength();
   size_t max_rows = row_bytes == 0 ? total_rows : max_buffer / row_bytes;
   // Force a smaller tile (tests, or to bound the unfold buffer further).
-  if (int forced = env::get_var("MLX_CONV_UNFOLD_TILE_ROWS", 0); forced > 0) {
+  if (int forced = config::get("MLX_CONV_UNFOLD_TILE_ROWS", 0); forced > 0) {
     max_rows = std::min(max_rows, static_cast<size_t>(forced));
   }
   if (max_rows == 0) {
@@ -72,7 +72,7 @@ inline int winograd_batch_step(
 
   // Limit of maximum memory can be used for the step.
   size_t working_set = d.mtl_device()->recommendedMaxWorkingSetSize();
-  if (int env_ws = env::get_var("MLX_CONV_WINOGRAD_WORKING_SET", 0);
+  if (int env_ws = config::get("MLX_CONV_WINOGRAD_WORKING_SET", 0);
       env_ws > 0) {
     working_set = env_ws;
   }
@@ -96,8 +96,7 @@ inline int winograd_batch_step(
           (conv_params.C + conv_params.O) * itemsize;
   auto max_n = static_cast<int64_t>(budget / bytes_per_n);
   int safe_n = static_cast<int>(std::min<int64_t>(max_n, total_n));
-  if (int forced = env::get_var("MLX_CONV_WINOGRAD_TILE_BATCH", 0);
-      forced > 0) {
+  if (int forced = config::get("MLX_CONV_WINOGRAD_TILE_BATCH", 0); forced > 0) {
     return std::min(forced, safe_n);
   }
 
@@ -350,8 +349,13 @@ void implicit_gemm_conv_2D_gpu(
     wn = 1;
   }
 
+  // The 8 channel loader reads one row per thread, so it needs bm = 64
+  if (C_per_group == 8) {
+    bm = 64;
+  }
+
   int tn = (implicit_N + bn - 1) / bn;
-  int tm = (implicit_M + bm - 1) / bm;
+  int tm = (static_cast<int64_t>(implicit_M) + bm - 1) / bm;
   int swizzle_log = 0;
 
   // Fix small channel specialization
@@ -365,6 +369,9 @@ void implicit_gemm_conv_2D_gpu(
   } else if (C_per_group <= 4) {
     gemm_k_iters = ((conv_params.wS[0] * conv_params.wS[1] * 4) + bk - 1) / bk;
     n_channel_specialization = C_per_group;
+  } else if (C_per_group == 8) {
+    gemm_k_iters = ((conv_params.wS[0] * conv_params.wS[1] * 8) + bk - 1) / bk;
+    n_channel_specialization = 8;
   }
 
   bool small_filter = (!n_channel_specialization) &&
@@ -546,7 +553,7 @@ void implicit_gemm_conv_2D_general_gpu(
   int bk = 16;
 
   int tn = (implicit_N + bn - 1) / bn;
-  int tm = (adj_implicit_m + bm - 1) / bm;
+  int tm = (static_cast<int64_t>(adj_implicit_m) + bm - 1) / bm;
   int swizzle_log = 0;
 
   // Get channel iteration info
@@ -670,7 +677,7 @@ void implicit_gemm_conv_3D_gpu(
   }
 
   int tn = (implicit_N + bn - 1) / bn;
-  int tm = (implicit_M + bm - 1) / bm;
+  int tm = (static_cast<int64_t>(implicit_M) + bm - 1) / bm;
   int swizzle_log = 0;
 
   bool small_filter =
@@ -782,6 +789,7 @@ void pad_and_slice_conv_3D_gpu(
     array x_copy(xshape, x.dtype(), nullptr, {});
     array zero(0, x.dtype());
     pad_gpu(x, zero, x_copy, {0, -1}, {0, 0}, s);
+    metal::get_command_encoder(s).add_temporary(zero);
     metal::get_command_encoder(s).add_temporary(x_copy);
 
     return x_copy;
@@ -965,7 +973,7 @@ void stride_two_conv_transpose_3D_gpu(
     array phase_out({M, O}, out.dtype(), nullptr, {});
     phase_out.set_data(allocator::malloc(phase_out.nbytes()));
 
-    std::vector<array> gemm_copies = {in_matrix, wt_phase};
+    std::vector<array> gemm_copies;
     steel_matmul(
         s,
         d,
@@ -1009,7 +1017,6 @@ void stride_two_conv_transpose_3D_gpu(
     copy_gpu_inplace(phase_out_nd, out_phase_view, CopyType::GeneralGeneral, s);
     copies.push_back(phase_out);
     copies.push_back(phase_out_nd);
-    copies.push_back(out_phase_view);
   }
 }
 
@@ -1385,6 +1392,7 @@ void pad_in_channels_conv_2D_gpu(
     array x_copy(xshape, x.dtype(), nullptr, {});
     array zero(0, x.dtype());
     pad_gpu(x, zero, x_copy, {-1}, {0}, s);
+    metal::get_command_encoder(s).add_temporary(zero);
     metal::get_command_encoder(s).add_temporary(x_copy);
 
     return x_copy;
@@ -1421,11 +1429,11 @@ void dispatch_conv_2D_gpu(
         conv_params.wS[0] <= 7 && conv_params.wS[1] <= 7 &&
         conv_params.str[0] <= 2 && conv_params.str[1] <= 2 &&
         conv_params.wt_strides[1] == conv_params.wS[1] &&
-        conv_params.C % 16 == 0 && conv_params.C == conv_params.O) {
+        conv_params.C % 8 == 0 && conv_params.C == conv_params.O) {
       return depthwise_conv_2D_gpu(s, d, in, wt, out, conv_params);
     }
 
-    if ((C_per_group <= 4 || C_per_group % 16 == 0) &&
+    if ((C_per_group <= 4 || C_per_group == 8 || C_per_group % 16 == 0) &&
         (O_per_group <= 16 || O_per_group % 16 == 0)) {
       return implicit_gemm_conv_2D_gpu(s, d, in, wt, out, conv_params);
     } else {
@@ -1442,7 +1450,7 @@ void dispatch_conv_2D_gpu(
   if (!conv_params.flip && is_stride_one && is_kdil_one && is_idil_one &&
       conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
       conv_params.C % 32 == 0 && conv_params.O % 32 == 0 && inp_large &&
-      channels_large) {
+      channels_large && config::get("MLX_CONV_WINOGRAD", 1)) {
     // Only use winograd conv when having enough memory.
     if (int n_step = winograd_batch_step(d, in, conv_params); n_step > 0) {
       return winograd_conv_2D_gpu(
@@ -1558,7 +1566,8 @@ void conv_1D_gpu(
   const int O_per_group = O / groups;
 
   // Direct to implicit gemm conv
-  if (is_idil_one && (C_per_group <= 4 || C_per_group % 16 == 0) &&
+  if (is_idil_one &&
+      (C_per_group <= 4 || C_per_group == 8 || C_per_group % 16 == 0) &&
       (O_per_group <= 16 || O_per_group % 16 == 0)) {
     MLXConvParams<2> conv_params{
         /* const int  N = */ static_cast<int>(in.shape(0)),

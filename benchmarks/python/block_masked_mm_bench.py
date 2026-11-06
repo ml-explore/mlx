@@ -101,7 +101,10 @@ def main():
             "1024x1024x1024x32x0.0,"
             "1024x1024x1024x32x0.9"
         ),
-        help="Comma-separated MxNxKxBSxSparsity list. Sparsity=fraction of blocks zeroed.",
+        help=(
+            "Comma-separated MxNxKxBSxSparsity list. "
+            "Sparsity=fraction of blocks zeroed."
+        ),
     )
     parser.add_argument(
         "--dtype",

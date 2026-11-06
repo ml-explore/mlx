@@ -1,12 +1,12 @@
 // Copyright © 2023-2024 Apple Inc.
-#include <iostream>
-
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
+
+#include <iostream>
 
 #include "mlx/backend/metal/metal.h"
 #include "mlx/device.h"

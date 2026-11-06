@@ -23,6 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pre-commit/action@v3.0.1
+      - name: Test check_stream_args.py
+        shell: bash
+        run: python .github/scripts/check_stream_args.py --self-test
 
   build_and_test:
     name: ${{ matrix.os }} (${{ matrix.toolkit }}, ${{ matrix.arch }})
@@ -83,9 +86,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        macos-target: ['14.0', '15.0', '26.2']
+        macos-target: ['26.2', '27.0']
         toolkit: ['cpu', 'metal', 'jit']
-    runs-on: 'macos-26-xlarge'
+    runs-on: [self-hosted, macos]
     needs: check_lint
     steps:
       - uses: actions/checkout@v7
@@ -97,51 +100,23 @@ jobs:
           # Use the compile cache of metal build for all builds.
           ccache-save: ${{ matrix.toolkit == 'metal' }}
           ccache-toolkit: 'metal'
-      - uses: ./.github/actions/build-macos
-        with:
-          cmake-args: ${{ steps.setup.outputs.cmake-args }}
-          macos-target: ${{ matrix.macos-target }}
-      - uses: ./.github/actions/test-macos
-        if: matrix.toolkit == 'cpu'
-        with:
-          toolkit: 'cpu'
-      - uses: actions/upload-artifact@v7
-        if: matrix.toolkit != 'cpu'
-        with:
-          name: mlx-${{ matrix.toolkit }}-macos${{ matrix.macos-target }}
-          path: |
-            dist/mlx-*.whl
-            build/mlx/backend/metal/kernels/mlx.metallib
-            build/tests/tests
-          if-no-files-found: error
-
-  mac_test:
-    name: Test macOS (${{ matrix.toolkit }})
-    if: github.repository == 'ml-explore/mlx'
-    runs-on: [self-hosted, macos]
-    needs: mac_build
-    strategy:
-      fail-fast: false
-      matrix:
-        toolkit: ['metal', 'jit']
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
-        with:
-          toolkit: ${{ matrix.toolkit }}
-          use-ccache: false
-      - uses: actions/download-artifact@v8
-        with:
-          path: artifact
-          pattern: mlx-${{ matrix.toolkit }}-*
-      - run: ls -lhR artifact
+      - name: Build python package
+        shell: bash
+        env:
+          CMAKE_ARGS: ${{ steps.setup.outputs.cmake-args }} -DMLX_BUILD_TESTS=ON
+          DEBUG: 1
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}
+        run: |
+          uv pip install build setuptools
+          uv run python -m build -w
       - uses: ./.github/actions/test-macos
         with:
           toolkit: ${{ matrix.toolkit }}
+      - uses: ./.github/actions/test-array-api
+        if: matrix.toolkit == 'metal'
 
   build_documentation:
     name: Build Documentation
-    if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-22.04
     needs: check_lint
     steps:

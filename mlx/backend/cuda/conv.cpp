@@ -9,6 +9,7 @@
 
 #include <nvtx3/nvtx3.hpp>
 
+#include <algorithm>
 #include <cassert>
 
 namespace mlx::core {
@@ -31,6 +32,7 @@ struct ConvCacheKey {
   std::array<int, MAX_NDIM> padding_lo;
   std::array<int, MAX_NDIM> padding_hi;
   std::array<int, MAX_NDIM> dilation;
+  std::array<int, MAX_NDIM> input_dilation;
   int groups;
   bool flip;
   uint8_t input_alignment;
@@ -281,6 +283,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
   cache_key.pod.padding_lo = vector_key(padding_lo_);
   cache_key.pod.padding_hi = vector_key(padding_hi_);
   cache_key.pod.dilation = vector_key(kernel_dilation_);
+  cache_key.pod.input_dilation = vector_key(input_dilation_);
   cache_key.pod.groups = groups_;
   cache_key.pod.flip = flip_;
   cache_key.pod.input_alignment = get_alignment(in);
@@ -320,11 +323,20 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
 
   // There is no reliable way to deduce the proper cuDNN backend for the
   // convolution, so we make a best guess and then try.
+  // The backward input convolution can not express a kernel stride and the
+  // other two can not express input dilation, those use the fallback kernel.
+  auto not_one = [](int v) { return v != 1; };
+  bool has_stride =
+      std::any_of(kernel_strides_.begin(), kernel_strides_.end(), not_one);
+  bool has_input_dilation =
+      std::any_of(input_dilation_.begin(), input_dilation_.end(), not_one);
   SmallVector<ConvBackendType, 2> try_backends;
   if (flip_) {
     // When weight is flipped, we assume it is backward input convolution.
-    try_backends.push_back(CONV_BACKWARD_INPUT);
-  } else {
+    if (!has_stride) {
+      try_backends.push_back(CONV_BACKWARD_INPUT);
+    }
+  } else if (!has_input_dilation) {
     // Otherwise it could be backward weight convolution or forward convolution,
     // mathematically there is no difference so we have to use heuristics.
     // Empirically backward convolutions have large kernel dimensions, and

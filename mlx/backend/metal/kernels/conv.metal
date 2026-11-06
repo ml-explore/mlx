@@ -418,8 +418,8 @@ winograd_conv_2d_weight_transform(
   // wt_out is stored transposed (A x A x C x O)
   short ohw_0 = sm * 8 + sn;
   short ohw_1 = sm * 8 + sn + 1;
-  device T* wt_out_0 = wt_out + ohw_0 * C * O + ko;
-  device T* wt_out_1 = wt_out + ohw_1 * C * O + ko;
+  device T* wt_out_0 = wt_out + size_t(ohw_0) * C * O + ko;
+  device T* wt_out_1 = wt_out + size_t(ohw_1) * C * O + ko;
 
   // Prepare shared memory
   threadgroup T Ws[BO][R][R][BC];
