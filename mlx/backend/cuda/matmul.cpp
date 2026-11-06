@@ -39,7 +39,7 @@ ensure_batch_contiguous(const array& x, cu::CommandEncoder& encoder, Stream s) {
   }
 
   bool rc = true;
-  for (int i = 0; i < x.ndim() - 3; i++) {
+  for (int i = 0; i < static_cast<int>(x.ndim()) - 3; i++) {
     rc &= (x.strides(i + 1) * x.shape(i)) == x.strides(i);
   }
   if (rc) {
@@ -466,6 +466,32 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       segments,
       out,
       encoder);
+}
+
+void GroupedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("GroupedMM::eval_gpu");
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  assert(inputs.size() == 3);
+  auto& a_pre = inputs[0];
+  auto& b_pre = inputs[1];
+  auto& offsets_pre = inputs[2];
+
+  if (out.size() == 0 || a_pre.size() == 0 || b_pre.size() == 0) {
+    array zero(0, a_pre.dtype());
+    encoder.add_temporary(zero);
+    fill_gpu(zero, out, s);
+    return;
+  }
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+  // a must be row contiguous
+  auto a = ensure_row_contiguous(a_pre, encoder, s);
+  auto b = std::get<2>(ensure_batch_contiguous(b_pre, encoder, s));
+  auto offsets = ensure_row_contiguous(offsets_pre, encoder, s);
+
+  grouped_mm(a, b, offsets, out, encoder);
 }
 
 } // namespace mlx::core
