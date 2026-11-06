@@ -7,6 +7,7 @@
 
 #include "doctest/doctest.h"
 #include "mlx/mlx.h"
+#include "mlx/allocator.h"
 
 using namespace mlx::core;
 
@@ -782,4 +783,49 @@ TEST_CASE("test layer norm vjp bias grad race") {
     }
   }
   CHECK(worst <= 1e-5);
+}
+
+TEST_CASE("test Metal cache admission respects limit and retains recent shapes") {
+  const size_t limit = 1 << 20;
+  const auto old_limit = set_cache_limit(limit);
+  struct RestoreCacheLimit {
+    size_t limit;
+    ~RestoreCacheLimit() {
+      clear_cache();
+      set_cache_limit(limit);
+    }
+  } restore{old_limit};
+  clear_cache();
+
+  // A buffer larger than the allowance must not enter an empty cache.
+  {
+    auto oversized = allocator::malloc(2 * limit);
+  }
+  CHECK_EQ(get_cache_memory(), 0);
+  clear_cache();
+
+  // Keep both buffers live until allocation has finished: neither allocation
+  // may clean up the other's admission overshoot before we inspect it.
+  const void* newest = nullptr;
+  {
+    auto second = allocator::malloc(limit / 2);
+    newest = second.buffer().ptr();
+    {
+      auto first = allocator::malloc(3 * limit / 4);
+    }
+    CHECK_EQ(get_cache_memory(), 3 * limit / 4);
+  }
+  CHECK_LE(get_cache_memory(), limit);
+  CHECK_EQ(get_cache_memory(), limit / 2);
+  {
+    auto reused = allocator::malloc(limit / 2);
+    CHECK_EQ(reused.buffer().ptr(), newest);
+  }
+
+  clear_cache();
+  set_cache_limit(0);
+  {
+    auto disabled = allocator::malloc(limit / 2);
+  }
+  CHECK_EQ(get_cache_memory(), 0);
 }
