@@ -205,6 +205,36 @@ void init_fast(nb::module_& parent_module) {
       )pbdoc");
 
   m.def(
+      "upsample_bilinear",
+      &mx::fast::upsample_bilinear,
+      "x"_a,
+      "scale_factor"_a,
+      "align_corners"_a = false,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def upsample_bilinear(x: array, scale_factor: tuple[float, float], align_corners: bool = False, *, stream: StreamOrDevice = None) -> array"),
+      R"pbdoc(
+        Fused 2D bilinear upsample.
+
+        The input ``x`` has shape ``(B, H, W, C)``. The output size per
+        spatial axis is ``int(scale * N)`` where ``N`` is the input size and
+        ``scale`` is the matching entry of ``scale_factor``. Floating point
+        inputs keep their dtype in the output; other inputs are computed and
+        returned in ``float32``.
+
+        Args:
+            x (array): Input array with shape ``(B, H, W, C)``.
+            scale_factor (tuple[float, float]): The multiplier for the
+              height and width axes.
+            align_corners (bool, optional): Whether to align the corners
+              of the input and output. Default: ``False``.
+
+        Returns:
+            array: The upsampled array.
+      )pbdoc");
+
+  m.def(
       "rope",
       [](const mx::array& a,
          int dims,

@@ -391,6 +391,20 @@ class TestExportImport(mlx_tests.MLXTestCase):
         expected = forward(input_data)
         self.assertTrue(mx.allclose(expected, out))
 
+    def test_export_upsample_bilinear(self):
+        path = os.path.join(self.test_dir, "upsample_bilinear.mlxfn")
+
+        def fun(x):
+            return mx.fast.upsample_bilinear(x, (2.0, 3.0), align_corners=True)
+
+        x = mx.random.normal(shape=(2, 7, 5, 4))
+        mx.export_function(path, fun, x)
+
+        imported = mx.import_function(path)
+        expected = fun(x)
+        out = imported(x)[0]
+        self.assertTrue(mx.allclose(out, expected))
+
     def test_export_conv_shapeless(self):
         # Conv1d (NLC)
         path = os.path.join(self.test_dir, "conv1d.mlxfn")

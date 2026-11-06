@@ -13,6 +13,7 @@ Fast
   cross_entropy
   gated_delta_update
   rope
+  upsample_bilinear
   scaled_dot_product_attention
   metal_kernel
   cuda_kernel

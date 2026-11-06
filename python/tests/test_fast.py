@@ -5,7 +5,15 @@ import os
 import unittest
 
 import mlx.core as mx
+import mlx.nn as nn
 import mlx_tests
+from mlx.nn.layers.upsample import _interpolate_separable, _linear_indices
+
+
+def _upsample_ref(x, scale, align_corners):
+    return _interpolate_separable(
+        x.astype(mx.float32), scale, _linear_indices, align_corners
+    )
 
 
 def rope_orig(x, dims, traditional, base, scale, offset, freqs=None):
@@ -1395,6 +1403,220 @@ class TestFast(mlx_tests.MLXTestCase):
         vmap_out = mx.vmap(f)(mx.ones((4, 8)))
         self.assertEqual(vmap_out.shape, (4, 8))
         self.assertTrue(mx.allclose(vmap_out, mx.full((4, 8), 2.0)))
+
+    def _upsample_devices(self):
+        devices = [mx.cpu]
+        if mx.metal.is_available():
+            devices = [mx.gpu, mx.cpu]
+        return devices
+
+    def test_upsample_bilinear_forward(self):
+        scales = [
+            (2.0, 2.0),
+            (4.0, 4.0),
+            (1.5, 1.5),
+            (3.0, 3.0),
+            (0.5, 0.5),
+            (0.25, 0.25),
+            (2.0, 3.0),
+        ]
+        dtypes = [(mx.float32, 1e-5), (mx.float16, 2e-2), (mx.bfloat16, 6e-2)]
+        for dev in self._upsample_devices():
+            with mx.stream(dev):
+                for scale in scales:
+                    for align_corners in (False, True):
+                        for B in (1, 2):
+                            for C in (1, 4, 32):
+                                x = mx.random.uniform(shape=(B, 7, 5, C))
+                                for dtype, atol in dtypes:
+                                    xd = x.astype(dtype)
+                                    out = mx.fast.upsample_bilinear(
+                                        xd, scale, align_corners
+                                    )
+                                    ref = _upsample_ref(xd, scale, align_corners)
+                                    self.assertEqual(out.dtype, dtype)
+                                    self.assertTrue(
+                                        mx.allclose(
+                                            out.astype(mx.float32),
+                                            ref.astype(mx.float32),
+                                            atol=atol,
+                                        )
+                                    )
+
+    def test_upsample_bilinear_single_pixel(self):
+        # PSPNet-style 1x1 input upsampled with a large scale factor.
+        for dev in self._upsample_devices():
+            with mx.stream(dev):
+                x = mx.random.uniform(shape=(1, 1, 1, 512))
+                out = mx.fast.upsample_bilinear(x, (60.0, 60.0), False)
+                ref = _upsample_ref(x, (60.0, 60.0), False)
+                self.assertTrue(mx.allclose(out, ref, atol=1e-5))
+
+    def test_upsample_bilinear_int_input(self):
+        for dev in self._upsample_devices():
+            with mx.stream(dev):
+                x = mx.arange(1 * 4 * 4 * 2, dtype=mx.int32).reshape(1, 4, 4, 2)
+                out = mx.fast.upsample_bilinear(x, (2.0, 2.0), False)
+                ref = _upsample_ref(x, (2.0, 2.0), False)
+                self.assertEqual(out.dtype, mx.float32)
+                self.assertTrue(mx.allclose(out, ref, atol=1e-5))
+
+    def test_upsample_bilinear_grad(self):
+        scales = [(2.0, 2.0), (0.5, 0.5), (60.0, 60.0)]
+        for dev in self._upsample_devices():
+            with mx.stream(dev):
+                for scale in scales:
+                    if scale == (60.0, 60.0):
+                        x = mx.random.uniform(shape=(1, 1, 1, 512))
+                    else:
+                        x = mx.random.uniform(shape=(2, 7, 5, 4))
+                    out_h = int(scale[0] * x.shape[1])
+                    out_w = int(scale[1] * x.shape[2])
+                    y = mx.random.uniform(shape=(x.shape[0], out_h, out_w, x.shape[3]))
+
+                    def f_fast(x):
+                        return (mx.fast.upsample_bilinear(x, scale, False) * y).sum()
+
+                    def f_ref(x):
+                        return (_upsample_ref(x, scale, False) * y).sum()
+
+                    g_fast = mx.grad(f_fast)(x)
+                    g_ref = mx.grad(f_ref)(x)
+                    scale_atol = 1e-5 * max(1.0, float(mx.abs(g_ref).max()))
+                    self.assertTrue(mx.allclose(g_fast, g_ref, atol=scale_atol))
+
+    def test_upsample_bilinear_grad_float16(self):
+        for dev in self._upsample_devices():
+            with mx.stream(dev):
+                x = mx.random.uniform(shape=(2, 7, 5, 4)).astype(mx.float16)
+                y = mx.random.uniform(shape=(2, 14, 10, 4)).astype(mx.float16)
+
+                def f_fast(x):
+                    return (mx.fast.upsample_bilinear(x, (2.0, 2.0), False) * y).sum()
+
+                def f_ref(x):
+                    return (_upsample_ref(x, (2.0, 2.0), False) * y).sum()
+
+                g_fast = mx.grad(f_fast)(x)
+                g_ref = mx.grad(f_ref)(x)
+                self.assertTrue(
+                    mx.allclose(
+                        g_fast.astype(mx.float32),
+                        g_ref.astype(mx.float32),
+                        atol=1e-1,
+                    )
+                )
+
+    def test_upsample_bilinear_grad_align_corners(self):
+        for dev in self._upsample_devices():
+            with mx.stream(dev):
+                x = mx.random.uniform(shape=(2, 7, 5, 4))
+                y = mx.random.uniform(shape=(2, 14, 10, 4))
+
+                def f_fast(x):
+                    return (mx.fast.upsample_bilinear(x, (2.0, 2.0), True) * y).sum()
+
+                def f_ref(x):
+                    return (_upsample_ref(x, (2.0, 2.0), True) * y).sum()
+
+                g_fast = mx.grad(f_fast)(x)
+                g_ref = mx.grad(f_ref)(x)
+                scale_atol = 1e-5 * max(1.0, float(mx.abs(g_ref).max()))
+                self.assertTrue(mx.allclose(g_fast, g_ref, atol=scale_atol))
+
+    def test_upsample_bilinear_grad_float16_downscale(self):
+        for dev in self._upsample_devices():
+            with mx.stream(dev):
+                x = mx.random.uniform(shape=(2, 8, 6, 4)).astype(mx.float16)
+                y = mx.random.uniform(shape=(2, 4, 3, 4)).astype(mx.float16)
+
+                def f_fast(x):
+                    return (mx.fast.upsample_bilinear(x, (0.5, 0.5), False) * y).sum()
+
+                def f_ref(x):
+                    return (_upsample_ref(x, (0.5, 0.5), False) * y).sum()
+
+                g_fast = mx.grad(f_fast)(x)
+                g_ref = mx.grad(f_ref)(x)
+                self.assertTrue(
+                    mx.allclose(
+                        g_fast.astype(mx.float32),
+                        g_ref.astype(mx.float32),
+                        atol=1e-1,
+                    )
+                )
+
+    def test_upsample_bilinear_empty(self):
+        for dev in self._upsample_devices():
+            with mx.stream(dev):
+                # Zero-size batch.
+                x = mx.random.uniform(shape=(0, 7, 5, 4))
+                out = mx.fast.upsample_bilinear(x, (2.0, 2.0), False)
+                ref = _upsample_ref(x, (2.0, 2.0), False)
+                self.assertEqual(out.shape, ref.shape)
+                self.assertEqual(out.shape, (0, 14, 10, 4))
+
+                # A scale small enough to give an empty output on one axis.
+                x = mx.random.uniform(shape=(2, 4, 5, 4))
+                out = mx.fast.upsample_bilinear(x, (0.1, 2.0), False)
+                ref = _upsample_ref(x, (0.1, 2.0), False)
+                self.assertEqual(out.shape, ref.shape)
+                self.assertEqual(out.shape[1], 0)
+
+    def test_upsample_bilinear_vmap_jvp(self):
+        x = mx.random.uniform(shape=(3, 2, 7, 5, 4))
+
+        def f(x):
+            return mx.fast.upsample_bilinear(x, (2.0, 3.0), False)
+
+        def f_ref(x):
+            return _upsample_ref(x, (2.0, 3.0), False)
+
+        out = mx.vmap(f)(x)
+        ref = mx.vmap(f_ref)(x)
+        self.assertTrue(mx.allclose(out, ref, atol=1e-5))
+
+        x0 = x[0]
+        tangent = mx.random.uniform(shape=x0.shape)
+        _, jvp_out = mx.jvp(f, (x0,), (tangent,))
+        _, jvp_ref = mx.jvp(f_ref, (x0,), (tangent,))
+        self.assertTrue(mx.allclose(jvp_out[0], jvp_ref[0], atol=1e-5))
+
+    def test_upsample_bilinear_nn_layer_dtypes(self):
+        x = mx.random.uniform(shape=(2, 7, 5, 4)).astype(mx.float16)
+        layer = nn.Upsample(scale_factor=2.0, mode="linear")
+        out = layer(x)
+        ref = _upsample_ref(x, (2.0, 2.0), False)
+        self.assertEqual(out.dtype, mx.float16)
+        self.assertTrue(mx.allclose(out.astype(mx.float32), ref, atol=2e-2))
+
+        xi = mx.arange(2 * 4 * 4 * 2, dtype=mx.int32).reshape(2, 4, 4, 2)
+        out_i = nn.Upsample(scale_factor=2.0, mode="linear")(xi)
+        self.assertEqual(out_i.dtype, mx.float32)
+
+    def test_upsample_bilinear_noncontiguous(self):
+        for dev in self._upsample_devices():
+            with mx.stream(dev):
+                x = mx.random.uniform(shape=(2, 4, 7, 5))
+                xt = mx.transpose(x, (0, 2, 1, 3))
+                out = mx.fast.upsample_bilinear(xt, (2.0, 1.5), False)
+                ref = _upsample_ref(xt, (2.0, 1.5), False)
+                self.assertTrue(mx.allclose(out, ref, atol=1e-5))
+
+    def test_upsample_bilinear_compile(self):
+        x = mx.random.uniform(shape=(2, 7, 5, 4))
+
+        def f(x):
+            return mx.fast.upsample_bilinear(x, (2.0, 3.0), False)
+
+        out_eager = f(x)
+        out_compiled = mx.compile(f)(x)
+        self.assertTrue(mx.allclose(out_eager, out_compiled, atol=1e-6))
+
+    def test_upsample_bilinear_errors(self):
+        x = mx.random.uniform(shape=(2, 5, 4))
+        with self.assertRaises(ValueError):
+            mx.fast.upsample_bilinear(x, (2.0, 2.0))
 
 
 if __name__ == "__main__":
