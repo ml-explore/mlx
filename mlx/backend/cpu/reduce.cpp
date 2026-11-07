@@ -80,6 +80,17 @@ struct ReductionAccumulator {
   using type = std::conditional_t<widen_to_float, float, U>;
 };
 
+template <typename Op, typename U>
+struct BlockAccumulator {
+  using type = U;
+};
+
+template <typename Op, typename U>
+constexpr bool use_blocks =
+    !std::is_same_v<typename BlockAccumulator<Op, U>::type, U>;
+
+constexpr int kReduceBlockSize = 512;
+
 template <typename T, typename U, typename Op>
 void strided_reduce(
     const T* x,
@@ -115,6 +126,22 @@ void contiguous_reduce(
     Op op,
     U init) {
   constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
+  if constexpr (use_blocks<Op, U>) {
+    // First sum floats into blocks, then sum blocks in double precision
+    // to reduce rounding errors.
+    using BlockT = typename BlockAccumulator<Op, U>::type;
+    BlockT total = static_cast<BlockT>(*accumulator);
+    while (size >= kReduceBlockSize) {
+      simd::Simd<U, N> block_v(init);
+      for (int i = 0; i < kReduceBlockSize; i += N) {
+        block_v = op(block_v, simd::Simd<U, N>(simd::load<T, N>(x + i)));
+      }
+      total = op(total, static_cast<BlockT>(op(block_v)));
+      x += kReduceBlockSize;
+      size -= kReduceBlockSize;
+    }
+    *accumulator = static_cast<U>(total);
+  }
   simd::Simd<U, N> accumulator_v(init);
   while (size >= N) {
     accumulator_v = op(accumulator_v, simd::Simd<U, N>(simd::load<T, N>(x)));
@@ -412,6 +439,11 @@ struct SumReduce {
   T operator()(simd::Simd<T, N> x) {
     return simd::sum(x);
   };
+};
+
+template <>
+struct BlockAccumulator<SumReduce, float> {
+  using type = double;
 };
 
 struct ProdReduce {
