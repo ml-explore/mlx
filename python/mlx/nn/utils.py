@@ -200,11 +200,24 @@ def clip_grad_norm_sharded(
         (Any, mlx.core.array): The possibly rescaled local shard of the
         gradients and the global gradient norm.
     """
+
+    def squared_norm(g):
+        # Sum float16 squares in float32 so they do not overflow
+        if g.dtype == mx.float16:
+            g = g.astype(mx.float32)
+        return g.square().sum()
+
+    def scale(g):
+        # Cast after scaling so small normalizers do not underflow in float16
+        if mx.issubdtype(g.dtype, mx.floating):
+            return (g * normalizer).astype(g.dtype)
+        return g * normalizer
+
     local_norm_squared = tree_reduce(
-        lambda acc, g: acc + g.square().sum(), gradients, 0.0
+        lambda acc, g: acc + squared_norm(g), gradients, 0.0
     )
     global_norm_squared = mx.distributed.all_sum(local_norm_squared, group=group)
     grad_norm = mx.sqrt(global_norm_squared)
     normalizer = mx.minimum(max_norm / (grad_norm + 1e-6), 1.0)
-    clipped_gradients = tree_map(lambda g: g * normalizer, gradients)
+    clipped_gradients = tree_map(scale, gradients)
     return clipped_gradients, grad_norm
