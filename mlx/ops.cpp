@@ -5315,8 +5315,10 @@ std::vector<array> fp_quantize(
     auto new_shape = w.shape();
     new_shape.back() = -1;
     auto wq = reshape(w, {-1, group_size}, s);
-    auto scales =
-        divide(max(abs(wq, s), -1, true, s), array(maxval, w.dtype()), s);
+    // Skip NaN in the group max, as the GPU kernels do
+    auto w_abs = abs(wq, s);
+    w_abs = where(isnan(w_abs, s), array(0, w.dtype()), w_abs, s);
+    auto scales = divide(max(w_abs, -1, true, s), array(maxval, w.dtype()), s);
     if (group_size == 16) {
       // convert to e4m3
       auto scale_encode = inputs.size() > 1
@@ -5324,8 +5326,14 @@ std::vector<array> fp_quantize(
           : array(1.0f, float32);
       scales = multiply(scales, scale_encode, s);
       scales = to_fp8(scales, s);
-      wq = multiply(
-          divide(wq, from_fp8(scales, w.dtype(), s), s), scale_encode, s);
+      auto dec = from_fp8(scales, w.dtype(), s);
+      auto zero = array(0, dec.dtype());
+      wq = where(
+          not_equal(dec, zero, s),
+          divide(wq, dec, s),
+          multiply(wq, zero, s),
+          s);
+      wq = multiply(wq, scale_encode, s);
     } else {
       // convert to e8m0
       auto z = array(0, scales.dtype());
@@ -5339,33 +5347,26 @@ std::vector<array> fp_quantize(
           add(exponent, array(1, int32), s),
           exponent,
           s);
-      scales = where(equal(scales, z, s), z, exponent, s);
+      auto zero_max = equal(scales, z, s);
+      scales = where(zero_max, z, exponent, s);
 
       wq = divide(wq, power(array(2.0f, w.dtype()), scales, s), s);
       scales = astype(add(scales, array(127, int32), s), uint8, s);
+      scales = where(zero_max, array(0, uint8), scales, s);
     }
     if (bits == 4) {
-      auto lut = array({
-          +0.0f,
-          +0.5f,
-          +1.0f,
-          +1.5f,
-          +2.0f,
-          +3.0f,
-          +4.0f,
-          +6.0f,
-          -0.0f,
-          -0.5f,
-          -1.0f,
-          -1.5f,
-          -2.0f,
-          -3.0f,
-          -4.0f,
-          -6.0f,
-      });
-      lut = astype(lut, w.dtype(), s);
-      wq = argmin(
-          abs(subtract(expand_dims(wq, -1, s), lut, s), s), -1, false, s);
+      // Midpoints between the e2m1 magnitudes, ties go to the even code
+      auto mid = array({0.25f, 0.75f, 1.25f, 1.75f, 2.5f, 3.5f, 5.0f});
+      mid = astype(mid, w.dtype(), s);
+      auto wa = abs(wq, s);
+      auto lo = searchsorted(mid, wa, "left", s);
+      auto hi = searchsorted(mid, wa, "right", s);
+      auto odd = astype(bitwise_and(lo, array(1, uint32), s), bool_, s);
+      auto sign_bit = multiply(
+          astype(less(wq, array(0, wq.dtype()), s), uint32, s),
+          array(8, uint32),
+          s);
+      wq = add(where(odd, hi, lo, s), sign_bit, s);
       auto shifts = power(array(2, uint32), arange(0, 32, 4, uint32, s), s);
       wq = reshape(wq, {-1, 4, 8}, s);
       wq = sum(multiply(wq, shifts, s), -1, false, s);
