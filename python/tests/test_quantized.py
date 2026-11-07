@@ -131,6 +131,24 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_hat = mx.dequantize(w_q, scales, mode="mxfp4")
         self.assertTrue(mx.all(w_hat == 0))
 
+    def test_fp4_quantize_ties_to_even(self):
+        ties = mx.array([0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0])
+        expected = mx.array([0.0, 1.0, 1.0, 2.0, 2.0, 4.0, 4.0])
+        w = mx.zeros((3, 32))
+        w[0, :7] = ties
+        w[1, :7] = -ties
+        w[:2, 7] = 6.0
+        # A NaN should not change the group scale
+        w[0, 8] = float("nan")
+        for mode in ["mxfp4", "nvfp4"]:
+            w_q, scales = mx.quantize(w, mode=mode)
+            w_hat = mx.dequantize(w_q, scales, mode=mode)
+            self.assertTrue(mx.array_equal(w_hat[0, :7], expected))
+            self.assertTrue(mx.array_equal(w_hat[1, :7], -expected))
+            self.assertEqual(w_q[0, 1].item(), 7)
+            self.assertTrue(mx.all(w_q[:, 2:] == 0))
+            self.assertTrue(mx.all(scales[2] == 0))
+
     def test_mxfp8_quantize_dequantize(self):
         w = 2 * mx.random.uniform(shape=(512, 32)) - 1
         w = w.astype(mx.bfloat16)
