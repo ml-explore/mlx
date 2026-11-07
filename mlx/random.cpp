@@ -419,10 +419,30 @@ array categorical_inverse_cdf(
       exp(subtract(x, m, s), s),
       s);
 
-  auto cdf = cumsum(w, 0, /* reverse = */ false, /* inclusive = */ false, s);
-  auto u = multiply(uniform(shape, float32, key, s), sum(w, s), s);
+  // Scale u by the last CDF value, not by sum(w): the two can differ after
+  // rounding, and u past the end selected the last entry
+  int n = w.size();
+  auto cdf = cumsum(w, 0, /* reverse = */ false, /* inclusive = */ true, s);
+  auto u = multiply(uniform(shape, float32, key, s), take(cdf, n - 1, s), s);
+  auto idx = searchsorted(cdf, u, "right", s);
+  idx = minimum(idx, array(n - 1, idx.dtype()), s);
 
-  return subtract(searchsorted(cdf, u, "right", s), array(1u, uint32), s);
+  // Rounding can give a zero weight entry a nonzero CDF step, so move each
+  // index to the nearest entry with a positive weight at or before it
+  auto positive = greater(w, array(0.0f, dtype), s);
+  auto last_positive = cummax(
+      where(positive, arange(0, n, s), array(-1, int32), s),
+      0,
+      /* reverse = */ false,
+      /* inclusive = */ true,
+      s);
+  auto out = take(last_positive, idx, s);
+  out = where(
+      less(out, array(0, int32), s),
+      astype(argmax(positive, false, s), int32, s),
+      out,
+      s);
+  return astype(out, uint32, s);
 }
 
 array categorical_impl(

@@ -372,6 +372,18 @@ class TestRandom(mlx_tests.MLXTestCase):
         self.assertEqual(mx.random.categorical(logits, num_samples=1).shape, (1,))
         self.assertEqual(mx.random.categorical(logits, num_samples=0).shape, (0,))
 
+        # Zero probability categories are never sampled
+        logits = 3 * mx.random.normal((151936,), key=mx.random.key(0))
+        logits[-1] = -float("inf")
+        logits[1000:1500] = -float("inf")
+        streams = [mx.cpu] + ([mx.gpu] if mx.metal.is_available() else [])
+        for s in streams:
+            out = mx.random.categorical(
+                logits, num_samples=1_000_000, key=mx.random.key(1), stream=s
+            )
+            banned = mx.logical_or(out == 151935, (out >= 1000) & (out < 1500))
+            self.assertFalse(mx.any(banned).item())
+
     def test_permutation(self):
         x = sorted(mx.random.permutation(4).tolist())
         self.assertEqual([0, 1, 2, 3], x)
