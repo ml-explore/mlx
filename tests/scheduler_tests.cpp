@@ -1,5 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
+#include <latch>
+
 #include "doctest/doctest.h"
 
 #include "mlx/mlx.h"
@@ -324,6 +326,26 @@ TEST_CASE("test scheduler races") {
     y = exp(y);
   }
   eval(a, y);
+}
+
+TEST_CASE("test active task count during completion") {
+  scheduler::Scheduler sched;
+  auto s = default_stream(Device::cpu);
+  sched.notify_new_task(s);
+  sched.notify_new_task(s);
+  std::latch start(2);
+  std::thread completion([&] {
+    start.arrive_and_wait();
+    sched.notify_task_completion(s);
+  });
+  start.arrive_and_wait();
+  int count = sched.n_active_tasks();
+  completion.join();
+
+  CHECK((count == 1 || count == 2));
+  CHECK_EQ(sched.n_active_tasks(), 1);
+  sched.notify_task_completion(s);
+  CHECK_EQ(sched.n_active_tasks(), 0);
 }
 
 // The fence orders work between two streams. Check that the consumer sees the
