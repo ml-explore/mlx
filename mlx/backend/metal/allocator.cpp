@@ -78,6 +78,12 @@ MetalAllocator::MetalAllocator(Device& d)
 
 MetalAllocator::~MetalAllocator() = default;
 
+void MetalAllocator::record_allocation(size_t size) {
+  auto active = get_active_memory() + size;
+  active_memory_.store(active, std::memory_order_relaxed);
+  peak_memory_ = std::max(peak_memory_, active);
+}
+
 size_t MetalAllocator::set_cache_limit(size_t limit) {
   std::unique_lock lk(mutex_);
   std::swap(limit, max_pool_size_);
@@ -163,8 +169,7 @@ Buffer MetalAllocator::malloc(size_t size) {
     }
   }
 
-  active_memory_ += buf->length();
-  peak_memory_ = std::max(peak_memory_, active_memory_);
+  record_allocation(buf->length());
 
   // Maintain the cache below the requested limit
   if (get_cache_memory() > max_pool_size_) {
@@ -195,7 +200,8 @@ void MetalAllocator::free(Buffer buffer) {
 #endif
 
   std::unique_lock lk(mutex_);
-  active_memory_ -= buf->length();
+  active_memory_.store(
+      get_active_memory() - buf->length(), std::memory_order_relaxed);
   if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
@@ -220,8 +226,7 @@ Buffer MetalAllocator::make_buffer(void* ptr, size_t size) {
   }
   std::unique_lock lk(mutex_);
   residency_sets_.insert(buf);
-  active_memory_ += buf->length();
-  peak_memory_ = std::max(peak_memory_, active_memory_);
+  record_allocation(buf->length());
   num_resources_++;
   return Buffer{static_cast<void*>(buf)};
 }
@@ -232,7 +237,8 @@ void MetalAllocator::release(Buffer buffer) {
     return;
   }
   std::unique_lock lk(mutex_);
-  active_memory_ -= buf->length();
+  active_memory_.store(
+      get_active_memory() - buf->length(), std::memory_order_relaxed);
   num_resources_--;
   residency_sets_.erase(buf);
   lk.unlock();

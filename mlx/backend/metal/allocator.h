@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <map>
 #include <mutex>
 #include <vector>
@@ -24,9 +25,10 @@ class MetalAllocator : public allocator::Allocator {
   virtual void release(Buffer buffer) override;
 
   size_t get_active_memory() {
-    return active_memory_;
+    return active_memory_.load(std::memory_order_relaxed);
   };
   size_t get_peak_memory() {
+    std::lock_guard lk(mutex_);
     return peak_memory_;
   };
   void reset_peak_memory() {
@@ -54,6 +56,9 @@ class MetalAllocator : public allocator::Allocator {
   MetalAllocator(Device& d);
   ~MetalAllocator();
 
+  // Caller must hold mutex_.
+  void record_allocation(size_t size);
+
   friend MetalAllocator& allocator();
 
   NS::SharedPtr<MTL::Heap> heap_;
@@ -65,7 +70,7 @@ class MetalAllocator : public allocator::Allocator {
   // Allocation stats
   size_t block_limit_;
   size_t gc_limit_;
-  size_t active_memory_{0};
+  std::atomic<size_t> active_memory_{0};
   size_t peak_memory_{0};
   size_t max_pool_size_;
   size_t wired_limit_{0};
