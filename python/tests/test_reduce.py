@@ -311,6 +311,17 @@ class TestReduce(mlx_tests.MLXTestCase):
         c2 = b.sum(0)
         self.assertTrue(np.all(c1 == c2))
 
+    def test_sum_accuracy(self):
+        # A large mean needs an accurate float32 sum, else var is wrong.
+        rng = np.random.RandomState(0)
+        x_np = (1e6 + 10 * rng.standard_normal((4, 250_000))).astype(np.float32)
+        x_mx = mx.array(x_np)
+        x64 = x_np.astype(np.float64)
+        for axis in [None, -1]:
+            with self.subTest(axis=axis):
+                out = mx.var(x_mx, axis=axis, stream=mx.cpu)
+                self.assertTrue(np.allclose(out, x64.var(axis=axis), rtol=1e-2, atol=0))
+
     def test_and_or_negative_zero(self):
         # -0.0 equals zero but has its sign bit set, so it must not be treated
         # as truthy just because its bit pattern is nonzero
