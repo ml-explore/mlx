@@ -53,6 +53,12 @@ class MLX_API Allocator {
   virtual Buffer malloc(size_t size) = 0;
   virtual void free(Buffer buffer) = 0;
   virtual size_t size(Buffer buffer) const = 0;
+  virtual bool is_donatable(Buffer) {
+    return true;
+  }
+  virtual int set_allocation_stream(int) {
+    return -1;
+  }
   virtual Buffer make_buffer(void* ptr, size_t size) {
     return Buffer{nullptr};
   };
@@ -84,6 +90,23 @@ class MLX_API Allocator {
 };
 
 MLX_API Allocator& allocator();
+
+class AllocationScope {
+ public:
+  explicit AllocationScope(int stream)
+      : allocator_(allocator()),
+        previous_(allocator_.set_allocation_stream(stream)) {}
+  ~AllocationScope() {
+    allocator_.set_allocation_stream(previous_);
+  }
+
+  AllocationScope(const AllocationScope&) = delete;
+  AllocationScope& operator=(const AllocationScope&) = delete;
+
+ private:
+  Allocator& allocator_;
+  int previous_;
+};
 
 using Deleter = std::function<void(Buffer)>;
 

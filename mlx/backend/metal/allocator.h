@@ -20,6 +20,8 @@ class MetalAllocator : public allocator::Allocator {
   virtual Buffer malloc(size_t size) override;
   virtual void free(Buffer buffer) override;
   virtual size_t size(Buffer buffer) const override;
+  virtual bool is_donatable(Buffer buffer) override;
+  virtual int set_allocation_stream(int stream) override;
   virtual Buffer make_buffer(void* ptr, size_t size) override;
   virtual void release(Buffer buffer) override;
 
@@ -41,8 +43,20 @@ class MetalAllocator : public allocator::Allocator {
   size_t get_memory_limit();
   size_t set_wired_limit(size_t limit);
   void clear_cache();
+  void retain_buffer(MTL::Buffer* buffer, int stream);
+  void release_buffers(
+      const std::unordered_set<MTL::Buffer*>& buffers,
+      int stream);
 
  private:
+  struct BufferUse {
+    std::unordered_map<int, size_t> streams;
+    bool released{false};
+  };
+
+  void cache_pending_buffer(MTL::Buffer* buffer, const BufferUse& use);
+  void remove_pending_buffer(MTL::Buffer* buffer, const BufferUse& use);
+
   MTL::Device* device_;
 
   // The size of allocations which go on the heap until it is full. This size
@@ -61,6 +75,8 @@ class MetalAllocator : public allocator::Allocator {
 
   // Caching allocator
   BufferCache<MTL::Buffer> buffer_cache_;
+  std::unordered_map<MTL::Buffer*, BufferUse> buffer_uses_;
+  std::unordered_map<int, std::multimap<size_t, MTL::Buffer*>> pending_buffers_;
 
   // Allocation stats
   size_t block_limit_;

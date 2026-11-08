@@ -21,6 +21,7 @@ struct FenceImpl {
     if (!use_fast) {
       event = std::make_unique<Event>(stream);
     } else {
+      allocator::AllocationScope allocation_scope(-1);
       fence.emplace(allocator::malloc(sizeof(uint32_t)));
       cpu_value()[0] = 0;
     }
