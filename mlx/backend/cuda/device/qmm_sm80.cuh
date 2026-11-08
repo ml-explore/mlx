@@ -470,4 +470,88 @@ void qmm_sm80_rhs_kernel(
   }
 }
 
+template <int GroupSize,
+          typename Element,
+          typename Quant,
+          typename Scale,
+          typename CtaTiler>
+__global__
+__launch_bounds__(decltype(size(make_tiled_mma()))::value)
+void qmm_sm80_rhs_expert_kernel(
+    const Element* A,
+    const Quant* B,
+    const Scale* S,
+    const Element* Z,
+    const uint32_t* starts,
+    const uint32_t* prefix,
+    Element* C,
+    int m,
+    int n,
+    int k,
+    int group_count) {
+  uint32_t block = blockIdx.x;
+  if (block >= prefix[group_count]) {
+    return;
+  }
+  int lo = 0;
+  int hi = group_count;
+  while (lo < hi) {
+    int mid = lo + (hi - lo) / 2;
+    if (prefix[mid] <= block) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  int expert = lo - 1;
+  auto cta_tiler = CtaTiler{};
+  int y_row = starts[expert] +
+      (block - prefix[expert]) * int(size<0>(cta_tiler));
+  int remaining = starts[expert + 1] - y_row;
+  int run_rows = remaining < size<0>(cta_tiler) ? remaining : size<0>(cta_tiler);
+  int n_coord = int(blockIdx.y);
+  int thread_idx = int(threadIdx.x);
+
+  auto dA = make_stride(k, Int<1>{}, int64_t(m) * k);
+  auto dB = make_stride(k, Int<1>{}, int64_t(n) * k);
+  auto dC = make_stride(n, Int<1>{}, int64_t(m) * n);
+  auto S_layout = make_scales_layout<GroupSize>(n, k, group_count);
+  Tensor mA_mkl = make_tensor(make_gmem_ptr(A), make_shape(m, k, 1), dA);
+  Tensor mB_nkl = make_tensor(make_gmem_ptr<Quant>(B), make_shape(n, k, group_count), dB);
+  Tensor mC_mnl = make_tensor(make_gmem_ptr(C), make_shape(m, n, 1), dC);
+  Tensor mS_nkl = make_tensor(make_gmem_ptr(S), S_layout);
+  Tensor mZ_nkl = make_tensor(make_gmem_ptr(Z), S_layout);
+  Tensor mA = domain_offset(make_coord(y_row, 0), mA_mkl(_,_,0));
+  Tensor mC = domain_offset(make_coord(y_row, 0), mC_mnl(_,_,0));
+  Tensor mB = mB_nkl(_,_,expert);
+  Tensor mS = mS_nkl(_,_,expert);
+  Tensor mZ = mZ_nkl(_,_,expert);
+  auto run_qmm = [&](auto run_tiler) {
+    Tensor gA = local_tile(mA, run_tiler, make_coord(0, n_coord, _), Step<_1, X,_1>{});
+    Tensor gB = local_tile(mB, run_tiler, make_coord(0, n_coord, _), Step< X,_1,_1>{});
+    Tensor gC = local_tile(mC, run_tiler, make_coord(0, n_coord, _), Step<_1,_1, X>{});
+    Tensor gS = local_tile(mS, run_tiler, make_coord(0, n_coord, _), Step< X,_1,_1>{});
+    Tensor gZ = local_tile(mZ, run_tiler, make_coord(0, n_coord, _), Step< X,_1,_1>{});
+    qmm_sm80_mainloop(run_tiler, gA, gB, gS, gZ, gC, run_rows, thread_idx);
+  };
+  constexpr int tile_rows = decltype(size<0>(cta_tiler))::value;
+  if constexpr (tile_rows > 32) {
+    if (run_rows <= 16) {
+      run_qmm(make_shape(Int<16>{}, size<1>(cta_tiler), size<2>(cta_tiler)));
+    } else if (run_rows <= 32) {
+      run_qmm(make_shape(Int<32>{}, size<1>(cta_tiler), size<2>(cta_tiler)));
+    } else {
+      run_qmm(cta_tiler);
+    }
+  } else if constexpr (tile_rows > 16) {
+    if (run_rows <= 16) {
+      run_qmm(make_shape(Int<16>{}, size<1>(cta_tiler), size<2>(cta_tiler)));
+    } else {
+      run_qmm(cta_tiler);
+    }
+  } else {
+    run_qmm(cta_tiler);
+  }
+}
+
 } // namespace mlx::core::cu
