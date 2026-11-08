@@ -589,6 +589,49 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 tol = 1e-3 if dtype == mx.float32 else 1.5e-3
                 self.assertLess((y_q - y_hat).abs().max(), tol)
 
+    def test_qmm_large_m_tiles(self):
+        # On CUDA, M 512 and up with K 1024 and up uses 128-row tiles when they
+        # cut the waves over the SMs enough: M 1665 with N 16384 does so on 28
+        # to 188 SMs and leaves a partial tile. N 128 and M 511 keep 64-row
+        # tiles.
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        widths = [128]
+        if mx.default_device() == mx.gpu and mx.cuda.is_available():
+            widths.append(16384)
+        if mx.default_device() == mx.gpu:
+            dtypes = [mx.float16, mx.bfloat16]
+        else:
+            dtypes = [mx.float32]
+        modes = [
+            ("affine", 32, 4),
+            ("affine", 32, 8),
+            ("affine", 64, 4),
+            ("affine", 64, 8),
+            ("affine", 128, 4),
+            ("affine", 128, 8),
+            ("nvfp4", 16, 4),
+            ("mxfp4", 32, 4),
+            ("mxfp8", 32, 8),
+        ]
+        cases = product(widths, [511, 512, 1665], [1024, 2048], modes, dtypes)
+        for N, M, K, (mode, group_size, bits), dtype in cases:
+            with self.subTest(
+                N=N, M=M, K=K, mode=mode, group_size=group_size, bits=bits, dtype=dtype
+            ):
+                x = (mx.random.normal(shape=(M, K), key=k1) / K**0.5).astype(dtype)
+                w = (mx.random.normal(shape=(N, K), key=k2) / K**0.5).astype(dtype)
+                w_q, scales, *biases = mx.quantize(w, group_size, bits, mode=mode)
+                biases = biases[0] if biases else None
+                w_hat = mx.dequantize(w_q, scales, biases, group_size, bits, mode=mode)
+                y_q = mx.quantized_matmul(
+                    x, w_q, scales, biases, True, group_size, bits, mode=mode
+                )
+                y_hat = x @ w_hat.T
+                self.assertEqual(y_q.shape, y_hat.shape)
+                tol = 1e-3 if dtype == mx.float32 else 1.5e-3
+                self.assertLess((y_q - y_hat).abs().max(), tol)
+
     @unittest.skipIf("CI" in os.environ, "too slow in CI")
     def test_qmm_non_transposed(self):
         # The non-transposed matmul (w is [K, N]) is reachable mainly from the
@@ -2398,6 +2441,40 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 y_hat = mx.stack(
                     [
                         x[i].astype(mx.float32) @ w_hat[int(rhs_indices[i])].T
+                        for i in range(3)
+                    ]
+                ).astype(dtype)
+                self.assertEqual(y_q.shape, y_hat.shape)
+                self.assertLess((y_q - y_hat).abs().max(), 1e-1)
+
+    @unittest.skipIf(not mx.cuda.is_available(), "requires CUDA GPU")
+    def test_gather_qmm_large_m_tiles(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires CUDA GPU")
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        E, M, N, K = 4, 1665, 16384, 1024
+        lhs_indices = mx.array([2, 0, 1], dtype=mx.uint32)
+        rhs_indices = mx.array([0, 2, 3], dtype=mx.uint32)
+        for dtype, mode in product([mx.float16, mx.bfloat16], ["affine", "nvfp4"]):
+            with self.subTest(dtype=dtype, mode=mode):
+                x = (mx.random.normal(shape=(3, M, K), key=k1) / K**0.5).astype(dtype)
+                w = mx.random.normal(shape=(E, N, K), key=k2).astype(dtype)
+                w_q, *wargs = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(w_q, *wargs, mode=mode)
+                y_q = mx.gather_qmm(
+                    x,
+                    w_q,
+                    *wargs,
+                    lhs_indices=lhs_indices,
+                    rhs_indices=rhs_indices,
+                    transpose=True,
+                    mode=mode,
+                )
+                y_hat = mx.stack(
+                    [
+                        x[int(lhs_indices[i])].astype(mx.float32)
+                        @ w_hat[int(rhs_indices[i])].T
                         for i in range(3)
                     ]
                 ).astype(dtype)
