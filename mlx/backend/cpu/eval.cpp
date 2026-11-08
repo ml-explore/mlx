@@ -22,6 +22,7 @@ void clear_streams() {
 }
 
 void eval(array& arr) {
+  allocator::AllocationScope allocation_scope(-1);
   auto s = arr.primitive().stream();
 
   auto outputs = arr.outputs();
