@@ -281,6 +281,7 @@ int primitive_root(int n) {
 std::tuple<array, array, array> compute_raders_constants(
     int rader_n,
     const Stream& s) {
+  allocator::AllocationScope allocation_scope(-1);
   int proot = primitive_root(rader_n);
   // Fermat's little theorem
   int inv = mod_exp(proot, rader_n - 2, rader_n);
@@ -324,6 +325,7 @@ std::pair<array, array> compute_bluestein_constants(
     int n,
     int bluestein_n,
     int radix_twiddle_size = 0) {
+  allocator::AllocationScope allocation_scope(-1);
   // We need to calculate the Bluestein twiddle factors
   // in double precision for the overall numerical stability
   // of Bluestein's FFT algorithm to be acceptable.
