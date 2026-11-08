@@ -14,8 +14,8 @@ namespace mlx::core {
 
 namespace {
 
-inline auto make_cta_tiler(int m, int group_size) {
-  int tile_m = std::max(16, std::min(64, next_power_of_2(m)));
+inline auto make_cta_tiler(int m, int group_size, int tile_m_max) {
+  int tile_m = std::max(16, std::min(tile_m_max, next_power_of_2(m)));
   int tile_n = 128;
   int tile_k = std::max(64, group_size);
   return cute::make_shape(tile_m, tile_n, tile_k);
@@ -23,6 +23,22 @@ inline auto make_cta_tiler(int m, int group_size) {
 
 inline int get_quantized_batch_count(const array& w) {
   return w.ndim() > 2 ? w.size() / (w.shape(-1) * w.shape(-2)) : 1;
+}
+
+bool use_128_row_tiles(int m, int n, int k, int l, cu::Device& device) {
+  if (m < 512 || k < 1024) {
+    return false;
+  }
+  int sm_count = 0;
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &sm_count, cudaDevAttrMultiProcessorCount, device.cuda_device()));
+  auto waves = [&](int tile_m) {
+    int64_t ctas =
+        int64_t(cute::ceil_div(m, tile_m)) * cute::ceil_div(n, 128) * l;
+    return cute::ceil_div(ctas, int64_t(sm_count));
+  };
+  int64_t waves_64 = waves(64);
+  return waves_64 >= 4 && 9 * waves(128) < 5 * waves_64;
 }
 
 } // namespace
@@ -40,28 +56,38 @@ void qmm_sm80(
     QuantizationMode mode,
     cu::CommandEncoder& encoder) {
   auto [m, n, k, l, broadcast_b] = make_problem_shape(x, w, out);
-  auto cta_tiler = make_cta_tiler(m, group_size);
+  bool large_tiles = !lhs_indices && !rhs_indices &&
+      use_128_row_tiles(m, n, k, l, encoder.device());
+  auto cta_tiler = make_cta_tiler(m, group_size, large_tiles ? 128 : 64);
+  int tile_m = cute::size<0>(cta_tiler);
+  bool grouped_tiles = !lhs_indices && !rhs_indices && tile_m >= 64;
 
   std::string module_name = fmt::format(
       "qmm_sm80_tn_{}_m{}_b{}_g{}_{}",
       dtype_to_string(x.dtype()),
-      cute::size<0>(cta_tiler),
+      grouped_tiles ? "64_128" : std::to_string(tile_m),
       bits,
       group_size,
       quantization_mode_to_string(mode));
 
   auto [ctype_x, ctype_q, ctype_s] = get_qmm_cutlass_types(x, bits, mode);
-  std::string kernel_name = fmt::format(
-      "mlx::core::cu::qmm_sm80_kernel<{}, {}, {}, {}, {}>",
-      group_size,
-      ctype_x,
-      ctype_q,
-      ctype_s,
-      cta_tiler_to_string(cta_tiler));
+  auto make_kernel_name = [&](int tile_m) {
+    return fmt::format(
+        "mlx::core::cu::qmm_sm80_kernel<{}, {}, {}, {}, {}>",
+        group_size,
+        ctype_x,
+        ctype_q,
+        ctype_s,
+        cta_tiler_to_string(make_cta_tiler(tile_m, group_size, tile_m)));
+  };
+  std::string kernel_name = make_kernel_name(tile_m);
 
   cu::JitModule& mod = cu::get_jit_module(encoder.device(), module_name, [&]() {
+    auto kernel_names = grouped_tiles
+        ? std::vector{make_kernel_name(64), make_kernel_name(128)}
+        : std::vector{kernel_name};
     return std::make_tuple(
-        false, jit_source_qmm_sm80, std::vector{kernel_name});
+        false, jit_source_qmm_sm80, std::move(kernel_names));
   });
 
   encoder.set_input_array(x);
@@ -168,7 +194,7 @@ void gather_qmm_rhs_sm80(
   int n = out.shape(-1);
   int k = x.shape(-1);
   int group_count = get_quantized_batch_count(w);
-  auto cta_tiler = make_cta_tiler(m, group_size);
+  auto cta_tiler = make_cta_tiler(m, group_size, 64);
 
   std::string module_name = fmt::format(
       "gather_qmm_rhs_sm80_tn_{}_m{}_b{}_g{}_{}",
