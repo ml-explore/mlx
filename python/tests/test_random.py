@@ -384,6 +384,14 @@ class TestRandom(mlx_tests.MLXTestCase):
             banned = mx.logical_or(out == 151935, (out >= 1000) & (out < 1500))
             self.assertFalse(mx.any(banned).item())
 
+        # Same for a single draw from logits of shape (1, V)
+        logits = logits[None]
+        keys = mx.random.split(mx.random.key(2), 20_000)
+        out = mx.concatenate(
+            [mx.random.categorical(logits, key=k, stream=mx.cpu) for k in keys]
+        )
+        self.assertFalse(mx.any(out == 151935).item())
+
     def test_permutation(self):
         x = sorted(mx.random.permutation(4).tolist())
         self.assertEqual([0, 1, 2, 3], x)
