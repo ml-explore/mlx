@@ -10,19 +10,106 @@
 
 #include "cuda_jit_sources.h"
 
+#include <cub/block/block_scan.cuh>
+
 namespace mlx::core {
 
 namespace {
 
-inline auto make_cta_tiler(int m, int group_size) {
+__device__ int first_row_of(const uint32_t* indices, int rows, uint32_t expert) {
+  int lo = 0;
+  int hi = rows;
+  while (lo < hi) {
+    int mid = lo + (hi - lo) / 2;
+    if (indices[mid] < expert) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
+constexpr int expert_tiles_block_dim = 256;
+
+__global__ void gather_expert_tiles(
+    const uint32_t* indices,
+    uint32_t* starts,
+    uint32_t* prefix,
+    int rows,
+    int experts,
+    int tile_m) {
+  using BlockScan = cub::BlockScan<uint32_t, expert_tiles_block_dim>;
+  __shared__ typename BlockScan::TempStorage temp;
+  uint32_t total = 0;
+  for (int first = 0; first <= experts; first += expert_tiles_block_dim) {
+    int expert = first + threadIdx.x;
+    int start = rows;
+    uint32_t tiles = 0;
+    if (expert < experts) {
+      start = first_row_of(indices, rows, expert);
+      int end = first_row_of(indices, rows, expert + 1);
+      tiles = (end - start + tile_m - 1) / tile_m;
+    }
+    uint32_t offset;
+    uint32_t block_tiles;
+    BlockScan(temp).ExclusiveSum(tiles, offset, block_tiles);
+    if (expert <= experts) {
+      starts[expert] = start;
+      prefix[expert] = total + offset;
+    }
+    total += block_tiles;
+    __syncthreads();
+  }
+}
+
+inline auto make_cta_tiler(int m, int group_size, int tile_n = 128) {
   int tile_m = std::max(16, std::min(64, next_power_of_2(m)));
-  int tile_n = 128;
   int tile_k = std::max(64, group_size);
   return cute::make_shape(tile_m, tile_n, tile_k);
 }
 
-inline int get_quantized_batch_count(const array& w) {
-  return w.ndim() > 2 ? w.size() / (w.shape(-1) * w.shape(-2)) : 1;
+inline int64_t get_quantized_batch_count(const array& w) {
+  return w.ndim() > 2
+      ? w.size() / (int64_t(w.shape(-1)) * w.shape(-2))
+      : 1;
+}
+
+bool supports_expert_tiles(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& out,
+    bool transpose,
+    QuantizationMode mode,
+    cu::Device& device) {
+  if (device.compute_capability_major() < 8 ||
+      mode != QuantizationMode::Nvfp4) {
+    return false;
+  }
+  if (x.dtype() != float16 && x.dtype() != bfloat16) {
+    return false;
+  }
+  if (!transpose || !w.flags().row_contiguous ||
+      !scales.flags().row_contiguous) {
+    return false;
+  }
+  int n = out.shape(-1);
+  int k = x.shape(-1);
+  constexpr int tile_k = 64;
+  constexpr int min_k_tiles = 3;
+  constexpr int max_grid_yz_dim = 65535;
+  // CuTe scale products and sliced offsets must fit signed int.
+  if (n % 64 != 0 || k % tile_k != 0 || k / tile_k < min_k_tiles ||
+      n / 64 > max_grid_yz_dim || int64_t(n) * k > INT32_MAX) {
+    return false;
+  }
+  if (x.size() > INT32_MAX || out.size() > INT32_MAX ||
+      scales.size() > INT32_MAX) {
+    return false;
+  }
+  constexpr int min_output_elements = 65536;
+  return out.size() >= min_output_elements;
 }
 
 } // namespace
@@ -132,25 +219,33 @@ bool supports_gather_qmm_rhs_sm80(
   if (out_m != 1) {
     return false;
   }
-  if (!supports_qmm_sm80(
-          x,
-          w,
-          scales,
-          biases,
-          out,
-          transpose,
-          bits,
-          group_size,
-          mode,
-          device)) {
+  if (out.shape(-1) % 128 != 0) {
+    if (!supports_expert_tiles(x, w, scales, out, transpose, mode, device)) {
+      return false;
+    }
+  } else if (!supports_qmm_sm80(
+                 x,
+                 w,
+                 scales,
+                 biases,
+                 out,
+                 transpose,
+                 bits,
+                 group_size,
+                 mode,
+                 device)) {
     return false;
   }
 
-  int rows = out.size() / out.shape(-1);
-  int input_rows = x.size() / x.shape(-1);
-  int group_count = get_quantized_batch_count(w);
+  int64_t rows = out.size() / out.shape(-1);
+  int64_t input_rows = x.size() / x.shape(-1);
+  int64_t group_count = get_quantized_batch_count(w);
+  if (rows > INT32_MAX || group_count >= INT32_MAX) {
+    return false;
+  }
+  int min_rows_per_expert = out.shape(-1) % 128 == 0 ? 4 : 16;
   return input_rows == rows && rows >= 16 && group_count > 0 &&
-      rows / group_count >= 4;
+      rows / group_count >= min_rows_per_expert;
 }
 
 void gather_qmm_rhs_sm80(
@@ -168,7 +263,10 @@ void gather_qmm_rhs_sm80(
   int n = out.shape(-1);
   int k = x.shape(-1);
   int group_count = get_quantized_batch_count(w);
-  auto cta_tiler = make_cta_tiler(m, group_size);
+  bool expert_tiles = n % 128 != 0;
+  auto cta_tiler = expert_tiles
+      ? make_cta_tiler(m / group_count, group_size, 64)
+      : make_cta_tiler(m, group_size);
 
   std::string module_name = fmt::format(
       "gather_qmm_rhs_sm80_tn_{}_m{}_b{}_g{}_{}",
@@ -177,10 +275,14 @@ void gather_qmm_rhs_sm80(
       bits,
       group_size,
       quantization_mode_to_string(mode));
+  if (expert_tiles) {
+    module_name += "_n64";
+  }
 
   auto [ctype_x, ctype_q, ctype_s] = get_qmm_cutlass_types(x, bits, mode);
   std::string kernel_name = fmt::format(
-      "mlx::core::cu::qmm_sm80_rhs_kernel<{}, {}, {}, {}, {}>",
+      "mlx::core::cu::{}<{}, {}, {}, {}, {}>",
+      expert_tiles ? "qmm_sm80_rhs_expert_kernel" : "qmm_sm80_rhs_kernel",
       group_size,
       ctype_x,
       ctype_q,
@@ -192,6 +294,36 @@ void gather_qmm_rhs_sm80(
         false, jit_source_qmm_sm80, std::vector{kernel_name});
   });
 
+  std::optional<array> starts;
+  std::optional<array> prefix;
+  int64_t tile_m = cute::size<0>(cta_tiler);
+  int64_t row_blocks = (int64_t(m) + tile_m - 1) / tile_m;
+  if (expert_tiles) {
+    starts = array({group_count + 1}, uint32, nullptr, {});
+    prefix = array({group_count + 1}, uint32, nullptr, {});
+    starts->set_data(cu::malloc_async(starts->nbytes(), encoder));
+    prefix->set_data(cu::malloc_async(prefix->nbytes(), encoder));
+    encoder.set_input_array(rhs_indices);
+    encoder.set_output_array(*starts);
+    encoder.set_output_array(*prefix);
+    encoder.add_kernel_node(
+        gather_expert_tiles,
+        1,
+        expert_tiles_block_dim,
+        gpu_ptr<uint32_t>(rhs_indices),
+        gpu_ptr<uint32_t>(*starts),
+        gpu_ptr<uint32_t>(*prefix),
+        m,
+        group_count,
+        int(cute::size<0>(cta_tiler)));
+    encoder.set_input_array(*starts);
+    encoder.set_input_array(*prefix);
+    encoder.add_temporary(*starts);
+    encoder.add_temporary(*prefix);
+    // Each expert ends in at most one partial tile.
+    row_blocks = std::min<int64_t>(m, row_blocks + std::min(m, group_count) - 1);
+  }
+
   encoder.set_input_array(x);
   encoder.set_input_array(w);
   encoder.set_input_array(scales);
@@ -202,7 +334,7 @@ void gather_qmm_rhs_sm80(
   encoder.set_output_array(out);
 
   dim3 num_blocks{
-      uint32_t(cute::ceil_div(m, cute::size<0>(cta_tiler))),
+      uint32_t(row_blocks),
       uint32_t(cute::ceil_div(n, cute::size<1>(cta_tiler))),
       1};
   dim3 block_dims{uint32_t(cute::size(cu::make_tiled_mma()))};
@@ -220,6 +352,26 @@ void gather_qmm_rhs_sm80(
     }
   });
 
+  if (expert_tiles) {
+    encoder.add_kernel_node_ex(
+        kernel,
+        num_blocks,
+        block_dims,
+        {},
+        smem_bytes,
+        gpu_ptr<void>(x),
+        gpu_ptr<void>(w),
+        gpu_ptr<void>(scales),
+        biases ? gpu_ptr<void>(*biases) : nullptr,
+        gpu_ptr<uint32_t>(*starts),
+        gpu_ptr<uint32_t>(*prefix),
+        gpu_ptr<void>(out),
+        m,
+        n,
+        k,
+        group_count);
+    return;
+  }
   encoder.add_kernel_node_ex(
       kernel,
       num_blocks,
