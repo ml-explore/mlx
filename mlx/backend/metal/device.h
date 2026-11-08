@@ -35,8 +35,9 @@ class MLX_API CommandEncoder {
     }
     ~ConcurrentContext() {
       enc.concurrent_ = false;
-      enc.prev_outputs_.insert(
-          enc.concurrent_outputs_.begin(), enc.concurrent_outputs_.end());
+      for (const auto& [buffer, _] : enc.concurrent_outputs_) {
+        enc.prev_outputs_.insert(buffer);
+      }
       enc.concurrent_outputs_.clear();
     }
 
@@ -48,6 +49,7 @@ class MLX_API CommandEncoder {
   void set_input_array(const array& a, int idx, int64_t offset = 0);
   void set_output_array(array& a, int idx, int64_t offset = 0);
   void register_output_array(const array& a);
+  void retain_array(const array& a);
 
   void add_temporary(array arr);
   void add_temporaries(std::vector<array> arrays);
@@ -101,10 +103,7 @@ class MLX_API CommandEncoder {
   void commit(std::function<void()> completion = nullptr);
   void synchronize();
 #ifndef NDEBUG
-  void verify_graph(
-      const char* primitive_name,
-      const std::vector<array>& inputs,
-      const std::vector<array>& outputs);
+  void verify_graph(const char* primitive_name);
 #endif
 
   MTL::CommandBuffer* get_command_buffer() const {
@@ -115,6 +114,7 @@ class MLX_API CommandEncoder {
   MTL::ComputeCommandEncoder* get_command_encoder();
 
   Device& device_;
+  int stream_index_;
   bool exiting_{false};
 
   // Buffer that stores encoded commands.
@@ -122,6 +122,8 @@ class MLX_API CommandEncoder {
   NS::SharedPtr<MTL::CommandBuffer> buffer_;
   int buffer_ops_{0};
   size_t buffer_sizes_{0};
+  std::unordered_set<MTL::Buffer*> retained_buffers_;
+  std::unordered_set<std::shared_ptr<array::Data>> retained_data_;
 
   // The residency set and how many of its sets this queue has attached.
   ResidencySets& residency_sets_;
@@ -141,20 +143,23 @@ class MLX_API CommandEncoder {
   NS::SharedPtr<MTL::Fence> fence_;
   bool needs_barrier_{false};
   bool concurrent_{false};
-  std::vector<array> temporaries_;
   std::unordered_set<MTL::Resource*> prev_inputs_;
   std::unordered_set<MTL::Resource*> prev_outputs_;
   std::unordered_set<MTL::Resource*> next_inputs_;
   std::unordered_set<MTL::Resource*> next_outputs_;
-  std::unordered_set<MTL::Resource*> concurrent_outputs_;
+  std::unordered_map<MTL::Resource*, std::weak_ptr<array::Data>>
+      concurrent_outputs_;
   std::unordered_set<const void*> all_inputs_;
   std::unordered_set<const void*> all_outputs_;
 #ifndef NDEBUG
   std::vector<void*> registered_data_ptrs_;
 #endif
 
-  // A map of prior command encoder outputs to their corresponding fence.
-  std::unordered_map<const void*, NS::SharedPtr<MTL::Fence>> prev_ce_outputs_;
+  struct BufferAccess {
+    NS::SharedPtr<MTL::Fence> writer;
+    std::vector<NS::SharedPtr<MTL::Fence>> readers;
+  };
+  std::unordered_map<const void*, BufferAccess> prev_ce_accesses_;
   std::mutex outputs_mtx_;
 };
 

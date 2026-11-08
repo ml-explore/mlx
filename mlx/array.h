@@ -284,7 +284,8 @@ class MLX_API array {
   /** True indicates the arrays buffer is safe to reuse */
   bool is_donatable() const {
     return array_desc_.use_count() == 1 &&
-        (array_desc_->data.use_count() == 1) && array_desc_->data->is_owned();
+        (array_desc_->data.use_count() == 1) && array_desc_->data->is_owned() &&
+        allocator::allocator().is_donatable(buffer());
   }
 
   /** The array's siblings. */
@@ -583,6 +584,7 @@ T array::item() const {
 
 template <typename It>
 void array::init(It src) {
+  allocator::AllocationScope allocation_scope(-1);
   set_data(allocator::malloc(size() * size_of(dtype())));
   switch (dtype()) {
     case bool_:

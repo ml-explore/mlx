@@ -88,6 +88,7 @@ void ExpandDims::eval(const std::vector<array>& inputs, array& out) {
 
 void NumberOfElements::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
+  allocator::AllocationScope allocation_scope(-1);
   out.set_data(allocator::malloc(out.nbytes()));
 
   double numel = 1;

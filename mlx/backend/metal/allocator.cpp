@@ -42,6 +42,14 @@ bool can_reuse_alien_buffer(void* ptr) {
 
 namespace metal {
 
+namespace {
+thread_local int allocation_stream = -1;
+}
+
+int MetalAllocator::set_allocation_stream(int stream) {
+  return std::exchange(allocation_stream, stream);
+}
+
 MetalAllocator::MetalAllocator(Device& d)
     : device_(d.mtl_device()),
       residency_sets_(d.residency_sets()),
@@ -127,6 +135,20 @@ Buffer MetalAllocator::malloc(size_t size) {
 
   // Try the cache
   std::unique_lock lk(mutex_);
+  if (auto stream = pending_buffers_.find(allocation_stream);
+      stream != pending_buffers_.end()) {
+    auto it = stream->second.lower_bound(size);
+    if (it != stream->second.end() &&
+        it->first < std::min(2 * size, size + 2 * vm_page_size)) {
+      auto* buf = it->second;
+      stream->second.erase(it);
+      if (stream->second.empty()) {
+        pending_buffers_.erase(stream);
+      }
+      buffer_uses_.at(buf).released = false;
+      return Buffer{buf};
+    }
+  }
   MTL::Buffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
     size_t mem_required = get_active_memory() + get_cache_memory() + size;
@@ -190,11 +212,15 @@ void MetalAllocator::free(Buffer buffer) {
     return;
   }
 
+  std::unique_lock lk(mutex_);
+  if (auto it = buffer_uses_.find(buf); it != buffer_uses_.end()) {
+    it->second.released = true;
+    cache_pending_buffer(buf, it->second);
+    return;
+  }
 #ifndef NDEBUG
   untrack_allocation(buffer.raw_ptr());
 #endif
-
-  std::unique_lock lk(mutex_);
   active_memory_ -= buf->length();
   if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
@@ -206,6 +232,78 @@ void MetalAllocator::free(Buffer buffer) {
     lk.unlock();
     auto pool = metal::new_scoped_memory_pool();
     buf->release();
+  }
+}
+
+bool MetalAllocator::is_donatable(Buffer buffer) {
+  std::lock_guard lk(mutex_);
+  auto it = buffer_uses_.find(static_cast<MTL::Buffer*>(buffer.ptr()));
+  return it == buffer_uses_.end() ||
+      (it->second.streams.size() == 1 &&
+       it->second.streams.begin()->first == allocation_stream);
+}
+
+void MetalAllocator::cache_pending_buffer(
+    MTL::Buffer* buffer,
+    const BufferUse& use) {
+  if (use.released && use.streams.size() == 1) {
+    pending_buffers_[use.streams.begin()->first].emplace(
+        buffer->length(), buffer);
+  }
+}
+
+void MetalAllocator::remove_pending_buffer(
+    MTL::Buffer* buffer,
+    const BufferUse& use) {
+  if (!use.released || use.streams.size() != 1) {
+    return;
+  }
+  auto stream = pending_buffers_.find(use.streams.begin()->first);
+  auto& buffers = stream->second;
+  auto [begin, end] = buffers.equal_range(buffer->length());
+  auto it = std::find_if(begin, end, [buffer](const auto& entry) {
+    return entry.second == buffer;
+  });
+  assert(it != end);
+  buffers.erase(it);
+  if (buffers.empty()) {
+    pending_buffers_.erase(stream);
+  }
+}
+
+void MetalAllocator::retain_buffer(MTL::Buffer* buffer, int stream) {
+  std::lock_guard lk(mutex_);
+  auto& use = buffer_uses_[buffer];
+  assert(!use.released);
+  ++use.streams[stream];
+}
+
+void MetalAllocator::release_buffers(
+    const std::unordered_set<MTL::Buffer*>& buffers,
+    int stream) {
+  std::vector<MTL::Buffer*> released;
+  {
+    std::lock_guard lk(mutex_);
+    for (auto* buffer : buffers) {
+      auto it = buffer_uses_.find(buffer);
+      auto& use = it->second;
+      remove_pending_buffer(buffer, use);
+      auto count = use.streams.find(stream);
+      if (--count->second == 0) {
+        use.streams.erase(count);
+      }
+      if (use.streams.empty()) {
+        if (use.released) {
+          released.push_back(buffer);
+        }
+        buffer_uses_.erase(it);
+      } else {
+        cache_pending_buffer(buffer, use);
+      }
+    }
+  }
+  for (auto* buffer : released) {
+    free(Buffer{buffer});
   }
 }
 
