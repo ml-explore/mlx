@@ -295,7 +295,8 @@ MTL::ComputePipelineState* get_gemv_wide_kernel(
     const metal::MTLFCList& func_consts,
     const array&,
     int,
-    int) {
+    int,
+    bool) {
   return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
