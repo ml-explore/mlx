@@ -349,6 +349,13 @@ void init_fast(nb::module_& parent_module) {
           * For Grouped Query Attention and Multi-Query Attention, the ``k``
             and ``v`` inputs should not be pre-tiled to match ``q``.
 
+        .. note::
+
+          On the Metal backend, a fused kernel is only available for some
+          input shapes (head dimensions, query length, mask type). When none
+          is available, the unfused path is used unless ``force_fused=True``,
+          in which case the error message states why.
+
         In the following the dimensions are given by:
 
         * ``B``: The batch size.
