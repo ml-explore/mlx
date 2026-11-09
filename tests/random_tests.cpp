@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include <numeric>
+#include <thread>
 
 #include "doctest/doctest.h"
 
@@ -34,6 +35,27 @@ TEST_CASE("test global rng") {
 
   CHECK_EQ(x.item<uint32_t>(), a.item<uint32_t>());
   CHECK_EQ(y.item<uint32_t>(), b.item<uint32_t>());
+}
+
+TEST_CASE("test default key per thread") {
+  // Threads that do not call seed() must not get the same bits.
+  constexpr int n_threads = 4;
+  std::vector<uint32_t> results(n_threads);
+  std::vector<std::thread> threads;
+  for (int i = 0; i < n_threads; ++i) {
+    threads.emplace_back([&results, i]() {
+      results[i] =
+          random::bits({}, 4, std::nullopt, Device::cpu).item<uint32_t>();
+    });
+  }
+  for (auto& t : threads) {
+    t.join();
+  }
+  for (int i = 0; i < n_threads; ++i) {
+    for (int j = i + 1; j < n_threads; ++j) {
+      CHECK_NE(results[i], results[j]);
+    }
+  }
 }
 
 TEST_CASE("test random split") {
