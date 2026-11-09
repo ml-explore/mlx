@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <cmath>
 #include <complex>
+#include <type_traits>
 
 #include "mlx/backend/cpu/simd/simd.h"
 
@@ -117,13 +118,36 @@ Simd<uint32_t, N> fp32_to_bits(Simd<float, N> x) {
   return *(Simd<uint32_t, N>*)(&x);
 }
 
+// Narrow double to float with round-to-odd: when the conversion is inexact,
+// pick the neighboring float whose last mantissa bit is set. Rounding that
+// float to a much narrower format (fp8) then gives the same result as
+// rounding the double directly. Plain round-to-nearest can land exactly on an
+// fp8 tie and round the wrong way, e.g. 1.0625 + 2^-30 must encode as 1.125,
+// not 1.0.
+template <int N>
+Simd<float, N> narrow_round_to_odd(Simd<double, N> x) {
+  Simd<float, N> f = x;
+  Simd<double, N> back = f;
+  auto bits = fp32_to_bits(f);
+  auto needs_fix = (back != x) && ((bits & 1u) == 0u);
+  // f is the neighbor on one side of x; step one ulp to the other side.
+  auto overshot = abs(back) > abs(x);
+  auto fixed = select(overshot, bits - 1u, bits + 1u);
+  return fp32_from_bits(select(needs_fix, fixed, bits));
+}
+
 struct ToFP8 {
   template <typename T, int N>
   Simd<uint8_t, N> operator()(Simd<T, N> f) {
     uint32_t fp8_max = 543 << 21;
     auto denorm_mask = Simd<uint32_t, N>(141 << 23);
     Simd<uint32_t, N> f_bits;
-    Simd<float, N> f32 = f;
+    Simd<float, N> f32;
+    if constexpr (std::is_same_v<T, double>) {
+      f32 = narrow_round_to_odd(f);
+    } else {
+      f32 = f;
+    }
     f_bits = fp32_to_bits(f32);
     Simd<uint8_t, N> result = 0u;
     auto sign = f_bits & 0x80000000;
