@@ -265,7 +265,7 @@ inline void build_kernel(
 void Compiled::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  if (typeid(tape_.back().primitive()) == typeid(Reduce)) {
+  if (auto& p = tape_.back().primitive(); typeid(p) == typeid(Reduce)) {
     return compiled_reduce(
         stream(),
         kernel_lib_,

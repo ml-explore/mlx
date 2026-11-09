@@ -81,7 +81,10 @@ bool is_fusable_reduce(const array& a) {
   if (std::getenv("MLX_DISABLE_REDUCE_FUSION")) {
     return false;
   }
-  if (!a.has_primitive() || typeid(a.primitive()) != typeid(Reduce)) {
+  if (!a.has_primitive()) {
+    return false;
+  }
+  if (auto& p = a.primitive(); typeid(p) != typeid(Reduce)) {
     return false;
   }
   return a.primitive().stream().device == Device::gpu &&
