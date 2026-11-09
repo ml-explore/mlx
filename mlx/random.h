@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include <chrono>
 #include <optional>
 
 #include "mlx/api.h"
@@ -21,15 +20,12 @@ class MLX_API KeySequence {
 
   // Each thread has its own random key to avoid race condition.
   static KeySequence& default_() {
-    static auto time_seed = []() {
-      auto now = std::chrono::system_clock::now();
-      return std::chrono::duration_cast<std::chrono::milliseconds>(
-                 now.time_since_epoch())
-          .count();
-    }();
-    static thread_local KeySequence ks(time_seed);
+    static thread_local KeySequence ks(default_seed());
     return ks;
   }
+
+  // Seed for a new default key. Each call returns a different seed.
+  static uint64_t default_seed();
 
  private:
   array key_;
