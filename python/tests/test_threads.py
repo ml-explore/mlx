@@ -106,6 +106,26 @@ class TestThreads(mlx_tests.MLXTestCase):
             t.join()
         self.assertEqual(errors, [])
 
+    def test_default_random_key_per_thread(self):
+        # Threads that do not call seed() must not get the same numbers.
+        n_threads = 4
+        results = [None] * n_threads
+
+        def draw(i):
+            results[i] = mx.random.uniform(shape=(8,)).tolist()
+
+        threads = [threading.Thread(target=draw, args=(i,)) for i in range(n_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        main_result = mx.random.uniform(shape=(8,)).tolist()
+        all_results = results + [main_result]
+        for i in range(len(all_results)):
+            for j in range(i + 1, len(all_results)):
+                self.assertNotEqual(all_results[i], all_results[j])
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

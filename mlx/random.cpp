@@ -1,6 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <sstream>
 
@@ -13,6 +15,15 @@
 namespace mlx::core::random {
 
 KeySequence::KeySequence(uint64_t seed) : key_(key(seed)) {}
+
+uint64_t KeySequence::default_seed() {
+  static const uint64_t time_seed =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::system_clock::now().time_since_epoch())
+          .count();
+  static std::atomic<uint64_t> count{0};
+  return time_seed + count++;
+}
 
 void KeySequence::seed(uint64_t seed) {
   key_ = key((seed));
