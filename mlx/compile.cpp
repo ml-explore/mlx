@@ -11,6 +11,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/compiled.h"
+#include "mlx/backend/metal/metal.h"
 #include "mlx/compile.h"
 #include "mlx/compile_impl.h"
 #include "mlx/fast_primitives.h"
@@ -71,12 +72,21 @@ bool is_noop(const Primitive& p) {
   return typeid(p) == typeid(Copy) || typeid(p) == typeid(StopGradient);
 }
 
-bool is_reduction(const Primitive& p) {
-  return typeid(p) == typeid(Reduce) || typeid(p) == typeid(ArgReduce);
-}
-
 bool is_fusable(const Primitive& p) {
   return is_unary(p) || is_binary(p) || is_ternary(p) || is_broadcast(p);
+}
+
+// A reduction that can end a fused graph. Only the Metal backend supports it.
+bool is_fusable_reduce(const array& a) {
+  if (std::getenv("MLX_DISABLE_REDUCE_FUSION")) {
+    return false;
+  }
+  if (!a.has_primitive() || typeid(a.primitive()) != typeid(Reduce)) {
+    return false;
+  }
+  return a.primitive().stream().device == Device::gpu &&
+      metal::is_available() && !issubdtype(a.dtype(), complexfloating) &&
+      !issubdtype(a.inputs()[0].dtype(), complexfloating);
 }
 
 Compiled::Compiled(
@@ -207,6 +217,11 @@ std::vector<Shape> Compiled::output_shapes(const std::vector<array>& inputs) {
     auto dd = nd - in.ndim();
     for (auto i = dd; i < nd; ++i) {
       out_shape[i] = std::max(out_shape[i], in.shape()[i - dd]);
+    }
+  }
+  if (auto r = dynamic_cast<const Reduce*>(&tape_.back().primitive())) {
+    for (auto ax : r->state().second) {
+      out_shape[ax] = 1;
     }
   }
   // All outputs have the same shape
@@ -837,6 +852,13 @@ void compile_fuse(
     //  - Collect inputs to the new compiled primitive
     //  - Add fusable primitives to a tape in the correct order
 
+    // A reduction root fuses the elementwise graph that makes its input. Its
+    // inner arrays have a different shape, so they cannot be outputs.
+    bool reduce_root = is_fusable_reduce(arr);
+
+    // Broadcasts split during the recursion as (original, copy) pairs
+    std::vector<std::pair<array, array>> splits;
+
     std::function<void(const array&, int, const Stream&, const Shape&)> recurse;
     std::unordered_set<uintptr_t> cache;
     std::unordered_set<uintptr_t> input_set;
@@ -853,10 +875,13 @@ void compile_fuse(
       // - Constant input
       // - Stream mismatch
       // - Non fusable primitive
-      // - Is global output but has a different shape
+      // - Is global output but has a different shape or feeds a reduction
+      bool is_output = output_map.find(a.id()) != output_map.end();
+      bool is_root_reduce = reduce_root && depth == 0;
       if (depth >= max_compile_depth || !a.has_primitive() ||
-          a.primitive().stream() != s || !is_fusable(a.primitive()) ||
-          (output_map.find(a.id()) != output_map.end() && a.shape() != shape)) {
+          a.primitive().stream() != s ||
+          !(is_fusable(a.primitive()) || is_root_reduce) ||
+          (is_output && (a.shape() != shape || (reduce_root && depth > 0)))) {
         // Possible input
         input_set.insert(a.id());
         return;
@@ -882,7 +907,10 @@ void compile_fuse(
       if (!all_parents_in) {
         if (a.has_primitive() && is_broadcast(a.primitive()) &&
             input_set.size() < max_compile_arrays) {
-          array b = split_one(a, parents_map, cache);
+          // `a` may alias a parent input which the split overwrites
+          array original = a;
+          array b = split_one(original, parents_map, cache);
+          splits.emplace_back(std::move(original), b);
           recurse(b, depth, s, shape);
         } else {
           // Possible input
@@ -947,6 +975,22 @@ void compile_fuse(
       fused_tape.push_back(a);
     };
     recurse_tape(arr);
+
+    // The backend infers the shape before the reduction from the inputs. If
+    // that is not possible, undo the broadcast splits and do not fuse.
+    if (reduce_root) {
+      Shape in_shape;
+      for (auto& in : inputs) {
+        in_shape = broadcast_shapes(in_shape, in.shape());
+      }
+      if (in_shape != arr.inputs()[0].shape()) {
+        for (auto it = splits.rbegin(); it != splits.rend(); ++it) {
+          merge_one(it->first, it->second, parents_map);
+        }
+        new_tape.push_back(arr);
+        continue;
+      }
+    }
 
     std::vector<array> old_outputs;
     // Add to global cache and add any global outputs to outputs
