@@ -130,6 +130,12 @@ instantiate_gemv_wide(bfloat16, bfloat16_t, 16);
 instantiate_gemv_wide(float16, half, 32);
 instantiate_gemv_wide(bfloat16, bfloat16_t, 32);
 
+instantiate_kernel("gemv_wide_staged_float32_nv2_kl16", gemv_wide, float, 2, 16, true)
+instantiate_kernel("gemv_wide_staged_float32_nv3_kl16", gemv_wide, float, 3, 16, true)
+instantiate_kernel("gemv_wide_staged_float32_nv4_kl16", gemv_wide, float, 4, 16, true)
+instantiate_kernel("gemv_wide_staged_float32_nv5_kl16", gemv_wide, float, 5, 16, true)
+instantiate_kernel("gemv_wide_staged_float32_nv6_kl16", gemv_wide, float, 6, 16, true)
+
 // clang-format off
 #define instantiate_gemv_wide_gather_helper(name, itype, nv, kl) \
   instantiate_kernel(                                            \

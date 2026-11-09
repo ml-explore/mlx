@@ -271,7 +271,8 @@ MTL::ComputePipelineState* get_gemv_wide_kernel(
     const metal::MTLFCList& func_consts,
     const array& out,
     int vecs_per_tg,
-    int k_lanes);
+    int k_lanes,
+    bool staged = false);
 
 MTL::ComputePipelineState* get_gemv_wide_gather_kernel(
     metal::Device& d,

@@ -1386,6 +1386,7 @@ struct GemvWideConfig {
   int vecs_per_tg;
   int k_lanes;
   int grid_x;
+  bool staged = false;
 };
 
 std::string gemv_wide_kernel_name(
@@ -1427,6 +1428,17 @@ inline std::optional<GemvWideConfig> gemv_wide_config(
   bool vec4_aligned = mat_offset % 8 == 0 && vec_offset % 8 == 0 &&
       mat_ld % 4 == 0 && vec_ld % 4 == 0 && all_aligned(mat_batch_stride, 4) &&
       all_aligned(vec_batch_stride, 4);
+
+  // float32 uses the staged kernel only where it measured faster than the
+  // GEMM on M4: 2 <= M <= 6 and N * K >= 2^22. More vectors or a smaller
+  // matrix ran slower than the GEMM.
+  if (out.dtype() == float32) {
+    if (M <= 1 || M > 6 || N <= 1 || K % 4 != 0 || !vec4_aligned ||
+        int64_t(N) * K < (int64_t(1) << 22)) {
+      return std::nullopt;
+    }
+    return GemvWideConfig{M, 16, 1, /* staged = */ true};
+  }
 
   // Wide amortizes one matrix stream over several vectors; M == 1 has
   // nothing to amortize and stays with gemv.
@@ -1495,10 +1507,15 @@ bool gemv_wide(
   const bool do_axpby = bias != nullptr;
   int batch_ndim = batch_shape.size();
 
-  MTL::Size group_dims(32, plan->k_lanes / 8, 1);
-  MTL::Size grid_dims(plan->grid_x, (N + 3) / 4, batch_size_out);
+  // Staged threadgroups give each of 16 matrix rows 16 reduction lanes
+  // (32 x 8 = 256 threads); the others hold 4 rows.
+  int rows_per_tg = plan->staged ? 16 : 4;
+  MTL::Size group_dims(32, rows_per_tg * plan->k_lanes / 32, 1);
+  MTL::Size grid_dims(
+      plan->grid_x, (N + rows_per_tg - 1) / rows_per_tg, batch_size_out);
 
-  std::string base_name = gemv_wide_kernel_name("gemv_wide_", out, *plan);
+  std::string base_name = gemv_wide_kernel_name(
+      plan->staged ? "gemv_wide_staged_" : "gemv_wide_", out, *plan);
   std::ostringstream hash_name;
   hash_name << base_name << "_nc" << has_batch << "_axpby" << do_axpby;
   metal::MTLFCList func_consts = {
@@ -1514,7 +1531,8 @@ bool gemv_wide(
       func_consts,
       out,
       plan->vecs_per_tg,
-      plan->k_lanes);
+      plan->k_lanes,
+      plan->staged);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   compute_encoder.set_input_array(mat, 0);
@@ -2721,7 +2739,8 @@ bool gather_mm_wide(
       vec_offset,
       mat_batch_stride,
       vec_batch_stride);
-  if (!cfg) {
+  // The gather route has no staged kernel.
+  if (!cfg || cfg->staged) {
     return false;
   }
 
