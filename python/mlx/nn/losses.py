@@ -118,8 +118,9 @@ def cross_entropy(
         # shifted logits and exact 0.0 at argmax
         logits = mx.where(is_max, 0.0, logits - max_logit)
 
+        # Softmax collapse fix ref https://arxiv.org/abs/2610.31642
         if targets_as_probs:
-            # Fix log-softmax style softmax collapse, see https://arxiv.org/abs/2610.31642
+            # Apply log-softmax style fix for softmax collapse
             # TODO: verify softmax cancellation issue in soft-target cross-entropy loss (require target logits instead)
             score = mx.sum(logits * targets, axis=axis)
 
@@ -131,7 +132,7 @@ def cross_entropy(
             
             loss = mx.log1p(mx.sum(non_max_exps, axis=axis)) - score
         else:
-            # Fix Softmax collapse for hard-target cross-entropy loss, see https://arxiv.org/abs/2610.31642
+            # Apply fix for softmax collapse
             score = mx.take_along_axis(
                 logits, mx.expand_dims(targets, axis), axis
             ).squeeze(axis)

@@ -91,13 +91,21 @@ class TestLosses(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.allclose(loss, expected))
 
-    # TODO:
-    # def test_softmax_collapse(self):
-    #     pass
+        # Test softmax collapse (non-fast path)
+        # Use a non-final class axis to exercise the non-fast path.
+        logits = mx.array([[0.0], [-20.0]], dtype=mx.float32)
+        other = mx.exp(-20.0)
+        p_other = other / (1.0 + other)
+        expected_loss = mx.array(mx.log1p(other))
+        expected_grad = mx.array([[-p_other], [p_other]])
+        loss_and_grad = mx.value_and_grad(nn.losses.cross_entropy)
 
-    # TODO:
-    # def test_softmax_cancellation(self):
-    #     pass
+        for targets in (mx.array([0]), mx.array([[1.0], [0.0]])):
+            with self.subTest(targets=targets):
+                loss, grad = loss_and_grad(logits, targets, axis=0, reduction="sum")
+                self.assertEqualArray(loss, expected_loss, atol=0, rtol=1e-5)
+                self.assertEqualArray(grad, expected_grad, atol=0, rtol=1e-5)
+
 
     def test_binary_cross_entropy(self):
         def _test_logits_as_inputs():
