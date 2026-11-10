@@ -1,5 +1,7 @@
 // Copyright © 2026 Apple Inc.
 
+#include <algorithm>
+
 #include <fmt/format.h>
 #include <sstream>
 
@@ -604,6 +606,12 @@ void compiled_reduce(
   }
   auto axes =
       static_cast<const Reduce&>(tape.back().primitive()).state().second;
+  bool empty_in =
+      std::any_of(shape.begin(), shape.end(), [](auto d) { return d == 0; });
+  if (empty_in && out.size() > 0) {
+    return compiled_reduce_fallback(
+        s, trace_inputs, tape, constant_ids, inputs, shape, out);
+  }
   auto layout = get_reduce_layout(inputs, is_constant, shape, axes);
   if (layout.type == ReduceLayout::None) {
     return compiled_reduce_fallback(
