@@ -4896,6 +4896,18 @@ class TestOps(mlx_tests.MLXTestCase):
             sorted_x = mx.take(x, mx.argsort(x))
             self.assertTrue(mx.array_equal(sorted_x, expected, equal_nan=True))
 
+    def test_sort_bool(self):
+        np.random.seed(0)
+        # Small sizes use the single block sort, large sizes the multi-block sort
+        for size in [10, 5000, 50000]:
+            with self.subTest(size=size):
+                a_np = np.random.uniform(size=size) < 0.5
+                a_mx = mx.array(a_np)
+                self.assertTrue(np.array_equal(mx.sort(a_mx), np.sort(a_np)))
+                self.assertEqual(mx.sort(a_mx).dtype, mx.bool_)
+                idx = mx.argsort(a_mx)
+                self.assertTrue(np.array_equal(mx.take(a_mx, idx), np.sort(a_np)))
+
     def test_to_from_fp8(self):
         vals = mx.array(
             [448, 256, 192, 128, 96, 64, 48, 32, 24, 16, 12, 8, 6, 4, 3, 2, 0.015625]

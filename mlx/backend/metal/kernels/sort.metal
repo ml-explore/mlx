@@ -41,6 +41,7 @@ instantiate_block_sort_bn(int32, int32_t)
 instantiate_block_sort_bn(float16, half)
 instantiate_block_sort_bn(float32, float)
 instantiate_block_sort_bn(bfloat16, bfloat16_t)
+instantiate_block_sort_bn(bool_, bool)
 
 #define instantiate_block_sort_long(itname, itype) \
   instantiate_block_sort_tn(itname, itype, 32)     \
@@ -73,6 +74,7 @@ instantiate_multi_block_sort_base(int32, int32_t)
 instantiate_multi_block_sort_base(float16, half)
 instantiate_multi_block_sort_base(float32, float)
 instantiate_multi_block_sort_base(bfloat16, bfloat16_t)
+instantiate_multi_block_sort_base(bool_, bool)
 
 #define instantiate_multi_block_sort_long(vtname, vtype) \
   instantiate_multi_block_sort(vtname, vtype, uint32, uint32_t, true, 256, 4)
