@@ -669,10 +669,11 @@ inline bool use_qmv_mma(
       if (d.get_architecture().back() == 'd') {
         return false;
       }
-      // Only 4 and 8 bits are instantiated; affine pays off from a smaller N *
-      // K than fp.
-      return (bits == 4 || bits == 8) && (N >= 512) && (K >= 512) &&
-          (int64_t(N) * K >= (int64_t(1) << 21)) && (N % 16 == 0);
+      // qmv_mma reads 2 to 8 bits (not 7). Affine pays off from a smaller
+      // N * K than fp, and from 2^20 on gen 15+ (M4).
+      int nk_log2 = d.get_architecture_gen() >= 15 ? 20 : 21;
+      return (bits >= 2 && bits != 7) && (N >= 512) && (K >= 512) &&
+          (int64_t(N) * K >= (int64_t(1) << nk_log2)) && (N % 16 == 0);
     }
   } else { // fp quantization
     if (nax) {

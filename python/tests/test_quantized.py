@@ -926,9 +926,10 @@ class TestQuantized(mlx_tests.MLXTestCase):
             [
                 (4224, 4128),
                 (512, 4096),  # smallest K: one K step per simdgroup
+                (1024, 1024),  # smallest N * K on gen 15+
             ],
             [3, 8, 9],
-            [4, 8],
+            [2, 3, 4, 5, 6, 8],
             [32, 64, 128],
             [mx.bfloat16, mx.float16, mx.float32],
         ):
