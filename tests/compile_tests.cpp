@@ -321,6 +321,8 @@ TEST_CASE("test compile unary fused") {
   }
 
   {
+    // Reductions fuse on the GPU, so use the CPU to keep the Reduce
+    StreamContext ctx(Device::cpu);
     auto cfun = compile(unary_fused_2);
     auto x = array({1.0, 2.0});
     auto out = cfun({x});
@@ -331,6 +333,7 @@ TEST_CASE("test compile unary fused") {
     // it if we change compile conditions
     CHECK_EQ(typeid(p), typeid(Reduce));
     auto cout = out[0].inputs()[0];
+    REQUIRE(cout.has_primitive());
     auto& cp = cout.primitive();
     CHECK_EQ(typeid(cp), typeid(Compiled));
     CHECK_EQ(cout.inputs()[0].id(), x.id());
@@ -345,6 +348,7 @@ TEST_CASE("test compile unary fused") {
     CHECK_EQ(typeid(p), typeid(Compiled));
     auto sout = out[0].inputs()[0];
     CHECK_EQ(out[0].inputs().size(), 1);
+    REQUIRE(sout.has_primitive());
     auto& sp = sout.primitive();
     CHECK_EQ(typeid(sp), typeid(Reduce));
     CHECK_EQ(sout.inputs()[0].id(), x.id());
@@ -421,6 +425,8 @@ TEST_CASE("test compile binary fused") {
   }
 
   {
+    // Reductions fuse on the GPU, so use the CPU to keep the Reduce
+    StreamContext ctx(Device::cpu);
     auto cfun = compile(binary_fused_3);
     auto x = array({1.0, 2.0});
     auto y = array({1.0, 2.0});
@@ -430,6 +436,7 @@ TEST_CASE("test compile binary fused") {
     CHECK_EQ(typeid(p), typeid(Reduce));
 
     auto cout = out.inputs()[0];
+    REQUIRE(cout.has_primitive());
     auto& cp = cout.primitive();
     CHECK_EQ(typeid(cp), typeid(Compiled));
     CHECK_EQ(cout.inputs()[0].id(), x.id());

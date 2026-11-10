@@ -4,6 +4,7 @@
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/backend/metal/compiled.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/utils.h"
@@ -12,6 +13,29 @@
 #include "mlx/utils.h"
 
 namespace mlx::core {
+
+void build_tape(
+    std::string& os,
+    const std::vector<array>& tape,
+    NodeNamer& namer) {
+  for (auto& x : tape) {
+    os += fmt::format(
+        "  {0} tmp_{1} = ", get_type_string(x.dtype()), namer.get_name(x));
+    if (is_static_cast(x.primitive())) {
+      os += fmt::format(
+          "cast_to<{0}>(tmp_{1});\n",
+          get_type_string(x.dtype()),
+          namer.get_name(x.inputs()[0]));
+    } else {
+      os += x.primitive().name();
+      os += "()(";
+      for (int i = 0; i < x.inputs().size() - 1; i++) {
+        os += fmt::format("tmp_{0}, ", namer.get_name(x.inputs()[i]));
+      }
+      os += fmt::format("tmp_{0});\n", namer.get_name(x.inputs().back()));
+    }
+  }
+}
 
 inline void build_kernel(
     std::string& os,
@@ -203,23 +227,7 @@ inline void build_kernel(
   }
 
   // Actually write the computation
-  for (auto& x : tape) {
-    os += fmt::format(
-        "  {0} tmp_{1} = ", get_type_string(x.dtype()), namer.get_name(x));
-    if (is_static_cast(x.primitive())) {
-      os += fmt::format(
-          "cast_to<{0}>(tmp_{1});\n",
-          get_type_string(x.dtype()),
-          namer.get_name(x.inputs()[0]));
-    } else {
-      os += x.primitive().name();
-      os += "()(";
-      for (int i = 0; i < x.inputs().size() - 1; i++) {
-        os += fmt::format("tmp_{0}, ", namer.get_name(x.inputs()[i]));
-      }
-      os += fmt::format("tmp_{0});\n", namer.get_name(x.inputs().back()));
-    }
-  }
+  build_tape(os, tape, namer);
 
   // Write the outputs from tmps
   for (auto& x : outputs) {
@@ -257,6 +265,18 @@ inline void build_kernel(
 void Compiled::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
+  if (auto& p = tape_.back().primitive(); typeid(p) == typeid(Reduce)) {
+    return compiled_reduce(
+        stream(),
+        kernel_lib_,
+        inputs_,
+        tape_,
+        constant_ids_,
+        is_constant_,
+        inputs,
+        outputs[0]);
+  }
+
   // Get the kernel if someone else built it already
   auto& s = stream();
   auto& d = metal::device(s.device);
