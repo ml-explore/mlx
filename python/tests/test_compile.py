@@ -1817,7 +1817,9 @@ class TestCompile(mlx_tests.MLXTestCase):
             check(lambda a, b: mx.sum(a + b, axis=-1), a, b, atol=tol, rtol=tol)
             check(lambda a, b: mx.max(a * b, axis=-1), a, b, atol=tol, rtol=tol)
             check(lambda a, b: mx.sum(a * b, axis=0), a, b, atol=tol, rtol=tol)
-        check(lambda a: mx.sum(mx.abs(a), axis=-1), x.astype(mx.complex64))
+        # CUDA codegen does not support complex casts
+        if fusion:
+            check(lambda a: mx.sum(mx.abs(a), axis=-1), x.astype(mx.complex64))
 
         # Empty arrays
         check(lambda a, b: mx.sum(a * b, axis=-1), x[:, :, :0], y[:, :, :0])
