@@ -23,6 +23,105 @@ void Add::eval_cpu(const std::vector<array>& inputs, array& out) {
   binary_op_cpu(a, b, out, detail::Add(), stream());
 }
 
+namespace {
+
+struct LogAddExpGradOp {
+  template <typename T>
+  using Acc = std::conditional_t<std::is_same_v<T, double>, double, float>;
+
+  template <int N, typename T>
+  std::pair<simd::Simd<T, N>, simd::Simd<T, N>> operator()(
+      simd::Simd<T, N> a,
+      simd::Simd<T, N> b) const {
+    using A = Acc<T>;
+    auto diff = simd::Simd<A, N>(a) - simd::Simd<A, N>(b);
+    auto e = simd::exp(-simd::abs(diff));
+    auto large = simd::Simd<A, N>(1) / (simd::Simd<A, N>(1) + e);
+    auto small = e * large;
+    auto positive = diff >= simd::Simd<A, N>(0);
+    return {
+        simd::Simd<T, N>(simd::select(positive, large, small)),
+        simd::Simd<T, N>(simd::select(positive, small, large))};
+  }
+
+  template <typename T>
+  std::pair<T, T> operator()(T a, T b) const {
+    auto [first, second] = (*this)(simd::Simd<T, 1>(a), simd::Simd<T, 1>(b));
+    return {first.value, second.value};
+  }
+};
+
+} // namespace
+
+void LogAddExpGrad::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  const auto& a = inputs[0];
+  const auto& b = inputs[1];
+  auto bopt = get_binary_op_type(a, b);
+  set_binary_op_output_data(a, b, outputs[0], bopt);
+  set_binary_op_output_data(a, b, outputs[1], bopt);
+  auto& encoder = cpu::get_command_encoder(stream());
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_output_array(outputs[0]);
+  encoder.set_output_array(outputs[1]);
+  encoder.dispatch([a = array::unsafe_weak_copy(a),
+                    b = array::unsafe_weak_copy(b),
+                    first = array::unsafe_weak_copy(outputs[0]),
+                    second = array::unsafe_weak_copy(outputs[1]),
+                    bopt]() mutable {
+    dispatch_float_types(first.dtype(), "LogAddExpGrad", [&](auto tag) {
+      using T = MLX_GET_TYPE(tag);
+      LogAddExpGradOp op;
+      if (bopt == BinaryOpType::General) {
+        binary_op<T>(a, b, first, second, op, bopt);
+        return;
+      }
+      constexpr int N = simd::max_size<LogAddExpGradOp::Acc<T>>;
+      const bool scalar_a = bopt == BinaryOpType::ScalarScalar ||
+          bopt == BinaryOpType::ScalarVector;
+      const bool scalar_b = bopt == BinaryOpType::ScalarScalar ||
+          bopt == BinaryOpType::VectorScalar;
+      const T* ap = a.data<T>();
+      const T* bp = b.data<T>();
+      T* firstp = first.data<T>();
+      T* secondp = second.data<T>();
+      size_t count = first.data_size();
+      while (count >= N) {
+        if constexpr (std::is_same_v<T, bfloat16_t>) {
+          simd::Simd<float, N> av, bv;
+          for (int i = 0; i < N; ++i) {
+            av[i] = static_cast<float>(ap[scalar_a ? 0 : i]);
+            bv[i] = static_cast<float>(bp[scalar_b ? 0 : i]);
+          }
+          auto [x, y] = op(av, bv);
+          for (int i = 0; i < N; ++i) {
+            firstp[i] = T(x[i]);
+            secondp[i] = T(y[i]);
+          }
+        } else {
+          auto av = scalar_a ? simd::Simd<T, N>(*ap) : simd::load<T, N>(ap);
+          auto bv = scalar_b ? simd::Simd<T, N>(*bp) : simd::load<T, N>(bp);
+          auto [x, y] = op(av, bv);
+          simd::store(firstp, x);
+          simd::store(secondp, y);
+        }
+        ap += scalar_a ? 0 : N;
+        bp += scalar_b ? 0 : N;
+        firstp += N;
+        secondp += N;
+        count -= N;
+      }
+      while (count-- > 0) {
+        std::tie(*firstp++, *secondp++) = op(*ap, *bp);
+        ap += !scalar_a;
+        bp += !scalar_b;
+      }
+    });
+  });
+}
+
 void DivMod::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {

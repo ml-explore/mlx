@@ -919,6 +919,24 @@ class Divide : public UnaryPrimitive {
   DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
+class LogAddExpGrad : public Primitive {
+ public:
+  explicit LogAddExpGrad(Stream stream) : Primitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_NAME(LogAddExpGrad)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    return {inputs[0].shape(), inputs[0].shape()};
+  }
+};
+
 class DivMod : public Primitive {
  public:
   explicit DivMod(Stream stream) : Primitive(stream) {}

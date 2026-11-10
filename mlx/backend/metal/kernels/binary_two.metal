@@ -51,4 +51,5 @@
   instantiate_binary_base(op, complex64, complex64_t, complex64_t) \
   instantiate_binary_float(op)
 
-instantiate_binary_types(DivMod) // clang-format on
+instantiate_binary_types(DivMod)
+instantiate_binary_float(LogAddExpGrad) // clang-format on

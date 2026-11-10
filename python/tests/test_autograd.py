@@ -47,6 +47,215 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(out[0].item(), 4.0 * 1.0 + 2.0 * 3.0)
         self.assertEqual(out[1].item(), 4.0 * 1.0 + 6.0 * 3.0)
 
+    def test_logaddexp_small_gradients(self):
+        for dtype, gap, rtol in (
+            (mx.float16, 8.0, 3e-3),
+            (mx.bfloat16, 8.0, 1e-2),
+            (mx.float32, 20.0, 1e-5),
+        ):
+            x = mx.array([-gap, 0.0, gap], dtype=dtype)
+            expected = 1 / (
+                1 + np.exp(-np.array(x.astype(mx.float32), dtype=np.float64))
+            )
+            cotangent = mx.array([0.5, -2.0, 3.0], dtype=dtype)
+
+            for arg in (0, 1):
+                with self.subTest(dtype=dtype, arg=arg):
+
+                    def fun(x):
+                        return mx.logaddexp(x, 0) if arg == 0 else mx.logaddexp(0, x)
+
+                    _, (vjp,) = mx.vjp(fun, [x], [cotangent])
+                    _, (jvp,) = mx.jvp(fun, [x], [cotangent])
+                    reference = expected * np.array(
+                        cotangent.astype(mx.float32), dtype=np.float64
+                    )
+                    for result in (vjp, jvp):
+                        self.assertEqual(result.dtype, dtype)
+                        np.testing.assert_allclose(
+                            np.array(result.astype(mx.float32)),
+                            reference,
+                            rtol=rtol,
+                            atol=0,
+                        )
+
+    def test_logaddexp_both_input_gradients(self):
+        a = mx.array([[0.0], [20.0]])
+        b = mx.array([[-20.0, 0.0, 20.0]])
+        cotangent = mx.array([[0.5, -2.0, 3.0], [1.0, 0.25, -0.5]])
+        a_np, b_np = np.array(a, dtype=np.float64), np.array(b, dtype=np.float64)
+        cotangent_np = np.array(cotangent, dtype=np.float64)
+        weights_a = 1 / (1 + np.exp(b_np - a_np))
+        weights_b = 1 / (1 + np.exp(a_np - b_np))
+        _, (grad_a, grad_b) = mx.vjp(mx.logaddexp, [a, b], [cotangent])
+        np.testing.assert_allclose(
+            np.array(grad_a),
+            (cotangent_np * weights_a).sum(axis=1, keepdims=True),
+            rtol=1e-5,
+            atol=0,
+        )
+        np.testing.assert_allclose(
+            np.array(grad_b),
+            (cotangent_np * weights_b).sum(axis=0, keepdims=True),
+            rtol=1e-5,
+            atol=0,
+        )
+        for tangents, reference in (
+            ([mx.ones_like(a), mx.zeros_like(b)], weights_a),
+            ([mx.zeros_like(a), mx.ones_like(b)], weights_b),
+        ):
+            _, (jvp,) = mx.jvp(mx.logaddexp, [a, b], tangents)
+            np.testing.assert_allclose(np.array(jvp), reference, rtol=1e-5, atol=0)
+
+    def test_logaddexp_small_second_derivative(self):
+        def fun(x):
+            return mx.logaddexp(0, x)
+
+        x = mx.array(-20.0)
+        sigmoid = 1 / (1 + math.exp(20.0))
+        expected = sigmoid * (1 - sigmoid)
+        for derivative in (mx.grad(mx.grad(fun)), mx.compile(mx.grad(mx.grad(fun)))):
+            np.testing.assert_allclose(
+                derivative(x).item(), expected, rtol=1e-5, atol=0
+            )
+
+    def test_logaddexp_gradient_layouts(self):
+        dtypes = [(mx.float16, 5e-3), (mx.bfloat16, 2e-2), (mx.float32, 1e-5)]
+        if mx.default_device() == mx.cpu:
+            dtypes.append((mx.float64, 1e-12))
+
+        def reduce_to_shape(x, shape):
+            while x.ndim > len(shape):
+                x = x.sum(axis=0)
+            for axis, size in enumerate(shape):
+                if size == 1 and x.shape[axis] != 1:
+                    x = x.sum(axis=axis, keepdims=True)
+            return x
+
+        grad = mx.compile(
+            mx.grad(lambda a, b: mx.logaddexp(a, b).sum(), argnums=(0, 1))
+        )
+        for dtype, rtol in dtypes:
+            a = mx.array(np.linspace(-4, 4, 30).reshape(3, 10), dtype=dtype)
+            b = mx.array(np.linspace(3, -3, 30).reshape(3, 10), dtype=dtype)
+            scalar = mx.array(0.25, dtype=dtype)
+            cases = [
+                (a, b),
+                (a.T, b.T),
+                (a[:, ::2], b[:, 1::2]),
+                (a[::-1, ::-1], b[::-1, ::-1]),
+                (a, scalar),
+                (scalar, b),
+                (scalar, -scalar),
+                (a[:0], b[:0]),
+                (mx.broadcast_to(scalar, a.shape), mx.broadcast_to(-scalar, a.shape)),
+            ]
+            for case, (x, y) in enumerate(cases):
+                with self.subTest(dtype=dtype, case=case):
+                    x_np = np.array(
+                        x if dtype == mx.float64 else x.astype(mx.float32),
+                        dtype=np.float64,
+                    )
+                    y_np = np.array(
+                        y if dtype == mx.float64 else y.astype(mx.float32),
+                        dtype=np.float64,
+                    )
+                    weights = (
+                        1 / (1 + np.exp(y_np - x_np)),
+                        1 / (1 + np.exp(x_np - y_np)),
+                    )
+                    cotangent = mx.full(
+                        np.broadcast_shapes(x.shape, y.shape), 0.5, dtype=dtype
+                    )
+                    _, eager = mx.vjp(mx.logaddexp, [x, y], [cotangent])
+                    for results, scale in ((eager, 0.5), (grad(x, y), 1)):
+                        for result, weight, shape in zip(
+                            results, weights, (x.shape, y.shape)
+                        ):
+                            self.assertEqual(result.shape, shape)
+                            self.assertEqual(result.dtype, dtype)
+                            reference = reduce_to_shape(scale * weight, shape)
+                            actual = np.array(
+                                result
+                                if dtype == mx.float64
+                                else result.astype(mx.float32)
+                            )
+                            np.testing.assert_allclose(
+                                actual, reference, rtol=rtol, atol=0
+                            )
+
+    def test_logaddexp_gradient_shapeless_compile(self):
+        grad = mx.compile(
+            mx.grad(lambda a, b: mx.logaddexp(a, b).sum(), argnums=(0, 1)),
+            shapeless=True,
+        )
+        small = 1 / (1 + math.exp(20.0))
+        for size in (3, 7, 9):
+            a = mx.full((size, 2), -20.0)
+            b = mx.zeros((1, 2))
+            first, second = grad(a, b)
+            np.testing.assert_allclose(
+                np.array(first), np.full(a.shape, small), rtol=1e-5, atol=0
+            )
+            np.testing.assert_allclose(
+                np.array(second),
+                np.full(b.shape, size * (1 - small)),
+                rtol=1e-5,
+                atol=0,
+            )
+
+    def test_logaddexp_gradient_higher_transforms(self):
+        grad = mx.grad(mx.logaddexp, argnums=(0, 1))
+        for value in (-20.0, 0.0, 20.0):
+            a, b = mx.array(value), mx.array(0.0)
+            small = 1 / (1 + math.exp(abs(value)))
+            derivative = small * (1 - small)
+            hessian = mx.grad(lambda a, b: grad(a, b)[0], argnums=(0, 1))(a, b)
+            np.testing.assert_allclose(
+                [x.item() for x in hessian],
+                [derivative, -derivative],
+                rtol=1e-5,
+                atol=0,
+            )
+            _, jvp = mx.jvp(grad, [a, b], [mx.array(2.0), mx.array(-3.0)])
+            np.testing.assert_allclose(
+                [x.item() for x in jvp],
+                [5 * derivative, -5 * derivative],
+                rtol=1e-5,
+                atol=0,
+            )
+        a, b = mx.array(0.0), mx.array(0.0)
+        huge = mx.array(3e38)
+        _, jvp = mx.jvp(grad, [a, b], [huge, -huge])
+        _, vjp = mx.vjp(grad, [a, b], [huge, -huge])
+        for result in (jvp, vjp):
+            np.testing.assert_allclose(
+                [x.item() for x in result], [1.5e38, -1.5e38], rtol=1e-5, atol=0
+            )
+        x = mx.array([-20.0, 0.0, 20.0])
+        y = mx.zeros_like(x)
+        expected = mx.vjp(mx.logaddexp, [x, y], [mx.ones_like(x)])[1]
+        for mapped in (
+            mx.vmap(grad)(x, y),
+            mx.vmap(grad, in_axes=(0, None))(x, mx.array(0.0)),
+            mx.vmap(grad, in_axes=(None, 0))(mx.array(0.0), -x),
+        ):
+            for actual, reference in zip(mapped, expected):
+                self.assertTrue(mx.array_equal(actual, reference))
+
+    def test_logaddexp_gradient_nonfinite(self):
+        a = mx.array([float("inf"), -float("inf"), 0.0, 0.0, float("nan")])
+        b = mx.array([0.0, 0.0, float("inf"), -float("inf"), 0.0])
+        _, gradients = mx.vjp(mx.logaddexp, [a, b], [mx.ones_like(a)])
+        expected = [
+            mx.array([1.0, 0.0, 0.0, 1.0, float("nan")]),
+            mx.array([0.0, 1.0, 1.0, 0.0, float("nan")]),
+        ]
+        for actual, reference in zip(gradients, expected):
+            np.testing.assert_allclose(
+                np.array(actual), np.array(reference), rtol=0, atol=0
+            )
+
     def test_logcumsumexp_jvp(self):
         x = mx.array([0.0, 0.0, 0.0])
         t = mx.array([1.0, 1.0, 1.0])

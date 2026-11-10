@@ -3,6 +3,7 @@
 #include "mlx/backend/cuda/device/unary_ops.cuh"
 
 #include <cuda/std/array>
+#include <cuda/std/type_traits>
 
 namespace mlx::core::cu {
 
@@ -306,6 +307,20 @@ struct DivMod {
   __device__ cuda::std::array<T, 2> operator()(T x, T y) {
     return {FloorDivide{}(x, y), Remainder{}(x, y)};
   };
+};
+
+struct LogAddExpGrad {
+  template <typename T>
+  __device__ cuda::std::array<T, 2> operator()(T x, T y) {
+    using Acc =
+        cuda::std::conditional_t<cuda::std::is_same_v<T, double>, double, float>;
+    Acc diff = static_cast<Acc>(x) - static_cast<Acc>(y);
+    Acc e = cuda::std::exp(-cuda::std::abs(diff));
+    Acc large = Acc(1) / (Acc(1) + e);
+    Acc small = e * large;
+    return diff >= 0 ? cuda::std::array<T, 2>{T(large), T(small)}
+                     : cuda::std::array<T, 2>{T(small), T(large)};
+  }
 };
 
 } // namespace mlx::core::cu

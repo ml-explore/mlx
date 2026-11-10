@@ -373,6 +373,7 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(Depends),
       SERIALIZE_PRIMITIVE(Divide),
       SERIALIZE_PRIMITIVE(DivMod),
+      SERIALIZE_PRIMITIVE(LogAddExpGrad),
       SERIALIZE_PRIMITIVE(DynamicSlice),
       SERIALIZE_PRIMITIVE(DynamicSliceUpdate),
       SERIALIZE_PRIMITIVE(Equal, "NaNEqual"),

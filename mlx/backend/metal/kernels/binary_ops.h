@@ -339,3 +339,15 @@ struct DivMod {
     return {FloorDivide{}(x, y), Remainder{}(x, y)};
   };
 };
+
+struct LogAddExpGrad {
+  template <typename T>
+  metal::array<T, 2> operator()(T x, T y) thread {
+    float diff = static_cast<float>(x) - static_cast<float>(y);
+    float e = metal::precise::exp(-metal::abs(diff));
+    float large = 1.0f / (1.0f + e);
+    float small = e * large;
+    return diff >= 0 ? metal::array<T, 2>{T(large), T(small)}
+                     : metal::array<T, 2>{T(small), T(large)};
+  }
+};

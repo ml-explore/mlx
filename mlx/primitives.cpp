@@ -3007,20 +3007,77 @@ std::pair<std::vector<array>, std::vector<int>> LogicalOr::vmap(
   return {{logical_or(a, b, stream())}, {to_ax}};
 }
 
+namespace {
+
+std::vector<array> logaddexp_grad(const array& a, const array& b, Stream s) {
+  auto inputs = broadcast_arrays({a, b}, s);
+  auto shape = inputs[0].shape();
+  return array::make_arrays(
+      {shape, shape},
+      {a.dtype(), a.dtype()},
+      std::make_shared<LogAddExpGrad>(s),
+      std::move(inputs));
+}
+
+} // namespace
+
+std::vector<array> LogAddExpGrad::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  auto derivative = multiply(outputs[0], outputs[1], stream());
+  auto grad = subtract(
+      multiply(derivative, cotangents[0], stream()),
+      multiply(derivative, cotangents[1], stream()),
+      stream());
+  std::vector<array> vjps;
+  for (auto arg : argnums) {
+    vjps.push_back(arg == 0 ? grad : negative(grad, stream()));
+  }
+  return vjps;
+}
+
+std::vector<array> LogAddExpGrad::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  auto weights = logaddexp_grad(primals[0], primals[1], stream());
+  auto derivative = multiply(weights[0], weights[1], stream());
+  auto tangent = multiply(tangents[0], derivative, stream());
+  if (argnums[0] == 1) {
+    tangent = negative(tangent, stream());
+  }
+  for (int i = 1; i < argnums.size(); ++i) {
+    auto part = multiply(tangents[i], derivative, stream());
+    tangent = argnums[i] == 0 ? add(tangent, part, stream())
+                              : subtract(tangent, part, stream());
+  }
+  return {tangent, negative(tangent, stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> LogAddExpGrad::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto [a, b, axis] = vmap_binary_op(inputs, axes, stream());
+  return {logaddexp_grad(a, b, stream()), {axis, axis}};
+}
+
 std::vector<array> LogAddExp::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  auto a = primals[0];
-  auto b = primals[1];
-  auto s = sigmoid(subtract(a, b, stream()), stream());
+  std::vector<array> weights;
+  if (argnums.size() == 2) {
+    weights = logaddexp_grad(primals[0], primals[1], stream());
+  }
   std::vector<array> vjps;
   for (auto arg : argnums) {
-    vjps.push_back(multiply(
-        cotangents[0],
-        arg == 0 ? s : subtract(array(1.0f, s.dtype()), s, stream()),
-        stream()));
+    auto weight = weights.empty()
+        ? sigmoid(subtract(primals[arg], primals[1 - arg], stream()), stream())
+        : weights[arg];
+    vjps.push_back(multiply(cotangents[0], weight, stream()));
   }
   return vjps;
 }
@@ -3029,15 +3086,16 @@ std::vector<array> LogAddExp::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  auto a = primals[0];
-  auto b = primals[1];
-  auto s = sigmoid(subtract(a, b, stream()), stream());
+  std::vector<array> weights;
+  if (argnums.size() == 2) {
+    weights = logaddexp_grad(primals[0], primals[1], stream());
+  }
   auto jvp_fun = [&](int i) {
     int arg = argnums[i];
-    return multiply(
-        tangents[i],
-        arg == 0 ? s : subtract(array(1.0f, s.dtype()), s, stream()),
-        stream());
+    auto weight = weights.empty()
+        ? sigmoid(subtract(primals[arg], primals[1 - arg], stream()), stream())
+        : weights[arg];
+    return multiply(tangents[i], weight, stream());
   };
   auto out = jvp_fun(0);
   if (argnums.size() > 1) {

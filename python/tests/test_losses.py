@@ -305,6 +305,19 @@ class TestLosses(mlx_tests.MLXTestCase):
         self.assertEqual(loss.shape, (2, 3))
         self.assertTrue(np.allclose(np.array(loss), expected))
 
+    def test_binary_cross_entropy_small_logit_gradients(self):
+        for dtype, gap, rtol in (
+            (mx.float16, 8.0, 3e-3),
+            (mx.bfloat16, 8.0, 1e-2),
+            (mx.float32, 20.0, 1e-5),
+        ):
+            with self.subTest(dtype=dtype):
+                logits = mx.array([-gap], dtype=dtype)
+                targets = mx.zeros_like(logits)
+                grad = mx.grad(nn.losses.binary_cross_entropy)(logits, targets)
+                expected = 1 / (1 + np.exp(gap))
+                np.testing.assert_allclose(grad.item(), expected, rtol=rtol, atol=0)
+
     def test_gaussian_nll_loss(self):
         inputs = mx.array([[0.1, 0.2], [0.3, 0.4]])
         targets = mx.array([[0.2, 0.1], [0.1, 0.2]])

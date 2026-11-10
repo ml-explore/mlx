@@ -23,6 +23,16 @@ class TestExportImport(mlx_tests.MLXTestCase):
     def tearDownClass(cls):
         cls.test_dir_fid.cleanup()
 
+    def test_logaddexp_gradient_export(self):
+        path = os.path.join(self.test_dir, "logaddexp_grad.mlxfn")
+        grad = mx.grad(lambda a, b: mx.logaddexp(a, b).sum(), argnums=(0, 1))
+        a = mx.array([-20.0, 0.0, 20.0])
+        b = mx.zeros_like(a)
+        mx.export_function(path, grad, a, b)
+        restored = mx.import_function(path)
+        for actual, reference in zip(restored(a, b), grad(a, b)):
+            self.assertTrue(mx.array_equal(actual, reference))
+
     def test_basic_export_import(self):
         path = os.path.join(self.test_dir, "fn.mlxfn")
 

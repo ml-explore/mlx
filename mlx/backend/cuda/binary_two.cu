@@ -232,6 +232,9 @@ constexpr bool supports_binary_two_op() {
     return std::is_same_v<In, Out> &&
         (std::is_integral_v<Out> || is_floating_v<Out>);
   }
+  if (std::is_same_v<Op, LogAddExpGrad>) {
+    return std::is_same_v<In, Out> && is_floating_v<Out>;
+  }
   return false;
 }
 
@@ -406,6 +409,13 @@ void DivMod::eval_gpu(
   nvtx3::scoped_range r("DivMod::eval_gpu");
   auto& s = outputs[0].primitive().stream();
   binary_two_op_gpu<cu::DivMod>(inputs, outputs, name(), s);
+}
+
+void LogAddExpGrad::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  nvtx3::scoped_range r("LogAddExpGrad::eval_gpu");
+  binary_two_op_gpu<cu::LogAddExpGrad>(inputs, outputs, name(), stream());
 }
 
 } // namespace mlx::core
