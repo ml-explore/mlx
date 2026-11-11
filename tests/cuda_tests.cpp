@@ -3,6 +3,8 @@
 #include "doctest/doctest.h"
 #include "mlx/mlx.h"
 
+#include "mlx/backend/cuda/allocator.h"
+
 #ifdef _WIN32
 #include "mlx/backend/cuda/wddm.h"
 #endif
@@ -22,6 +24,22 @@ bool memory_pools_supported() {
       cudaDeviceGetAttribute(&supported, cudaDevAttrMemoryPoolsSupported, 0),
       cudaSuccess);
   return supported;
+}
+
+// Host buffers are pinned memory read over PCIe only without concurrent
+// managed access (Windows, WSL, Tegra).
+bool host_memory_is_pinned() {
+  int managed = 0;
+  REQUIRE_EQ(
+      cudaDeviceGetAttribute(&managed, cudaDevAttrConcurrentManagedAccess, 0),
+      cudaSuccess);
+  return !managed;
+}
+
+cudaMemoryType residency(void* ptr) {
+  cudaPointerAttributes attr{};
+  REQUIRE_EQ(cudaPointerGetAttributes(&attr, ptr), cudaSuccess);
+  return attr.type;
 }
 
 struct CacheLimitGuard {
@@ -108,6 +126,45 @@ TEST_CASE("test clear cache trims CUDA pool") {
           pool, cudaMemPoolAttrReservedMemCurrent, &final_reserved),
       cudaSuccess);
   CHECK_LT(final_reserved, allocated_reserved);
+}
+
+TEST_CASE("test cached host buffer is not reused for device output") {
+  if (!host_memory_is_pinned()) {
+    return;
+  }
+  clear_cache();
+  auto& alloc = cu::allocator();
+  cudaStream_t stream;
+  REQUIRE_EQ(cudaStreamCreate(&stream), cudaSuccess);
+  constexpr size_t size = 1 << 22;
+  // Put a host buffer into the size-keyed cache.
+  alloc.free(alloc.malloc(size));
+  auto buf = alloc.malloc_async(size, 0, stream);
+  CHECK_NE(
+      residency(static_cast<cu::CudaBuffer*>(buf.ptr())->data),
+      cudaMemoryTypeHost);
+  alloc.free(buf);
+  CHECK_EQ(cudaStreamSynchronize(stream), cudaSuccess);
+  CHECK_EQ(cudaStreamDestroy(stream), cudaSuccess);
+}
+
+TEST_CASE("test host data is moved to device memory") {
+  if (!host_memory_is_pinned() || !memory_pools_supported()) {
+    return;
+  }
+  auto data = [](const array& a) {
+    return static_cast<cu::CudaBuffer*>(a.buffer().ptr())->data;
+  };
+  std::vector<float> v(1 << 20, 2.0f);
+  array a(v.begin(), {1 << 20});
+  CHECK_NE(residency(data(a)), cudaMemoryTypeHost);
+  CHECK_EQ(sum(a).item<float>(), 2.0f * (1 << 20));
+
+  // Arrays for a CPU default device stay on the host.
+  set_default_device(Device::cpu);
+  array b(v.begin(), {1 << 20});
+  set_default_device(Device::gpu);
+  CHECK_NE(residency(data(b)), cudaMemoryTypeDevice);
 }
 
 TEST_CASE("test eval after cuda error") {
