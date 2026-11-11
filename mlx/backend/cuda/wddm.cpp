@@ -100,8 +100,9 @@ class WddmMemoryBudget {
 } // namespace
 
 size_t get_wddm_memory_limit(int device, cudaMemPool_t pool) {
-  static WddmMemoryBudget budget(gpu::device_count());
-  return budget.get_memory_limit(device, pool);
+  // Avoid releasing DXGI adapters under the loader lock during DLL teardown.
+  static auto* budget = new WddmMemoryBudget(gpu::device_count());
+  return budget->get_memory_limit(device, pool);
 }
 
 } // namespace mlx::core::cu
