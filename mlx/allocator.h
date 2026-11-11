@@ -143,4 +143,8 @@ inline void release(Buffer buffer) {
 
 MLX_API bool can_reuse_alien_buffer(void* ptr);
 
+// Called after the host has written |buffer|. Backends whose GPU reads host
+// memory slowly move it to device memory.
+MLX_API void move_to_device_memory(Buffer buffer);
+
 } // namespace mlx::core::allocator

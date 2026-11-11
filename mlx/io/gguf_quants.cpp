@@ -151,6 +151,9 @@ void gguf_load_quantized(
   } else if (tensor.type == GGUF_TYPE_Q8_0) {
     extract_q8_0_data(tensor, weights, scales, biases);
   }
+  allocator::move_to_device_memory(weights.buffer());
+  allocator::move_to_device_memory(scales.buffer());
+  allocator::move_to_device_memory(biases.buffer());
 
   a.emplace(name, std::move(weights));
 

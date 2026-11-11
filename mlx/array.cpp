@@ -96,6 +96,7 @@ array::array(
     auto ptr = static_cast<char*>(data);
     std::copy(ptr, ptr + nbytes(), this->data<char>());
     deleter(data);
+    allocator::move_to_device_memory(this->buffer());
   } else {
     auto wrapped_deleter = [deleter](allocator::Buffer buffer) {
       auto ptr = buffer.raw_ptr();
