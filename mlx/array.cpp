@@ -249,6 +249,7 @@ void array::ArrayDesc::init() {
   for (const auto& in : inputs) {
     is_tracer |= in.is_tracer();
   }
+  is_backward = detail::InBackward::in_backward();
 }
 
 array::ArrayDesc::ArrayDesc(Shape shape, Dtype dtype)
