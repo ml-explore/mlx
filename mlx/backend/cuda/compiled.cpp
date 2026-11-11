@@ -227,6 +227,15 @@ void Compiled::eval_gpu(
     std::vector<array>& outputs) {
   nvtx3::scoped_range r("Compiled::eval_gpu");
   auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  // All outputs have the same shape. Do not launch a kernel when it is empty.
+  if (outputs[0].size() == 0) {
+    for (auto& out : outputs) {
+      out.set_data(cu::malloc_async(0, encoder));
+    }
+    return;
+  }
 
   // Determine the work per thread for the vectorized reads/writes. We take it
   // as 16 over the max itemsize for the outputs. Another heuristic could be
@@ -236,8 +245,6 @@ void Compiled::eval_gpu(
     max_size = (max_size > x.itemsize()) ? max_size : x.itemsize();
   }
   int work_per_thread = 16 / max_size;
-
-  auto& encoder = cu::get_command_encoder(s);
 
   cu::JitModule& mod = cu::get_jit_module(encoder.device(), lib_name(), [&]() {
     // Build source code.
