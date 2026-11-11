@@ -257,6 +257,14 @@ inline void build_kernel(
 void Compiled::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
+  // All outputs have the same shape. Do not launch a kernel when it is empty.
+  if (outputs[0].size() == 0) {
+    for (auto& out : outputs) {
+      out.set_data(allocator::malloc(0));
+    }
+    return;
+  }
+
   // Get the kernel if someone else built it already
   auto& s = stream();
   auto& d = metal::device(s.device);
