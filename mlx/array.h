@@ -628,6 +628,7 @@ void array::init(It src) {
       std::copy(src, src + size(), data<complex64_t>());
       break;
   }
+  allocator::move_to_device_memory(buffer());
 }
 
 /* Utilities for determining whether a template parameter is array. */

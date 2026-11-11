@@ -327,6 +327,39 @@ void CudaAllocator::move_to_unified_memory(
   buf.device = -1;
 }
 
+void CudaAllocator::move_to_device_memory(CudaBuffer& buf, int device) {
+  // Without a memory pool there is no free stream to copy on. Small buffers
+  // are cheap to read over PCIe and not worth a copy and a sync.
+  if (supports_managed_memory() || buf.device != -1 || buf.size < page_size ||
+      !mem_pools_[device]) {
+    return;
+  }
+  cu::device(device).make_current();
+  // The free stream is mostly idle, so waiting on it does not stall on kernels.
+  cudaStream_t stream = free_streams_[device];
+  CudaBuffer* dev;
+  try {
+    dev =
+        static_cast<CudaBuffer*>(malloc_async(buf.size, device, stream).ptr());
+  } catch (const std::runtime_error&) {
+    // Out of device memory, stay in host memory.
+    return;
+  }
+  if (dev->device == device) {
+    try {
+      CHECK_CUDA_ERROR(cudaMemcpyAsync(
+          dev->data, buf.data, buf.size, cudaMemcpyHostToDevice, stream));
+      CHECK_CUDA_ERROR(cudaStreamSynchronize(stream));
+    } catch (...) {
+      free(Buffer{dev});
+      throw;
+    }
+    std::swap(buf, *dev);
+  }
+  // Returns the host memory to the cache.
+  free(Buffer{dev});
+}
+
 // This must be called with mutex_ acquired
 void CudaAllocator::free_cuda_buffer(CudaBuffer* buf) {
   if (scalar_pool_.in_pool(buf)) {
@@ -443,6 +476,15 @@ void* Buffer::raw_ptr() {
 
 bool can_reuse_alien_buffer(void* ptr) {
   return true;
+}
+
+void move_to_device_memory(Buffer buffer) {
+  auto d = default_device();
+  if (d.type != Device::gpu || !buffer.ptr()) {
+    return;
+  }
+  cu::allocator().move_to_device_memory(
+      *static_cast<cu::CudaBuffer*>(buffer.ptr()), cu::device(d).cuda_device());
 }
 
 } // namespace allocator

@@ -58,6 +58,10 @@ class CudaAllocator : public allocator::Allocator {
   // host memory), and copy the data over. Pass |stream| to copy asynchronously.
   void move_to_unified_memory(CudaBuffer& buf, cudaStream_t stream = nullptr);
 
+  // Without managed memory, replace the pinned host memory of |buf| with
+  // memory on |device| and copy the data over synchronously.
+  void move_to_device_memory(CudaBuffer& buf, int device);
+
   size_t get_active_memory() const;
   size_t get_peak_memory() const;
   void reset_peak_memory();
