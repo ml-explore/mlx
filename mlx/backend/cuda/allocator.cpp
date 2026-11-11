@@ -188,6 +188,18 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
   // Find available buffer from cache.
   std::unique_lock lock(mutex_);
   CudaBuffer* buf = buffer_cache_.reuse_from_cache(size);
+  // Pinned host memory is read over PCIe, skip it for device allocations.
+  // Put it back instead of freeing, cudaFreeHost synchronizes the device.
+  if (device >= 0 && !supports_managed_memory()) {
+    std::vector<CudaBuffer*> host_bufs;
+    while (buf && buf->device == -1) {
+      host_bufs.push_back(buf);
+      buf = buffer_cache_.reuse_from_cache(size);
+    }
+    for (auto* b : host_bufs) {
+      buffer_cache_.recycle_to_cache(b);
+    }
+  }
   if (!buf) {
     // If we have a lot of memory pressure try to reclaim memory from the cache.
     int64_t mem_to_free =
