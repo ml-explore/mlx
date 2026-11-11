@@ -13,6 +13,15 @@ endif()
 if(MLX_BUILD_CUDA)
   list(APPEND GPU_TEST_SOURCES cuda_tests.cpp)
   target_link_libraries(tests PRIVATE CUDA::cudart)
+  if(WIN32 AND BUILD_SHARED_LIBS)
+    add_executable(cuda_wddm_exit_test cuda_wddm_exit_test.cpp)
+    target_link_libraries(cuda_wddm_exit_test PRIVATE mlx CUDA::cudart)
+    target_compile_definitions(cuda_wddm_exit_test PRIVATE NOMINMAX
+                                                           WIN32_LEAN_AND_MEAN)
+    add_test(NAME cuda_wddm_process_exit COMMAND cuda_wddm_exit_test)
+    set_tests_properties(cuda_wddm_process_exit PROPERTIES SKIP_RETURN_CODE 77
+                                                           TIMEOUT 30)
+  endif()
 endif()
 
 if(MLX_BUILD_METAL)
