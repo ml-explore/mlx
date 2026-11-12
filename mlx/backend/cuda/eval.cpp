@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/gpu/eval.h"
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/cublas_utils.h"
 #include "mlx/backend/cuda/cudnn_utils.h"
@@ -54,7 +55,9 @@ void eval(array& arr) {
     if (arr.is_tracer()) {
       inputs = arr.inputs();
     }
-    arr.primitive().eval_gpu(arr.inputs(), outputs);
+    if (!set_empty_outputs(outputs)) {
+      arr.primitive().eval_gpu(arr.inputs(), outputs);
+    }
   }
 
   auto& stream = arr.primitive().stream();

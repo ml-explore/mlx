@@ -48,6 +48,9 @@ std::tuple<dim3, uint32_t> get_launch_args(
     int work_per_thread /* = 1 */,
     uint32_t max_block_dim /* = 1024 */) {
   size_t nthreads = cuda::ceil_div(size, work_per_thread);
+  if (nthreads == 0) {
+    return std::make_tuple(dim3(0), 1u);
+  }
   uint32_t block_dim = max_block_dim < nthreads ? max_block_dim : nthreads;
   dim3 num_blocks;
   if (large) {
@@ -64,6 +67,9 @@ get_launch_args_general(int dim0, size_t rest, int work_per_thread /* = 1 */) {
   constexpr uint32_t max_grid_yz_dim = 65535;
   dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
   dim3 block_dims = get_block_dims(dim0, rest, 1);
+  if (dim0 == 0 || rest == 0) {
+    return {dim3(0), block_dims};
+  }
   uint32_t num_blocks_x = cuda::ceil_div(dim0, block_dims.x);
   uint32_t num_blocks_y = cuda::ceil_div(rest, block_dims.y);
   uint32_t num_blocks_z = cuda::ceil_div(num_blocks_y, max_grid_yz_dim);
