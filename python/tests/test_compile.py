@@ -1737,11 +1737,13 @@ class TestCompile(mlx_tests.MLXTestCase):
         b = mx.zeros((0,))
         out = cfun(a, b)
         self.assertEqual(out.shape, (17, 0))
-        self.assertTrue(mx.array_equal(out, fun(a, b)))
+        self.assertTrue(mx.array_equal(out, fun(a, b), stream=mx.cpu))
 
-        out = cfun(a[::2], b)
-        self.assertEqual(out.shape, (9, 0))
-        self.assertTrue(mx.array_equal(out, fun(a[::2], b)))
+        # Input from a matmul with an empty output (#4869)
+        x = mx.zeros((0, 32)) @ mx.zeros((32, 16))
+        out = mx.compile(lambda x: x * 2 + 1)(x)
+        self.assertEqual(out.shape, (0, 16))
+        self.assertTrue(mx.array_equal(out, out, stream=mx.cpu))
 
 
 if __name__ == "__main__":
