@@ -588,7 +588,6 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("SliceUpdate::eval_gpu");
   assert(inputs.size() == 2);
   if (out.size() == 0) {
-    out.set_data(cu::malloc_async(0, cu::get_command_encoder(stream())));
     return;
   }
 

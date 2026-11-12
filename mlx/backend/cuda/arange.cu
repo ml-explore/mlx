@@ -38,11 +38,11 @@ __global__ void arange(T* out, IdxT size, T start, T step) {
 
 void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Arange::eval_gpu");
-  auto& encoder = cu::get_command_encoder(stream());
-  out.set_data(cu::malloc_async(out.nbytes(), encoder));
   if (out.size() == 0) {
     return;
   }
+  auto& encoder = cu::get_command_encoder(stream());
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
   encoder.set_output_array(out);
 
   dispatch_int_float_types(out.dtype(), "Arange", [&](auto type_tag) {
