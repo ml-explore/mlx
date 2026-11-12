@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <memory>
 
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
@@ -42,7 +43,9 @@ void eval(array& arr) {
     }
 
     debug_set_primitive_buffer_label(command_buffer, arr.primitive());
-    arr.primitive().eval_gpu(arr.inputs(), outputs);
+    if (!set_empty_outputs(outputs)) {
+      arr.primitive().eval_gpu(arr.inputs(), outputs);
+    }
   }
   std::unordered_set<std::shared_ptr<array::Data>> buffers;
   for (auto& in : arr.inputs()) {

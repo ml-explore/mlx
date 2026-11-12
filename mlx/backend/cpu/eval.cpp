@@ -1,5 +1,6 @@
 // Copyright © 2025 Apple Inc.
 #include "mlx/backend/cpu/eval.h"
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
@@ -32,7 +33,9 @@ void eval(array& arr) {
     if (arr.is_tracer()) {
       inputs = arr.inputs();
     }
-    arr.primitive().eval_cpu(arr.inputs(), outputs);
+    if (!set_empty_outputs(outputs)) {
+      arr.primitive().eval_cpu(arr.inputs(), outputs);
+    }
   }
 
   std::unordered_set<std::shared_ptr<array::Data>> buffers;

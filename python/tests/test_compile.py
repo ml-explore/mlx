@@ -1728,6 +1728,23 @@ class TestCompile(mlx_tests.MLXTestCase):
         x = mx.array([1.0, float("nan"), 3.0])
         self.assertTrue(mx.array_equal(mx.compile(fun)(x), mx.array([False, True])))
 
+    def test_compile_empty_output(self):
+        def fun(a, b):
+            return mx.exp(a) * b
+
+        cfun = mx.compile(fun)
+        a = mx.zeros((17, 0))
+        b = mx.zeros((0,))
+        out = cfun(a, b)
+        self.assertEqual(out.shape, (17, 0))
+        self.assertTrue(mx.array_equal(out, fun(a, b), stream=mx.cpu))
+
+        # Input from a matmul with an empty output (#4869)
+        x = mx.zeros((0, 32)) @ mx.zeros((32, 16))
+        out = mx.compile(lambda x: x * 2 + 1)(x)
+        self.assertEqual(out.shape, (0, 16))
+        self.assertTrue(mx.array_equal(out, out, stream=mx.cpu))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

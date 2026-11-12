@@ -925,6 +925,41 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(out[0], a))
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
+    def test_custom_kernel_empty_and_nonempty_outputs(self):
+        if mx.metal.is_available():
+            source = """
+                uint elem = thread_position_in_grid.x;
+                out1[elem] = a[elem];
+            """
+            custom_kernel = mx.fast.metal_kernel
+        elif mx.cuda.is_available():
+            source = """
+                auto elem = cooperative_groups::this_grid().thread_rank();
+                out1[elem] = a[elem];
+            """
+            custom_kernel = mx.fast.cuda_kernel
+
+        a = mx.ones((4,))
+        kernel = custom_kernel(
+            name="empty_and_nonempty",
+            input_names=["a"],
+            output_names=["out0", "out1"],
+            source=source,
+        )
+        out0, out1 = kernel(
+            inputs=[a],
+            grid=(4, 1, 1),
+            threadgroup=(4, 1, 1),
+            output_shapes=[(0,), (4,)],
+            output_dtypes=[mx.float32, mx.float32],
+            init_value=0,
+            stream=mx.gpu,
+        )
+        mx.eval(out0, out1)
+        self.assertTrue(mx.array_equal(out0, out0, stream=mx.cpu))
+        self.assertTrue(mx.array_equal(out1, a))
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_custom_kernel_args(self):
         if mx.metal.is_available():
             source = """

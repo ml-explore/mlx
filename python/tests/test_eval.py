@@ -255,6 +255,21 @@ class TestEval(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(x == 6.0).item())
         self.assertEqual((mx.ones((4,), stream=mx.cpu) + 1).sum().item(), 8.0)
 
+    def test_empty_outputs(self):
+        # Read each output on the CPU, so an output with no data fails
+        def check(*outs):
+            mx.eval(outs)
+            for o in outs:
+                self.assertEqual(o.size, 0)
+                self.assertTrue(mx.array_equal(o, o, stream=mx.cpu).item())
+
+        # One output
+        check(mx.zeros((0, 32)) @ mx.zeros((32, 16)))
+        # More than one output, all empty
+        check(*mx.quantize(mx.zeros((0, 64)), 64, 4))
+        # CPU eval
+        check(mx.conv2d(mx.zeros((2, 8, 8, 4)), mx.zeros((0, 3, 3, 4)), stream=mx.cpu))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

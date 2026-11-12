@@ -222,6 +222,19 @@ inline bool is_donatable(const array& in, const array& out) {
       in.buffer_size() <= out.nbytes() + donation_extra;
 }
 
+// If all outputs are empty, give each one a 0-byte buffer and return true.
+inline bool set_empty_outputs(std::vector<array>& outputs) {
+  for (auto& o : outputs) {
+    if (o.size() != 0) {
+      return false;
+    }
+  }
+  for (auto& o : outputs) {
+    o.set_data(allocator::malloc(0));
+  }
+  return true;
+}
+
 std::pair<bool, Strides> prepare_reshape(const array& in, const array& out);
 
 void shared_buffer_reshape(
