@@ -1577,6 +1577,11 @@ std::vector<array> Convolution::vjp(
     }
     // Grads for weight
     else if (a == 1) {
+      if (in.shape(0) == 0) {
+        grads.push_back(zeros_like(wt, stream()));
+        continue;
+      }
+
       bool no_dilation = true;
 
       for (int i = 0; i < input_dilation_.size(); i++) {
