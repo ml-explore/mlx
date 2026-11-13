@@ -2,6 +2,10 @@
 
 #include "doctest/doctest.h"
 
+#include <atomic>
+#include <chrono>
+#include <thread>
+
 #include "mlx/mlx.h"
 #include "mlx/scheduler.h"
 
@@ -324,6 +328,42 @@ TEST_CASE("test scheduler races") {
     y = exp(y);
   }
   eval(a, y);
+}
+
+TEST_CASE("test eval reads the task count while cpu tasks complete") {
+  auto s = new_stream(Device::cpu);
+  auto y = zeros({100}, s);
+  for (int i = 0; i < 1000; ++i) {
+    y = exp(y, s);
+  }
+  eval(y);
+  CHECK_EQ(y.size(), 100);
+}
+
+TEST_CASE("test wait for capacity blocks until a task completes") {
+  auto s = default_stream(default_device());
+  synchronize(s);
+  for (int i = 0; i < 11; ++i) {
+    scheduler::notify_new_task(s);
+  }
+  std::atomic<bool> returned{false};
+  std::thread waiter([&returned] {
+    scheduler::wait_for_capacity({});
+    returned = true;
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  CHECK_FALSE(returned);
+  scheduler::notify_task_completion(s);
+  waiter.join();
+  CHECK(returned);
+  for (int i = 0; i < 10; ++i) {
+    scheduler::notify_task_completion(s);
+  }
+}
+
+TEST_CASE("test wait for capacity returns when under the limit") {
+  synchronize(default_stream(default_device()));
+  scheduler::wait_for_capacity({});
 }
 
 // The fence orders work between two streams. Check that the consumer sees the
