@@ -39,7 +39,7 @@ Simd<T, N> exp(Simd<T, N> in) {
     Simd<float, N> x_init = in;
     auto x = x_init * 1.442695f; // multiply with log_2(e)
     Simd<float, N> ipart, fpart;
-    ipart = floor(x + 0.5);
+    ipart = floor(x + 0.5f);
     fpart = x - ipart;
 
     x = 1.535336188319500e-4f;

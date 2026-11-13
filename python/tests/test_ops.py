@@ -687,6 +687,19 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.floor(mx.array([22 + 3j, 19 + 98j]))
 
+        # Exact for values near the float32 integer limit, signed zeros,
+        # subnormals, infinities and NaN.
+        v = np.array(
+            [-0.0, 0.0, -0.5, 0.5, -1.5, 2.5, 0.99999994, -0.99999994]
+            + [8388607.5, -8388607.5, 8388608.0, -8388609.0, 3e9, -3e9]
+            + [3.4e38, -3.4e38, np.inf, -np.inf, np.nan, 1e-40, -1e-40],
+            dtype=np.float32,
+        )
+        v = np.tile(v, 100)
+        out = np.array(mx.floor(mx.array(v)))
+        np.testing.assert_array_equal(out, np.floor(v))
+        np.testing.assert_array_equal(np.signbit(out), np.signbit(np.floor(v)))
+
     def test_ceil(self):
         x = mx.array([-22.03, 19.98, -27, 9, 0.0, -np.inf, np.inf])
         expected = [-22, 20, -27, 9, 0, -np.inf, np.inf]
@@ -1305,6 +1318,19 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = np.exp(a, dtype=np.float32)
 
         self.assertTrue(np.allclose(result, expected))
+
+        v = np.array(
+            [0.0, -0.0, 88.5, -88.5, 100.0, -100.0, np.inf, -np.inf, np.nan],
+            dtype=np.float32,
+        )
+        out = np.array(mx.exp(mx.array(v)))
+        np.testing.assert_array_equal(
+            out, [1.0, 1.0, np.inf, 0.0, np.inf, 0.0, np.inf, 0.0, np.nan]
+        )
+
+        x = np.linspace(-87, 87, 100003, dtype=np.float32)
+        out = np.array(mx.exp(mx.array(x)))
+        np.testing.assert_allclose(out, np.exp(x.astype(np.float64)), rtol=5e-6)
 
     def test_expm1(self):
         a = mx.array([-88, -87, 0, 0.5, -0.5, 5, 87, 88, 89, 90])

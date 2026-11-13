@@ -103,6 +103,25 @@ DEFAULT_UNARY(sqrt, std::sqrt)
 DEFAULT_UNARY(tan, std::tan)
 DEFAULT_UNARY(tanh, std::tanh)
 
+#if (defined(__x86_64__) || defined(_M_X64)) && !defined(__SSE4_1__)
+// Without SSE4.1 (no roundss), std::floor on float is an out-of-line libm
+// call. That blocks vectorization of every loop using it, e.g. the exp
+// approximation used by exp, softmax, sigmoid, etc. This version is exact
+// (including the sign of zero, NaN, inf and large values) and inlines.
+inline Simd<float, 1> floor(Simd<float, 1> in) {
+  // Written without branches so that loops using it can be vectorized.
+  float x = in.value;
+  // |x| >= 2^23 (or NaN / inf): x is already integral.
+  bool small = std::abs(x) < 8388608.0f;
+  float xs = small ? x : 0.0f;
+  float t = static_cast<float>(static_cast<int32_t>(xs));
+  float r = t - ((t > xs) ? 1.0f : 0.0f);
+  // The result has the same sign as x (this restores floor(-0.0) == -0.0).
+  r = std::copysign(r, x);
+  return small ? r : x;
+}
+#endif
+
 template <typename T>
 Simd<T, 1> abs(Simd<T, 1> in) {
   if constexpr (std::is_unsigned_v<T>) {
@@ -348,6 +367,16 @@ Simd<T, 1> clamp(Simd<T, 1> v, Simd<T, 1> min, Simd<T, 1> max) {
 
 template <typename T, typename U>
 Simd<T, 1> fma(Simd<T, 1> x, Simd<T, 1> y, U z) {
+#if (defined(__x86_64__) || defined(_M_X64)) && !defined(__FMA__)
+  // Without hardware FMA enabled at compile time, std::fma is an out-of-line
+  // libm call (and a software emulation on CPUs without FMA), which makes
+  // the polynomial approximations built on it (exp, sin, cos, erf, ...)
+  // several times slower. Those only need a multiply-add, not the single
+  // rounding of a fused operation.
+  if constexpr (std::is_floating_point_v<T>) {
+    return x.value * y.value + Simd<T, 1>(z).value;
+  }
+#endif
   return std::fma(x.value, y.value, Simd<T, 1>(z).value);
 }
 

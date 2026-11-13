@@ -88,3 +88,12 @@ else()
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
                              ${CMAKE_CURRENT_SOURCE_DIR}/jit_compiler.cpp)
 endif()
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  # Match clang's default floating point exception semantics. MLX does not read
+  # FP exception flags, and without this GCC refuses to if-convert (and
+  # therefore vectorize) loops with selects, such as the exp approximation used
+  # by exp, softmax and sigmoid. Results are unchanged (unlike -ffast-math).
+  target_compile_options(mlx
+                         PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-trapping-math>)
+endif()
