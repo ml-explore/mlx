@@ -36,7 +36,7 @@ class MLX_API Scheduler {
   void notify_new_task(const Stream& stream) {
     {
       std::lock_guard<std::mutex> lk(mtx);
-      n_active_tasks_++;
+      n_active_tasks_.fetch_add(1, std::memory_order_relaxed);
     }
     completion_cv.notify_all();
   }
@@ -44,13 +44,13 @@ class MLX_API Scheduler {
   void notify_task_completion(const Stream& stream) {
     {
       std::lock_guard<std::mutex> lk(mtx);
-      n_active_tasks_--;
+      n_active_tasks_.fetch_sub(1, std::memory_order_relaxed);
     }
     completion_cv.notify_all();
   }
 
   int n_active_tasks() const {
-    return n_active_tasks_;
+    return n_active_tasks_.load(std::memory_order_relaxed);
   }
 
   void wait_for_one() {
@@ -68,7 +68,7 @@ class MLX_API Scheduler {
 
   StreamThread& get_thread(Stream s);
 
-  int n_active_tasks_{0};
+  std::atomic<int> n_active_tasks_{0};
   std::unordered_map<int, std::unique_ptr<StreamThread>> threads_;
   std::shared_mutex threads_mtx_;
   std::condition_variable completion_cv;

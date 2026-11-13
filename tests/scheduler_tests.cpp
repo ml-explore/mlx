@@ -326,6 +326,16 @@ TEST_CASE("test scheduler races") {
   eval(a, y);
 }
 
+TEST_CASE("test eval reads the task count while cpu tasks complete") {
+  auto s = new_stream(Device::cpu);
+  auto y = zeros({100}, s);
+  for (int i = 0; i < 1000; ++i) {
+    y = exp(y, s);
+  }
+  eval(y);
+  CHECK_EQ(y.size(), 100);
+}
+
 // The fence orders work between two streams. Check that the consumer sees the
 // producer result for every combination of producer and consumer device.
 TEST_CASE("test cross stream fence ordering") {
