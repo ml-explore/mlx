@@ -115,6 +115,29 @@ void contiguous_reduce(
     Op op,
     U init) {
   constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
+  if constexpr (N == 1) {
+    // No native SIMD type: use several independent accumulators so that the
+    // loop is not bound by the latency of a single dependency chain (and the
+    // compiler can vectorize it).
+    constexpr int K = 8;
+    if (size >= 2 * K) {
+      U acc[K];
+      for (int k = 0; k < K; k++) {
+        acc[k] = init;
+      }
+      while (size >= K) {
+        for (int k = 0; k < K; k++) {
+          acc[k] = op(acc[k], x[k]);
+        }
+        x += K;
+        size -= K;
+      }
+      for (int k = 1; k < K; k++) {
+        acc[0] = op(acc[0], acc[k]);
+      }
+      *accumulator = op(*accumulator, acc[0]);
+    }
+  }
   simd::Simd<U, N> accumulator_v(init);
   while (size >= N) {
     accumulator_v = op(accumulator_v, simd::Simd<U, N>(simd::load<T, N>(x)));

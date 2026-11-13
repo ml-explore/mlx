@@ -217,6 +217,30 @@ class TestReduce(mlx_tests.MLXTestCase):
                 mx.eval(out)
                 self.assertEqual(out.shape, (0,))
 
+    def test_sum_float32_accuracy(self):
+        x = np.random.default_rng(0).uniform(0, 1, (1 << 22) + 3)
+        x = x.astype(np.float32)
+        expected = x.astype(np.float64).sum()
+        out = mx.sum(mx.array(x)).item()
+        self.assertLess(abs(out - expected) / expected, 1e-5)
+
+        rows = x[: 1031 * 2053].reshape(1031, 2053)
+        np.testing.assert_allclose(
+            np.array(mx.sum(mx.array(rows), axis=1)),
+            rows.astype(np.float64).sum(axis=1),
+            rtol=1e-5,
+        )
+        np.testing.assert_array_equal(
+            np.array(mx.max(mx.array(rows), axis=1)), rows.max(axis=1)
+        )
+        np.testing.assert_array_equal(
+            np.array(mx.min(mx.array(rows), axis=1)), rows.min(axis=1)
+        )
+
+        x[123457] = np.nan
+        self.assertTrue(math.isnan(mx.max(mx.array(x)).item()))
+        self.assertTrue(math.isnan(mx.min(mx.array(x)).item()))
+
     def test_sum_bool(self):
         x = np.random.uniform(0, 1, size=(10, 10, 10)) > 0.5
         y = mx.array(x)
