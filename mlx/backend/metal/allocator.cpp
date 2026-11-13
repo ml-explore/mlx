@@ -210,7 +210,10 @@ void MetalAllocator::free(Buffer buffer) {
 }
 
 size_t MetalAllocator::size(Buffer buffer) const {
-  return static_cast<MTL::Buffer*>(buffer.ptr())->length();
+  if (const auto* p = buffer.ptr(); p) {
+    return static_cast<const MTL::Buffer*>(p)->length();
+  }
+  return 0;
 }
 
 Buffer MetalAllocator::make_buffer(void* ptr, size_t size) {
