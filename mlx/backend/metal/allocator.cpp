@@ -218,8 +218,9 @@ Buffer MetalAllocator::make_buffer(void* ptr, size_t size) {
   if (!buf) {
     return Buffer{nullptr};
   }
+  // The caller owns this memory, so it is not wired. Wiring a file-backed
+  // mapping would read the whole file and keep it in memory.
   std::unique_lock lk(mutex_);
-  residency_sets_.insert(buf);
   active_memory_ += buf->length();
   peak_memory_ = std::max(peak_memory_, active_memory_);
   num_resources_++;
@@ -234,7 +235,6 @@ void MetalAllocator::release(Buffer buffer) {
   std::unique_lock lk(mutex_);
   active_memory_ -= buf->length();
   num_resources_--;
-  residency_sets_.erase(buf);
   lk.unlock();
   auto pool = metal::new_scoped_memory_pool();
   buf->release();
