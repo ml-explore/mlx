@@ -99,11 +99,13 @@ void copy_gpu_inplace(
 }
 
 void fill_gpu(const array& in, array& out, const Stream& s) {
+  // Allocate even when empty. Matmul uses fill to materialize its output.
+  // Without a Data object, a compiled kernel crashes when it binds the array.
+  auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
   if (out.size() == 0) {
     return;
   }
-  auto& encoder = cu::get_command_encoder(s);
-  out.set_data(cu::malloc_async(out.nbytes(), encoder));
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   copy_contiguous(encoder, CopyType::Scalar, in, out, 0, 0);

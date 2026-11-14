@@ -10,6 +10,7 @@ from io import StringIO
 from itertools import product
 
 import mlx.core as mx
+import mlx.nn as nn
 import mlx_tests
 import numpy as np
 
@@ -45,6 +46,50 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = compiled_fn(x, y)
         self.assertEqual(out.dtype, mx.int32)
         self.assertTrue(mx.array_equal(out, mx.array([2, 4])))
+
+    def test_compile_empty_matmul_output(self):
+        # Regression test for https://github.com/ml-explore/mlx/issues/4869.
+        # On GPU, matmul left an empty output with no data buffer. A compiled
+        # elementwise kernel then crashed when it bound that input.
+        # Run on the GPU when this build has one, so the Metal and CUDA CI
+        # jobs hit that path. CPU-only builds keep the default device.
+        if mx.metal.is_available() or mx.cuda.is_available():
+            device = mx.gpu
+        else:
+            device = mx.default_device()
+
+        with mx.stream(device):
+            x = mx.zeros((0, 32)) @ mx.zeros((32, 16))
+            eager = x * 2 + 1
+            compiled = mx.compile(lambda a: a * 2 + 1)(x)
+            mx.eval(compiled, eager)
+            self.assertEqual(compiled.shape, (0, 16))
+            self.assertEqual(compiled.dtype, x.dtype)
+            self.assertTrue(mx.array_equal(compiled, eager).item())
+            # Touch the buffer. A missing Data object segfaults here.
+            self.assertEqual(np.array(compiled).shape, (0, 16))
+
+            # Evaluating the matmul first did not avoid the crash.
+            x_eval = mx.zeros((0, 32)) @ mx.zeros((32, 16))
+            mx.eval(x_eval)
+            self.assertEqual(np.array(x_eval).shape, (0, 16))
+            compiled_eval = mx.compile(lambda a: a * 2 + 1)(x_eval)
+            mx.eval(compiled_eval)
+            self.assertEqual(compiled_eval.shape, (0, 16))
+            self.assertTrue(mx.array_equal(compiled_eval, eager).item())
+
+            # mlx.nn.gelu is compiled and crashed on this input.
+            gelu_out = nn.gelu(x_eval)
+            mx.eval(gelu_out)
+            self.assertEqual(gelu_out.shape, (0, 16))
+            gelu_zeros = nn.gelu(mx.zeros((0, 16)))
+            self.assertTrue(mx.array_equal(gelu_out, gelu_zeros).item())
+
+            # Empty K still fills a non-empty output with zeros.
+            k0 = mx.zeros((2, 0)) @ mx.zeros((0, 3))
+            mx.eval(k0)
+            self.assertEqual(k0.shape, (2, 3))
+            self.assertTrue(mx.array_equal(k0, mx.zeros((2, 3))).item())
 
     def test_compile_sigmoid_matches_eager(self):
         # Regression test: `Sigmoid` spelled an unqualified `metal::exp`, which

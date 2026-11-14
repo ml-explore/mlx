@@ -180,10 +180,12 @@ void copy_gpu_inplace(
 }
 
 void fill_gpu(const array& val, array& out, const Stream& s) {
+  // Allocate even when empty. Matmul uses fill to materialize its output.
+  // Without a Data object, a compiled kernel crashes when it binds the array.
+  out.set_data(allocator::malloc(out.nbytes()));
   if (out.size() == 0) {
     return;
   }
-  out.set_data(allocator::malloc(out.nbytes()));
   bool large = out.data_size() > UINT32_MAX;
   int work_per_thread = get_work_per_thread(out.dtype(), out.data_size());
   auto& d = metal::device(s.device);
