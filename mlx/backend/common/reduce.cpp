@@ -39,7 +39,8 @@ ReductionPlan get_reduction_plan(const array& x, const std::vector<int>& axes) {
     Shape shape = {x.shape(axes[0])};
     Strides strides = {x.strides()[axes[0]]};
     for (int i = 1; i < axes.size(); i++) {
-      if (axes[i] - 1 == axes[i - 1] && x.shape(axes[i]) > 1) {
+      if (axes[i] - 1 == axes[i - 1] && x.shape(axes[i]) > 1 &&
+          static_cast<int64_t>(shape.back()) * x.shape(axes[i]) <= INT32_MAX) {
         shape.back() *= x.shape(axes[i]);
         strides.back() = x.strides()[axes[i]];
       } else {
@@ -94,7 +95,8 @@ ReductionPlan get_reduction_plan(const array& x, const std::vector<int>& axes) {
     auto b = reductions[i - 1];
 
     // b.stride = a.shape * a.stride then a and b are contiguous
-    if (b.second == a.first * a.second) {
+    if (b.second == a.first * a.second &&
+        static_cast<int64_t>(a.first) * b.first <= INT32_MAX) {
       reductions.erase(reductions.begin() + i);
       reductions[i - 1] = std::make_pair(a.first * b.first, a.second);
     }
