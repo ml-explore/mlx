@@ -1,5 +1,6 @@
 // Copyright © 2023-2026 Apple Inc.
 
+#include <atomic>
 #include <chrono>
 #include <future>
 #include <memory>
@@ -40,6 +41,42 @@ TEST_CASE("test simple allocations") {
     auto buffer = allocator::allocator().malloc(0);
     allocator::allocator().free(buffer);
   }
+}
+
+TEST_CASE("test peak memory is the largest active memory") {
+  clear_cache();
+  reset_peak_memory();
+  auto baseline = get_active_memory();
+  size_t size = 1 << 20;
+  for (int i = 0; i < 10; ++i) {
+    auto buffer = allocator::allocator().malloc(size);
+    allocator::allocator().free(buffer);
+  }
+  CHECK_GE(get_peak_memory(), baseline + size);
+  CHECK_LT(get_peak_memory(), baseline + 2 * size);
+  clear_cache();
+}
+
+TEST_CASE("test memory stats are readable while another thread allocates") {
+  std::atomic<bool> done{false};
+  std::thread allocating([&done] {
+    for (int i = 0; i < 1000; ++i) {
+      auto buffer = allocator::allocator().malloc(4096);
+      allocator::allocator().free(buffer);
+    }
+    done = true;
+  });
+  bool peak_never_decreased = true;
+  auto last_peak = get_peak_memory();
+  do {
+    get_active_memory();
+    auto peak = get_peak_memory();
+    peak_never_decreased = peak_never_decreased && peak >= last_peak;
+    last_peak = peak;
+  } while (!done);
+  allocating.join();
+  CHECK(peak_never_decreased);
+  CHECK_GE(get_peak_memory(), 4096);
 }
 
 TEST_CASE("test large allocations") {
