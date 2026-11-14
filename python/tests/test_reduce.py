@@ -217,6 +217,10 @@ class TestReduce(mlx_tests.MLXTestCase):
                 mx.eval(out)
                 self.assertEqual(out.shape, (0,))
 
+        # An empty array with large dimensions
+        a = mx.zeros((1, 2**16, 2**16, 0))
+        self.assertEqual(mx.sum(a, axis=(1, 2, 3)).item(), 0)
+
     def test_sum_bool(self):
         x = np.random.uniform(0, 1, size=(10, 10, 10)) > 0.5
         y = mx.array(x)
@@ -384,6 +388,10 @@ class TestReduce(mlx_tests.MLXTestCase):
         self.assertEqual(x.max().item(), 250)
         self.assertTrue(x.any().item())
         self.assertFalse(x.all().item())
+
+        # Reducing two axes that together hold 2**31 + 2**16 elements
+        self.assertEqual(x[None].max(axis=(1, 2)).item(), 250)
+        self.assertEqual(x.T[None].max(axis=(1, 2)).item(), 250)
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_init_reduce_large_output(self):
