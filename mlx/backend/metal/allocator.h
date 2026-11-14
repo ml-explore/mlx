@@ -2,6 +2,9 @@
 
 #pragma once
 
+#include <atomic>
+#include <cassert>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <vector>
@@ -24,15 +27,15 @@ class MetalAllocator : public allocator::Allocator {
   virtual void release(Buffer buffer) override;
 
   size_t get_active_memory() {
-    return active_memory_;
-  };
+    return active_memory_.load(std::memory_order_relaxed);
+  }
   size_t get_peak_memory() {
-    return peak_memory_;
-  };
+    return peak_memory_.load(std::memory_order_relaxed);
+  }
   void reset_peak_memory() {
     std::unique_lock lk(mutex_);
-    peak_memory_ = 0;
-  };
+    peak_memory_.store(0, std::memory_order_relaxed);
+  }
   size_t get_cache_memory() {
     return buffer_cache_.cache_size();
   };
@@ -62,11 +65,27 @@ class MetalAllocator : public allocator::Allocator {
   // Caching allocator
   BufferCache<MTL::Buffer> buffer_cache_;
 
+  void add_active_memory_locked(size_t size) {
+    auto active = active_memory_.load(std::memory_order_relaxed);
+    assert(size <= std::numeric_limits<size_t>::max() - active);
+    active += size;
+    active_memory_.store(active, std::memory_order_relaxed);
+    if (active > peak_memory_.load(std::memory_order_relaxed)) {
+      peak_memory_.store(active, std::memory_order_relaxed);
+    }
+  }
+
+  void sub_active_memory_locked(size_t size) {
+    auto active = active_memory_.load(std::memory_order_relaxed);
+    assert(size <= active);
+    active_memory_.store(active - size, std::memory_order_relaxed);
+  }
+
   // Allocation stats
   size_t block_limit_;
   size_t gc_limit_;
-  size_t active_memory_{0};
-  size_t peak_memory_{0};
+  std::atomic<size_t> active_memory_{0};
+  std::atomic<size_t> peak_memory_{0};
   size_t max_pool_size_;
   size_t wired_limit_{0};
   size_t num_resources_{0};
