@@ -480,6 +480,37 @@ TEST_CASE("test gguf metadata value validation") {
   }
 }
 
+TEST_CASE("test gguf metadata at unaligned offsets") {
+  std::string file_path = get_temp_file("test_unaligned_metadata.gguf");
+  std::unordered_map<std::string, array> weights = {{"w", array({1.0f, 2.0f})}};
+  std::unordered_map<std::string, GGUFMetaData> metadata = {
+      {"a", std::string("xyz")},
+      {"bcd", std::vector<std::string>{"e", "fgh", "ij"}},
+      {"efghi", array(7)},
+      {"jkl", array({1, -2, 3})},
+      {"m", array({1.5f, -2.5f})},
+      {"nopqr", astype(array({1, 2, 3}), uint64)},
+      {"stu", astype(array({-4, 5}), int16)},
+      {"v", astype(array({6, 7, 8}), uint8)},
+      {"wxyzw", array({true, false, true})}};
+  save_gguf(file_path, weights, metadata);
+
+  auto [loaded_weights, loaded_metadata] = load_gguf(file_path);
+  CHECK_EQ(loaded_metadata.size(), metadata.size());
+  CHECK_EQ(std::get<std::string>(loaded_metadata.at("a")), "xyz");
+  CHECK_EQ(
+      std::get<std::vector<std::string>>(loaded_metadata.at("bcd")),
+      std::vector<std::string>{"e", "fgh", "ij"});
+  CHECK_EQ(std::get<array>(loaded_metadata.at("efghi")).item<int>(), 7);
+  for (auto key : {"jkl", "m", "nopqr", "stu", "v", "wxyzw"}) {
+    CAPTURE(key);
+    const auto& expected = std::get<array>(metadata.at(key));
+    const auto& loaded = std::get<array>(loaded_metadata.at(key));
+    CHECK_EQ(loaded.dtype(), expected.dtype());
+    CHECK(array_equal(loaded, expected).item<bool>());
+  }
+}
+
 TEST_CASE("test gguf metadata") {
   std::string file_path = get_temp_file("test_arr.gguf");
   using dict = std::unordered_map<std::string, array>;
