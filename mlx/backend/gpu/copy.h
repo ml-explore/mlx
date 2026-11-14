@@ -41,7 +41,8 @@ void copy_gpu_inplace(
     CopyType ctype,
     const Stream& s);
 
-// Fill the output with the scalar val
+// Fill the output with the scalar val.
+// An empty output still gets a buffer so a later kernel can bind it.
 void fill_gpu(const array& val, array& out, const Stream& s);
 
 // Return a contiguous array with same shape that copies the data of |arr|.
