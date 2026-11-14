@@ -53,6 +53,22 @@ TEST_CASE("test random split") {
   CHECK(array_equal(keys, expected).item<bool>());
 }
 
+TEST_CASE("test random bits with keys at unaligned offsets") {
+  auto keys = random::split(random::key(0), 4);
+  for (int width : {1, 2}) {
+    CAPTURE(width);
+    auto fn = [width](array k) {
+      return random::bits({3}, width, k, Device::cpu);
+    };
+    auto out = vmap(fn)(keys);
+    for (int i = 0; i < keys.shape(0); ++i) {
+      CAPTURE(i);
+      auto expected = random::bits({3}, width, take(keys, i, 0), Device::cpu);
+      CHECK(array_equal(take(out, i, 0), expected).item<bool>());
+    }
+  }
+}
+
 TEST_CASE("test random bits") {
   // Test shapes, types, and sizes
   {
