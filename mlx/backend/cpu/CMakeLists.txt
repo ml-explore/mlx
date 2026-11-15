@@ -4,6 +4,20 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 else()
   set(COMPILER ${CMAKE_CXX_COMPILER})
   set(CLANG FALSE)
+  # On Linux the CPU JIT compiles every kernel with `g++` at run time (see
+  # jit_compiler.cpp), so the preamble has to be preprocessed by g++ too.
+  # libstdc++ preprocessed by clang++ uses Clang-only builtins that g++ rejects,
+  # which breaks mx.compile in Clang builds.
+  if(UNIX AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    find_program(MLX_CPU_JIT_GXX g++)
+    if(MLX_CPU_JIT_GXX)
+      set(COMPILER ${MLX_CPU_JIT_GXX})
+    else()
+      message(
+        WARNING "g++ not found: the CPU JIT preamble is preprocessed with "
+                "${CMAKE_CXX_COMPILER}, and mx.compile may fail at run time.")
+    endif()
+  endif()
 endif()
 
 set(COMPILE_DEPS
