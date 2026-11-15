@@ -90,6 +90,20 @@ void init_cudnn_handles_cache() {
   cudnn_handles_cache();
 }
 
+void clear_cudnn_handles_cache() {
+  auto& cache = cudnn_handles_cache();
+  for (int i = 0; i < static_cast<int>(cache.size()); ++i) {
+    auto& storage = cache[i];
+    if (!storage.handle) {
+      continue;
+    }
+    auto handle = storage.handle;
+    storage.handle = nullptr;
+    cu::device(i).make_current();
+    CHECK_CUDNN_ERROR(cudnnDestroy(handle));
+  }
+}
+
 fe::error_t DnnGraph::prepare() {
   RETURN_IF_ERROR(validate());
   try {
