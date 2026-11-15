@@ -56,8 +56,9 @@ single-threaded changes (vectorized math, multiple accumulators, tiled
 transposes) from the multithreading.
 
 Raw JSON is in `benchmarks/results/cpu_perf/`: the 2026-11-15 runs at the
-top level (these tables), the 2026-11-13 runs in `2026-11-13/`, and an
-interleaved single-thread check in `interleaved_1thread.json`.
+top level (these tables), the 2026-11-13 runs in `2026-11-13/`, an
+interleaved single-thread check in `interleaved_1thread.json`, and the
+compiler and flag comparison in `2026-11-15-clang/`.
 
 ## Results (2026-11-15)
 
@@ -172,6 +173,75 @@ showed `add f32 1024x1024` as 6.27x and `mean` as 19.1x.)
 The rows that moved most (`layer_norm`, the transposes, the small sort)
 are the ones with the widest `[min..max]` spread within a single run.
 
+## Compilers and flags (2026-11-15)
+
+The tables above use GCC 13.4 at `-O3` for the default x86-64 target. To
+check whether a different compiler or flags would do better, the branch
+(`1a27421`) was built six ways and the full benchmark suite was run three
+times per build, with the builds interleaved and the start order rotated
+each round. Every Clang build used clang 19.1.7 (conda-forge) against the
+same GCC 13.4 libstdc++ and sysroot, linked with lld. The table shows the
+median of the three runs. "Speedup" is the GCC `-O3` time divided by the
+other build's time, so above 1 means faster than GCC. Raw runs are in
+`benchmarks/results/cpu_perf/2026-11-15-clang/flags_interleaved.json`.
+
+| Op | GCC -O3 (ms) | clang -O3 | clang -O3 ThinLTO | clang -O3 -march=native | GCC -O3 -march=native |
+|---|---:|---:|---:|---:|---:|
+| where 4096x4096 | 21.76 | 2.50x | 2.21x | 2.55x | 1.06x |
+| exp f32 1024x1024 | 0.481 | 1.11x | 1.10x | 4.26x | 0.74x |
+| exp f32 4096x4096 | 13.02 | 0.92x | 1.06x | 1.50x | 0.82x |
+| max axis=-1 4096x4096 | 1.585 | 1.10x | 1.09x | 1.66x | 1.00x |
+| add f32 4096x4096 | 9.91 | 0.94x | 1.22x | 1.06x | 1.01x |
+| mean axis=-1 1024x1024 | 0.038 | 0.27x | 0.65x | 1.04x | 0.96x |
+| softmax f32 4096x4096 | 17.48 | 0.63x | 0.61x | 0.87x | 0.99x |
+| softmax f32 8x32x512x512 | 65.94 | 0.58x | 0.57x | 0.85x | 0.93x |
+| softmax bf16 4096x4096 | 38.54 | 0.90x | 0.90x | 1.19x | 1.30x |
+| sort axis=-1 1024x4096 | 39.77 | 0.84x | 0.84x | 0.84x | 1.00x |
+| argsort axis=-1 1024x4096 | 46.48 | 0.89x | 0.90x | 0.91x | 0.96x |
+| **Geomean, all 27 ops** | | **0.95x** | **1.00x** | **1.18x** | **1.00x** |
+
+A sixth build, clang `-O3 -fno-plt -fno-semantic-interposition`, came out
+at 1.02x, within noise.
+
+What this shows:
+
+- **Switching to Clang doesn't help overall.** Plain clang `-O3` is 5%
+  slower by geomean. It's much slower on float32 softmax (0.6x), sort
+  (0.84x) and `mean` on 1024x1024 (0.27x), and faster only on `where`.
+  ThinLTO brings it back to parity (1.00x), with no op clearly faster
+  than GCC except `where`. `-fno-plt` changes nothing.
+- **`-march=native` helps only with Clang.** clang `-O3 -march=native` is
+  the only build that beats GCC overall (1.18x). Most of that is `exp`
+  (4.3x at 1024x1024) and `max` (1.7x), from AVX-512 and FMA in the
+  vectorized math. It's still slower on float32 softmax and sort. GCC with
+  `-march=native` is a wash (1.00x) and is slower on `exp`. Both builds run
+  only on CPUs with the build machine's instruction set, so neither is a
+  default. To try it anyway:
+  `cmake .. -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_CXX_FLAGS=-march=native`.
+- **`where` was a missed vectorization in GCC**, not a Clang advantage.
+  GCC 13 can't vectorize `cond ? x : y` with a `bool` condition on x86, even
+  with `-march=native`. Commit `24b9e0f` rewrites the contiguous case as a
+  bitwise blend that both compilers vectorize. The GCC build is now as fast
+  as Clang on `where`: 2.1x faster with 8 threads and 2.5x on 1 thread
+  (`where_select.json`; measured on a loaded machine, so the times there
+  are higher than in the table above). The `where` rows elsewhere in this
+  file were measured before that commit.
+- **Clang builds broke `mx.compile` on Linux.** The CPU JIT runs `g++` at
+  run time, but CMake preprocessed its preamble with the build compiler, so
+  every compiled kernel failed with Clang (upstream issue
+  ml-explore/mlx#4577). Commit `340a079` preprocesses it with `g++` when the
+  build compiler isn't GCC. All 24 C++ compile test cases now pass in the
+  Clang build.
+
+The default build stays GCC at `-O3` with no `-march` flag.
+
+Limits of this comparison: one machine, one Clang version (19.1.7), one GCC
+version (13.4). The interleaved runs were done before an unrelated build
+started on the same machine. A separate single-thread round was dropped
+because that build overlapped it. The Clang builds were not run through the
+full test suite. Only the compile tests and Python `mx.compile` checks were
+run on them.
+
 ## Changes (one commit each)
 
 | Commit | Change | Ops it affects |
@@ -187,6 +257,8 @@ are the ones with the widest `[min..max]` spread within a single run.
 | `eb2a1db` | Split softmax rows across threads | softmax |
 | `25766a1` | Sort/argsort rows in parallel | sort, argsort |
 | `fe0fa8e` | Targeted tests vs NumPy and the benchmark script | |
+| `340a079` | Preprocess the CPU JIT preamble with `g++` in Clang builds on Linux (fixes `mx.compile` with Clang) | mx.compile |
+| `24b9e0f` | Contiguous `where` as a bitwise blend that GCC vectorizes | where |
 
 Later commits format code, add a missing include, make the report script
 use the faster baseline run, and update these docs (no kernel changes). `rms_norm` and `layer_norm` use the composed fallback on CPU, so they
@@ -194,13 +266,14 @@ speed up through the elementwise and reduction changes.
 
 ## Correctness
 
-Results from 2026-11-15, each C++ test case run in its own process:
+Results from 2026-11-15, each C++ test case run in its own process. The
+`perf/cpu` column was rerun at `24b9e0f`, with the `where` change.
 
 | Suite | Upstream `96fbf67` | `perf/cpu` |
 |---|---|---|
 | C++ `tests` (doctest) | 243 / 243 pass | 243 / 243 pass |
-| Python `python/tests` | 775 run: all pass, 60 skipped | 786 run (775 + 11 new): all pass, 60 skipped |
-| New `python/tests/test_cpu_parallel.py` | 10 / 11 pass (fails the float32 sum accuracy check) | 11 / 11 pass |
+| Python `python/tests` | 775 run: all pass, 60 skipped | 787 run (775 + 12 new): all pass, 60 skipped |
+| New `python/tests/test_cpu_parallel.py` | 10 / 11 pass (fails the float32 sum accuracy check; the 12th test is newer) | 12 / 12 pass |
 
 **`g++` must be on `PATH` for the `mx.compile` tests.** On CPU, MLX JIT-compiles
 fused kernels by calling `g++` at runtime, and turns `mx.compile` off
