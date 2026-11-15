@@ -171,6 +171,49 @@ class TestCPUParallel(mlx_tests.MLXTestCase):
             out = mx.where(mx.array(c), mx.array(a), mx.array(b))
             np.testing.assert_array_equal(np.array(out), np.where(c, a, b))
 
+    def test_where_dtypes_bit_exact(self):
+        # Contiguous where() is a bitwise blend: check every element size,
+        # and that NaN payloads, -0.0 and inf are copied exactly.
+        with mx.stream(mx.cpu):
+            for n in [7, 65537, 262147]:
+                c = self.rng.random(n) > 0.5
+                for dt in [
+                    np.bool_,
+                    np.uint8,
+                    np.int16,
+                    np.int32,
+                    np.uint64,
+                    np.float16,
+                    np.float32,
+                ]:
+                    a = (self.rng.standard_normal(n) * 100).astype(dt)
+                    b = (self.rng.standard_normal(n) * 100).astype(dt)
+                    out = np.array(mx.where(mx.array(c), mx.array(a), mx.array(b)))
+                    np.testing.assert_array_equal(out, np.where(c, a, b))
+                a = self.rand(n)
+                a[::3] = -0.0
+                a[1::5] = np.inf
+                a.view(np.uint32)[2::7] = 0x7FC00123  # NaN with a payload
+                b = self.rand(n)
+                out = np.array(mx.where(mx.array(c), mx.array(a), mx.array(b)))
+                expected = np.where(c, a, b)
+                np.testing.assert_array_equal(
+                    out.view(np.uint32), expected.view(np.uint32)
+                )
+                x = mx.array(self.rand(n)).astype(mx.bfloat16)
+                y = mx.array(self.rand(n)).astype(mx.bfloat16)
+                out = mx.where(mx.array(c), x, y)
+                ref = np.where(
+                    c, np.array(x.astype(mx.float32)), np.array(y.astype(mx.float32))
+                )
+                np.testing.assert_array_equal(np.array(out.astype(mx.float32)), ref)
+                xc = mx.array(self.rand(n) + 1j * self.rand(n))
+                yc = mx.array(self.rand(n) + 1j * self.rand(n))
+                out = np.array(mx.where(mx.array(c), xc, yc))
+                np.testing.assert_array_equal(
+                    out, np.where(c, np.array(xc), np.array(yc))
+                )
+
     def test_copies_and_transposes(self):
         with mx.stream(mx.cpu):
             for shape in [(1, 1), (3, 70001), (1023, 1025), (4096, 33), (33, 4096)]:
