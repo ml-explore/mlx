@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <complex>
 #include <functional>
+#include <limits>
 
 #ifdef _MSC_VER
 #include <intrin.h> // For _BitScanReverse
@@ -204,8 +205,9 @@ Simd<T, 1> clz(Simd<T, 1> x_) {
 #endif
 }
 
-// Integer division by zero traps on x86 and returns 0 on arm64. Define the
-// quotient as 0 on all platforms, which keeps a == (a / b) * b + (a % b).
+// Integer division by zero and min / -1 trap on x86, while arm64 yields 0 and
+// min respectively. Use the arm64 results on all platforms, which keeps
+// a == (a / b) * b + (a % b).
 template <typename T>
 Simd<T, 1> divide(Simd<T, 1> a_, Simd<T, 1> b_) {
   T a = a_.value;
@@ -213,6 +215,11 @@ Simd<T, 1> divide(Simd<T, 1> a_, Simd<T, 1> b_) {
   if constexpr (std::is_integral_v<T>) {
     if (b == 0) {
       return T(0);
+    }
+    if constexpr (std::is_signed_v<T>) {
+      if (b == T(-1) && a == std::numeric_limits<T>::min()) {
+        return a;
+      }
     }
   }
   return a / b;
@@ -226,6 +233,16 @@ Simd<T, 1> floor_divide(Simd<T, 1> a_, Simd<T, 1> b_) {
     // Integer division by zero gives 0. See divide above.
     if (b == 0) {
       return T(0);
+    }
+    // min / -1 traps on x86; return the arm64 result (min) instead. The
+    // floored adjustment below is a no-op because the division is exact.
+    if constexpr (is_signed_v<T>) {
+      if (b == T(-1)) {
+        if (a == std::numeric_limits<T>::min()) {
+          return a;
+        }
+        return T(-a);
+      }
     }
     T q = a / b;
     if constexpr (is_signed_v<T>) {
@@ -249,6 +266,12 @@ Simd<T, 1> remainder(Simd<T, 1> a_, Simd<T, 1> b_) {
   if constexpr (std::is_integral_v<T>) {
     if (b == 0) {
       return a;
+    }
+    // x % -1 is 0 for every x but min % -1 traps on x86.
+    if constexpr (is_signed_v<T>) {
+      if (b == T(-1)) {
+        return T(0);
+      }
     }
     r = a % b;
   } else {
