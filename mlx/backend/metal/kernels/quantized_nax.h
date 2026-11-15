@@ -678,6 +678,7 @@ inline void dequantize(BytePtr w, U scale, U bias, OutPtr w_local) {
 
 template <
     typename T,
+    typename S,
     short BROWS,
     short BCOLS,
     short dst_ld,
@@ -715,13 +716,13 @@ struct QuantizedBlockLoader {
 
   threadgroup T* dst;
   const device uint8_t* src;
-  const device T* scales;
-  const device T* biases;
+  const device S* scales;
+  const device S* biases;
 
   QuantizedBlockLoader(
       const device uint8_t* src_,
-      const device T* scales_,
-      const device T* biases_,
+      const device S* scales_,
+      const device S* biases_,
       const int src_ld_,
       threadgroup T* dst_,
       ushort simd_group_id [[simdgroup_index_in_threadgroup]],
@@ -800,6 +801,7 @@ struct QuantizedBlockLoader {
 
 template <
     typename T,
+    typename S,
     short BROWS,
     short BCOLS,
     short dst_ld,
@@ -808,6 +810,7 @@ template <
     short bits>
 struct QuantizedBlockLoader<
     T,
+    S,
     BROWS,
     BCOLS,
     dst_ld,
@@ -848,13 +851,13 @@ struct QuantizedBlockLoader<
 
   threadgroup T* dst;
   const device uint8_t* src;
-  const device T* scales;
-  const device T* biases;
+  const device S* scales;
+  const device S* biases;
 
   QuantizedBlockLoader(
       const device uint8_t* src_,
-      const device T* scales_,
-      const device T* biases_,
+      const device S* scales_,
+      const device S* biases_,
       const int src_ld_,
       threadgroup T* dst_,
       ushort simd_group_id [[simdgroup_index_in_threadgroup]],
@@ -931,12 +934,12 @@ struct QuantizedBlockLoader<
   }
 };
 
-template <typename T>
+template <typename T, typename S>
 METAL_FUNC void adjust_matrix_offsets(
     const device T*& x,
     const device uint32_t*& w,
-    const device T*& scales,
-    const device T*& biases,
+    const device S*& scales,
+    const device S*& biases,
     device T*& y,
     int output_stride,
     const constant int& x_batch_ndims,
@@ -970,12 +973,12 @@ METAL_FUNC void adjust_matrix_offsets(
   y += tid.z * output_stride;
 }
 
-template <typename T>
+template <typename T, typename S>
 METAL_FUNC void adjust_matrix_offsets(
     const device T*& x,
     const device uint32_t*& w,
-    const device T*& scales,
-    const device T*& biases,
+    const device S*& scales,
+    const device S*& biases,
     const device uint32_t* lhs_indices,
     const device uint32_t* rhs_indices,
     device T*& y,
@@ -1030,6 +1033,7 @@ METAL_FUNC void adjust_matrix_offsets(
 // the MMAs of step k hides the device reads behind the matrix work.
 template <
     typename T,
+    typename S,
     short BROWS,
     short BCOLS,
     short dst_ld,
@@ -1055,16 +1059,16 @@ struct QuantizedBlockLoaderStaged {
   const short bi;
   const short bj;
   const device uint8_t* src;
-  const device T* scales;
-  const device T* biases;
+  const device S* scales;
+  const device S* biases;
   uint32_t raw[n_words];
   T scale;
   T bias;
 
   QuantizedBlockLoaderStaged(
       const device uint8_t* src_,
-      const device T* scales_,
-      const device T* biases_,
+      const device S* scales_,
+      const device S* biases_,
       const int src_ld,
       ushort simd_group_id,
       ushort simd_lane_id) thread
@@ -1116,6 +1120,7 @@ struct QuantizedBlockLoaderStaged {
 // Weights use two threadgroup buffers with one barrier between K steps.
 template <
     typename T,
+    typename S,
     int group_size,
     int bits,
     typename U = T,
@@ -1125,8 +1130,8 @@ template <
     int SM = 16>
 METAL_FUNC void qmm_t_nax_staged_impl(
     const device uint32_t* w,
-    const device T* scales,
-    const device T* biases,
+    const device S* scales,
+    const device S* biases,
     const device T* x,
     device U* y,
     threadgroup T* Ws,
@@ -1149,6 +1154,7 @@ METAL_FUNC void qmm_t_nax_staged_impl(
 
   using loader_w_t = QuantizedBlockLoaderStaged<
       T,
+      S,
       BN,
       BK,
       BK_padded,
@@ -1289,6 +1295,7 @@ METAL_FUNC void qmm_t_nax_staged_impl(
 
 template <
     typename T,
+    typename S,
     int group_size,
     int bits,
     bool aligned_N,
@@ -1300,8 +1307,8 @@ template <
     int WN = 2>
 METAL_FUNC void qmm_t_nax_tgp_impl(
     const device uint32_t* w,
-    const device T* scales,
-    const device T* biases,
+    const device S* scales,
+    const device S* biases,
     const device T* x,
     device U* y,
     threadgroup T* Ws,
@@ -1325,6 +1332,7 @@ METAL_FUNC void qmm_t_nax_tgp_impl(
 
   using loader_w_t = QuantizedBlockLoader<
       T,
+      S,
       BN,
       BK,
       BK_padded,
@@ -1436,6 +1444,7 @@ METAL_FUNC void qmm_t_nax_tgp_impl(
 
 template <
     typename T,
+    typename S,
     const int group_size,
     const int bits,
     const int BM = 64,
@@ -1445,8 +1454,8 @@ template <
     const int WN = 2>
 METAL_FUNC void qmm_n_nax_tgp_impl(
     const device uint32_t* w,
-    const device T* scales,
-    const device T* biases,
+    const device S* scales,
+    const device S* biases,
     const device T* x,
     device T* y,
     threadgroup T* Ws,
@@ -1469,6 +1478,7 @@ METAL_FUNC void qmm_n_nax_tgp_impl(
 
   using loader_w_t = QuantizedBlockLoader<
       T,
+      S,
       BK,
       BN,
       BN_padded,
@@ -1564,6 +1574,7 @@ METAL_FUNC void qmm_n_nax_tgp_impl(
 
 template <
     typename T,
+    typename S,
     int group_size,
     int bits,
     bool has_global_scale, // unused
@@ -1576,8 +1587,8 @@ template <
     int WN = 2>
 [[kernel]] void affine_qmm_t_nax(
     const device uint32_t* w [[buffer(0)]],
-    const device T* scales [[buffer(1)]],
-    const device T* biases [[buffer(2)]],
+    const device S* scales [[buffer(1)]],
+    const device S* biases [[buffer(2)]],
     const device T* x [[buffer(3)]],
     device T* y [[buffer(4)]],
     const constant int& K [[buffer(5)]],
@@ -1622,16 +1633,28 @@ template <
   }
   if constexpr (WN == 1) {
     static_assert(aligned_N, "Aligned output columns");
-    qmm_t_nax_staged_impl<T, group_size, bits, T, BM, BK, BN, BM / WM>(
+    qmm_t_nax_staged_impl<T, S, group_size, bits, T, BM, BK, BN, BM / WM>(
         w, scales, biases, x, y, Ws, K, N, M, K, tid, simd_gid, simd_lid);
   } else {
-    qmm_t_nax_tgp_impl<T, group_size, bits, aligned_N, T, BM, BK, BN, WM, WN>(
+    qmm_t_nax_tgp_impl<
+        T,
+        S,
+        group_size,
+        bits,
+        aligned_N,
+        T,
+        BM,
+        BK,
+        BN,
+        WM,
+        WN>(
         w, scales, biases, x, y, Ws, K, N, M, K, tid, lid, simd_gid, simd_lid);
   }
 }
 
 template <
     typename T,
+    typename S,
     int group_size,
     int bits,
     bool has_global_scale, // unimplemented
@@ -1644,8 +1667,8 @@ template <
     int WN = 2>
 [[kernel]] void affine_qmm_t_nax_splitk(
     const device uint32_t* w [[buffer(0)]],
-    const device T* scales [[buffer(1)]],
-    const device T* biases [[buffer(2)]],
+    const device S* scales [[buffer(1)]],
+    const device S* biases [[buffer(2)]],
     const device T* x [[buffer(3)]],
     device float* y [[buffer(4)]],
     const constant int& K [[buffer(5)]],
@@ -1673,7 +1696,7 @@ template <
 
   if constexpr (WN == 1) {
     static_assert(aligned_N, "Aligned output columns");
-    qmm_t_nax_staged_impl<T, group_size, bits, float, BM, BK, BN, BM / WM>(
+    qmm_t_nax_staged_impl<T, S, group_size, bits, float, BM, BK, BN, BM / WM>(
         (const device uint32_t*)wl,
         scales,
         biases,
@@ -1690,6 +1713,7 @@ template <
   } else {
     qmm_t_nax_tgp_impl<
         T,
+        S,
         group_size,
         bits,
         aligned_N,
@@ -1718,6 +1742,7 @@ template <
 
 template <
     typename T,
+    typename S,
     int group_size,
     int bits,
     bool has_global_scale, // unused
@@ -1730,8 +1755,8 @@ template <
     int WN = 2>
 [[kernel]] void affine_qmm_n_nax(
     const device uint32_t* w [[buffer(0)]],
-    const device T* scales [[buffer(1)]],
-    const device T* biases [[buffer(2)]],
+    const device S* scales [[buffer(1)]],
+    const device S* biases [[buffer(2)]],
     const device T* x [[buffer(3)]],
     device T* y [[buffer(4)]],
     const constant int& K [[buffer(5)]],
@@ -1774,12 +1799,13 @@ template <
         tid);
   }
 
-  qmm_n_nax_tgp_impl<T, group_size, bits, BM, BK, BN, WM, WN>(
+  qmm_n_nax_tgp_impl<T, S, group_size, bits, BM, BK, BN, WM, WN>(
       w, scales, biases, x, y, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
 template <
     typename T,
+    typename S,
     int group_size,
     int bits,
     bool has_global_scale, // unused
@@ -1792,8 +1818,8 @@ template <
     int WN = 2>
 [[kernel]] void affine_gather_qmm_t_nax(
     const device uint32_t* w [[buffer(0)]],
-    const device T* scales [[buffer(1)]],
-    const device T* biases [[buffer(2)]],
+    const device S* scales [[buffer(1)]],
+    const device S* biases [[buffer(2)]],
     const device T* x [[buffer(3)]],
     const device uint32_t* lhs_indices [[buffer(4)]],
     const device uint32_t* rhs_indices [[buffer(5)]],
@@ -1845,12 +1871,13 @@ template <
       s_strides,
       b_strides,
       tid);
-  qmm_t_nax_tgp_impl<T, group_size, bits, aligned_N, T, BM, BK, BN, WM, WN>(
+  qmm_t_nax_tgp_impl<T, S, group_size, bits, aligned_N, T, BM, BK, BN, WM, WN>(
       w, scales, biases, x, y, Ws, K, N, M, K, tid, lid, simd_gid, simd_lid);
 }
 
 template <
     typename T,
+    typename S,
     const int group_size,
     const int bits,
     const int BM = 64,
@@ -1860,8 +1887,8 @@ template <
     const int WN = 2>
 [[kernel]] void affine_gather_qmm_n_nax(
     const device uint32_t* w [[buffer(0)]],
-    const device T* scales [[buffer(1)]],
-    const device T* biases [[buffer(2)]],
+    const device S* scales [[buffer(1)]],
+    const device S* biases [[buffer(2)]],
     const device T* x [[buffer(3)]],
     const device uint32_t* lhs_indices [[buffer(4)]],
     const device uint32_t* rhs_indices [[buffer(5)]],
@@ -1913,12 +1940,13 @@ template <
       s_strides,
       b_strides,
       tid);
-  qmm_n_nax_tgp_impl<T, group_size, bits, BM, BK, BN, WM, WN>(
+  qmm_n_nax_tgp_impl<T, S, group_size, bits, BM, BK, BN, WM, WN>(
       w, scales, biases, x, y, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
 template <
     typename T,
+    typename S,
     int group_size,
     int bits,
     bool has_global_scale, // unused
@@ -1931,8 +1959,8 @@ template <
 [[kernel]] void affine_gather_qmm_rhs_nax(
     const device T* x [[buffer(0)]],
     const device uint32_t* w [[buffer(1)]],
-    const device T* scales [[buffer(2)]],
-    const device T* biases [[buffer(3)]],
+    const device S* scales [[buffer(2)]],
+    const device S* biases [[buffer(3)]],
     const device int32_t* offsets [[buffer(4)]],
     device T* y [[buffer(5)]],
     const constant int& M [[buffer(6)]],
@@ -1949,6 +1977,7 @@ template <
 
   using loader_w_t = QuantizedBlockLoader<
       T,
+      S,
       transpose ? BN : BK,
       transpose ? BK : BN,
       transpose ? BK_padded : BN_padded,
@@ -2136,11 +2165,17 @@ template <
 
 // Few rows of x times transposed weights, as fp_qmv_nax. Each thread reads 32
 // values of a weight row per K step, which lie in one quantization group.
-template <typename T, int group_size, int bits, int WK = 8, int BN = 32>
+template <
+    typename T,
+    typename S,
+    int group_size,
+    int bits,
+    int WK = 8,
+    int BN = 32>
 [[kernel]] void affine_qmv_nax(
     const device uint32_t* w [[buffer(0)]],
-    const device T* scales [[buffer(1)]],
-    const device T* biases [[buffer(2)]],
+    const device S* scales [[buffer(1)]],
+    const device S* biases [[buffer(2)]],
     const device T* x [[buffer(3)]],
     device T* y [[buffer(4)]],
     const constant int& K [[buffer(5)]],
