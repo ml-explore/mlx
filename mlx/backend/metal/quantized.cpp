@@ -643,11 +643,13 @@ inline bool use_qmv_mma(
     metal::Device& d) {
   bool nax = metal::is_nax_available();
   bool affine = mode == QuantizationMode::Affine;
-  // affine_qmv_mma beats qmv from 3 rows below gen 15 and qmv_wide from 4
-  // rows above; the other paths from 6.
+  // affine_qmv_mma beats qmv from 3 rows on gen 13 and 14 GPUs (4 on their
+  // Ultras) and qmv_wide from 4 rows on gen 15 and above; the other paths
+  // from 6.
+  bool ultra = d.get_architecture().back() == 'd';
   int min_rows = 6;
   if (affine && !nax) {
-    min_rows = d.get_architecture_gen() >= 15 ? 4 : 3;
+    min_rows = (ultra || d.get_architecture_gen() >= 15) ? 4 : 3;
   }
   if ((M < min_rows) || (K % 128 != 0)) {
     return false;
@@ -665,8 +667,8 @@ inline bool use_qmv_mma(
           (x.dtype() == float16 || x.dtype() == bfloat16) && (N >= 512) &&
           (K >= 1024) && (N % 32 == 0);
     } else { // non-nax
-      // Ultra keeps the vector kernels.
-      if (d.get_architecture().back() == 'd') {
+      // M3 Ultra and newer keep the vector kernels.
+      if (ultra && d.get_architecture_gen() >= 15) {
         return false;
       }
       // Only 4 and 8 bits are instantiated; affine pays off from a smaller N *
