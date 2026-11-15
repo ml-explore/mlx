@@ -50,37 +50,46 @@ The design of MLX is inspired by frameworks like
 
 ## Benchmarks (this fork: `perf/cpu`)
 
-> This fork's `perf/cpu` branch speeds up the **CPU backend** (Linux, x86).
-> Measured on an 8 vCPU Intel Xeon VM (320 MiB L3, no GPU), GCC 13, upstream
-> `96fbf67` vs `perf/cpu`. These are median times per call over 15 rounds of
-> 10 calls. Metal / Apple Silicon were not measured. Full method, all ops,
-> single-thread numbers and limits are in [PERF.md](PERF.md) and
+> This fork's `perf/cpu` branch speeds up MLX's **CPU backend** on Linux/x86:
+> a worker pool for intra-op parallelism, multithreaded elementwise ops,
+> copies, reductions, softmax and sort, tiled transposes, and a vectorized
+> `exp`. Measured on an 8 vCPU Intel Xeon VM (320 MiB L3, **no GPU**), GCC 13,
+> upstream `96fbf67` vs `perf/cpu`, median time per call over 15 rounds of 10
+> calls, baseline = the faster of two upstream runs. Metal, CUDA and Apple
+> Silicon were not measured. Full method, all 27 ops, single-thread numbers,
+> a second session's results and the limits are in [PERF.md](PERF.md) and
 > [docs/mlx-cpu-perf.pdf](docs/mlx-cpu-perf.pdf).
 
 | Op (float32) | Upstream (ms) | perf/cpu (ms) | Speedup |
 |---|---:|---:|---:|
-| add f32 4096x4096 | 25.48 | 7.33 | 3.5x |
-| add bcast row 4096x4096 | 22.57 | 6.65 | 3.4x |
-| exp f32 4096x4096 | 258.69 | 9.81 | 26.4x |
-| tanh f32 4096x4096 | 96.78 | 16.07 | 6.0x |
-| where 4096x4096 | 111.50 | 15.86 | 7.0x |
-| sum all 4096x4096 | 8.74 | 0.44 | 19.9x |
-| sum axis=0 4096x4096 | 2.80 | 1.19 | 2.3x |
-| max axis=-1 4096x4096 | 17.13 | 0.82 | 20.8x |
-| softmax f32 4096x4096 | 277.83 | 12.94 | 21.5x |
-| softmax f32 8x32x512x512 | 1093.90 | 50.26 | 21.8x |
-| rms_norm 4096x4096 | 59.79 | 16.57 | 3.6x |
-| layer_norm 4096x4096 | 109.27 | 25.79 | 4.2x |
-| transpose copy 4096x4096 | 184.50 | 9.41 | 19.6x |
-| swapaxes copy 8x32x512x512 | 170.87 | 32.97 | 5.2x |
-| sort axis=-1 1024x4096 | 204.78 | 27.63 | 7.4x |
-| argsort axis=-1 1024x4096 | 245.35 | 33.24 | 7.4x |
-| gather rows 4096 of 32000x1024 | 1.28 | 1.24 | 1.0x |
+| add f32 4096x4096 | 24.24 | 6.84 | 3.5x |
+| add bcast row 4096x4096 | 20.88 | 6.43 | 3.3x |
+| exp f32 1024x1024 | 14.31 | 0.24 | 60.7x |
+| exp f32 4096x4096 | 256.62 | 9.27 | 27.7x |
+| tanh f32 4096x4096 | 89.58 | 14.70 | 6.1x |
+| where 4096x4096 | 102.33 | 14.74 | 6.9x |
+| sum all 4096x4096 | 8.62 | 0.39 | 22.2x |
+| sum axis=0 4096x4096 | 2.81 | 1.15 | 2.4x |
+| max axis=-1 4096x4096 | 16.80 | 0.81 | 20.8x |
+| softmax f32 4096x4096 | 272.23 | 11.87 | 22.9x |
+| softmax f32 8x32x512x512 | 1072.39 | 50.03 | 21.4x |
+| rms_norm 4096x4096 | 69.33 | 19.15 | 3.6x |
+| layer_norm 4096x4096 | 98.29 | 30.45 | 3.2x |
+| transpose copy 4096x4096 | 156.86 | 9.56 | 16.4x |
+| swapaxes copy 8x32x512x512 | 173.32 | 36.88 | 4.7x |
+| sort axis=-1 1024x4096 | 202.14 | 27.35 | 7.4x |
+| argsort axis=-1 1024x4096 | 240.04 | 31.50 | 7.6x |
+| gather rows 4096 of 32000x1024 | 1.19 | 1.20 | 1.0x |
 
 ![CPU speedups](docs/perf/cpu_speedup.png)
 
-`gather` was not changed and is shown as a control. Reproduce with
-`python benchmarks/python/cpu_ops_bench.py` (see PERF.md).
+`gather` was not changed and is shown as a control. Set
+`MLX_CPU_NUM_THREADS=N` to cap the thread count (`1` turns the parallelism
+off). All C++ and Python tests pass, plus 11 new ones in
+`python/tests/test_cpu_parallel.py`. To reproduce, build with
+`-DMLX_BUILD_METAL=OFF -DMLX_BUILD_CUDA=OFF`, then run
+`python benchmarks/python/cpu_ops_bench.py` on this branch and on upstream
+(full commands in [PERF.md](PERF.md#reproduce)).
 
 ## Examples
 

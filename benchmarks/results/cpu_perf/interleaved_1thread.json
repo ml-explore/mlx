@@ -1,0 +1,125 @@
+{
+  "description": "Upstream 96fbf67 and perf/cpu with MLX_CPU_NUM_THREADS=1, run alternately (3 rounds, one op per process) on 2026-11-15 to separate single-thread changes from session noise. Each value is the median per-call time of one cpu_ops_bench.py run.",
+  "results": {
+    "add bcast row 4096x4096": {
+      "upstream_median_ms": [
+        21.8456,
+        25.5321,
+        22.1707
+      ],
+      "perf_cpu_1thread_median_ms": [
+        23.9911,
+        27.6709,
+        21.2498
+      ]
+    },
+    "add f32 1024x1024": {
+      "upstream_median_ms": [
+        0.4218,
+        0.4021,
+        0.4249
+      ],
+      "perf_cpu_1thread_median_ms": [
+        0.3984,
+        0.3967,
+        0.4391
+      ]
+    },
+    "add f32 256x256": {
+      "upstream_median_ms": [
+        0.0216,
+        0.0216,
+        0.0215
+      ],
+      "perf_cpu_1thread_median_ms": [
+        0.0241,
+        0.0215,
+        0.0218
+      ]
+    },
+    "add f32 4096x4096": {
+      "upstream_median_ms": [
+        23.4872,
+        29.8148,
+        25.574
+      ],
+      "perf_cpu_1thread_median_ms": [
+        25.3576,
+        28.1414,
+        25.4188
+      ]
+    },
+    "astype f32->bf16 4096x4096": {
+      "upstream_median_ms": [
+        15.0902,
+        14.0408,
+        14.3084
+      ],
+      "perf_cpu_1thread_median_ms": [
+        14.1894,
+        14.1007,
+        14.3953
+      ]
+    },
+    "layer_norm 4096x4096": {
+      "upstream_median_ms": [
+        93.7421,
+        93.2936,
+        82.6785
+      ],
+      "perf_cpu_1thread_median_ms": [
+        71.7366,
+        73.4772,
+        76.0812
+      ]
+    },
+    "mul scalar 4096x4096": {
+      "upstream_median_ms": [
+        21.0607,
+        25.6019,
+        23.6624
+      ],
+      "perf_cpu_1thread_median_ms": [
+        21.5059,
+        19.7726,
+        20.0918
+      ]
+    },
+    "sum axis=0 4096x4096": {
+      "upstream_median_ms": [
+        3.0595,
+        2.8391,
+        2.8631
+      ],
+      "perf_cpu_1thread_median_ms": [
+        2.8593,
+        2.9686,
+        3.0563
+      ]
+    },
+    "swapaxes copy 8x32x512x512": {
+      "upstream_median_ms": [
+        166.9056,
+        164.2482,
+        153.2612
+      ],
+      "perf_cpu_1thread_median_ms": [
+        168.4314,
+        171.6966,
+        165.4903
+      ]
+    },
+    "tanh f32 4096x4096": {
+      "upstream_median_ms": [
+        92.6763,
+        87.1299,
+        89.3431
+      ],
+      "perf_cpu_1thread_median_ms": [
+        93.6167,
+        91.5472,
+        87.4429
+      ]
+    }
+  }
+}
