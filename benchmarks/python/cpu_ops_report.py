@@ -2,24 +2,47 @@
 """Turn cpu_ops_bench.py JSON results into a markdown table and a chart.
 
 Usage:
-    python benchmarks/python/cpu_ops_report.py BEFORE.json AFTER.json \
-        [--one-thread AFTER_1T.json] [--chart out.png]
+    python benchmarks/python/cpu_ops_report.py BEFORE.json [BEFORE2.json ...] \
+        --after AFTER.json [--one-thread AFTER_1T.json] [--chart out.png]
+
+When several BEFORE files are given (repeated baseline runs), each op uses
+the run with the lowest median. That is the conservative choice: run-to-run
+noise can only make the reported speedup smaller, never larger.
 """
 
 import argparse
 import json
 
 
+def load(path):
+    with open(path) as f:
+        return json.load(f)
+
+
+def best_of(runs):
+    """For each op, keep the entry with the lowest median across runs."""
+    out = {}
+    for run in runs:
+        for name, r in run.items():
+            if name not in out or r["median_ms"] < out[name]["median_ms"]:
+                out[name] = r
+    return out
+
+
+def fmt(r):
+    return f"{r['median_ms']:.3f} [{r['min_ms']:.3f}..{r['max_ms']:.3f}]"
+
+
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("before")
-    p.add_argument("after")
+    p.add_argument("before", nargs="+")
+    p.add_argument("--after", required=True)
     p.add_argument("--one-thread", default="")
     p.add_argument("--chart", default="")
     args = p.parse_args()
-    before = json.load(open(args.before))
-    after = json.load(open(args.after))
-    one = json.load(open(args.one_thread)) if args.one_thread else None
+    before = best_of([load(f) for f in args.before])
+    after = load(args.after)
+    one = load(args.one_thread) if args.one_thread else None
 
     hdr = "| Op | Before (ms) | After (ms) | Speedup |"
     sep = "|---|---:|---:|---:|"
@@ -34,11 +57,7 @@ def main():
             continue
         a = after[name]
         s = b["median_ms"] / a["median_ms"]
-        row = (
-            f"| {name} | {b['median_ms']:.3f} [{b['min_ms']:.3f}..{b['max_ms']:.3f}]"
-            f" | {a['median_ms']:.3f} [{a['min_ms']:.3f}..{a['max_ms']:.3f}]"
-            f" | {s:.2f}x |"
-        )
+        row = f"| {name} | {fmt(b)} | {fmt(a)} | {s:.2f}x |"
         if one:
             o = one[name]
             row += f" {o['median_ms']:.3f} | {b['median_ms'] / o['median_ms']:.2f}x |"
@@ -64,8 +83,10 @@ def main():
         ax.axvline(1.0, color="black", linewidth=0.8)
         for y, v in zip(ys, vals):
             ax.text(v * 1.05, y, f"{v:.1f}x", va="center", fontsize=7)
-        ax.set_xlabel("Speedup vs upstream (median time, log scale)")
-        ax.set_title("MLX CPU backend, perf/cpu vs upstream (8 vCPU Xeon, Linux)")
+        ax.set_xlabel("Speedup vs upstream 96fbf67 (median time per call, log scale)")
+        ax.set_title(
+            "MLX CPU backend: perf/cpu vs upstream (8 vCPU Xeon VM, Linux, no GPU)"
+        )
         ax.set_xlim(0.5, max(vals) * 2)
         fig.tight_layout()
         fig.savefig(args.chart, dpi=150)
