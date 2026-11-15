@@ -60,6 +60,33 @@ inline void copy_dims(
   }
 }
 
+// Tile size (in elements) for transpose-like copies.
+constexpr int64_t kCopyTile = 32;
+
+// dst[i * d_m + j] = src[i * s_m + j * s_n] for i < M and j < N, visiting
+// the columns in blocks of kCopyTile. The caller passes at most kCopyTile
+// rows, so each block touches kCopyTile source and destination cache lines.
+template <typename SrcT, typename DstT>
+inline void copy_2d_tiled(
+    const SrcT* src,
+    DstT* dst,
+    int64_t M,
+    int64_t N,
+    int64_t s_m,
+    int64_t s_n,
+    int64_t d_m) {
+  for (int64_t j0 = 0; j0 < N; j0 += kCopyTile) {
+    int64_t j1 = std::min(j0 + kCopyTile, N);
+    for (int64_t i = 0; i < M; ++i) {
+      const SrcT* s = src + i * s_m;
+      DstT* d = dst + i * d_m;
+      for (int64_t j = j0; j < j1; ++j) {
+        d[j] = static_cast<DstT>(s[j * s_n]);
+      }
+    }
+  }
+}
+
 template <typename SrcT, typename DstT>
 void copy_general_general(
     const array& src,
@@ -86,14 +113,48 @@ void copy_general_general(
       collapse_contiguous_dims(data_shape, {i_strides, o_strides});
 
   int ndim = shape.size();
-  if (ndim < 3) {
-    if (i_offset_ptr) {
-      src_ptr += i_offset_ptr[0];
-    }
-    if (o_offset_ptr) {
-      dst_ptr += o_offset_ptr[0];
-    }
+  if (i_offset_ptr) {
+    src_ptr += i_offset_ptr[0];
+  }
+  if (o_offset_ptr) {
+    dst_ptr += o_offset_ptr[0];
+  }
 
+  // Transpose-like copy: the innermost destination axis is contiguous but
+  // the source walks it with a large stride, while the next axis is
+  // contiguous in the source. Copying element by element touches a new
+  // source cache line for every element, so copy in kCopyTile x kCopyTile
+  // tiles to keep both sides in cache.
+  if (ndim >= 2 && strides[1][ndim - 1] == 1 && strides[0][ndim - 2] == 1 &&
+      strides[0][ndim - 1] >= 16) {
+    int64_t M = shape[ndim - 2];
+    int64_t N = shape[ndim - 1];
+    int64_t s_m = strides[0][ndim - 2];
+    int64_t s_n = strides[0][ndim - 1];
+    int64_t d_m = strides[1][ndim - 2];
+    int64_t outer = std::accumulate(
+        shape.begin(), shape.end() - 2, int64_t{1}, std::multiplies<int64_t>());
+    ContiguousIterator in(shape, strides[0], ndim - 2);
+    ContiguousIterator out(shape, strides[1], ndim - 2);
+    for (int64_t o = 0; o < outer; ++o) {
+      for (int64_t m0 = 0; m0 < M; m0 += kCopyTile) {
+        int64_t m1 = std::min(m0 + kCopyTile, M);
+        copy_2d_tiled(
+            src_ptr + in.loc + m0 * s_m,
+            dst_ptr + out.loc + m0 * d_m,
+            m1 - m0,
+            N,
+            s_m,
+            s_n,
+            d_m);
+      }
+      in.step();
+      out.step();
+    }
+    return;
+  }
+
+  if (ndim < 3) {
     if (ndim == 1) {
       copy_dims<SrcT, DstT, 1>(
           src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
@@ -105,12 +166,6 @@ void copy_general_general(
           src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
     }
     return;
-  }
-  if (i_offset_ptr) {
-    src_ptr += i_offset_ptr[0];
-  }
-  if (o_offset_ptr) {
-    dst_ptr += o_offset_ptr[0];
   }
 
   auto size = std::accumulate(

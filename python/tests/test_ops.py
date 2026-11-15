@@ -804,6 +804,31 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertListEqual(mx.transpose(x, axes=(0, 2, 1)).tolist(), expected)
 
+    def test_transpose_copy(self):
+        rng = np.random.default_rng(0)
+        for shape in [(1, 1), (3, 701), (1023, 1025), (4096, 33), (33, 4096)]:
+            x = rng.standard_normal(shape).astype(np.float32)
+            out = mx.contiguous(mx.array(x).T)
+            np.testing.assert_array_equal(np.array(out), x.T)
+
+        x = rng.standard_normal((5, 37, 129, 65)).astype(np.float32)
+        for perm in [(0, 1, 3, 2), (3, 2, 1, 0), (0, 2, 1, 3), (2, 0, 3, 1)]:
+            out = mx.contiguous(mx.transpose(mx.array(x), perm))
+            np.testing.assert_array_equal(np.array(out), np.transpose(x, perm))
+
+        # Type conversion during the copy
+        x = rng.standard_normal((257, 129)).astype(np.float32)
+        out = mx.array(x).T.astype(mx.float16)
+        np.testing.assert_array_equal(np.array(out), x.T.astype(np.float16))
+
+        # Copy into a slice of a larger array
+        a = mx.zeros((256, 256))
+        b = rng.standard_normal((128, 256)).astype(np.float32)
+        a[:, 64:192] = mx.array(b).T
+        expected = np.zeros((256, 256), np.float32)
+        expected[:, 64:192] = b.T
+        np.testing.assert_array_equal(np.array(a), expected)
+
     def test_move_swap_axes(self):
         x = mx.zeros((2, 3, 4))
         self.assertEqual(mx.moveaxis(x, 0, 2).shape, (3, 4, 2))
