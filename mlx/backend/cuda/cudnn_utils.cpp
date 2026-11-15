@@ -2,7 +2,8 @@
 
 #include "mlx/backend/cuda/cudnn_utils.h"
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/gpu/device_info.h"
+
+#include <unordered_map>
 
 namespace mlx::core {
 
@@ -48,16 +49,37 @@ inline auto nhwc_to_nchw(const array& x) {
   return std::make_tuple(std::move(shape), std::move(strides));
 }
 
-auto& cudnn_handles_cache() {
-  struct CudnnHandle {
-    ~CudnnHandle() {
-      if (handle) {
-        CHECK_CUDNN_ERROR(cudnnDestroy(handle));
+class CudnnHandle {
+ public:
+  explicit CudnnHandle(cu::Device& device) : device_(device) {
+    device_.make_current();
+    CHECK_CUDNN_ERROR(cudnnCreate(&handle_));
+  }
+
+  ~CudnnHandle() {
+    if (handle_) {
+      try {
+        device_.make_current();
+        cudnnDestroy(handle_);
+      } catch (...) {
       }
     }
-    cudnnHandle_t handle{nullptr};
-  };
-  static thread_local std::vector<CudnnHandle> cache(gpu::device_count());
+  }
+
+  CudnnHandle(const CudnnHandle&) = delete;
+  CudnnHandle& operator=(const CudnnHandle&) = delete;
+
+  cudnnHandle_t handle() const {
+    return handle_;
+  }
+
+ private:
+  cu::Device& device_;
+  cudnnHandle_t handle_{nullptr};
+};
+
+auto& cudnn_handles_cache() {
+  static thread_local std::unordered_map<int, CudnnHandle> cache;
   return cache;
 }
 
@@ -78,16 +100,17 @@ void check_cudnn_error(const char* name, fe::error_t err) {
 }
 
 cudnnHandle_t get_cudnn_handle(cu::Device& device) {
-  auto& storage = cudnn_handles_cache().at(device.cuda_device());
-  if (!storage.handle) {
-    device.make_current();
-    CHECK_CUDNN_ERROR(cudnnCreate(&storage.handle));
-  }
-  return storage.handle;
+  auto& cache = cudnn_handles_cache();
+  auto it = cache.try_emplace(device.cuda_device(), device).first;
+  return it->second.handle();
 }
 
 void init_cudnn_handles_cache() {
   cudnn_handles_cache();
+}
+
+void clear_cudnn_handles_cache() {
+  cudnn_handles_cache().clear();
 }
 
 fe::error_t DnnGraph::prepare() {

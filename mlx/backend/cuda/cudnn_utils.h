@@ -29,8 +29,11 @@ void check_cudnn_error(const char* name, fe::error_t err);
 cudnnHandle_t get_cudnn_handle(cu::Device& device);
 
 void init_cudnn_handles_cache();
+void clear_cudnn_handles_cache();
 void init_cudnn_conv_cache();
+void clear_cudnn_conv_cache();
 void init_cudnn_sdpa_cache();
+void clear_cudnn_sdpa_cache();
 
 // Return pointer alignment of |x|'s data.
 inline uint8_t get_alignment(const array& x) {
