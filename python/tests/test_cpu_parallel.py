@@ -51,8 +51,24 @@ class TestCPUParallel(mlx_tests.MLXTestCase):
     def test_exp_special_values(self):
         with mx.stream(mx.cpu):
             v = np.array(
-                [0.0, -0.0, 1.0, -1.0, 88.0, 88.5, -88.0, -88.5, 100.0, -100.0,
-                 np.inf, -np.inf, np.nan, 0.5, -0.5, 1e-30],
+                [
+                    0.0,
+                    -0.0,
+                    1.0,
+                    -1.0,
+                    88.0,
+                    88.5,
+                    -88.0,
+                    -88.5,
+                    100.0,
+                    -100.0,
+                    np.inf,
+                    -np.inf,
+                    np.nan,
+                    0.5,
+                    -0.5,
+                    1e-30,
+                ],
                 dtype=np.float32,
             )
             out = np.array(mx.exp(mx.array(v)))
@@ -72,10 +88,33 @@ class TestCPUParallel(mlx_tests.MLXTestCase):
     def test_floor_exact(self):
         with mx.stream(mx.cpu):
             v = np.array(
-                [-0.0, 0.0, -0.5, 0.5, -1.0, 1.0, -1.5, 2.5, 0.99999994,
-                 -0.99999994, 1e7 + 0.5, -1e7 - 0.5, 8388607.5, -8388607.5,
-                 8388608.0, -8388609.0, 3e9, -3e9, 3.4e38, -3.4e38, np.inf,
-                 -np.inf, np.nan, 1e-40, -1e-40],
+                [
+                    -0.0,
+                    0.0,
+                    -0.5,
+                    0.5,
+                    -1.0,
+                    1.0,
+                    -1.5,
+                    2.5,
+                    0.99999994,
+                    -0.99999994,
+                    1e7 + 0.5,
+                    -1e7 - 0.5,
+                    8388607.5,
+                    -8388607.5,
+                    8388608.0,
+                    -8388609.0,
+                    3e9,
+                    -3e9,
+                    3.4e38,
+                    -3.4e38,
+                    np.inf,
+                    -np.inf,
+                    np.nan,
+                    1e-40,
+                    -1e-40,
+                ],
                 dtype=np.float32,
             )
             v = np.tile(v, 5000)  # large enough to be split across threads

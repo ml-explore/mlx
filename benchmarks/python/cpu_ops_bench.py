@@ -35,8 +35,23 @@ def make_cases():
     idx = mx.random.randint(0, 32000, (4096,), key=k)
     sort_in = mx.random.normal((1024, 4096), key=k)
     sort_small = mx.random.normal((64, 1024), key=k)
-    mx.eval(big, med, small, big2, med2, row, w, b, batt, big_bf16, cond,
-            table, idx, sort_in, sort_small)
+    mx.eval(
+        big,
+        med,
+        small,
+        big2,
+        med2,
+        row,
+        w,
+        b,
+        batt,
+        big_bf16,
+        cond,
+        table,
+        idx,
+        sort_in,
+        sort_small,
+    )
 
     cases = [
         ("add f32 256x256", lambda: small + small),
