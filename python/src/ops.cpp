@@ -349,7 +349,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def add(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def add(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise addition.
 
@@ -376,7 +376,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def subtract(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def subtract(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise subtraction.
 
@@ -403,7 +403,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def multiply(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def multiply(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise multiplication.
 
@@ -430,7 +430,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def divide(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def divide(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise division.
 
@@ -457,7 +457,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def divmod(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def divmod(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise quotient and remainder.
 
@@ -485,7 +485,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def floor_divide(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def floor_divide(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise integer division.
 
@@ -512,7 +512,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def remainder(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def remainder(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise remainder of division.
 
@@ -540,7 +540,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def equal(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def equal(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise equality.
 
@@ -567,7 +567,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def not_equal(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def not_equal(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise not equal.
 
@@ -594,7 +594,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def less(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def less(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise less than.
 
@@ -621,7 +621,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def less_equal(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def less_equal(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise less than or equal.
 
@@ -648,7 +648,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def greater(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def greater(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise greater than.
 
@@ -675,7 +675,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def greater_equal(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def greater_equal(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise greater or equal.
 
@@ -704,7 +704,7 @@ void init_ops(nb::module_& m) {
       "equal_nan"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def array_equal(a: scalar | array, b: scalar | array, equal_nan: bool = False, stream: StreamOrDevice = None) -> array"),
+          "def array_equal(a: scalar | array, b: scalar | array, *, equal_nan: bool = False, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Array equality check.
 
@@ -2401,7 +2401,7 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def isnan(a: array, stream: StreamOrDevice = None) -> array"),
+      nb::sig("def isnan(a: array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are NaN.
 
@@ -2419,7 +2419,7 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def isinf(a: array, stream: StreamOrDevice = None) -> array"),
+      nb::sig("def isinf(a: array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are +/- inifnity.
 
@@ -2437,7 +2437,8 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def isfinite(a: array, stream: StreamOrDevice = None) -> array"),
+      nb::sig(
+          "def isfinite(a: array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are finite.
 
@@ -2457,7 +2458,8 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def isposinf(a: array, stream: StreamOrDevice = None) -> array"),
+      nb::sig(
+          "def isposinf(a: array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are positive infinity.
 
@@ -2476,7 +2478,8 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def isneginf(a: array, stream: StreamOrDevice = None) -> array"),
+      nb::sig(
+          "def isneginf(a: array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are negative infinity.
 
@@ -4759,7 +4762,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def round(a: array, /, decimals: int = 0, stream: StreamOrDevice = None) -> array"),
+          "def round(a: array, /, decimals: int = 0, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Round to the given number of decimals.
 
@@ -5716,7 +5719,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def bitwise_and(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def bitwise_and(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise bitwise and.
 
@@ -5743,7 +5746,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def bitwise_or(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def bitwise_or(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise bitwise or.
 
@@ -5770,7 +5773,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def bitwise_xor(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def bitwise_xor(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise bitwise xor.
 
@@ -5798,7 +5801,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def left_shift(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def left_shift(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise left shift.
 
@@ -5826,7 +5829,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def right_shift(a: scalar | array, b: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def right_shift(a: scalar | array, b: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise right shift.
 
@@ -5851,7 +5854,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def bitwise_invert(a: scalar | array, stream: StreamOrDevice = None) -> array"),
+          "def bitwise_invert(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise bitwise inverse.
 
@@ -5873,7 +5876,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def view(a: scalar | array, dtype: Dtype, stream: StreamOrDevice = None) -> array"),
+          "def view(a: scalar | array, dtype: Dtype, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         View the array as a different type.
 
@@ -5899,7 +5902,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def hadamard_transform(a: array, scale: float | None = None, stream: StreamOrDevice = None) -> array"),
+          "def hadamard_transform(a: array, scale: float | None = None, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Perform the Walsh-Hadamard transform along the final axis.
 

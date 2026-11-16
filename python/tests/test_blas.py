@@ -1574,6 +1574,11 @@ class TestBlas(mlx_tests.MLXTestCase):
                     c2 = gather_mm_test(a, b, rhs)
                     self.assertTrue(mx.allclose(c1, c2, rtol=tol, atol=tol))
 
+                    # Size-1 axis from expand_dims
+                    a = a.squeeze(1)[:, None, :]
+                    c2 = gather_mm_test(a, b, rhs)
+                    self.assertTrue(mx.allclose(c1, c2, rtol=tol, atol=tol))
+
     def test_gather_mm_sorted_vjp(self):
         def gather_mm_ref(a, b, rhs):
             b = b[rhs]

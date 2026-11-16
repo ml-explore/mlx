@@ -637,6 +637,8 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             )
             self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
 
+    @unittest.skipIf(not mx.is_available(mx.gpu), "too slow on CPU")
+    @unittest.skipIf(mx.cuda.is_available() and "CI" in os.environ, "not enough memory")
     def test_sdpa_vector_gqa_long(self):
         scale = 1.0
         mx.random.seed(0)
@@ -1529,6 +1531,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.allclose(ref, out, atol=1e-5, rtol=1e-5))
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    @unittest.skipIf(mx.cuda.is_available() and "CI" in os.environ, "not enough memory")
     def test_sdpa_window_large(self):
         D = 128
         scale = D**-0.5

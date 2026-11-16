@@ -408,13 +408,8 @@ class GatedDeltaUpdate : public Custom {
       std::function<std::vector<array>(std::vector<array>)> fallback)
       : Custom(stream, std::move(fallback)) {}
 
-  static bool use_fallback(
-      const int Hk,
-      const int Dk,
-      const int Hv,
-      const int Dv,
-      const bool has_mask,
-      Stream s);
+  static bool
+  use_fallback(int Hk, int Dk, int Hv, int Dv, bool has_mask, Stream s);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -447,12 +442,7 @@ class GatedDeltaUpdateVJP : public Custom {
       std::function<std::vector<array>(std::vector<array>)> fallback)
       : Custom(stream, std::move(fallback)) {}
 
-  static bool use_fallback(
-      const int Hk,
-      const int Dk,
-      const int Hv,
-      const int Dv,
-      Stream s);
+  static bool use_fallback(int Hk, int Dk, int Hv, int Dv, Stream s);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {

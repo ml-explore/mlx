@@ -237,6 +237,10 @@ void init_random(nb::module_& parent_module) {
         real numbers and $\text{Re}(x),\text{Im}(x) \sim \mathcal{N}(0,
         \frac{1}{2})$ for complex numbers.
 
+        .. note::
+           Outputs are deterministic for a given key on a given machine, but
+           they are not guaranteed to be bit-exact across GPU architectures.
+
         Args:
             shape (list(int), optional): Shape of the output. Default: ``()``.
             dtype (Dtype, optional): Type of the output. Default: ``float32``.
