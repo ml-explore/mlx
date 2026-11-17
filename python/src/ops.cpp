@@ -1843,7 +1843,9 @@ void init_ops(nb::module_& m) {
          const ScalarOrArray& vals,
          std::optional<mx::Dtype> dtype,
          mx::StreamOrDevice s) {
-        return mx::full(to_shape(shape), to_array(vals, dtype), s);
+        auto array_vals = to_array(vals, dtype);
+        auto t = dtype.value_or(array_vals.dtype());
+        return mx::full(to_shape(shape), array_vals, t, s);
       },
       "shape"_a,
       "vals"_a,
