@@ -1452,6 +1452,51 @@ class TestAutograd(mlx_tests.MLXTestCase):
             mem_post = mx.get_active_memory()
             self.assertEqual(mem_pre, mem_post)
 
+    def test_checkpoint_recurrence_memory(self):
+        # Chunked recurrence with gradients for the per-step inputs (#4837)
+        H, D, C = 4, 128, 32
+
+        def step(s, q, k, v):
+            ys = []
+            for t in range(q.shape[0]):
+                s = s * 0.95
+                delta = v[t] - (s * k[t][:, None, :]).sum(-1)
+                s = s + delta[:, :, None] * k[t][:, None, :]
+                ys.append((s * q[t][:, None, :]).sum(-1))
+            return s, mx.stack(ys)
+
+        def loss(x0, chunks):
+            s, total = x0, mx.array(0.0)
+            for q, k, v in chunks:
+                s, y = mx.checkpoint(step)(s, q, k, v)
+                total = total + y.sum()
+            return total
+
+        def peak_memory(num_chunks):
+            mx.random.seed(0)
+            chunks = [
+                (
+                    mx.random.normal((C, H, D)),
+                    0.05 * mx.random.normal((C, H, D)),
+                    mx.random.normal((C, H, D)),
+                )
+                for _ in range(num_chunks)
+            ]
+            x0 = mx.zeros((H, D, D))
+            mx.eval(chunks, x0)
+            mx.synchronize()
+            gc.collect()
+            mx.reset_peak_memory()
+            base = mx.get_active_memory()
+            out = mx.value_and_grad(loss, argnums=(0, 1))(x0, chunks)
+            mx.eval(out)
+            return mx.get_peak_memory() - base
+
+        # Without bounded recomputation, about one state per step stays alive
+        state_size = H * D * D * 4
+        growth = peak_memory(16) - peak_memory(4)
+        self.assertLess(growth / (12 * C * state_size), 0.25)
+
     def test_grad_with_copies(self):
         a = mx.array(2.0)
         arrays = [a, a, a]

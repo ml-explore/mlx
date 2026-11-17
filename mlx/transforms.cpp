@@ -1052,19 +1052,23 @@ std::function<array(const array&)> vmap(
   return [vfun](const array& a) { return vfun({a})[0]; };
 }
 
-std::function<std::vector<array>(const std::vector<array>&)> custom_function(
+namespace {
+
+std::function<std::vector<array>(const std::vector<array>&)>
+custom_function_impl(
     std::function<std::vector<array>(const std::vector<array>&)> fun,
     std::optional<std::function<std::vector<array>(
         const std::vector<array>&,
         const std::vector<array>&,
-        const std::vector<array>&)>> fun_vjp /* = std::nullopt */,
+        const std::vector<array>&)>> fun_vjp,
     std::optional<std::function<std::vector<array>(
         const std::vector<array>&,
         const std::vector<array>&,
-        const std::vector<int>&)>> fun_jvp /* = std::nullopt */,
+        const std::vector<int>&)>> fun_jvp,
     std::optional<std::function<std::pair<std::vector<array>, std::vector<int>>(
         const std::vector<array>&,
-        const std::vector<int>&)>> fun_vmap /* = std::nullopt */) {
+        const std::vector<int>&)>> fun_vmap,
+    bool synchronize_vjps) {
   if (!fun_vjp.has_value() && !fun_jvp.has_value() && !fun_vmap.has_value()) {
     return fun;
   }
@@ -1072,7 +1076,8 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_function(
   return [fun = std::move(fun),
           fun_vjp = std::move(fun_vjp),
           fun_jvp = std::move(fun_jvp),
-          fun_vmap = std::move(fun_vmap)](const std::vector<array>& args) {
+          fun_vmap = std::move(fun_vmap),
+          synchronize_vjps](const std::vector<array>& args) {
     // Compute the outputs
     auto outputs = fun(args);
 
@@ -1142,9 +1147,33 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_function(
                     -> std::pair<std::vector<array>, std::vector<int>> {
                   std::vector<int> out_axes(out_size, 0);
                   return {vmap(fun, in_axes, out_axes)(inputs), out_axes};
-                })),
+                }),
+            synchronize_vjps),
         inputs);
   };
+}
+
+} // namespace
+
+std::function<std::vector<array>(const std::vector<array>&)> custom_function(
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
+    std::optional<std::function<std::vector<array>(
+        const std::vector<array>&,
+        const std::vector<array>&,
+        const std::vector<array>&)>> fun_vjp /* = std::nullopt */,
+    std::optional<std::function<std::vector<array>(
+        const std::vector<array>&,
+        const std::vector<array>&,
+        const std::vector<int>&)>> fun_jvp /* = std::nullopt */,
+    std::optional<std::function<std::pair<std::vector<array>, std::vector<int>>(
+        const std::vector<array>&,
+        const std::vector<int>&)>> fun_vmap /* = std::nullopt */) {
+  return custom_function_impl(
+      std::move(fun),
+      std::move(fun_vjp),
+      std::move(fun_jvp),
+      std::move(fun_vmap),
+      false);
 }
 
 std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
@@ -1162,11 +1191,16 @@ std::function<std::vector<array>(const std::vector<array>&)> checkpoint(
                      const std::vector<array>& primals,
                      const std::vector<array>& cotangents,
                      const std::vector<array>& outputs) -> std::vector<array> {
-    auto [__, vjps] = vjp(fun, depends(primals, outputs), cotangents);
+    // Do not recompute before the outputs and the cotangents are available.
+    auto dependencies = outputs;
+    dependencies.insert(
+        dependencies.end(), cotangents.begin(), cotangents.end());
+    auto [__, vjps] = vjp(fun, depends(primals, dependencies), cotangents);
     return vjps;
   };
 
-  return custom_vjp(fun, vjp_fun);
+  return custom_function_impl(
+      std::move(fun), std::move(vjp_fun), std::nullopt, std::nullopt, true);
 }
 
 } // namespace mlx::core
