@@ -199,20 +199,21 @@ set(MLX_CUDA_ARCH_LIST)
 foreach(arch IN LISTS MLX_CUDA_ARCHITECTURES)
   if(arch MATCHES "^([0-9]+[af]?)-(real|virtual)$")
     if(CMAKE_MATCH_2 STREQUAL "real")
-      list(APPEND MLX_CUDA_ARCH_LIST "\"sm_${CMAKE_MATCH_1}\"")
+      list(APPEND MLX_CUDA_ARCH_LIST "sm_${CMAKE_MATCH_1}")
     else()
-      list(APPEND MLX_CUDA_ARCH_LIST "\"compute_${CMAKE_MATCH_1}\"")
+      list(APPEND MLX_CUDA_ARCH_LIST "compute_${CMAKE_MATCH_1}")
     endif()
   elseif(arch MATCHES "^[0-9]+[af]?$")
-    list(APPEND MLX_CUDA_ARCH_LIST "\"sm_${arch}\"" "\"compute_${arch}\"")
+    list(APPEND MLX_CUDA_ARCH_LIST "sm_${arch}" "compute_${arch}")
   else()
-    list(APPEND MLX_CUDA_ARCH_LIST "\"${arch}\"")
+    list(APPEND MLX_CUDA_ARCH_LIST "${arch}")
   endif()
 endforeach()
 list(JOIN MLX_CUDA_ARCH_LIST "," MLX_CUDA_ARCH_LIST)
 target_compile_definitions(
   mlx
-  PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:MLX_CUDA_ARCH_LIST=${MLX_CUDA_ARCH_LIST}>")
+  PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:MLX_CUDA_ARCH_LIST=\"${MLX_CUDA_ARCH_LIST}\">")
 
 # Configure Windows CUDA DLL loading.
 if(WIN32)
