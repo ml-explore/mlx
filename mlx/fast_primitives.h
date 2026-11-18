@@ -409,11 +409,16 @@ class GatedDeltaUpdate : public Custom {
  public:
   GatedDeltaUpdate(
       Stream stream,
-      std::function<std::vector<array>(std::vector<array>)> fallback)
-      : Custom(stream, std::move(fallback)) {}
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      std::optional<int> state_at = std::nullopt)
+      : Custom(stream, std::move(fallback)), state_at_(state_at) {}
 
   static bool
   use_fallback(int Hk, int Dk, int Hv, int Dv, bool has_mask, Stream s);
+
+  // True if the kernel can store the state_at state in the same pass.
+  static bool
+  supports_state_at(Dtype dtype, bool vectorized_g, int T, Stream s);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -437,6 +442,7 @@ class GatedDeltaUpdate : public Custom {
 
  private:
   bool is_training_;
+  std::optional<int> state_at_;
 };
 
 class GatedDeltaUpdateVJP : public Custom {

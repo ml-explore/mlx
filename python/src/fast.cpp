@@ -412,6 +412,7 @@ void init_fast(nb::module_& parent_module) {
       "beta"_a,
       "initial_state"_a = nb::none(), // optional, defaults to None
       "mask"_a = nb::none(), // optional, defaults to None
+      "state_at"_a = nb::none(), // optional, defaults to None
       "stream"_a = nb::none(), // optional, defaults to None
       R"(
             Gated delta network forward pass.

@@ -64,7 +64,12 @@ MLX_API array scaled_dot_product_attention(
     bool force_fused = false,
     StreamOrDevice s = {});
 
-/** Updates recurrent state with the gated delta rule. */
+/**
+ * Updates recurrent state with the gated delta rule.
+ *
+ * If `state_at` is set, also returns the state after the first `state_at`
+ * time steps as a third output.
+ */
 MLX_API std::vector<array> gated_delta_update(
     const array& queries,
     const array& keys,
@@ -73,6 +78,7 @@ MLX_API std::vector<array> gated_delta_update(
     const array& beta_,
     const std::optional<array>& initial_state = std::nullopt,
     const std::optional<array>& mask = std::nullopt,
+    std::optional<int> state_at = std::nullopt,
     StreamOrDevice s = {});
 
 using CustomKernelFunction = std::function<std::vector<array>(

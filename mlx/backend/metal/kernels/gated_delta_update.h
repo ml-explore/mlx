@@ -5,6 +5,7 @@
 
 constant bool save_state [[function_constant(200)]];
 constant bool vectorized_g [[function_constant(201)]];
+constant bool store_state_at [[function_constant(202)]];
 
 #define AT(TILE, IDX) TILE.thread_elements()[IDX]
 #define SUB(TILE0, TILE1, TILE2)                \
@@ -281,6 +282,9 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
     device float* state_out [[buffer(7)]], // [B, Hv, Dv, Dk]
     constant int& T [[buffer(8)]],
     device float* state_cache [[buffer(9), function_constant(save_state)]],
+    device float* state_at_out
+    [[buffer(10), function_constant(store_state_at)]], // [B, Hv, Dv, Dk]
+    constant int& state_at [[buffer(11), function_constant(store_state_at)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
     uint thread_index_in_simdgroup [[thread_index_in_simdgroup]]) {
@@ -352,6 +356,13 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
     out = simd_sum(out);
     if (thread_index_in_simdgroup == 0) {
       y[dv_idx] = static_cast<InT>(out);
+    }
+    // Exit state of step state_at - 1, same layout as state_out.
+    if (store_state_at && t == state_at - 1) {
+      auto c_state = state_at_out + (n * Dv + dv_idx) * Dk;
+      for (int i = 0; i < n_per_t; ++i) {
+        c_state[n_per_t * dk_idx + i] = state[i];
+      }
     }
     // Increment data pointers to next time step
     q_ += Hk * Dk;

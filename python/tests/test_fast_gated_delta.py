@@ -352,6 +352,154 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                         )
             mx.clear_cache()
 
+    def test_gated_delta_state_at(self):
+        def split(q, k, v, g, b, h0, mask, c):
+            def mask_t(lo, hi):
+                return None if mask is None else mask[:, lo:hi]
+
+            y0, hc = mx.fast.gated_delta_update(
+                q[:, :c],
+                k[:, :c],
+                v[:, :c],
+                g[:, :c],
+                b[:, :c],
+                initial_state=h0,
+                mask=mask_t(0, c),
+            )
+            y1, hf = mx.fast.gated_delta_update(
+                q[:, c:],
+                k[:, c:],
+                v[:, c:],
+                g[:, c:],
+                b[:, c:],
+                initial_state=hc,
+                mask=mask_t(c, None),
+            )
+            return mx.concatenate([y0, y1], axis=1), hf, hc
+
+        B, Dk, Dv = 2, 128, 128
+        # (8, 32) has no kernel and uses the fallback.
+        heads = [(16, 32), (32, 32), (16, 16), (8, 32)]
+        dtypes = [mx.float32, mx.bfloat16, mx.float16]
+        for (Hk, Hv), dtype, T, vectorized_g in product(
+            heads, dtypes, range(2, 13), (False, True)
+        ):
+            mx.random.seed(T)
+            q = mx.random.normal(shape=(B, T, Hk, Dk)).astype(dtype)
+            k = mx.random.normal(shape=(B, T, Hk, Dk))
+            k = (k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)).astype(dtype)
+            v = mx.random.normal(shape=(B, T, Hv, Dv)).astype(dtype)
+            g_shape = (B, T, Hv, Dk) if vectorized_g else (B, T, Hv)
+            g = mx.sigmoid(mx.random.normal(shape=g_shape))
+            b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
+            h0 = mx.random.normal((B, Hv, Dv, Dk))
+            masks = [None, mx.random.bernoulli(0.7, shape=(B, T))]
+            for c, mask in product(range(1, T), masks):
+                with self.subTest(
+                    Hk=Hk,
+                    Hv=Hv,
+                    dtype=dtype,
+                    T=T,
+                    c=c,
+                    vectorized_g=vectorized_g,
+                    masked=mask is not None,
+                ):
+                    out = mx.fast.gated_delta_update(
+                        q, k, v, g, b, initial_state=h0, mask=mask, state_at=c
+                    )
+                    ref = split(q, k, v, g, b, h0, mask, c)
+                    self.assertEqual(len(out), 3)
+                    for x, r in zip(out, ref):
+                        self.assertEqual(x.dtype, r.dtype)
+                        self.assertTrue(mx.array_equal(x, r))
+
+        # A forced chunk size must also match the split.
+        if mx.metal.is_available():
+            T, c = 6, 4
+            q = mx.random.normal(shape=(1, T, 16, Dk))
+            k = mx.random.normal(shape=(1, T, 16, Dk))
+            k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
+            v = mx.random.normal(shape=(1, T, 32, Dv))
+            g = mx.sigmoid(mx.random.normal(shape=(1, T, 32)))
+            b = mx.sigmoid(mx.random.normal(shape=(1, T, 32)))
+            h0 = mx.random.normal((1, 32, Dv, Dk))
+            with mx.config.scoped_update(MLX_GATED_DELTA_CHUNK=8):
+                out = mx.fast.gated_delta_update(
+                    q, k, v, g, b, initial_state=h0, state_at=c
+                )
+                ref = split(q, k, v, g, b, h0, None, c)
+                mx.eval(out, ref)
+            for x, r in zip(out, ref):
+                self.assertTrue(mx.array_equal(x, r))
+
+        # No initial state is the same as a zero initial state.
+        for T, c, mask in [(6, 4, None), (6, 4, mx.ones((1, 6), dtype=mx.bool_))]:
+            q = mx.random.normal(shape=(1, T, 16, Dk))
+            k = mx.random.normal(shape=(1, T, 16, Dk))
+            k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
+            v = mx.random.normal(shape=(1, T, 32, Dv))
+            g = mx.sigmoid(mx.random.normal(shape=(1, T, 32)))
+            b = mx.sigmoid(mx.random.normal(shape=(1, T, 32)))
+            out = mx.fast.gated_delta_update(q, k, v, g, b, mask=mask, state_at=c)
+            ref = split(q, k, v, g, b, mx.zeros((1, 32, Dv, Dk)), mask, c)
+            self.assertEqual(len(out), 3)
+            for x, r in zip(out, ref):
+                self.assertTrue(mx.array_equal(x, r))
+
+    def test_gated_delta_state_at_errors(self):
+        T = 4
+        q = mx.zeros((1, T, 16, 128))
+        v = mx.zeros((1, T, 32, 128))
+        g = mx.ones((1, T, 32))
+        b = mx.ones((1, T, 32))
+        for c in (-1, 0, T, T + 1):
+            with self.assertRaises(ValueError):
+                mx.fast.gated_delta_update(q, q, v, g, b, state_at=c)
+
+    def test_gated_delta_state_at_vjp(self):
+        B, Hk, Hv, Dk, Dv = 1, 16, 32, 128, 128
+        for T, c in ((4, 1), (4, 3), (12, 5)):
+            mx.random.seed(0)
+            q = mx.random.normal(shape=(B, T, Hk, Dk))
+            k = mx.random.normal(shape=(B, T, Hk, Dk))
+            k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
+            v = mx.random.normal(shape=(B, T, Hv, Dv))
+            g = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
+            b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
+            h0 = mx.random.normal((B, Hv, Dv, Dk))
+            primals = [q, k, v, g, b, h0]
+            cotans = [
+                mx.random.normal(shape=(B, T, Hv, Dv)) * 1e-2,
+                mx.random.normal(shape=(B, Hv, Dv, Dk)) * 1e-2,
+                mx.random.normal(shape=(B, Hv, Dv, Dk)) * 1e-2,
+            ]
+
+            def fused(q, k, v, g, b, h0):
+                return mx.fast.gated_delta_update(
+                    q, k, v, g, b, initial_state=h0, state_at=c
+                )
+
+            def split(q, k, v, g, b, h0):
+                y0, hc = mx.fast.gated_delta_update(
+                    q[:, :c], k[:, :c], v[:, :c], g[:, :c], b[:, :c], initial_state=h0
+                )
+                y1, hf = mx.fast.gated_delta_update(
+                    q[:, c:], k[:, c:], v[:, c:], g[:, c:], b[:, c:], initial_state=hc
+                )
+                return mx.concatenate([y0, y1], axis=1), hf, hc
+
+            # (4, 1) and (4, 3) store the state in the same kernel pass, whose
+            # vjp is the fallback. (12, 5) takes the split path, where each of
+            # the two calls uses the fused vjp. All compare to the fallback
+            # vjp of the split.
+            _, vjp_out = mx.vjp(fused, primals, cotans)
+            with mx.config.scoped_update(MLX_GATED_DELTA_VJP_FALLBACK=1):
+                _, vjp_ref = mx.vjp(split, primals, cotans)
+                mx.eval(vjp_ref)
+            for i, (x, r) in enumerate(zip(vjp_out, vjp_ref)):
+                with self.subTest(T=T, c=c, grad=i):
+                    self.assertTrue(mx.allclose(x, r, rtol=1e-5, atol=1e-6))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)
