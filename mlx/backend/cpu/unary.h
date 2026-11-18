@@ -51,6 +51,11 @@ void unary_op(const array& a, array& out, Op) {
           unary_op_contiguous<T, U, Op>(src + begin, dst + begin, end - begin);
         });
   } else {
+    // Empty inputs can be non-contiguous (e.g. NumPy (0,0) with zero
+    // strides). Bail out before dividing by a zero trailing dimension.
+    if (a.size() == 0) {
+      return;
+    }
     size_t shape = ndim > 0 ? a.shape().back() : 1;
     size_t stride = ndim > 0 ? a.strides().back() : 1;
     if (ndim <= 1) {
