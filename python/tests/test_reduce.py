@@ -406,6 +406,26 @@ class TestReduce(mlx_tests.MLXTestCase):
                         self.assertEqual(actual.shape, expected.shape)
                         self.assertTrue(mx.array_equal(actual, expected))
 
+    @unittest.skipIf(
+        mx.metal.is_available(),
+        "Metal accumulates bfloat16 row reductions in bfloat16",
+    )
+    def test_bfloat16_row_reduce(self):
+        # Sums of many values into few outputs, like the gradient of a per
+        # channel scale. A bfloat16 accumulator loses precision on long sums.
+        for shape, axes in [
+            ((2, 1 << 22), (1,)),
+            ((1, 4096, 8, 1024), (0, 1, 3)),
+            ((2, 512, 4, 256), (0, 1, 3)),
+            ((64, 8, 4096), (0, 2)),
+            ((8, 300, 6), (0, 2)),
+        ]:
+            with self.subTest(shape=shape, axes=axes):
+                x = (mx.random.normal(shape) * 0.1 + 0.05).astype(mx.bfloat16)
+                expected = x.astype(mx.float32).sum(axis=axes)
+                out = x.sum(axis=axes).astype(mx.float32)
+                self.assertTrue(mx.allclose(out, expected, rtol=1e-2))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)
