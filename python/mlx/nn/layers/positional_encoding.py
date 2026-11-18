@@ -24,7 +24,17 @@ class RoPE(Module):
             implementation which is slightly less efficient. Default: ``False``.
         base (float, optional): The base used to compute angular frequency for
             each dimension in the positional encodings. Default: ``10000``.
-        scale (float, optional): The scale used to scale the positions. Default: ``1.0``.
+        scale (float, optional): The scale used to scale the positions.
+            Default: ``1.0``.
+        freqs (array, optional): The wavelength of each rotated pair of
+            features, of shape ``(dims // 2,)``. When given it takes
+            precedence over ``base``. Use it to express rotary encodings that
+            are not a plain power law, for example the scaled and partial
+            rotary encodings used by recent models. Default: ``None``.
+        partial_rotary_factor (float, optional): If set, only the first
+            ``int(dims * partial_rotary_factor)`` features are rotated and the
+            remaining ones are left unchanged. Must be in ``(0, 1]``. Default:
+            ``None``.
     """
 
     def __init__(
@@ -33,24 +43,76 @@ class RoPE(Module):
         traditional: bool = False,
         base: float = 10000,
         scale: float = 1.0,
+        freqs: Optional[mx.array] = None,
+        partial_rotary_factor: Optional[float] = None,
     ):
         super().__init__()
+        if dims % 2 != 0:
+            raise ValueError(f"[RoPE] dims must be even but got {dims}.")
+
         self.dims = dims
         self.traditional = traditional
         self.base = base
         self.scale = scale
+        self._partial_rotary_factor = partial_rotary_factor
+
+        if freqs is not None and partial_rotary_factor is not None:
+            raise ValueError(
+                "[RoPE] freqs and partial_rotary_factor cannot be used together."
+            )
+
+        if freqs is not None:
+            freqs = freqs if isinstance(freqs, mx.array) else mx.array(freqs)
+            if freqs.ndim != 1 or freqs.shape[0] != dims // 2:
+                raise ValueError(
+                    "[RoPE] freqs must be one dimensional with size "
+                    f"{dims // 2} but got shape {freqs.shape}."
+                )
+        elif partial_rotary_factor is not None:
+            if not 0 < partial_rotary_factor <= 1:
+                raise ValueError(
+                    "[RoPE] partial_rotary_factor must be in (0, 1] but got "
+                    f"{partial_rotary_factor}."
+                )
+            # The features that are not rotated get an infinite wavelength
+            # which makes their inverse frequency zero and leaves them
+            # unchanged.
+            rotated_dims = int(dims * partial_rotary_factor)
+            exponents = mx.arange(0, rotated_dims, 2, dtype=mx.float32) / dims
+            freqs = mx.concatenate(
+                [
+                    base**exponents,
+                    mx.full(((dims - rotated_dims) // 2,), mx.inf),
+                ]
+            )
+
+        self._freqs = freqs
 
     def _extra_repr(self):
-        return f"{self.dims}, traditional={self.traditional}"
+        s = f"{self.dims}, traditional={self.traditional}"
+        if self._partial_rotary_factor is not None:
+            s += f", partial_rotary_factor={self._partial_rotary_factor}"
+        return s
 
     def __call__(self, x, offset: int = 0):
+        freqs = self._freqs
+        if freqs is None:
+            return mx.fast.rope(
+                x,
+                self.dims,
+                traditional=self.traditional,
+                base=self.base,
+                scale=self.scale,
+                offset=offset,
+            )
         return mx.fast.rope(
             x,
             self.dims,
             traditional=self.traditional,
-            base=self.base,
+            base=None,
             scale=self.scale,
             offset=offset,
+            freqs=freqs,
         )
 
 
@@ -89,7 +151,8 @@ class SinusoidalPositionalEncoding(Module):
         # embedding dimension must be positive and even.
         if dims <= 0 or dims % 2 != 0:
             raise ValueError(
-                f"[SinusoidalPositionalEncoding] dims must be positive and even but got {dims}."
+                f"[SinusoidalPositionalEncoding] dims must be positive and even but "
+                f"got {dims}."
             )
 
         # Avoid division by zero when dims == 2 (one frequency pair).
@@ -107,7 +170,7 @@ class SinusoidalPositionalEncoding(Module):
             self._sigmas = self._sigmas * (2 * math.pi)
 
         # Save some constants that define the implementation
-        self.scale = scale or (2 / dims) ** 0.5
+        self.scale = scale if scale is not None else (2 / dims) ** 0.5
         self.cos_first = cos_first
 
     def __call__(self, x):
@@ -127,14 +190,36 @@ class SinusoidalPositionalEncoding(Module):
 
 
 class ALiBi(Module):
+    """Implements Attention with Linear Biases (ALiBi).
+
+    ALiBi adds a static, non-learnable bias matrix to attention scores proportional
+    to the distance between query and key tokens.
+
+    For more details see `Train Short, Test Long: Attention with Linear Biases Enables
+    Input Length Extrapolation <https://arxiv.org/abs/2108.12409>`_.
+    """
+
     @staticmethod
     def create_alibi_matrix(
         q_sequence_length: int,
         k_sequence_length: int,
         num_heads: int,
-        offset: int,
-        dtype=mx.float32,
-    ):
+        offset: int = 0,
+        dtype: mx.Dtype = mx.float32,
+    ) -> mx.array:
+        """Create the ALiBi bias matrix.
+
+        Args:
+            q_sequence_length (int): The query sequence length.
+            k_sequence_length (int): The key sequence length.
+            num_heads (int): The number of attention heads.
+            offset (int, optional): The position offset. Default: ``0``.
+            dtype (Dtype, optional): Data type of the output array. Default:
+                ``mx.float32``.
+
+        Returns:
+            array: The ALiBi bias matrix.
+        """
         x1 = mx.arange(offset, q_sequence_length)
         x2 = mx.arange(0, k_sequence_length)
         distance_matrix = -mx.abs(
@@ -145,7 +230,18 @@ class ALiBi(Module):
         return alibi_mask
 
     @staticmethod
-    def create_alibi_slope(num_heads, dtype):
+    def create_alibi_slope(num_heads: int, dtype: mx.Dtype = mx.float32) -> mx.array:
+        """Create the geometric slopes for ALiBi across attention heads.
+
+        Args:
+            num_heads (int): The number of attention heads.
+            dtype (Dtype, optional): Data type of the output array. Default:
+                ``mx.float32``.
+
+        Returns:
+            array: The slopes array expanded for head broadcasting.
+        """
+
         def get_slopes(n: int):
             if math.log2(n).is_integer():
                 start = 2 ** (-(2 ** -(math.log2(n) - 3)))
@@ -161,7 +257,22 @@ class ALiBi(Module):
         out = mx.array(slopes, dtype=dtype)
         return mx.expand_dims(out, axis=(-1, -2))
 
-    def __call__(self, attention_scores, offset=0, mask=None):
+    def __call__(
+        self,
+        attention_scores: mx.array,
+        offset: int = 0,
+        mask: Optional[mx.array] = None,
+    ) -> mx.array:
+        """Apply ALiBi matrix to attention scores.
+
+        Args:
+            attention_scores (array): The input attention scores.
+            offset (int, optional): The position offset. Default: ``0``.
+            mask (array, optional): An optional attention mask. Default: ``None``.
+
+        Returns:
+            array: The updated attention scores with ALiBi bias added.
+        """
         alibi_mask = ALiBi.create_alibi_matrix(
             q_sequence_length=attention_scores.shape[-2] + offset,
             k_sequence_length=attention_scores.shape[-1],

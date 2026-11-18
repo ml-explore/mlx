@@ -42,7 +42,7 @@ def all_gather_benchmark():
 
     def fn(x):
         for _ in range(its_per_eval):
-            x = mx.distributed.all_gather(x)[0]
+            x = mx.distributed.all_gather(x)[: a.shape[0]]
         return x
 
     ms = timeit(fn, a) / its_per_eval

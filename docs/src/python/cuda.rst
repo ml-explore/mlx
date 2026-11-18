@@ -7,3 +7,4 @@ CUDA
   :toctree: _autosummary
 
   is_available
+  get_arch_list

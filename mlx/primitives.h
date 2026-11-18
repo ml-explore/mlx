@@ -443,7 +443,7 @@ class AsStrided : public UnaryPrimitive {
   Strides strides_;
   size_t offset_;
 
-  void eval(const std::vector<array>& inputs, array& out);
+  void eval(const array& in, array& out);
 };
 
 class BitwiseBinary : public UnaryPrimitive {
@@ -975,9 +975,9 @@ class Equal : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
 
+  bool is_equivalent(const Primitive& other) const override;
   const char* name() const override {
     if (equal_nan_) {
       return "NaNEqual";
@@ -1079,8 +1079,13 @@ class FFT : public UnaryPrimitive {
       Stream stream,
       const std::vector<size_t>& axes,
       bool inverse,
-      bool real)
-      : UnaryPrimitive(stream), axes_(axes), inverse_(inverse), real_(real) {}
+      bool real,
+      bool odd_out = false)
+      : UnaryPrimitive(stream),
+        axes_(axes),
+        inverse_(inverse),
+        real_(real),
+        odd_out_(odd_out) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1091,13 +1096,16 @@ class FFT : public UnaryPrimitive {
 
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
-    return std::make_tuple(axes_, inverse_, real_);
+    return std::make_tuple(axes_, inverse_, real_, odd_out_);
   }
 
  private:
   std::vector<size_t> axes_;
   bool inverse_;
   bool real_;
+  // The output length of an inverse real transform is not recoverable from
+  // the input shape.
+  bool odd_out_;
 };
 
 class Flatten : public UnaryPrimitive {
@@ -1135,6 +1143,20 @@ class Floor : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_NAME(Floor)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+};
+
+class FloorDivide : public UnaryPrimitive {
+ public:
+  explicit FloorDivide(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_NAME(FloorDivide)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
 };
@@ -1325,9 +1347,9 @@ class Log : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
 
+  bool is_equivalent(const Primitive& other) const override;
   Base state() const {
     return base_;
   };
@@ -1716,6 +1738,41 @@ class GatherQMM : public UnaryPrimitive {
   bool right_sorted_;
 };
 
+class GatherQQMM : public UnaryPrimitive {
+ public:
+  explicit GatherQQMM(
+      Stream stream,
+      int group_size,
+      int bits,
+      QuantizationMode mode,
+      bool left_sorted = false,
+      bool right_sorted = false)
+      : UnaryPrimitive(stream),
+        group_size_(group_size),
+        bits_(bits),
+        mode_(mode),
+        left_sorted_(left_sorted),
+        right_sorted_(right_sorted) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_NAME(GatherQQMM)
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  auto state() const {
+    return std::make_tuple(
+        group_size_, bits_, mode_, left_sorted_, right_sorted_);
+  }
+
+ private:
+  int group_size_;
+  int bits_;
+  QuantizationMode mode_;
+  bool left_sorted_;
+  bool right_sorted_;
+};
+
 class RandomBits : public UnaryPrimitive {
  public:
   explicit RandomBits(Stream stream, const Shape& shape, int width)
@@ -1853,6 +1910,7 @@ class Scan : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS();
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
   const char* name() const override {
     switch (reduce_type_) {
@@ -2174,6 +2232,27 @@ class Softmax : public UnaryPrimitive {
 
  private:
   bool precise_;
+};
+
+class SearchSorted : public UnaryPrimitive {
+ public:
+  explicit SearchSorted(Stream stream, bool right)
+      : UnaryPrimitive(stream), right_(right) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_NAME(SearchSorted)
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  auto state() const {
+    return right_;
+  }
+
+ private:
+  bool right_;
 };
 
 class Sort : public UnaryPrimitive {

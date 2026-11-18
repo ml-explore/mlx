@@ -79,9 +79,9 @@ std::vector<array> AllGather::vjp(
   }
   starts[0] = g.rank() * stops[0];
   stops[0] += starts[0];
-  auto out = slice(cotangents[0], starts, stops);
+  auto out = slice(cotangents[0], starts, stops, stream());
   if (ndim == 0) {
-    out = squeeze(out, 0);
+    out = squeeze(out, 0, stream());
   }
   return {out};
 }

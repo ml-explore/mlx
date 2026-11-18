@@ -1,7 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import mlx.core as mx
-import mlx.nn as nn
 from time_utils import time_fn
 
 
@@ -16,8 +15,12 @@ def rms_norm(x, w, eps):
 
 
 def time_rms_norm():
-    f1 = lambda x, w, y: (rms_norm(x, w, 1e-5) * y).sum()
-    f2 = lambda x, w, y: (mx.fast.rms_norm(x, w, 1e-5) * y).sum()
+    def f1(x, w, y):
+        return (rms_norm(x, w, 1e-5) * y).sum()
+
+    def f2(x, w, y):
+        return (mx.fast.rms_norm(x, w, 1e-5) * y).sum()
+
     g1 = mx.grad(f1, argnums=(0, 1))
     g2 = mx.grad(f2, argnums=(0, 1))
 
@@ -37,8 +40,12 @@ def time_rms_norm():
     time_fn(rms_norm_loop, mx.compile(g1), x, w)
     time_fn(rms_norm_loop, mx.compile(g2), x, w)
 
-    f1 = lambda x, y: (rms_norm(x, None, 1e-5) * y).sum()
-    f2 = lambda x, y: (mx.fast.rms_norm(x, None, 1e-5) * y).sum()
+    def f1(x, y):
+        return (rms_norm(x, None, 1e-5) * y).sum()
+
+    def f2(x, y):
+        return (mx.fast.rms_norm(x, None, 1e-5) * y).sum()
+
     g1 = mx.grad(f1, argnums=(0,))
     g2 = mx.grad(f2, argnums=(0,))
 

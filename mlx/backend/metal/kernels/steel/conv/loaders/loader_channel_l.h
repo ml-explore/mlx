@@ -47,8 +47,11 @@ struct Conv2DInputBlockLoaderLargeFilter {
   const constant MLXConvParams<2>* params;
   const constant ImplicitGemmConv2DParams* gemm_params;
 
-  short weight_h;
-  short weight_w;
+  const int kdil_h;
+  const int kdil_w;
+
+  int weight_h;
+  int weight_w;
 
   const device T* src[n_rows];
 
@@ -64,13 +67,15 @@ struct Conv2DInputBlockLoaderLargeFilter {
       const constant MLXConvParams<2>* params_,
       const constant ImplicitGemmConv2DParams* gemm_params_,
       uint simd_group_id [[simdgroup_index_in_threadgroup]],
-      uint simd_lane_id [[thread_index_in_simdgroup]])
+      uint simd_lane_id [[thread_index_in_simdgroup]]) thread
       : thread_idx(simd_group_id * 32 + simd_lane_id),
         bi(thread_idx / TCOLS),
-        bj(vec_size * (thread_idx % TCOLS)),
+        bj(vec_size*(thread_idx % TCOLS)),
         dst(dst_ + bi * dst_ld + bj),
         params(params_),
         gemm_params(gemm_params_),
+        kdil_h(params_->flip ? -params_->kdil[0] : params_->kdil[0]),
+        kdil_w(params_->flip ? -params_->kdil[1] : params_->kdil[1]),
         weight_h(0),
         weight_w(0) {
     int out_n_pixels = params->oS[0] * params->oS[1];
@@ -87,14 +92,15 @@ struct Conv2DInputBlockLoaderLargeFilter {
       int iw = ow * params->str[1] - params->pad[1];
 
       read_n[i] = n;
-      read_ih[i] = ih;
-      read_iw[i] = iw;
 
       // Adjust for flip
       if (params->flip) {
         ih += (params->wS[0] - 1) * params->kdil[0];
         iw += (params->wS[1] - 1) * params->kdil[1];
       }
+
+      read_ih[i] = ih;
+      read_iw[i] = iw;
 
       // Read from input if in bounds
       src[i] = src_ + n * params->in_strides[0] + ih * params->in_strides[1] +
@@ -103,13 +109,13 @@ struct Conv2DInputBlockLoaderLargeFilter {
   }
 
   /* Load from device memory into threadgroup memory - without bound checking */
-  METAL_FUNC void load_unsafe() const {
+  METAL_FUNC void load_unsafe() const thread {
     STEEL_PRAGMA_UNROLL
     for (short i = 0, is = 0; i < n_rows; ++i, is += TROWS) {
       // Find bounds
       int n = read_n[i];
-      int ih = read_ih[i] + weight_h * params->kdil[0];
-      int iw = read_iw[i] + weight_w * params->kdil[1];
+      int ih = read_ih[i] + weight_h * kdil_h;
+      int iw = read_iw[i] + weight_w * kdil_w;
 
       // Read from input if in bounds
       if ((n < params->N) && (ih >= 0 && ih < params->iS[0]) &&
@@ -131,7 +137,7 @@ struct Conv2DInputBlockLoaderLargeFilter {
   }
 
   /* Iteration helper */
-  METAL_FUNC void next() {
+  METAL_FUNC void next() thread {
     if (++weight_w < params->wS[1]) {
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < n_rows; i++) {
@@ -197,8 +203,8 @@ struct Conv2DInputBlockLoaderSmallFilter {
   const constant MLXConvParams<2>* params;
   const constant ImplicitGemmConv2DParams* gemm_params;
 
-  short weight_h;
-  short weight_w;
+  int weight_h;
+  int weight_w;
 
   const device T* src[n_rows];
 
@@ -213,10 +219,10 @@ struct Conv2DInputBlockLoaderSmallFilter {
       const constant MLXConvParams<2>* params_,
       const constant ImplicitGemmConv2DParams* gemm_params_,
       uint simd_group_id [[simdgroup_index_in_threadgroup]],
-      uint simd_lane_id [[thread_index_in_simdgroup]])
+      uint simd_lane_id [[thread_index_in_simdgroup]]) thread
       : thread_idx(simd_group_id * 32 + simd_lane_id),
         bi(thread_idx / TCOLS),
-        bj(vec_size * (thread_idx % TCOLS)),
+        bj(vec_size*(thread_idx % TCOLS)),
         dst(dst_ + bi * dst_ld + bj),
         params(params_),
         gemm_params(gemm_params_),
@@ -287,7 +293,7 @@ struct Conv2DInputBlockLoaderSmallFilter {
   }
 
   /* Load from device memory into threadgroup memory - without bound checking */
-  METAL_FUNC void load_unsafe() const {
+  METAL_FUNC void load_unsafe() const thread {
     mask_t h_mask = mask_t(1) << weight_h;
     mask_t w_mask = mask_t(1) << weight_w;
 
@@ -312,7 +318,7 @@ struct Conv2DInputBlockLoaderSmallFilter {
   }
 
   /* Iteration helper */
-  METAL_FUNC void next() {
+  METAL_FUNC void next() thread {
     if (++weight_w < params->wS[1]) {
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < n_rows; i++) {
@@ -384,6 +390,7 @@ struct Conv2DWeightBlockLoader {
   int weight_step;
 
   const int read_n;
+  const int N;
   const bool do_read;
 
   /* Constructor */
@@ -394,22 +401,23 @@ struct Conv2DWeightBlockLoader {
       const constant MLXConvParams<2>* params_,
       const constant ImplicitGemmConv2DParams* gemm_params_,
       uint simd_group_id [[simdgroup_index_in_threadgroup]],
-      uint simd_lane_id [[thread_index_in_simdgroup]])
+      uint simd_lane_id [[thread_index_in_simdgroup]]) thread
       : src_ld(params_->wt_strides[0]),
         thread_idx(simd_group_id * 32 + simd_lane_id),
         bi(thread_idx / TCOLS),
-        bj(vec_size * (thread_idx % TCOLS)),
+        bj(vec_size*(thread_idx % TCOLS)),
         dst(dst_ + bi * dst_ld + bj),
         src(src_ + bi * src_ld + bj),
         params(params_),
         weight_hw(0),
         weight_step(params->C / params->groups),
         read_n(offsets.y + bi),
+        N(gemm_params_->N),
         do_read(read_n + n_rows * TROWS <= gemm_params_->N) {}
 
   /* Load from device memory into threadgroup memory - without bound checking */
-  METAL_FUNC void load_unsafe() const {
-    if (BN != 8 || do_read) {
+  METAL_FUNC void load_unsafe() const thread {
+    if (do_read) {
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < BN; i += TROWS) {
         STEEL_PRAGMA_UNROLL
@@ -419,7 +427,7 @@ struct Conv2DWeightBlockLoader {
       }
     } else {
       for (short i = 0; i < BN; i += TROWS) {
-        if ((read_n + i) < params->O) {
+        if ((read_n + i) < N) {
           STEEL_PRAGMA_UNROLL
           for (short j = 0; j < vec_size; j++) {
             dst[i * dst_ld + j] = src[i * src_ld + j];
@@ -435,7 +443,7 @@ struct Conv2DWeightBlockLoader {
   }
 
   /* Iteration helper */
-  METAL_FUNC void next() {
+  METAL_FUNC void next() thread {
     if (++weight_hw < (params->wS[1] * params->wS[0])) {
       src += weight_step;
       return;
@@ -481,9 +489,9 @@ struct Conv3DInputBlockLoaderLargeFilter {
   const constant MLXConvParams<3>* params;
   const constant ImplicitGemmConv3DParams* gemm_params;
 
-  short weight_d;
-  short weight_h;
-  short weight_w;
+  int weight_d;
+  int weight_h;
+  int weight_w;
 
   short kdil_d;
   short kdil_h;
@@ -504,10 +512,10 @@ struct Conv3DInputBlockLoaderLargeFilter {
       const constant MLXConvParams<3>* params_,
       const constant ImplicitGemmConv3DParams* gemm_params_,
       uint simd_group_id [[simdgroup_index_in_threadgroup]],
-      uint simd_lane_id [[thread_index_in_simdgroup]])
+      uint simd_lane_id [[thread_index_in_simdgroup]]) thread
       : thread_idx(simd_group_id * 32 + simd_lane_id),
         bi(thread_idx / TCOLS),
-        bj(vec_size * (thread_idx % TCOLS)),
+        bj(vec_size*(thread_idx % TCOLS)),
         dst(dst_ + bi * dst_ld + bj),
         params(params_),
         gemm_params(gemm_params_),
@@ -559,7 +567,7 @@ struct Conv3DInputBlockLoaderLargeFilter {
   }
 
   /* Load from device memory into threadgroup memory - without bound checking */
-  METAL_FUNC void load_unsafe() const {
+  METAL_FUNC void load_unsafe() const thread {
     STEEL_PRAGMA_UNROLL
     for (short i = 0, is = 0; i < n_rows; ++i, is += TROWS) {
       // Find bounds
@@ -588,7 +596,7 @@ struct Conv3DInputBlockLoaderLargeFilter {
   }
 
   /* Iteration helper */
-  METAL_FUNC void next() {
+  METAL_FUNC void next() thread {
     if (++weight_w < params->wS[2]) {
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < n_rows; i++) {
@@ -665,9 +673,9 @@ struct Conv3DInputBlockLoaderSmallFilter {
   const constant MLXConvParams<3>* params;
   const constant ImplicitGemmConv3DParams* gemm_params;
 
-  short weight_d;
-  short weight_h;
-  short weight_w;
+  int weight_d;
+  int weight_h;
+  int weight_w;
 
   const device T* src[n_rows];
 
@@ -683,10 +691,10 @@ struct Conv3DInputBlockLoaderSmallFilter {
       const constant MLXConvParams<3>* params_,
       const constant ImplicitGemmConv3DParams* gemm_params_,
       uint simd_group_id [[simdgroup_index_in_threadgroup]],
-      uint simd_lane_id [[thread_index_in_simdgroup]])
+      uint simd_lane_id [[thread_index_in_simdgroup]]) thread
       : thread_idx(simd_group_id * 32 + simd_lane_id),
         bi(thread_idx / TCOLS),
-        bj(vec_size * (thread_idx % TCOLS)),
+        bj(vec_size*(thread_idx % TCOLS)),
         dst(dst_ + bi * dst_ld + bj),
         params(params_),
         gemm_params(gemm_params_),
@@ -777,7 +785,7 @@ struct Conv3DInputBlockLoaderSmallFilter {
   }
 
   /* Load from device memory into threadgroup memory - without bound checking */
-  METAL_FUNC void load_unsafe() const {
+  METAL_FUNC void load_unsafe() const thread {
     mask_t d_mask = mask_t(1) << weight_d;
     mask_t h_mask = mask_t(1) << weight_h;
     mask_t w_mask = mask_t(1) << weight_w;
@@ -804,7 +812,7 @@ struct Conv3DInputBlockLoaderSmallFilter {
   }
 
   /* Iteration helper */
-  METAL_FUNC void next() {
+  METAL_FUNC void next() thread {
     if (++weight_w < params->wS[2]) {
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < n_rows; i++) {
@@ -887,6 +895,7 @@ struct Conv3DWeightBlockLoader {
   int weight_step;
 
   const int read_n;
+  const int N;
   const bool do_read;
 
   /* Constructor */
@@ -897,22 +906,23 @@ struct Conv3DWeightBlockLoader {
       const constant MLXConvParams<3>* params_,
       const constant ImplicitGemmConv3DParams* gemm_params_,
       uint simd_group_id [[simdgroup_index_in_threadgroup]],
-      uint simd_lane_id [[thread_index_in_simdgroup]])
+      uint simd_lane_id [[thread_index_in_simdgroup]]) thread
       : src_ld(params_->wt_strides[0]),
         thread_idx(simd_group_id * 32 + simd_lane_id),
         bi(thread_idx / TCOLS),
-        bj(vec_size * (thread_idx % TCOLS)),
+        bj(vec_size*(thread_idx % TCOLS)),
         dst(dst_ + bi * dst_ld + bj),
         src(src_ + bi * src_ld + bj),
         params(params_),
         weight_dhw(0),
         weight_step(params->C / params->groups),
         read_n(offsets.y + bi),
+        N(gemm_params_->N),
         do_read(read_n + n_rows * TROWS <= gemm_params_->N) {}
 
   /* Load from device memory into threadgroup memory - without bound checking */
-  METAL_FUNC void load_unsafe() const {
-    if (BN != 8 || do_read) {
+  METAL_FUNC void load_unsafe() const thread {
+    if (do_read) {
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < BN; i += TROWS) {
         STEEL_PRAGMA_UNROLL
@@ -922,7 +932,7 @@ struct Conv3DWeightBlockLoader {
       }
     } else {
       for (short i = 0; i < BN; i += TROWS) {
-        if ((read_n + i) < params->O) {
+        if ((read_n + i) < N) {
           STEEL_PRAGMA_UNROLL
           for (short j = 0; j < vec_size; j++) {
             dst[i * dst_ld + j] = src[i * src_ld + j];
@@ -938,7 +948,7 @@ struct Conv3DWeightBlockLoader {
   }
 
   /* Iteration helper */
-  METAL_FUNC void next() {
+  METAL_FUNC void next() thread {
     if (++weight_dhw < (params->wS[0] * params->wS[1] * params->wS[2])) {
       src += weight_step;
       return;

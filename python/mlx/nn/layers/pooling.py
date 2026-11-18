@@ -48,7 +48,8 @@ def _sliding_windows(x, window_shape, window_strides):
         raise ValueError(
             f"To extract sliding windows the window shapes and strides must have "
             f"the same number of spatial dimensions as the signal but the signal "
-            f"has {len(spatial_dims)} dims and the window shape has {len(window_shape)} "
+            f"has {len(spatial_dims)} dims and the window shape has "
+            f"{len(window_shape)} "
             f"and strides have {len(window_strides)}."
         )
 
@@ -84,6 +85,18 @@ def _sliding_windows(x, window_shape, window_strides):
 class _Pool(Module):
     def __init__(self, pooling_function, kernel_size, stride, padding, padding_value):
         super().__init__()
+
+        class_name = type(self).__name__
+        for name, values in (("kernel_size", kernel_size), ("stride", stride)):
+            if any(v <= 0 for v in values):
+                raise ValueError(
+                    f"[{class_name}] '{name}' must be positive but got {tuple(values)}."
+                )
+        if any(p[0] < 0 for p in padding):
+            raise ValueError(
+                f"[{class_name}] 'padding' must be non-negative but got "
+                f"{tuple(p[0] for p in padding)}."
+            )
 
         self._pooling_function = pooling_function
         self._kernel_size = kernel_size

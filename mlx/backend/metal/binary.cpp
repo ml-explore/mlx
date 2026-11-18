@@ -220,6 +220,7 @@ BINARY_GPU(Divide)
 BINARY_GPU_MULTI(DivMod)
 BINARY_GPU(Remainder)
 BINARY_GPU(Equal)
+BINARY_GPU(FloorDivide)
 BINARY_GPU(Greater)
 BINARY_GPU(GreaterEqual)
 BINARY_GPU(Less)
@@ -235,23 +236,7 @@ BINARY_GPU(Power)
 BINARY_GPU(Subtract)
 
 void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
-  switch (op_) {
-    case BitwiseBinary::And:
-      binary_op_gpu(inputs, out, name());
-      break;
-    case BitwiseBinary::Or:
-      binary_op_gpu(inputs, out, name());
-      break;
-    case BitwiseBinary::Xor:
-      binary_op_gpu(inputs, out, name());
-      break;
-    case BitwiseBinary::LeftShift:
-      binary_op_gpu(inputs, out, name());
-      break;
-    case BitwiseBinary::RightShift:
-      binary_op_gpu(inputs, out, name());
-      break;
-  }
+  binary_op_gpu(inputs, out, name());
 }
 
 } // namespace mlx::core

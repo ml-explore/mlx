@@ -34,7 +34,8 @@ dataset, and optimizer initialization.
         mx.eval(loss, model.parameters())
 
 All we have to do to average the gradients across machines is perform an
-:func:`all_sum` and divide by the size of the :class:`Group`. Namely we
+:func:`mlx.core.distributed.all_sum` and divide by the size of the
+:class:`mlx.core.distributed.Group`. Namely we
 have to :func:`mlx.utils.tree_map` the gradients with following function.
 
 .. code:: python

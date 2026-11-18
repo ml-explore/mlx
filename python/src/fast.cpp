@@ -75,20 +75,20 @@ struct PyCustomKernelFunction {
   const char* tag_;
 };
 
-mx::MathMode parse_metal_math_mode(const std::string& math_mode) {
+mx::fast::MathMode parse_metal_math_mode(const std::string& math_mode) {
   if (math_mode == "safe") {
-    return mx::MathMode::Safe;
+    return mx::fast::MathMode::Safe;
   } else if (math_mode == "relaxed") {
-    return mx::MathMode::Relaxed;
+    return mx::fast::MathMode::Relaxed;
   } else if (math_mode == "fast") {
-    return mx::MathMode::Fast;
+    return mx::fast::MathMode::Fast;
   }
   throw std::invalid_argument(
       "[metal_kernel] Expected math_mode to be 'safe', 'relaxed', or 'fast'.");
 }
 
-mx::CompileOptions parse_compile_options(const nb::object& obj) {
-  mx::CompileOptions result;
+mx::fast::CompileOptions parse_compile_options(const nb::object& obj) {
+  mx::fast::CompileOptions result;
   if (obj.is_none()) {
     return result;
   }
@@ -127,7 +127,7 @@ void init_fast(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def rms_norm(x: array, weight: Optional[array], eps: float, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def rms_norm(x: array, weight: array | None, eps: float, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Root Mean Square normalization (RMS norm).
 
@@ -154,7 +154,7 @@ void init_fast(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def layer_norm(x: array, weight: Optional[array], bias: Optional[array], eps: float, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def layer_norm(x: array, weight: array | None, bias: array | None, eps: float, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Layer normalization.
 
@@ -172,6 +172,36 @@ void init_fast(nb::module_& parent_module) {
 
         Returns:
             array: The output array.
+      )pbdoc");
+
+  m.def(
+      "cross_entropy",
+      &mx::fast::cross_entropy,
+      "logits"_a,
+      "targets"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def cross_entropy(logits: array, targets: array, *, stream: StreamOrDevice = None) -> array"),
+      R"pbdoc(
+        Cross entropy loss with class indices as targets.
+
+        Computes ``logsumexp(logits, axis=-1) - logits[..., target]`` in a
+        fused kernel with accumulation in float32.
+
+        Note: The fused kernel is available on Metal and CUDA. The CPU falls
+        back to the unfused version, which reduces in the dtype of the logits.
+
+        Args:
+            logits (array): The unnormalized logits. The loss is computed over
+              the last axis.
+            targets (array): Class indices. The shape should match the shape of
+              ``logits`` with the last axis removed. The indices must be in
+              ``[0, logits.shape[-1])``.
+
+        Returns:
+            array: The per-element loss in float32, with the shape of
+            ``targets``.
       )pbdoc");
 
   m.def(
@@ -197,7 +227,7 @@ void init_fast(nb::module_& parent_module) {
       "freqs"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def rope(a: array, dims: int, *, traditional: bool, base: Optional[float], scale: float, offset: Union[int, array], freqs: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def rope(a: array, dims: int, *, traditional: bool, base: float | None, scale: float, offset: int | array, freqs: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Apply rotary positional encoding to the input.
 
@@ -232,8 +262,10 @@ void init_fast(nb::module_& parent_module) {
          const mx::array& keys,
          const mx::array& values,
          const float scale,
+         int window_size,
          const std::variant<std::monostate, std::string, mx::array>& mask,
          const std::optional<mx::array>& sinks,
+         bool force_fused,
          mx::StreamOrDevice s) {
         bool has_mask = !std::holds_alternative<std::monostate>(mask);
         bool has_str_mask =
@@ -250,16 +282,43 @@ void init_fast(nb::module_& parent_module) {
               throw std::invalid_argument(msg.str());
             }
             return mx::fast::scaled_dot_product_attention(
-                queries, keys, values, scale, mask_str, std::nullopt, sinks, s);
+                queries,
+                keys,
+                values,
+                scale,
+                window_size,
+                mask_str,
+                std::nullopt,
+                sinks,
+                force_fused,
+                s);
           } else {
             auto mask_arr = std::get<mx::array>(mask);
             return mx::fast::scaled_dot_product_attention(
-                queries, keys, values, scale, "", mask_arr, sinks, s);
+                queries,
+                keys,
+                values,
+                scale,
+                window_size,
+                "",
+                mask_arr,
+                sinks,
+                force_fused,
+                s);
           }
 
         } else {
           return mx::fast::scaled_dot_product_attention(
-              queries, keys, values, scale, "", {}, sinks, s);
+              queries,
+              keys,
+              values,
+              scale,
+              window_size,
+              "",
+              {},
+              sinks,
+              force_fused,
+              s);
         }
       },
       "q"_a,
@@ -267,11 +326,13 @@ void init_fast(nb::module_& parent_module) {
       "v"_a,
       nb::kw_only(),
       "scale"_a,
+      "window_size"_a = -1,
       "mask"_a = nb::none(),
       "sinks"_a = nb::none(),
+      "force_fused"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, str, array] = None, sinks: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float, window_size: int = -1, mask: None | str | array = None, sinks: array | None = None, force_fused: bool = False, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         A fast implementation of multi-head attention: ``O = softmax(Q @ K.T, dim=-1) @ V``.
 
@@ -302,6 +363,9 @@ void init_fast(nb::module_& parent_module) {
             k (array): Keys with shape ``[B, N_kv, T_kv, D]``.
             v (array): Values with shape ``[B, N_kv, T_kv, D]``.
             scale (float): Scale for queries (typically ``1.0 / sqrt(q.shape(-1)``).
+            window_size (int, optional): The size of the sliding window. A
+               query attends only to keys less than ``window_size`` positions  
+               away. Use ``-1`` for no window. Must not be ``0``. Default: ``-1``.
             mask (str or array, optional): The mask to apply to the
                query-key scores. The mask can be an array or a string indicating
                the mask type. The only supported string type is ``"causal"``. If
@@ -313,6 +377,11 @@ void init_fast(nb::module_& parent_module) {
                last query aligns with the last key.
             sinks (array, optional): An optional array of attention sinks.
                Default: ``None``.
+            force_fused (bool, optional): If ``True``, use a fused kernel
+               regardless of the builtin heuristics and raise error when no
+               fused kernel is available. For certain configurations this would
+               result in slower kernel getting used but can reduce memory
+               consumption. Default: ``False``.
 
         Returns:
             array: The output array.
@@ -332,6 +401,32 @@ void init_fast(nb::module_& parent_module) {
             scale = D ** -0.5
             out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask="causal")
       )pbdoc");
+
+  m.def(
+      "gated_delta_update",
+      &mlx::core::fast::gated_delta_update,
+      "q"_a,
+      "k"_a,
+      "v"_a,
+      "gamma"_a,
+      "beta"_a,
+      "initial_state"_a = nb::none(), // optional, defaults to None
+      "mask"_a = nb::none(), // optional, defaults to None
+      "stream"_a = nb::none(), // optional, defaults to None
+      R"(
+            Chunked gated delta network forward pass.
+
+            Args:
+                q: Queries [B, T, Hk, Dk]
+                k: Keys [B, T, Hk, Dk]
+                v: Values [B, T, Hv, Dv]
+                gamma: Decay rate in linear space [B, T, Hv]
+                beta: Delta update rates [B, T, Hv]
+                initial_state: Optional initial hidden state [B, T, Hk, Dv]
+                mask: Optional
+            Returns:
+                Tuple of (output [B, T, Hv, Dv], final_state [B, T, Hk, Dv])
+        )");
 
   m.def(
       "metal_kernel",
@@ -365,7 +460,7 @@ void init_fast(nb::module_& parent_module) {
             "verbose"_a = false,
             "stream"_a = nb::none(),
             nb::sig(
-                "def __call__(self, *, inputs: List[Union[scalar, array]], output_shapes: List[Sequence[int]], output_dtypes: List[Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: Optional[List[Tuple[str, Union[bool, int, Dtype]]]] = None, init_value: Optional[float] = None, verbose: bool = false, stream: Union[None, Stream, Device] = None)"),
+                "def __call__(self, *, inputs: list[scalar | array], output_shapes: list[Sequence[int]], output_dtypes: list[Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: list[tuple[str, bool | int | Dtype]] | None = None, init_value: float | None = None, verbose: bool = false, stream: StreamOrDevice = None)"),
             R"pbdoc(
             Run the kernel.
 
@@ -489,7 +584,7 @@ void init_fast(nb::module_& parent_module) {
             "verbose"_a = false,
             "stream"_a = nb::none(),
             nb::sig(
-                "def __call__(self, *, inputs: List[Union[scalar, array]], output_shapes: List[Sequence[int]], output_dtypes: List[Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: Optional[List[Tuple[str, Union[bool, int, Dtype]]]] = None, init_value: Optional[float] = None, verbose: bool = false, stream: Union[None, Stream, Device] = None)"),
+                "def __call__(self, *, inputs: list[scalar | array], output_shapes: list[Sequence[int]], output_dtypes: list[Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: list[tuple[str, bool | int | Dtype]] | None = None, init_value: float | None = None, verbose: bool = false, stream: StreamOrDevice = None)"),
             R"pbdoc(
             Run the kernel.
 

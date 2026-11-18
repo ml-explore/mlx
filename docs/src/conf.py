@@ -2,15 +2,13 @@
 
 # -*- coding: utf-8 -*-
 
-import os
-import subprocess
 
 import mlx.core as mx
 
 # -- Project information -----------------------------------------------------
 
 project = "MLX"
-copyright = "2023, Apple"
+copyright = "2026, Apple"
 author = "MLX Contributors"
 version = ".".join(mx.__version__.split(".")[:3])
 release = version
@@ -23,20 +21,21 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
-    "breathe",
+    "hawkmoth",
+    "hawkmoth.ext.javadoc",
 ]
 
 python_use_unqualified_type_names = True
 autosummary_generate = True
-autosummary_filename_map = {"mlx.core.Stream": "stream_class"}
+autosummary_filename_map = {
+    "mlx.core.Stream": "stream_class",
+    "mlx.core.PrintOptions": "printoptions_class",
+}
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
 }
-
-breathe_projects = {"mlx": "../build/xml"}
-breathe_default_project = "mlx"
 
 templates_path = ["_templates"]
 html_static_path = ["_static"]
@@ -45,6 +44,12 @@ main_doc = "index"
 highlight_language = "python"
 pygments_style = "sphinx"
 add_module_names = False
+
+# -- Options for C++ docs ----------------------------------------------------
+
+hawkmoth_root = "mlx"
+hawkmoth_transform_default = "javadoc"
+hawkmoth_clang = ["-I.", "-std=c++20"]
 
 # -- Options for HTML output -------------------------------------------------
 

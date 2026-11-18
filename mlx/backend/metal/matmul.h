@@ -141,4 +141,11 @@ inline void steel_matmul(
       /* Strides B_batch_stride = */ B_batch_stride);
 }
 
+array gather_mm_offsets(
+    const array& indices,
+    int num_groups,
+    int M,
+    metal::Device& d,
+    const Stream& s);
+
 } // namespace mlx::core

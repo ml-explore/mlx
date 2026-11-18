@@ -25,17 +25,19 @@ __global__ void naive_unfold_nd(
   auto tid = block.group_index();
   auto lid = block.thread_index();
 
-  int index_batch = tid.z / out_pixels; // [0, N)
-  int index_out_spatial = tid.z % out_pixels; // [0, H_out * W_out)
+  // The matrix-row index (N * out_pixels values) rides grid.x, which allows
+  // up to 2^31-1 blocks; grid.y and grid.z are limited to 65,535.
+  int index_batch = tid.x / out_pixels; // [0, N)
+  int index_out_spatial = tid.x % out_pixels; // [0, H_out * W_out)
   int index_wt_spatial =
-      tid.x * block.dim_threads().x + lid.x; // [0, H_wt * W_wt)
+      tid.z * block.dim_threads().x + lid.x; // [0, H_wt * W_wt)
 
   if (index_wt_spatial >= filter_size / params.C) {
     return;
   }
 
   in += tid.y; // [0, C)
-  out += tid.z * filter_size + index_wt_spatial * params.C + tid.y;
+  out += tid.x * filter_size + index_wt_spatial * params.C + tid.y;
 
   bool valid = index_batch < params.N;
 
@@ -106,9 +108,12 @@ array unfold_inputs_nd(
   dim3 block_dims;
   block_dims.x = std::min(std::max(wt_spatial_size, 32), 1024);
   dim3 num_blocks;
-  num_blocks.x = cuda::ceil_div(wt_spatial_size, block_dims.x);
+  // mat_M = N * out_pixels can exceed 65,535 (a 256x256 output already has
+  // 65,536 positions), so it must ride grid.x; the handful of filter-spatial
+  // blocks go on grid.z. grid.y and grid.z are limited to 65,535.
+  num_blocks.x = mat_M;
   num_blocks.y = params.C;
-  num_blocks.z = mat_M;
+  num_blocks.z = cuda::ceil_div(wt_spatial_size, block_dims.x);
 
   encoder.set_input_array(in);
   encoder.set_output_array(unfolded);

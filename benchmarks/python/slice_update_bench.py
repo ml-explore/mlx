@@ -105,5 +105,6 @@ if __name__ == "__main__":
             )
             print(
                 f"{dtype:<12} {str(dst_shape):<25} {str(update_shape):<20} "
-                f"{mlx_time:<12.3f} {mlx_bw:<12.2f} {torch_time:<12.3f} {torch_bw:<12.2f}"
+                f"{mlx_time:<12.3f} {mlx_bw:<12.2f} {torch_time:<12.3f} "
+                f"{torch_bw:<12.2f}"
             )

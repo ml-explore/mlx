@@ -200,14 +200,17 @@ template <
             params->gemm_k_iterations_aligned,
             sgp_sm,
             sgp_sn);
-        if (use_out_source) {
-          gemm_epilogue<kAlignedM.value, kAlignedN.value>(
-              Dtile, C, params, addmm_params, sgp_sm, sgp_sn);
-        }
-        if constexpr (kAlignedM && kAlignedN) {
-          Dtile.store(D, int(params->ldd));
-        } else {
-          Dtile.store_safe(D, int(params->ldd), short2(sgp_sn, sgp_sm));
+        if ((kAlignedM.value || sgp_sm > 0) &&
+            (kAlignedN.value || sgp_sn > 0)) {
+          if (use_out_source) {
+            gemm_epilogue<kAlignedM.value, kAlignedN.value>(
+                Dtile, C, params, addmm_params, sgp_sm, sgp_sn);
+          }
+          if constexpr (kAlignedM && kAlignedN) {
+            Dtile.store(D, int(params->ldd));
+          } else {
+            Dtile.store_safe(D, int(params->ldd), short2(sgp_sn, sgp_sm));
+          }
         }
       });
     });

@@ -17,4 +17,11 @@ std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
   return nullptr;
 }
 
+std::shared_ptr<GroupImpl> init(bool strict, AllGatherFactory /* factory */) {
+  if (strict) {
+    throw std::runtime_error("Cannot initialize jaccl distributed backend.");
+  }
+  return nullptr;
+}
+
 } // namespace mlx::core::distributed::jaccl

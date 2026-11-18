@@ -48,10 +48,13 @@ class Hostfile:
                     "MLX_METAL_FAST_SYNCH=1"
                 ],
                 "hosts": [
-                    {"ssh": "hostname1", "ips": ["123.123.123.1"], "rdma": [null, "rdma_en2", "rdma_en3"]},
-                    {"ssh": "hostname2", "ips": ["123.123.123.2"], "rdma": ["rdma_en2", null, "rdma_en3"]},
+                    {"ssh": "hostname1", "ips": ["123.123.123.1"],
+                     "rdma": [null, "rdma_en2", "rdma_en3"]},
+                    {"ssh": "hostname2", "ips": ["123.123.123.2"],
+                     "rdma": ["rdma_en2", null, "rdma_en3"]},
                     ...
-                    {"ssh": "hostnameN", "ips": ["123.123.123.N"], "rdma": ["rdma_en2", "rdma_en3", null]},
+                    {"ssh": "hostnameN", "ips": ["123.123.123.N"],
+                     "rdma": ["rdma_en2", "rdma_en3", null]},
                 ]
             }
 
@@ -69,8 +72,8 @@ class Hostfile:
             envs = []
             hosts = []
             if isinstance(data, dict):
-                backend = data["backend"]
-                envs = data["envs"]
+                backend = data.get("backend", backend)
+                envs = data.get("envs", envs)
                 hosts = data["hosts"]
             elif isinstance(data, list):
                 hosts = data
@@ -90,7 +93,7 @@ class Hostfile:
     @classmethod
     def from_list(cls, hostlist, repeats=1):
         hosts = []
-        for i, h in enumerate(hostlist.split(",")):
+        for h in hostlist.split(","):
             if h == "":
                 raise ValueError("Hostname cannot be empty")
             try:
@@ -98,8 +101,8 @@ class Hostfile:
                 ips = [h]
             except ValueError:
                 ips = []
-            for i in range(repeats):
-                hosts.append(Host(i, h, ips, []))
+            for _ in range(repeats):
+                hosts.append(Host(len(hosts), h, ips, []))
         return cls(hosts)
 
 

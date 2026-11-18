@@ -35,8 +35,11 @@ struct ArgMin {
   __device__ IndexValPair<T> operator()(
       const IndexValPair<T>& best,
       const IndexValPair<T>& current) {
-    if (best.val > current.val ||
-        (best.val == current.val && best.index > current.index)) {
+    if ((cuda::std::isnan(current.val) &&
+         (!cuda::std::isnan(best.val) || best.index > current.index)) ||
+        (!cuda::std::isnan(best.val) &&
+         (best.val > current.val ||
+          (best.val == current.val && best.index > current.index)))) {
       return current;
     } else {
       return best;
@@ -50,7 +53,8 @@ struct ArgMin {
       uint32_t offset) {
 #pragma unroll
     for (int i = 0; i < N; i++) {
-      if (vals[i] < best.val) {
+      if ((!cuda::std::isnan(best.val) && cuda::std::isnan(vals[i])) ||
+          vals[i] < best.val) {
         best.val = vals[i];
         best.index = offset + i;
       }
@@ -68,8 +72,11 @@ struct ArgMax {
   __device__ IndexValPair<T> operator()(
       const IndexValPair<T>& best,
       const IndexValPair<T>& current) {
-    if (best.val < current.val ||
-        (best.val == current.val && best.index > current.index)) {
+    if ((cuda::std::isnan(current.val) &&
+         (!cuda::std::isnan(best.val) || best.index > current.index)) ||
+        (!cuda::std::isnan(best.val) &&
+         (best.val < current.val ||
+          (best.val == current.val && best.index > current.index)))) {
       return current;
     } else {
       return best;
@@ -83,7 +90,8 @@ struct ArgMax {
       uint32_t offset) {
 #pragma unroll
     for (int i = 0; i < N; i++) {
-      if (vals[i] > best.val) {
+      if ((!cuda::std::isnan(best.val) && cuda::std::isnan(vals[i])) ||
+          vals[i] > best.val) {
         best.val = vals[i];
         best.index = offset + i;
       }

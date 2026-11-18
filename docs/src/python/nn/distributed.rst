@@ -15,6 +15,7 @@ create sharded layers from existing :class:`Modules <mlx.nn.Module>`.
 
    shard_linear
    shard_inplace
+   fully_shard
 
 Layers
 ^^^^^^
@@ -28,3 +29,4 @@ Layers
    ShardedToAllLinear
    QuantizedAllToShardedLinear
    QuantizedShardedToAllLinear
+   FullyShardedModule

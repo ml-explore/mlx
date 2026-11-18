@@ -113,7 +113,7 @@ if __name__ == "__main__":
 
             print(
                 f"{M:5d} {N:5d} {K:6d}  "
-                f"{mlx_mean*1000:7.2f}±{mlx_std*1000:5.2f}  "
-                f"{torch_mean*1000:7.2f}±{torch_std*1000:5.2f}  "
+                f"{mlx_mean * 1000:7.2f}±{mlx_std * 1000:5.2f}  "
+                f"{torch_mean * 1000:7.2f}±{torch_std * 1000:5.2f}  "
                 f"{speedup:8.2f}x"
             )

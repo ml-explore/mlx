@@ -47,7 +47,7 @@ inline void set_ternary_op_output_data(
     const array& c,
     array& out,
     TernaryOpType topt,
-    std::function<allocator::Buffer(size_t)> mallocfn = allocator::malloc) {
+    std::function<allocator::Data(size_t)> mallocfn = allocator::malloc) {
   auto maybe_donate = [&out](const array& x) {
     if (is_donatable(x, out)) {
       out.copy_shared_buffer(x);

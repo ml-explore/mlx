@@ -12,10 +12,13 @@
 
 namespace mlx::core::cu {
 
+// Defined in kernel_utils.cu
+void* get_noop_kernel_ptr();
+
 namespace {
 
 bool use_cuda_graphs() {
-  static bool use_graphs = env::get_var("MLX_USE_CUDA_GRAPHS", true);
+  static bool use_graphs = config::get("MLX_USE_CUDA_GRAPHS", true);
   return use_graphs;
 }
 
@@ -157,6 +160,11 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
     }
   }
   active_deps_.clear();
+  if (force_single_root_ && deps.empty()) {
+    for (auto& node : nodes) {
+      roots_.push_back(node.node);
+    }
+  }
 
   for (auto o : active_outputs_) {
     for (auto& node : nodes) {
@@ -207,13 +215,22 @@ CommandEncoder::CommandEncoder(Device& d)
       stream_(d),
       graph_(d),
       worker_(std::make_shared<Worker>(d)),
-      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {
+      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400),
+      // DGX Spark / RTX Spark run memory-bound kernels slower in graphs that
+      // have several root nodes.
+      force_single_root_(
+          d.compute_capability_major() == 12 &&
+          d.compute_capability_minor() == 1) {
   std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits(d);
   worker_->start();
 }
 
 CommandEncoder::~CommandEncoder() {
-  synchronize();
+  try {
+    synchronize();
+  } catch (...) {
+    // Synchronizing can fail when the CUDA runtime is shutting down.
+  }
   worker_->stop();
 }
 
@@ -228,16 +245,25 @@ void CommandEncoder::set_input_array(const array& arr) {
   bytes_in_graph_ += arr.data_size();
   auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
   active_deps_.push_back(id);
+#ifndef NDEBUG
+  if (arr.data_shared_ptr()->is_owned()) {
+    registered_data_ptrs_.push_back(gpu_ptr<void>(arr));
+  }
+#endif
 }
 
 void CommandEncoder::set_output_array(const array& arr) {
   if (!use_cuda_graphs()) {
     return;
   }
-
   auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
   active_deps_.push_back(id);
   active_outputs_.push_back(id);
+#ifndef NDEBUG
+  if (arr.data_shared_ptr()->is_owned()) {
+    registered_data_ptrs_.push_back(gpu_ptr<void>(arr));
+  }
+#endif
 }
 
 void CommandEncoder::add_kernel_node_raw(
@@ -363,6 +389,9 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
   // Also checks if the sub-graph is updatable as CUDA graphs do not get
   // updated correctly if a kernel node getting updated has a different cluster
   // shape than the node it's being updated with.
+  // On NVIDIA drivers older than 595.112.07, updating a kernel node to a
+  // different function can also retain the old function's launch settings
+  // (cuBLAS nvjet 2x2f to 2x1 keeps 4-CTA clusters and hangs).
   std::string key = "(";
   size_t num_nodes = 0;
   CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, nullptr, &num_nodes));
@@ -462,10 +491,73 @@ bool CommandEncoder::needs_commit() {
 
 void CommandEncoder::commit() {
   nvtx3::scoped_range r("CommandEncoder::commit");
+  try {
+    commit_impl();
+  } catch (...) {
+    // Clear pending CUDA error first.
+    cudaGetLastError();
+    // Clear states.
+    clear_graph_state();
+    node_count_ = 0;
+    bytes_in_graph_ = 0;
+    // Clear graph.
+    try {
+      graph_.reset();
+    } catch (...) {
+      // Destroying could fail.
+      graph_.release();
+    }
+    try {
+      graph_ = CudaGraph(device_);
+    } catch (...) {
+      // Keep the original error.
+    }
+    // Re-throw the error.
+    throw;
+  }
+}
+
+void CommandEncoder::synchronize() {
+  CHECK_CUDA_ERROR(cudaStreamSynchronize(stream_));
+  auto p = std::make_shared<std::promise<void>>();
+  std::future<void> f = p->get_future();
+  add_completed_handler([p = std::move(p)]() { p->set_value(); });
+  commit();
+  f.wait();
+}
+
+#ifndef NDEBUG
+void CommandEncoder::verify_graph(const char* primitive_name) {
+  if (allocator::allocator().has_invalid_memory(registered_data_ptrs_)) {
+    throw std::runtime_error(
+        fmt::format(
+            "There are invalid memory registered when calling {}::eval_gpu, "
+            "which is a bug that corrupts the graph, and usually caused by "
+            "temporary arrays not registered with \"add_temporary\" method.",
+            primitive_name));
+  }
+}
+#endif
+
+void CommandEncoder::commit_impl() {
   if (!temporaries_.empty()) {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
   }
   if (use_cuda_graphs() && node_count_ > 0) {
+    // Give a graph with several roots a single no-op root.
+    if (roots_.size() > 1) {
+      cudaKernelNodeParams params = {};
+      params.func = get_noop_kernel_ptr();
+      params.gridDim = dim3(1);
+      params.blockDim = dim3(1);
+      cudaGraphNode_t root;
+      CHECK_CUDA_ERROR(cudaGraphAddKernelNode(&root, graph_, NULL, 0, &params));
+      for (auto node : roots_) {
+        from_nodes_.push_back(root);
+        to_nodes_.push_back(node);
+      }
+      graph_nodes_key_ += "R-";
+    }
     if (!from_nodes_.empty()) {
 #if CUDART_VERSION >= 13000
       CHECK_CUDA_ERROR(cudaGraphAddDependencies(
@@ -520,13 +612,8 @@ void CommandEncoder::commit() {
     }
 
     // Reset state
-    from_nodes_.clear();
-    to_nodes_.clear();
-    graph_deps_key_.clear();
-    graph_nodes_key_.clear();
-    node_map_.clear();
+    clear_graph_state();
     graph_ = CudaGraph(device_);
-    is_graph_updatable_ = true;
   }
 
   // Put completion handlers in a batch.
@@ -535,13 +622,20 @@ void CommandEncoder::commit() {
   bytes_in_graph_ = 0;
 }
 
-void CommandEncoder::synchronize() {
-  CHECK_CUDA_ERROR(cudaStreamSynchronize(stream_));
-  auto p = std::make_shared<std::promise<void>>();
-  std::future<void> f = p->get_future();
-  add_completed_handler([p = std::move(p)]() { p->set_value(); });
-  commit();
-  f.wait();
+void CommandEncoder::clear_graph_state() {
+  from_nodes_.clear();
+  to_nodes_.clear();
+  graph_deps_key_.clear();
+  graph_nodes_key_.clear();
+  node_map_.clear();
+  active_deps_.clear();
+  active_outputs_.clear();
+  concurrent_nodes_.clear();
+  roots_.clear();
+#ifndef NDEBUG
+  registered_data_ptrs_.clear();
+#endif
+  is_graph_updatable_ = true;
 }
 
 Device& device(int cuda_device) {
@@ -578,13 +672,20 @@ CommandEncoder& get_command_encoder(Stream s) {
 }
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders() {
-  static thread_local std::unordered_map<int, CommandEncoder> encoders;
-  return encoders;
+  if (is_main_thread()) {
+    static auto* encoders = new std::unordered_map<int, CommandEncoder>();
+    return *encoders;
+  } else {
+    static thread_local std::unordered_map<int, CommandEncoder> encoders;
+    return encoders;
+  }
 }
 
 std::unordered_map<int, CommandEncoder>& get_global_command_encoders() {
-  static std::unordered_map<int, CommandEncoder> encoders;
-  return encoders;
+  // encoders are leaked intentionally as they would synchronize on process
+  // shutdown
+  static auto* encoders = new std::unordered_map<int, CommandEncoder>();
+  return *encoders;
 }
 
 } // namespace mlx::core::cu

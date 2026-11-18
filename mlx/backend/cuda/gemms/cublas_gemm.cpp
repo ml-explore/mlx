@@ -15,17 +15,14 @@ namespace {
 cublasComputeType_t dtype_to_compute_type(Dtype dtype) {
   switch (dtype) {
     case float16:
-      return CUBLAS_COMPUTE_32F;
     case bfloat16:
       return CUBLAS_COMPUTE_32F;
     case float32:
+    case complex64:
       return mlx::core::env::enable_tf32() ? CUBLAS_COMPUTE_32F_FAST_TF32
                                            : CUBLAS_COMPUTE_32F;
     case float64:
       return CUBLAS_COMPUTE_64F;
-    case complex64:
-      return mlx::core::env::enable_tf32() ? CUBLAS_COMPUTE_32F_FAST_TF32
-                                           : CUBLAS_COMPUTE_32F;
     default:
       throw std::runtime_error(
           fmt::format(

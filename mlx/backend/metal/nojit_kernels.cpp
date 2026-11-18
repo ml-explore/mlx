@@ -79,6 +79,13 @@ MTL::ComputePipelineState* get_logsumexp_kernel(
   return d.get_kernel(kernel_name);
 }
 
+MTL::ComputePipelineState* get_cross_entropy_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&) {
+  return d.get_kernel(kernel_name);
+}
+
 MTL::ComputePipelineState* get_scan_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -97,6 +104,14 @@ MTL::ComputePipelineState* get_sort_kernel(
     const array&,
     int,
     int) {
+  return d.get_kernel(kernel_name);
+}
+
+MTL::ComputePipelineState* get_searchsorted_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&,
+    bool) {
   return d.get_kernel(kernel_name);
 }
 
@@ -273,6 +288,28 @@ MTL::ComputePipelineState* get_gemv_masked_kernel(
   return d.get_kernel(kernel_name);
 }
 
+MTL::ComputePipelineState* get_gemv_wide_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array&,
+    int,
+    int) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_gemv_wide_gather_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array&,
+    int,
+    int) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
 MTL::ComputePipelineState* get_steel_conv_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -323,6 +360,13 @@ MTL::ComputePipelineState* get_fft_kernel(
   return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
+MTL::ComputePipelineState* get_fft_twiddle_kernel(
+    metal::Device& d,
+    const std::string&,
+    const std::string&) {
+  return d.get_kernel("generate_bluestein_twiddles");
+}
+
 MTL::ComputePipelineState* get_quantized_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -337,15 +381,16 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const array&,
-    int,
-    int,
     const std::string&,
     int,
     int,
+    bool,
+    bool,
     int,
     int,
     int,
-    bool) {
+    int,
+    int) {
   return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
@@ -414,6 +459,15 @@ MTL::ComputePipelineState* get_steel_gemm_segmented_nax_kernel(
   return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
+MTL::ComputePipelineState* get_steel_gemm_thin_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const std::string&) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
 MTL::ComputePipelineState* get_qmm_nax_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -428,15 +482,16 @@ MTL::ComputePipelineState* get_gather_qmm_nax_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const array&,
-    int,
-    int,
     const std::string&,
     int,
     int,
+    bool,
+    bool,
     int,
     int,
     int,
-    bool) {
+    int,
+    int) {
   return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
@@ -446,6 +501,7 @@ MTL::ComputePipelineState* get_steel_attention_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const array&,
+    int,
     int,
     int,
     int,
@@ -466,7 +522,81 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     int,
     int,
     int,
-    const array&) {
+    int,
+    const array&,
+    bool) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_steel_attention_split_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array&,
+    int,
+    int,
+    int,
+    int,
+    int) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_steel_attention_split_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array&,
+    int,
+    int,
+    int) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_gated_delta_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_gated_delta_vjp_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+MTL::ComputePipelineState* get_gated_delta_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array&,
+    int,
+    int,
+    int,
+    int,
+    int,
+    int) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_gated_delta_vjp_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array&,
+    int,
+    int,
+    int,
+    int,
+    int,
+    int,
+    bool) {
   return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 

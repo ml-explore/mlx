@@ -10,11 +10,13 @@ Devices and Streams
 
    Device
    Stream
+   ThreadLocalStream
    default_device
    set_default_device
    default_stream
    new_stream
    new_thread_local_stream
+   new_thread_unsafe_stream
    set_default_stream
    stream
    synchronize

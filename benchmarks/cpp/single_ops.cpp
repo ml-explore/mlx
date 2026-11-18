@@ -5,6 +5,12 @@
 
 namespace mx = mlx::core;
 
+// mx::astype is overloaded, so it cannot be passed directly to the timing
+// helpers. Wrap the three argument form instead.
+auto astype = [](const mx::array& a, mx::Dtype dtype, mx::StreamOrDevice s) {
+  return mx::astype(a, dtype, s);
+};
+
 void time_creation_ops() {
   int M = 2000;
   int N = 500;
@@ -28,18 +34,18 @@ void time_type_conversions() {
 
   auto a = mx::zeros(shape, mx::float32);
   mx::eval(a);
-  TIMEM("mx::float32 to mx::int32", mx::astype, a, mx::int32, device);
-  TIMEM("mx::float32 to mx::uint32", mx::astype, a, mx::uint32, device);
+  TIMEM("mx::float32 to mx::int32", astype, a, mx::int32, device);
+  TIMEM("mx::float32 to mx::uint32", astype, a, mx::uint32, device);
 
   a = mx::zeros(shape, mx::int32);
   mx::eval(a);
-  TIMEM("mx::int32 to mx::float32", mx::astype, a, mx::float32, device);
+  TIMEM("mx::int32 to mx::float32", astype, a, mx::float32, device);
 
   a = mx::zeros(shape, mx::bool_);
   mx::eval(a);
-  TIMEM("bool to mx::float32", mx::astype, a, mx::float32, device);
-  TIMEM("bool to mx::int32", mx::astype, a, mx::int32, device);
-  TIMEM("bool to mx::uint32", mx::astype, a, mx::uint32, device);
+  TIMEM("bool to mx::float32", astype, a, mx::float32, device);
+  TIMEM("bool to mx::int32", astype, a, mx::int32, device);
+  TIMEM("bool to mx::uint32", astype, a, mx::uint32, device);
 }
 
 void time_random_generation() {

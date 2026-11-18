@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdint>
 
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
@@ -11,6 +12,7 @@
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
+#include <cooperative_groups.h>
 #include <nvtx3/nvtx3.hpp>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
@@ -20,6 +22,8 @@ namespace mlx::core {
 constexpr int N_PER_THREAD = 8;
 
 namespace cu {
+
+namespace cg = cooperative_groups;
 
 template <typename T>
 __device__ __forceinline__ T nan_value();
@@ -529,8 +533,8 @@ __global__ void mb_block_sort_kernel(
       int64_t(blockIdx.y), nc_shape.data(), nc_strides.data(), nc_dim);
 
   inp += block_idx;
-  out_vals += blockIdx.y * size_sorted_axis;
-  out_idxs += blockIdx.y * size_sorted_axis;
+  out_vals += int64_t(blockIdx.y) * size_sorted_axis;
+  out_idxs += int64_t(blockIdx.y) * size_sorted_axis;
 
   __shared__ ValT tgp_vals[sort_kernel::N_PER_BLOCK];
   __shared__ IdxT tgp_idxs[sort_kernel::N_PER_BLOCK];
@@ -567,9 +571,9 @@ __global__ void mb_block_partition_kernel(
 
   (void)dev_idxs;
 
-  block_partitions += blockIdx.y * blockDim.x;
-  dev_vals += blockIdx.y * size_sorted_axis;
-  dev_idxs += blockIdx.y * size_sorted_axis;
+  block_partitions += blockIdx.y * (n_blocks + 1);
+  dev_vals += int64_t(blockIdx.y) * size_sorted_axis;
+  dev_idxs += int64_t(blockIdx.y) * size_sorted_axis;
 
   for (int i = threadIdx.x; i <= n_blocks; i += blockDim.x) {
     int merge_group = i / merge_tiles;
@@ -622,10 +626,10 @@ __global__ void mb_block_merge_kernel(
   using block_sort_t = typename sort_kernel::block_merge_sort_t;
 
   block_partitions += blockIdx.y * (num_tiles + 1);
-  dev_vals_in += blockIdx.y * size_sorted_axis;
-  dev_idxs_in += blockIdx.y * size_sorted_axis;
-  dev_vals_out += blockIdx.y * size_sorted_axis;
-  dev_idxs_out += blockIdx.y * size_sorted_axis;
+  dev_vals_in += int64_t(blockIdx.y) * size_sorted_axis;
+  dev_idxs_in += int64_t(blockIdx.y) * size_sorted_axis;
+  dev_vals_out += int64_t(blockIdx.y) * size_sorted_axis;
+  dev_idxs_out += int64_t(blockIdx.y) * size_sorted_axis;
 
   int block_idx = blockIdx.x;
   int merge_group = block_idx / merge_tiles;
@@ -716,6 +720,40 @@ __global__ void mb_block_merge_kernel(
   }
 }
 
+template <typename T, bool Right>
+__device__ __forceinline__ uint32_t
+searchsorted_impl(const T* a, T v, uint32_t n, int64_t a_stride) {
+  LessThan<T> lt;
+  uint32_t lo = 0;
+  uint32_t hi = n;
+  while (lo < hi) {
+    uint32_t mid = lo + (hi - lo) / 2;
+    T m = a[static_cast<int64_t>(mid) * a_stride];
+    bool below = Right ? !lt(v, m) : lt(m, v);
+    if (below) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
+template <typename T, bool Right>
+__global__ void searchsorted(
+    const T* a,
+    const T* v,
+    uint32_t* out,
+    int64_t size,
+    uint32_t n,
+    int64_t a_stride) {
+  int64_t index = cg::this_grid().thread_rank();
+  if (index >= size) {
+    return;
+  }
+  out[index] = searchsorted_impl<T, Right>(a, v[index], n, a_stride);
+}
+
 } // namespace cu
 
 namespace {
@@ -744,16 +782,24 @@ void single_block_sort(
   int64_t in_stride_sorted_axis = in.strides()[axis];
   int64_t out_stride_sorted_axis = out.strides()[axis];
 
+  // The contiguous kernel walks the rows with a single stride, so the axes
+  // that are not sorted have to collapse to a single dim.
+  auto single_dim =
+      [](const Shape& nc_shape, const Strides& nc_str, int64_t& stride) {
+        auto [shape, strides] = collapse_contiguous_dims(nc_shape, nc_str);
+        if (shape.size() > 1) {
+          return false;
+        }
+        if (shape.size() > 0) {
+          stride = strides[0];
+        }
+        return true;
+      };
+  int64_t in_stride_segment_axis = 0;
+  int64_t out_stride_segment_axis = 0;
   bool contiguous = in.flags().contiguous;
-  auto check_strides = [](const array& x, int64_t sort_stride) {
-    int64_t min_stride =
-        *std::min_element(x.strides().begin(), x.strides().end());
-    int64_t max_stride =
-        *std::max_element(x.strides().begin(), x.strides().end());
-    return sort_stride == min_stride || sort_stride == max_stride;
-  };
-  contiguous &= check_strides(in, in_stride_sorted_axis);
-  contiguous &= check_strides(out, out_stride_sorted_axis);
+  contiguous &= single_dim(nc_shape, in_nc_str, in_stride_segment_axis);
+  contiguous &= single_dim(nc_shape, out_nc_str, out_stride_segment_axis);
 
   auto& encoder = cu::get_command_encoder(s);
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
@@ -780,19 +826,9 @@ void single_block_sort(
                 ARG_SORT,
                 BLOCK_THREADS,
                 N_PER_THREAD>;
-            int64_t in_stride_segment_axis = INT64_MAX;
-            int64_t out_stride_segment_axis = INT64_MAX;
-            for (int i = 0; i < nc_shape.size(); i++) {
-              if (nc_shape[i] == 1) {
-                continue;
-              }
-              if (in_nc_str[i] > INT32_MAX || out_nc_str[i] > INT32_MAX) {
-                throw std::runtime_error("[Sort::eval_gpu] Stride too large.");
-              }
-              in_stride_segment_axis =
-                  std::min(in_stride_segment_axis, in_nc_str[i]);
-              out_stride_segment_axis =
-                  std::min(out_stride_segment_axis, out_nc_str[i]);
+            if (in_stride_segment_axis > INT32_MAX ||
+                out_stride_segment_axis > INT32_MAX) {
+              throw std::runtime_error("[Sort::eval_gpu] Stride too large.");
             }
             encoder.add_kernel_node(
                 kernel,
@@ -1047,6 +1083,10 @@ void gpu_sort(
     int axis,
     bool argsort) {
   auto& encoder = cu::get_command_encoder(s);
+  if (out.size() == 0) {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    return;
+  }
   gpu_merge_sort(s, in, out, axis, argsort);
 }
 
@@ -1072,6 +1112,50 @@ void ArgPartition::eval_gpu(const std::vector<array>& inputs, array& out) {
 void Partition::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Partition::eval_gpu");
   gpu_sort(stream(), inputs[0], out, axis_, false);
+}
+
+void SearchSorted::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("SearchSorted::eval_gpu");
+  assert(inputs.size() == 2);
+  auto& s = stream();
+  auto& a = inputs[0];
+  auto v = inputs[1];
+
+  auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  if (out.size() == 0) {
+    return;
+  }
+
+  if (!v.flags().row_contiguous) {
+    v = contiguous_copy_gpu(v, s);
+    encoder.add_temporary(v);
+  }
+
+  encoder.set_input_array(a);
+  encoder.set_input_array(v);
+  encoder.set_output_array(out);
+
+  int64_t a_stride = a.strides()[0]; // sequence is 1D
+
+  dispatch_all_types(a.dtype(), [&](auto type_tag) {
+    using CTYPE = MLX_GET_TYPE(type_tag);
+    using T = cuda_type_t<CTYPE>;
+    dispatch_bool(right_, [&](auto right) {
+      auto [num_blocks, block_dims] =
+          get_launch_args(out, out.size() > INT32_MAX);
+      encoder.add_kernel_node(
+          cu::searchsorted<T, right.value>,
+          num_blocks,
+          block_dims,
+          gpu_ptr<T>(a),
+          gpu_ptr<T>(v),
+          gpu_ptr<uint32_t>(out),
+          static_cast<int64_t>(out.size()),
+          static_cast<uint32_t>(a.size()),
+          a_stride);
+    });
+  });
 }
 
 } // namespace mlx::core

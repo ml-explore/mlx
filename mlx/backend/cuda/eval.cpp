@@ -4,6 +4,7 @@
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/cublas_utils.h"
 #include "mlx/backend/cuda/cudnn_utils.h"
+#include "mlx/backend/cuda/cusolver_utils.h"
 #include "mlx/backend/cuda/event.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
@@ -20,6 +21,7 @@ void init() {
   mlx::core::cu::CudaEvent::init_pool();
   init_cublas_handles_cache();
   init_cudnn_handles_cache();
+  init_cusolver_handles_cache();
   init_cudnn_conv_cache();
   init_cudnn_sdpa_cache();
 }
@@ -67,6 +69,10 @@ void eval(array& arr) {
   for (auto& s : arr.siblings()) {
     encoder.add_temporary(s);
   }
+
+#ifndef NDEBUG
+  encoder.verify_graph(arr.primitive().name());
+#endif
 
   if (encoder.needs_commit()) {
     scheduler::notify_new_task(stream);

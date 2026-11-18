@@ -18,6 +18,8 @@ Stream to_stream(StreamOrDevice s) {
     return default_stream(default_device());
   } else if (std::holds_alternative<Device>(s)) {
     return default_stream(std::get<Device>(s));
+  } else if (std::holds_alternative<Device::DeviceType>(s)) {
+    return default_stream(std::get<Device::DeviceType>(s));
   } else if (std::holds_alternative<ThreadLocalStream>(s)) {
     return stream_from_thread_local_stream(std::get<ThreadLocalStream>(s));
   } else {
@@ -30,6 +32,10 @@ Stream to_stream(StreamOrDevice s, Device default_) {
     return default_stream(default_);
   } else if (std::holds_alternative<Device>(s)) {
     return default_stream(std::get<Device>(s));
+  } else if (std::holds_alternative<Device::DeviceType>(s)) {
+    return default_stream(std::get<Device::DeviceType>(s));
+  } else if (std::holds_alternative<ThreadLocalStream>(s)) {
+    return stream_from_thread_local_stream(std::get<ThreadLocalStream>(s));
   } else {
     return std::get<Stream>(s);
   }
@@ -173,7 +179,7 @@ int normalize_axis_index(
     std::ostringstream msg;
     msg << msg_prefix << "Axis " << axis << " is out of bounds for array with "
         << ndim << " dimensions.";
-    throw std::invalid_argument(msg.str());
+    throw std::out_of_range(msg.str());
   }
   return axis < 0 ? axis + ndim : axis;
 }
@@ -282,26 +288,6 @@ std::ostream& operator<<(std::ostream& os, array a) {
   });
   return os;
 }
-
-namespace env {
-
-int get_var(const char* name, int default_value) {
-  if (const char* buff_str = std::getenv(name)) {
-    return atoi(buff_str);
-  } else {
-    return default_value;
-  }
-}
-
-std::string get_var(const char* name, const char* default_value) {
-  if (const char* buff_str = std::getenv(name)) {
-    return buff_str;
-  } else {
-    return default_value;
-  }
-}
-
-} // namespace env
 
 template <typename T>
 void set_finfo_limits(

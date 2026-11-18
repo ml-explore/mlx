@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <dlfcn.h>
+#include <numeric>
 
 #include "mlx/backend/common/utils.h"
 
@@ -88,13 +89,16 @@ std::pair<Shape, Strides> collapse_contiguous_dims(
   Strides collapsed_strides;
 
   if (shape.size() > 0) {
-    collapsed_shape.push_back(shape[0]);
-    collapsed_strides.push_back(strides[0]);
-    for (int i = 1; i < shape.size(); i++) {
+    for (int i = 0; i < shape.size(); i++) {
       if (shape[i] == 1) {
         continue;
-      } else if (
-          strides[i] * shape[i] != collapsed_strides.back() ||
+      }
+      if (collapsed_shape.empty()) {
+        collapsed_shape.push_back(shape[i]);
+        collapsed_strides.push_back(strides[i]);
+        continue;
+      }
+      if (strides[i] * shape[i] != collapsed_strides.back() ||
           collapsed_shape.back() * static_cast<int64_t>(shape[i]) > size_cap) {
         collapsed_shape.push_back(shape[i]);
         collapsed_strides.push_back(strides[i]);
@@ -102,6 +106,10 @@ std::pair<Shape, Strides> collapse_contiguous_dims(
         collapsed_shape.back() *= shape[i];
         collapsed_strides.back() = strides[i];
       }
+    }
+    if (collapsed_shape.empty()) {
+      collapsed_shape.push_back(1);
+      collapsed_strides.push_back(1);
     }
   }
 
@@ -174,6 +182,22 @@ Dims get_2d_grid_dims_common(
     const Shape& shape,
     const Strides& strides,
     size_t divisor) {
+  // Shortcut when size is a multiple of divisor, for example:
+  // 36: {2 / 2, 4 / 2, 9 / 9} = {1, 2, 1}
+  Shape divided_shape = shape;
+  size_t remaining_divisor = divisor;
+  for (int i = 0; i < shape.size(); ++i) {
+    if (strides[i] == 0) {
+      continue;
+    }
+    auto factor = std::gcd(static_cast<size_t>(shape[i]), remaining_divisor);
+    divided_shape[i] /= factor;
+    remaining_divisor /= factor;
+  }
+  if (remaining_divisor == 1) {
+    return get_2d_grid_dims_common(divided_shape, strides);
+  }
+
   // Compute the 2d grid dimensions such that the total size of the grid is
   // divided by divisor.
   size_t grid_x = 1;

@@ -14,7 +14,7 @@ Import ``mlx.core`` and make an :class:`array`:
   >> import mlx.core as mx
   >> a = mx.array([1, 2, 3, 4])
   >> a.shape
-  [4]
+  (4,)
   >> a.dtype
   int32
   >> b = mx.array([1.0, 2.0, 3.0, 4.0])

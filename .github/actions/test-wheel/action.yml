@@ -30,10 +30,9 @@ runs:
     - name: Test local packages
       shell: bash
       run: |
-        echo "::group::Test local packages"
         # Fall back to PyPI if PyTorch index has issues.
         uv pip install torch --torch-backend=cpu
-        uv pip install numpy
+        uv pip install numpy pytest pytest-xdist
         if ${{ inputs.toolkit == 'cpu' }} ; then
           uv pip install wheelhouse/mlx_cpu*.whl
           uv pip install wheelhouse/mlx-*.whl
@@ -47,5 +46,8 @@ runs:
           echo "No matching backend wheel to install"
           exit 1
         fi
-        python -m unittest discover -v python/tests
-        echo "::endgroup::"
+        if ${{ inputs.toolkit == 'cpu' }} ; then
+          uv run pytest -n 4 || uv run pytest --last-failed
+        else
+          uv run pytest
+        fi

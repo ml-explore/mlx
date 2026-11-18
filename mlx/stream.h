@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <optional>
+#include <tuple>
 #include <vector>
 
 #include "mlx/api.h"
@@ -17,7 +19,7 @@ struct MLX_API Stream {
   // TODO: Use default three-way comparison when it gets supported in XCode.
   bool operator==(const Stream&) const = default;
   bool operator<(const Stream& rhs) const {
-    return device < rhs.device || index < rhs.index;
+    return std::tie(device, index) < std::tie(rhs.device, rhs.index);
   }
 };
 
@@ -27,6 +29,9 @@ struct MLX_API ThreadLocalStream : public Stream {
 
 /** Get the default stream of current thread for the given device. */
 MLX_API Stream default_stream(Device d);
+
+/** Get the default stream of current thread if it exists. */
+MLX_API std::optional<Stream> peek_default_stream(Device d);
 
 /** Make the stream the default for its device on current thread. */
 MLX_API void set_default_stream(Stream s);

@@ -1,9 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-#include <cstdint>
-#include <cstring>
-#include <sstream>
-#include <tuple>
-
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/complex.h>
 #include <nanobind/stl/optional.h>
@@ -12,6 +7,11 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/typing.h>
+
+#include <cstdint>
+#include <cstring>
+#include <sstream>
+#include <tuple>
 
 #include "mlx/backend/metal/metal.h"
 #include "mlx/utils.h"
@@ -76,6 +76,9 @@ class ArrayAt {
 class ArrayPythonIterator {
  public:
   ArrayPythonIterator(mx::array x) : idx_(0), x_(std::move(x)) {
+    if (x_.ndim() == 0) {
+      throw nb::type_error("iter() 0-dimensional array.");
+    }
     if (x_.shape(0) > 0 && x_.shape(0) < 10) {
       splits_ = mx::split(x_, x_.shape(0));
     }
@@ -126,9 +129,10 @@ void init_array(nb::module_& m) {
             return nb::isinstance<mx::Dtype>(other) &&
                 t == nb::cast<mx::Dtype>(other);
           })
-      .def("__hash__", [](const mx::Dtype& t) {
-        return static_cast<int64_t>(t.val());
-      });
+      .def(
+          "__hash__",
+          [](const mx::Dtype& t) { return static_cast<int64_t>(t.val()); })
+      .freeze();
 
   m.attr("bool_") = nb::cast(mx::bool_);
   m.attr("uint8") = nb::cast(mx::uint8);
@@ -226,13 +230,16 @@ void init_array(nb::module_& m) {
           &mx::finfo::smallest_normal,
           R"pbdoc(The smallest positive normal number.)pbdoc")
       .def_ro("dtype", &mx::finfo::dtype, R"pbdoc(The :obj:`Dtype`.)pbdoc")
-      .def("__repr__", [](const mx::finfo& f) {
-        std::ostringstream os;
-        os << "finfo("
-           << "min=" << f.min << ", max=" << f.max << ", dtype=" << f.dtype
-           << ")";
-        return os.str();
-      });
+      .def(
+          "__repr__",
+          [](const mx::finfo& f) {
+            std::ostringstream os;
+            os << "finfo("
+               << "min=" << f.min << ", max=" << f.max << ", dtype=" << f.dtype
+               << ")";
+            return os.str();
+          })
+      .freeze();
 
   nb::class_<mx::iinfo>(
       m,
@@ -250,13 +257,16 @@ void init_array(nb::module_& m) {
           &mx::iinfo::max,
           R"pbdoc(The largest representable number.)pbdoc")
       .def_ro("dtype", &mx::iinfo::dtype, R"pbdoc(The :obj:`Dtype`.)pbdoc")
-      .def("__repr__", [](const mx::iinfo& i) {
-        std::ostringstream os;
-        os << "iinfo("
-           << "min=" << i.min << ", max=" << i.max << ", dtype=" << i.dtype
-           << ")";
-        return os.str();
-      });
+      .def(
+          "__repr__",
+          [](const mx::iinfo& i) {
+            std::ostringstream os;
+            os << "iinfo("
+               << "min=" << i.min << ", max=" << i.max << ", dtype=" << i.dtype
+               << ")";
+            return os.str();
+          })
+      .freeze();
 
   nb::class_<ArrayAt>(
       m,
@@ -271,7 +281,8 @@ void init_array(nb::module_& m) {
       .def("multiply", &ArrayAt::multiply, "value"_a)
       .def("divide", &ArrayAt::divide, "value"_a)
       .def("maximum", &ArrayAt::maximum, "value"_a)
-      .def("minimum", &ArrayAt::minimum, "value"_a);
+      .def("minimum", &ArrayAt::minimum, "value"_a)
+      .freeze();
 
   nb::class_<ArrayLike>(
       m,
@@ -280,7 +291,8 @@ void init_array(nb::module_& m) {
         Any Python object which has an ``__mlx__array__`` method that
         returns an :obj:`array`.
       )pbdoc")
-      .def(nb::init_implicit<nb::object>());
+      .def(nb::init_implicit<nb::object>())
+      .freeze();
 
   nb::class_<ArrayPythonIterator>(
       m,
@@ -289,7 +301,8 @@ void init_array(nb::module_& m) {
       A helper object to iterate over the 1st dimension of an array.
       )pbdoc")
       .def("__next__", &ArrayPythonIterator::next)
-      .def("__iter__", [](const ArrayPythonIterator& it) { return it; });
+      .def("__iter__", [](const ArrayPythonIterator& it) { return it; })
+      .freeze();
 
   // Install buffer protocol functions
   PyType_Slot array_slots[] = {
@@ -312,7 +325,7 @@ void init_array(nb::module_& m) {
           "val"_a,
           "dtype"_a = nb::none(),
           nb::sig(
-              "def __init__(self: array, val: Union[scalar, list, tuple, DLPackCompatible, array], dtype: Optional[Dtype] = None)"))
+              "def __init__(self: array, val: scalar | list | tuple | DLPackCompatible | array, dtype: Dtype | None = None)"))
       .def_prop_ro(
           "size",
           &mx::array::size,
@@ -503,7 +516,7 @@ void init_array(nb::module_& m) {
                      nd.ndim(),
                      reinterpret_cast<const size_t*>(nd.shape_ptr()),
                      owner,
-                     nullptr,
+                     nd.stride_ptr(),
                      nb::dtype<mx::bfloat16_t>()),
                   mx::bfloat16));
             } else {
@@ -517,10 +530,7 @@ void init_array(nb::module_& m) {
              nb::object,
              std::optional<std::tuple<int, int>> dl_device,
              std::optional<bool> copy) {
-            if (copy.value_or(false)) {
-              return mlx_to_dlpack(mx::astype(a, a.dtype(), true), dl_device);
-            }
-            return mlx_to_dlpack(a, dl_device);
+            return mlx_to_dlpack(a, copy.value_or(false), dl_device);
           },
           nb::kw_only(),
           "stream"_a = nb::none(),
@@ -539,6 +549,13 @@ void init_array(nb::module_& m) {
               return nb::make_tuple(1, 0);
             }
           })
+      .def(
+          "__array__",
+          [](const mx::array& self, nb::object dtype, nb::object copy) {
+            return mlx_to_np_array(self);
+          },
+          "dtype"_a = nb::none(),
+          "copy"_a = nb::none())
       .def("__copy__", [](const mx::array& self) { return mx::array(self); })
       .def(
           "__deepcopy__",
@@ -799,6 +816,7 @@ void init_array(nb::module_& m) {
           },
           "other"_a)
       .def("__neg__", [](const mx::array& a) { return -a; })
+      .def("__pos__", [](const mx::array& a) { return mx::copy(a); })
       .def("__bool__", [](mx::array& a) { return nb::bool_(to_scalar(a)); })
       .def(
           "__repr__",
@@ -1026,6 +1044,28 @@ void init_array(nb::module_& m) {
       .def("__int__", [](mx::array& a) { return nb::int_(to_scalar(a)); })
       .def("__float__", [](mx::array& a) { return nb::float_(to_scalar(a)); })
       .def(
+          "__complex__",
+          [](mx::array& a) {
+            return nb::cast<std::complex<double>>(to_scalar(a));
+          })
+      .def(
+          "__index__",
+          [](mx::array& a) {
+            if (!mx::issubdtype(a.dtype(), mx::integer) || a.ndim() != 0) {
+              throw nb::type_error(
+                  "Only 0-dimensional integer arrays can be converted to an index.");
+            }
+            return nb::int_(to_scalar(a));
+          })
+      .def(
+          "__bytes__",
+          [](mx::array& a) {
+            auto c = mx::contiguous(a);
+            c.eval();
+            return nb::bytes(
+                reinterpret_cast<const char*>(c.data<void>()), c.nbytes());
+          })
+      .def(
           "__format__",
           [](mx::array& a, nb::object format_spec) {
             if (nb::len(nb::str(format_spec)) > 0 && a.ndim() > 0) {
@@ -1239,6 +1279,10 @@ void init_array(nb::module_& m) {
           "T",
           [](const mx::array& a) { return mx::transpose(a); },
           "Equivalent to calling ``self.transpose()`` with no arguments.")
+      .def_prop_ro(
+          "mT",
+          [](const mx::array& a) { return mx::matrix_transpose(a); },
+          "Equivalent to calling ``self.transpose()`` with the last two axes swapped.")
       .def(
           "sum",
           [](const mx::array& a,
@@ -1343,7 +1387,9 @@ void init_array(nb::module_& m) {
              const IntOrVec& axis,
              bool keepdims,
              int ddof,
+             std::optional<int> correction,
              mx::StreamOrDevice s) {
+            ddof = correction.value_or(ddof);
             return mx::std(
                 a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
           },
@@ -1351,6 +1397,7 @@ void init_array(nb::module_& m) {
           "keepdims"_a = false,
           "ddof"_a = 0,
           nb::kw_only(),
+          "correction"_a = nb::none(),
           "stream"_a = nb::none(),
           "See :func:`std`.")
       .def(
@@ -1359,7 +1406,9 @@ void init_array(nb::module_& m) {
              const IntOrVec& axis,
              bool keepdims,
              int ddof,
+             std::optional<int> correction,
              mx::StreamOrDevice s) {
+            ddof = correction.value_or(ddof);
             return mx::var(
                 a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
           },
@@ -1367,6 +1416,7 @@ void init_array(nb::module_& m) {
           "keepdims"_a = false,
           "ddof"_a = 0,
           nb::kw_only(),
+          "correction"_a = nb::none(),
           "stream"_a = nb::none(),
           "See :func:`var`.")
       .def(
@@ -1547,5 +1597,6 @@ void init_array(nb::module_& m) {
           "dtype"_a,
           nb::kw_only(),
           "stream"_a = nb::none(),
-          "See :func:`view`.");
+          "See :func:`view`.")
+      .freeze();
 }

@@ -3,6 +3,8 @@
 #include <atomic>
 #include <cstdlib>
 #include <map>
+#include <optional>
+#include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -45,17 +47,16 @@ bool is_unary(const Primitive& p) {
 }
 
 bool is_binary(const Primitive& p) {
-  return (
-      typeid(p) == typeid(Add) || typeid(p) == typeid(Divide) ||
-      typeid(p) == typeid(Equal) || typeid(p) == typeid(Greater) ||
-      typeid(p) == typeid(GreaterEqual) || typeid(p) == typeid(Less) ||
-      typeid(p) == typeid(LessEqual) || typeid(p) == typeid(LogicalNot) ||
-      typeid(p) == typeid(LogicalAnd) || typeid(p) == typeid(LogicalOr) ||
-      typeid(p) == typeid(LogAddExp) || typeid(p) == typeid(Maximum) ||
-      typeid(p) == typeid(Minimum) || typeid(p) == typeid(Multiply) ||
-      typeid(p) == typeid(NotEqual) || typeid(p) == typeid(Power) ||
-      typeid(p) == typeid(Subtract) || typeid(p) == typeid(BitwiseBinary) ||
-      typeid(p) == typeid(ArcTan2));
+  return typeid(p) == typeid(Add) || typeid(p) == typeid(ArcTan2) ||
+      typeid(p) == typeid(BitwiseBinary) || typeid(p) == typeid(Divide) ||
+      typeid(p) == typeid(Equal) || typeid(p) == typeid(FloorDivide) ||
+      typeid(p) == typeid(Greater) || typeid(p) == typeid(GreaterEqual) ||
+      typeid(p) == typeid(Less) || typeid(p) == typeid(LessEqual) ||
+      typeid(p) == typeid(LogicalNot) || typeid(p) == typeid(LogicalAnd) ||
+      typeid(p) == typeid(LogicalOr) || typeid(p) == typeid(LogAddExp) ||
+      typeid(p) == typeid(Maximum) || typeid(p) == typeid(Minimum) ||
+      typeid(p) == typeid(Multiply) || typeid(p) == typeid(NotEqual) ||
+      typeid(p) == typeid(Power) || typeid(p) == typeid(Subtract);
 }
 
 bool is_ternary(const Primitive& p) {
@@ -298,12 +299,12 @@ std::uintptr_t get_function_address(const std::function<T(U...)>& fun) {
   return reinterpret_cast<std::uintptr_t>(*fun_ptr);
 }
 
-class CompilerCache {
+class CompileCache {
  public:
   struct CacheEntry {
-    CacheEntry(Stream stream, bool shapeless)
-        : stream(stream), shapeless(shapeless) {};
-    Stream stream;
+    CacheEntry(std::optional<Stream> stream, bool shapeless)
+        : stream(stream), shapeless(shapeless) {}
+    std::optional<Stream> stream;
     bool shapeless;
     std::vector<array> inputs;
     std::vector<array> outputs;
@@ -313,15 +314,38 @@ class CompilerCache {
     std::shared_ptr<void> extra;
   };
 
-  // Returns a reference to a CacheEntry which can be updated
-  // by the caller to avoid copying large tapes / inputs / outputs
-  CacheEntry& find(
+  CompileCache() {
+    // Make sure the allocator is fully initialized before the compiler cache.
+    allocator::allocator();
+  }
+
+  // Returns a reference to a CacheEntry which can be updated by the caller to
+  // avoid copying large tapes / inputs / outputs, with the shared_ptr of
+  // entries to avoid getting erased during compilation.
+  std::tuple<CacheEntry&, std::shared_ptr<std::vector<CacheEntry>>> find(
       std::uintptr_t fun_id,
       const std::vector<array>& inputs,
       bool shapeless,
       const std::vector<uint64_t>& constants) {
-    // Find the cache entries for |fun_id|.
-    std::vector<CacheEntry>& entries = cache_[fun_id];
+    // Find the cache entries for |fun_id| in a thread-safe way.
+    auto entries_ptr = [&]() {
+      // Lookup with shared lock.
+      {
+        std::shared_lock lock(mutex_);
+        auto it = cache_.find(fun_id);
+        if (it != cache_.end()) {
+          return it->second;
+        }
+      }
+      // Insertion with exclusive lock.
+      std::unique_lock lock(mutex_);
+      auto& ptr = cache_[fun_id];
+      if (!ptr) {
+        ptr = std::make_shared<std::vector<CacheEntry>>();
+      }
+      return ptr;
+    }();
+    auto& entries = *entries_ptr;
 
     // Compare if 2 arrays have same shape and dtype.
     auto has_same_shape_and_dtype = [shapeless](
@@ -346,7 +370,7 @@ class CompilerCache {
     // Loop over entries and check:
     // - Default stream and device match the entry's default stream
     // - Inputs match i.e. shapes and types must be equal.
-    auto stream = default_stream(default_device());
+    auto stream = peek_default_stream(default_device());
     for (CacheEntry& entry : entries) {
       // Check that the default stream and device match
       if (entry.stream != stream) {
@@ -359,40 +383,37 @@ class CompilerCache {
       // Check the inputs match and return if so
       if (has_same_shape_and_dtype(inputs, entry.inputs) &&
           constants == entry.constants) {
-        return entry;
+        return {entry, std::move(entries_ptr)};
       }
     }
     // Otherwise append a new cache entry
     entries.push_back(CacheEntry{stream, shapeless});
-    return entries.back();
+    return {entries.back(), std::move(entries_ptr)};
   }
 
   void erase(std::uintptr_t fun_id) {
+    std::unique_lock lock(mutex_);
     cache_.erase(fun_id);
   }
 
   void clear() {
+    std::unique_lock lock(mutex_);
     cache_.clear();
   }
 
-  bool empty() {
-    return cache_.empty();
-  }
-
  private:
-  CompilerCache() {
-    // Make sure the allocator is fully
-    // initialized before the compiler cache
-    allocator::allocator();
-  }
-
-  friend CompilerCache& compiler_cache();
-  std::unordered_map<std::uintptr_t, std::vector<CacheEntry>> cache_;
+  // The cache may get its key erased from a separate thread, but its value is
+  // only added and modified in the thread of creation.
+  // Put value in a shared_ptr to avoid race condition when erasing happened
+  // during compilation for the same function.
+  std::unordered_map<std::uintptr_t, std::shared_ptr<std::vector<CacheEntry>>>
+      cache_;
+  std::shared_mutex mutex_;
 };
 
-CompilerCache& compiler_cache() {
-  static thread_local CompilerCache compiler_cache_;
-  return compiler_cache_;
+std::shared_ptr<CompileCache>& compile_cache_unsafe() {
+  static thread_local auto cache = std::make_shared<CompileCache>();
+  return cache;
 }
 
 std::tuple<std::vector<array>, std::vector<array>, std::shared_ptr<void>>
@@ -629,11 +650,16 @@ void compile_simplify(
     return pa.is_equivalent(pb);
   };
 
-  // Merge scalars
+  std::unordered_map<uintptr_t, array> output_map;
+  for (auto& o : outputs) {
+    output_map.insert({o.id(), o});
+  }
+
+  // Merge scalars, except outputs
   std::vector<array> new_tape;
   for (auto& arr : tape) {
     // Check if we can merge scalars
-    if (is_scalar(arr)) {
+    if (is_scalar(arr) && output_map.find(arr.id()) == output_map.end()) {
       auto scalar = scalars.find(get_scalar_rep(arr));
       if (scalar->second.id() != arr.id()) {
         merge(scalar->second, arr, parents_map);
@@ -647,10 +673,6 @@ void compile_simplify(
 
   // Remove no-ops
   {
-    std::unordered_map<uintptr_t, array> output_map;
-    for (auto& o : outputs) {
-      output_map.insert({o.id(), o});
-    }
     for (auto& arr : tape) {
       if (!arr.has_primitive() || !is_noop(arr.primitive())) {
         new_tape.push_back(std::move(arr));
@@ -672,11 +694,6 @@ void compile_simplify(
     tape_order.insert({tape[i].id(), i});
   }
 
-  std::unordered_set<uintptr_t> output_set;
-  for (auto& o : outputs) {
-    output_set.insert(o.id());
-  }
-
   // Multi-pass merge only keeping non-orphaned arrays in the tape
   for (int pass = 0; pass < passes; ++pass) {
     for (auto& arr : tape) {
@@ -696,7 +713,7 @@ void compile_simplify(
             auto& src = parents->second[src_idx].first;
             auto& dst = parents->second[dst_idx].first;
             if (src.id() != dst.id() && array_equivalent(src, dst) &&
-                output_set.find(src.id()) == output_set.end()) {
+                output_map.find(src.id()) == output_map.end()) {
               merge(dst, src, parents_map);
               mask[src_idx] = true;
             }
@@ -762,7 +779,7 @@ void compile_simplify(
           }
           return false;
         } else {
-          return output_set.find(a.id()) == output_set.end();
+          return output_map.find(a.id()) == output_map.end();
         }
       };
       bool discard = maybe_merge_parents(arr);
@@ -1120,7 +1137,9 @@ ArrayFnWithExtra compile(
     }
 
     // Find a cache entry with the correct inputs
-    auto& entry = compiler_cache().find(fun_id, inputs, shapeless, constants);
+    auto [entry, entries_ptr] =
+        compile_cache_unsafe()->find(fun_id, inputs, shapeless, constants);
+    static_assert(std::is_reference_v<decltype(entry)>);
 
     // No matching cache entry existed, so compile
     if (entry.empty) {
@@ -1192,16 +1211,20 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
   };
 }
 
-void compile_erase(std::uintptr_t fun_id) {
-  detail::compiler_cache().erase(fun_id);
+CompileCacheWeakPtr compile_cache() {
+  return compile_cache_unsafe();
 }
 
-void compile_clear_cache() {
-  detail::compiler_cache().clear();
+void compile_erase(const CompileCacheWeakPtr& cache, std::uintptr_t fun_id) {
+  if (auto p = cache.lock()) {
+    p->erase(fun_id);
+  }
 }
 
-bool compile_cache_empty() {
-  return detail::compiler_cache().empty();
+void compile_clear_cache(const CompileCacheWeakPtr& cache) {
+  if (auto p = cache.lock()) {
+    p->clear();
+  }
 }
 
 } // namespace detail
@@ -1221,8 +1244,8 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
     auto pfun = std::shared_ptr<
         std::function<std::vector<array>(const std::vector<array>&)>>(
         new std::function<std::vector<array>(const std::vector<array>&)>{fun},
-        [](auto* p) {
-          detail::compile_erase(reinterpret_cast<std::uintptr_t>(p));
+        [cache = detail::compile_cache()](auto* p) {
+          detail::compile_erase(cache, reinterpret_cast<std::uintptr_t>(p));
           delete p;
         });
     fun_id = reinterpret_cast<std::uintptr_t>(pfun.get());

@@ -5,12 +5,15 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <future>
 #include <iostream>
 #include <list>
+#include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <thread>
 #include <unordered_map>
 
@@ -21,71 +24,12 @@
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/reduction_ops.h"
 #include "mlx/distributed/utils.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/threadpool.h"
 
 #ifndef SOL_TCP
 #define SOL_TCP IPPROTO_TCP
 #endif
-
-#define SWITCH_TYPE(x, ...)  \
-  switch ((x).dtype()) {     \
-    case bool_: {            \
-      using T = bool;        \
-      __VA_ARGS__;           \
-    } break;                 \
-    case int8: {             \
-      using T = int8_t;      \
-      __VA_ARGS__;           \
-    } break;                 \
-    case int16: {            \
-      using T = int16_t;     \
-      __VA_ARGS__;           \
-    } break;                 \
-    case int32: {            \
-      using T = int32_t;     \
-      __VA_ARGS__;           \
-    } break;                 \
-    case int64: {            \
-      using T = int64_t;     \
-      __VA_ARGS__;           \
-    } break;                 \
-    case uint8: {            \
-      using T = uint8_t;     \
-      __VA_ARGS__;           \
-    } break;                 \
-    case uint16: {           \
-      using T = uint16_t;    \
-      __VA_ARGS__;           \
-    } break;                 \
-    case uint32: {           \
-      using T = uint32_t;    \
-      __VA_ARGS__;           \
-    } break;                 \
-    case uint64: {           \
-      using T = uint64_t;    \
-      __VA_ARGS__;           \
-    } break;                 \
-    case bfloat16: {         \
-      using T = bfloat16_t;  \
-      __VA_ARGS__;           \
-    } break;                 \
-    case float16: {          \
-      using T = float16_t;   \
-      __VA_ARGS__;           \
-    } break;                 \
-    case float32: {          \
-      using T = float;       \
-      __VA_ARGS__;           \
-    } break;                 \
-    case float64: {          \
-      using T = double;      \
-      __VA_ARGS__;           \
-    } break;                 \
-    case complex64: {        \
-      using T = complex64_t; \
-      __VA_ARGS__;           \
-    } break;                 \
-  }
 
 namespace mlx::core::distributed::ring {
 
@@ -94,6 +38,10 @@ constexpr const size_t ALL_SUM_BUFFERS = 2;
 constexpr const int CONN_ATTEMPTS = 5;
 constexpr const int CONN_WAIT = 1000;
 constexpr const char* RING_TAG = "[ring]";
+// send(2) and recv(2) reject a length above INT_MAX with EINVAL, so a single
+// transfer of 2 GiB or more fails outright rather than being carried in
+// pieces.
+constexpr const size_t MAX_IO_BYTES = 1024 * 1024 * 1024;
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 using json = nlohmann::json;
@@ -133,7 +81,10 @@ class SocketThread {
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
   }
   ~SocketThread() {
-    stop_ = true;
+    {
+      std::unique_lock lock(queue_mutex_);
+      stop_ = true;
+    }
     condition_.notify_all();
     worker_.join();
     int flags = fcntl(fd_, F_GETFL, 0);
@@ -204,6 +155,8 @@ class SocketThread {
     bool delete_recv = false;
     bool delete_send = false;
     while (true) {
+      SocketTask* recv_task = nullptr;
+      SocketTask* send_task = nullptr;
       {
         std::unique_lock lock(queue_mutex_);
 
@@ -228,30 +181,45 @@ class SocketThread {
             return;
           }
         }
+
+        if (!recvs_.empty()) {
+          recv_task = &recvs_.front();
+        }
+        if (!sends_.empty()) {
+          send_task = &sends_.front();
+        }
       }
 
-      if (!recvs_.empty()) {
-        auto& task = recvs_.front();
-        ssize_t r = ::recv(fd_, task.buffer, task.size, 0);
+      if (recv_task) {
+        auto& task = *recv_task;
+        ssize_t r =
+            ::recv(fd_, task.buffer, std::min(task.size, MAX_IO_BYTES), 0);
         if (r > 0) {
           task.buffer = static_cast<char*>(task.buffer) + r;
           task.size -= r;
           delete_recv = task.size == 0;
           error_count = 0;
+        } else if (r == 0) {
+          error_count++;
+          log_info(true, "Socket", fd_, "was closed by the peer");
         } else if (errno != EAGAIN) {
           error_count++;
           log_info(
               true, "Receiving from socket", fd_, "failed with errno", errno);
         }
       }
-      if (!sends_.empty()) {
-        auto& task = sends_.front();
-        ssize_t r = ::send(fd_, task.buffer, task.size, 0);
+      if (send_task) {
+        auto& task = *send_task;
+        ssize_t r =
+            ::send(fd_, task.buffer, std::min(task.size, MAX_IO_BYTES), 0);
         if (r > 0) {
           task.buffer = static_cast<char*>(task.buffer) + r;
           task.size -= r;
           delete_send = task.size == 0;
           error_count = 0;
+        } else if (r == 0) {
+          error_count++;
+          log_info(true, "Sending to socket", fd_, "made no progress");
         } else if (errno != EAGAIN) {
           error_count++;
           log_info(true, "Sending to socket", fd_, "failed with errno", errno);
@@ -259,7 +227,19 @@ class SocketThread {
       }
 
       if (error_count >= 10) {
-        log_info(true, "Too many send/recv errors. Aborting...");
+        log_info(true, "Too many send/recv errors. Failing pending tasks...");
+        // Throw exception in invoker's thread.
+        auto error = std::make_exception_ptr(
+            std::runtime_error("[ring] connection to a peer was lost"));
+        std::unique_lock lock(queue_mutex_);
+        for (auto& task : recvs_) {
+          task.promise.set_exception(error);
+        }
+        for (auto& task : sends_) {
+          task.promise.set_exception(error);
+        }
+        recvs_.clear();
+        sends_.clear();
         return;
       }
     }
@@ -348,15 +328,16 @@ std::vector<int> accept_connections(
  */
 std::vector<int> make_connections(
     const std::vector<detail::address_t>& addresses,
+    const std::optional<std::vector<detail::address_t>>& sources,
     bool verbose) {
   std::vector<int> sockets;
   int success;
 
-  for (auto& address : addresses) {
+  for (int i = 0; i < addresses.size(); i++) {
     sockets.push_back(
         detail::TCPSocket::connect(
             RING_TAG,
-            address,
+            addresses[i],
             CONN_ATTEMPTS,
             CONN_WAIT,
             [verbose](int attempt, int wait) {
@@ -369,11 +350,33 @@ std::vector<int> make_connections(
                   "ms (error:",
                   errno,
                   ")");
-            })
+            },
+            sources ? &(*sources)[i] : nullptr)
             .detach());
   }
 
   return sockets;
+}
+
+/**
+ * Parse the comma separated IPs that the outgoing connections bind to. The
+ * port is 0, so the OS selects it. If the variable is not set, return
+ * nullopt.
+ */
+std::optional<std::vector<detail::address_t>> load_sources(
+    const char* source_ips) {
+  if (source_ips == nullptr) {
+    return std::nullopt;
+  }
+
+  std::vector<detail::address_t> sources;
+  std::istringstream ips(source_ips);
+  std::string ip;
+  while (std::getline(ips, ip, ',')) {
+    sources.push_back(detail::parse_address(ip, "0"));
+  }
+
+  return sources;
 }
 
 } // namespace
@@ -383,6 +386,7 @@ class RingGroup : public GroupImpl {
   RingGroup(
       int rank,
       std::vector<std::vector<detail::address_t>> nodes,
+      std::optional<std::vector<detail::address_t>> sources,
       bool verbose)
       : rank_(rank), verbose_(verbose), pool_(0) {
     if (rank_ > 0 && rank_ >= nodes.size()) {
@@ -393,16 +397,24 @@ class RingGroup : public GroupImpl {
     size_ = nodes.size();
     int connect_to = (rank_ + 1) % size_;
 
+    if (sources && sources->size() != nodes[connect_to].size()) {
+      std::ostringstream msg;
+      msg << "[ring] MLX_RING_SOURCE_IPS has " << sources->size()
+          << " addresses but rank " << rank_ << " makes "
+          << nodes[connect_to].size() << " connections.";
+      throw std::runtime_error(msg.str());
+    }
+
     // We define the connection order by having the rank_ == size_ - 1 connect
     // first and accept after.
     if (rank_ < connect_to) {
       log_info(verbose_, "Rank", rank_, "accepting");
       sockets_left_ = accept_connections(nodes[rank_]);
       log_info(verbose_, "Rank", rank_, "connecting to", connect_to);
-      sockets_right_ = make_connections(nodes[connect_to], verbose);
+      sockets_right_ = make_connections(nodes[connect_to], sources, verbose);
     } else {
       log_info(verbose_, "Rank", rank_, "connecting to", connect_to);
-      sockets_right_ = make_connections(nodes[connect_to], verbose);
+      sockets_right_ = make_connections(nodes[connect_to], sources, verbose);
       log_info(verbose_, "Rank", rank_, "accepting");
       sockets_left_ = accept_connections(nodes[rank_]);
     }
@@ -475,18 +487,24 @@ class RingGroup : public GroupImpl {
   }
 
   void all_sum(const array& input, array& output, Stream stream) override {
-    SWITCH_TYPE(
-        output, all_reduce<T>(input, output, stream, detail::SumOp<T>()));
+    dispatch_all_types(output.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      all_reduce<T>(input, output, stream, detail::SumOp<T>());
+    });
   }
 
   void all_max(const array& input, array& output, Stream stream) override {
-    SWITCH_TYPE(
-        output, all_reduce<T>(input, output, stream, detail::MaxOp<T>()));
+    dispatch_all_types(output.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      all_reduce<T>(input, output, stream, detail::MaxOp<T>());
+    });
   }
 
   void all_min(const array& input, array& output, Stream stream) override {
-    SWITCH_TYPE(
-        output, all_reduce<T>(input, output, stream, detail::MinOp<T>()));
+    dispatch_all_types(output.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      all_reduce<T>(input, output, stream, detail::MinOp<T>());
+    });
   }
 
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
@@ -525,7 +543,7 @@ class RingGroup : public GroupImpl {
                 (i % 2) ? -1 : 1)));
       }
       for (auto& f : all_gathers) {
-        f.wait();
+        f.get();
       }
     });
   }
@@ -650,7 +668,7 @@ class RingGroup : public GroupImpl {
                 reduce_op)));
       }
       for (auto& f : all_sums) {
-        f.wait();
+        f.get();
       }
     });
   }
@@ -737,8 +755,8 @@ class RingGroup : public GroupImpl {
       }
 
       if (j >= 0) {
-        sends[b].wait();
-        recvs[b].wait();
+        sends[b].get();
+        recvs[b].get();
         if (2 * j < send_plan.size()) {
           reduce_op(
               recv_buffers[j % ALL_SUM_BUFFERS],
@@ -749,8 +767,13 @@ class RingGroup : public GroupImpl {
 
       std::swap(a, b);
     }
-    sends[b].wait();
-    recvs[b].wait();
+    // Check valid() to avoid consuming same future twice for single packet.
+    if (sends[b].valid()) {
+      sends[b].get();
+    }
+    if (recvs[b].valid()) {
+      recvs[b].get();
+    }
   }
 
   void all_gather_impl(
@@ -784,8 +807,8 @@ class RingGroup : public GroupImpl {
       send_segment = (send_segment + size_ + direction) % size_;
       recv_segment = (recv_segment + size_ + direction) % size_;
 
-      sent.wait();
-      recvd.wait();
+      sent.get();
+      recvd.get();
     }
   }
 
@@ -804,7 +827,7 @@ class RingGroup : public GroupImpl {
           std::min(data_size, (i + 1) * segment_size) - i * segment_size));
     }
     for (auto& f : sends) {
-      f.wait();
+      f.get();
     }
   }
 
@@ -822,7 +845,7 @@ class RingGroup : public GroupImpl {
           std::min(data_size, (i + 1) * segment_size) - i * segment_size));
     }
     for (auto& f : recvs) {
-      f.wait();
+      f.get();
     }
   }
 
@@ -848,6 +871,7 @@ std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
   const char* hostfile = std::getenv("MLX_HOSTFILE");
   const char* rank_str = std::getenv("MLX_RANK");
   const char* ring_verbose = std::getenv("MLX_RING_VERBOSE");
+  const char* source_ips = std::getenv("MLX_RING_SOURCE_IPS");
 
   if (!hostfile || !rank_str) {
     if (strict) {
@@ -864,7 +888,8 @@ std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
   auto nodes = load_nodes(hostfile);
   int rank = std::atoi(rank_str);
 
-  return std::make_shared<RingGroup>(rank, nodes, ring_verbose != nullptr);
+  return std::make_shared<RingGroup>(
+      rank, nodes, load_sources(source_ips), ring_verbose != nullptr);
 }
 
 } // namespace mlx::core::distributed::ring

@@ -56,7 +56,7 @@ array flatten_in_eval(const array& x, int start_axis, int end_axis, Stream s) {
 
 array reshape_in_eval(const array& x, Shape shape, Stream s) {
   array out(std::move(shape), x.dtype(), nullptr, {});
-  reshape_gpu(x, out, s);
+  reshape_gpu(x, out, true, s);
   return out;
 }
 

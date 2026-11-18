@@ -16,14 +16,14 @@ void new_stream(Stream s) {
   assert(s.device == Device::gpu);
   auto& encoders = metal::get_command_encoders();
   auto& d = metal::device(s.device);
-  encoders.try_emplace(s.index, d, s.index, d.residency_set());
+  encoders.try_emplace(s.index, d, s.index, d.residency_sets());
 }
 
 void new_thread_unsafe_stream(Stream s) {
   assert(s.device == Device::gpu);
   auto& encoders = metal::get_global_command_encoders();
   auto& d = metal::device(s.device);
-  encoders.try_emplace(s.index, d, s.index, d.residency_set());
+  encoders.try_emplace(s.index, d, s.index, d.residency_sets());
 }
 
 void eval(array& arr) {
@@ -55,6 +55,10 @@ void eval(array& arr) {
   if (auto it = buffers.find(arr.data_shared_ptr()); it != buffers.end()) {
     buffers.erase(it);
   }
+
+#ifndef NDEBUG
+  encoder.verify_graph(arr.primitive().name(), arr.inputs(), outputs);
+#endif
 
   if (encoder.needs_commit()) {
     encoder.end_encoding();

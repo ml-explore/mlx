@@ -7,7 +7,26 @@ FetchContent_MakeAvailable(doctest)
 add_executable(tests ${PROJECT_SOURCE_DIR}/tests/tests.cpp)
 
 if(MLX_BUILD_METAL OR MLX_BUILD_CUDA)
-  set(METAL_TEST_SOURCES gpu_tests.cpp)
+  set(GPU_TEST_SOURCES gpu_tests.cpp)
+endif()
+
+if(MLX_BUILD_CUDA)
+  list(APPEND GPU_TEST_SOURCES cuda_tests.cpp)
+  target_link_libraries(tests PRIVATE CUDA::cudart)
+endif()
+
+if(MLX_BUILD_METAL)
+  list(APPEND GPU_TEST_SOURCES residency_tests.cpp)
+endif()
+
+if(TARGET jaccl)
+  target_sources(tests PRIVATE jaccl_tests.cpp)
+  target_include_directories(
+    tests PRIVATE ${PROJECT_SOURCE_DIR}/mlx/distributed/jaccl/lib)
+  get_target_property(mlx_link_libraries mlx LINK_LIBRARIES)
+  if(BUILD_SHARED_LIBS OR NOT jaccl IN_LIST mlx_link_libraries)
+    target_link_libraries(tests PRIVATE jaccl)
+  endif()
 endif()
 
 include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
@@ -20,6 +39,7 @@ target_sources(
           autograd_tests.cpp
           blas_tests.cpp
           compile_tests.cpp
+          config_tests.cpp
           custom_vjp_tests.cpp
           creations_tests.cpp
           device_tests.cpp
@@ -34,7 +54,7 @@ target_sources(
           utils_tests.cpp
           vmap_tests.cpp
           linalg_tests.cpp
-          ${METAL_TEST_SOURCES})
+          ${GPU_TEST_SOURCES})
 
 target_link_libraries(tests PRIVATE mlx doctest)
 target_compile_options(tests PRIVATE ${SANITIZER_COMPILE_FLAGS})

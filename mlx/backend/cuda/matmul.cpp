@@ -35,7 +35,7 @@ check_transpose(cu::CommandEncoder& enc, const Stream& s, const array& arr) {
 std::tuple<bool, int64_t, array>
 ensure_batch_contiguous(const array& x, cu::CommandEncoder& encoder, Stream s) {
   if (x.flags().row_contiguous) {
-    return std::make_tuple(false, x.strides(-2), x);
+    return std::make_tuple(false, x.shape(-1), x);
   }
 
   bool rc = true;
@@ -374,8 +374,8 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];
 
-  // Return 0s if either input is empty.
-  if (a_pre.size() == 0 || b_pre.size() == 0) {
+  // Return 0s if the output or either input is empty.
+  if (out.size() == 0 || a_pre.size() == 0 || b_pre.size() == 0) {
     array zero(0, a_pre.dtype());
     encoder.add_temporary(zero);
     fill_gpu(zero, out, s);

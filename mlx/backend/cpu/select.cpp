@@ -7,6 +7,7 @@
 
 #include "mlx/backend/cpu/binary_ops.h"
 #include "mlx/backend/cpu/ternary.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
@@ -95,50 +96,10 @@ void select_op(
                     out = array::unsafe_weak_copy(out),
                     op,
                     topt]() mutable {
-    switch (out.dtype()) {
-      case bool_:
-        select_dispatch<bool>(a, b, c, out, op, topt);
-        break;
-      case uint8:
-        select_dispatch<uint8_t>(a, b, c, out, op, topt);
-        break;
-      case uint16:
-        select_dispatch<uint16_t>(a, b, c, out, op, topt);
-        break;
-      case uint32:
-        select_dispatch<uint32_t>(a, b, c, out, op, topt);
-        break;
-      case uint64:
-        select_dispatch<uint64_t>(a, b, c, out, op, topt);
-        break;
-      case int8:
-        select_dispatch<int8_t>(a, b, c, out, op, topt);
-        break;
-      case int16:
-        select_dispatch<int16_t>(a, b, c, out, op, topt);
-        break;
-      case int32:
-        select_dispatch<int32_t>(a, b, c, out, op, topt);
-        break;
-      case int64:
-        select_dispatch<int64_t>(a, b, c, out, op, topt);
-        break;
-      case float16:
-        select_dispatch<float16_t>(a, b, c, out, op, topt);
-        break;
-      case float32:
-        select_dispatch<float>(a, b, c, out, op, topt);
-        break;
-      case float64:
-        select_dispatch<double>(a, b, c, out, op, topt);
-        break;
-      case bfloat16:
-        select_dispatch<bfloat16_t>(a, b, c, out, op, topt);
-        break;
-      case complex64:
-        select_dispatch<complex64_t>(a, b, c, out, op, topt);
-        break;
-    }
+    dispatch_all_types(out.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      select_dispatch<T>(a, b, c, out, op, topt);
+    });
   });
 }
 

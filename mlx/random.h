@@ -17,7 +17,7 @@ class MLX_API KeySequence {
   explicit KeySequence(uint64_t seed);
 
   void seed(uint64_t seed);
-  array next();
+  array next(StreamOrDevice s = {});
 
   // Each thread has its own random key to avoid race condition.
   static KeySequence& default_() {

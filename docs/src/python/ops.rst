@@ -134,6 +134,7 @@ Operations
    meshgrid
    min
    minimum
+   minmax
    moveaxis
    multiply
    nan_to_num
@@ -168,6 +169,7 @@ Operations
    savez_compressed
    save_gguf
    save_safetensors
+   searchsorted
    sigmoid
    sign
    sin
@@ -202,6 +204,7 @@ Operations
    triu
    trunc
    unflatten
+   unique
    unstack
    vecdot
    var

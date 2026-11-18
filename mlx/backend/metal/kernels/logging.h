@@ -16,7 +16,7 @@ struct os_log {
   constexpr os_log(constant char*, constant char*) constant {}
 
   template <typename... Args>
-  void log_debug(constant char*, Args...) const {}
+  void log_debug(constant char*, Args...) const thread {}
 
   template <typename... Args>
   void log_debug(constant char*, Args...) const constant {}

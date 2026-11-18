@@ -27,15 +27,19 @@ MLX_API ArrayFnWithExtra compile(
     bool shapeless,
     std::vector<uint64_t> constants);
 
-// Erase cached compile functions
-MLX_API void compile_erase(std::uintptr_t fun_id);
+// Get the compiler cache of current thread.
+class CompileCache;
+using CompileCacheWeakPtr = std::weak_ptr<CompileCache>;
+MLX_API CompileCacheWeakPtr compile_cache();
+
+// Erase cached compile function.
+MLX_API void compile_erase(
+    const CompileCacheWeakPtr& cache,
+    std::uintptr_t fun_id);
 
 // Clear the compiler cache causing a recompilation of all compiled functions
 // when called again.
-MLX_API void compile_clear_cache();
-
-// Return true if the cache is empty.
-MLX_API bool compile_cache_empty();
+MLX_API void compile_clear_cache(const CompileCacheWeakPtr& cache);
 
 bool compile_available_for_device(const Device& device);
 

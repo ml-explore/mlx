@@ -186,7 +186,7 @@ implicit_gemm_conv_2d_general(
     if (offset_n >= gemm_params->N)
       return;
 
-    short diff = gemm_params->N - offset_n;
+    int diff = gemm_params->N - offset_n;
 
     STEEL_PRAGMA_UNROLL
     for (int i = 0; i < mma_t::TM; i++) {

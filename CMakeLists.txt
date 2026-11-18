@@ -43,6 +43,7 @@ option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
 option(MLX_BUILD_PYTHON_STUBS "Build stub files for python bindings" ON)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(MLX_USE_CCACHE "Use CCache for compilation cache when available" ON)
+option(MLX_EXPORT_ALL_SYMBOLS "Export all symbols in the library" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 option(USE_SYSTEM_FMT "Use system's provided fmt library" OFF)
 option(USE_ASAN "Enable AddressSanitizer (ASan)" OFF)
@@ -151,6 +152,7 @@ cmake_policy(SET CMP0135 NEW)
 
 add_library(mlx)
 
+target_compile_features(mlx INTERFACE cxx_std_20)
 target_compile_options(mlx PUBLIC ${SANITIZER_COMPILE_FLAGS})
 target_link_options(mlx PUBLIC ${SANITIZER_LINK_FLAGS})
 
@@ -232,6 +234,10 @@ if(MLX_BUILD_METAL)
     mlx PUBLIC $<BUILD_INTERFACE:${metal_cpp_SOURCE_DIR}>
                $<INSTALL_INTERFACE:include/metal_cpp>)
   target_link_libraries(mlx PUBLIC ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZ_LIB})
+  if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    find_library(IOKIT_LIB IOKit)
+    target_link_libraries(mlx PRIVATE ${IOKIT_LIB})
+  endif()
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -261,7 +267,8 @@ if(WIN32)
   FetchContent_MakeAvailable(dlfcn-win32)
   endblock()
   target_include_directories(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src")
-  target_link_libraries(mlx PRIVATE dl)
+  target_sources(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src/dlfcn.c")
+  target_link_libraries(mlx PRIVATE Psapi.lib)
 endif()
 
 if(MLX_BUILD_CPU)
@@ -296,10 +303,15 @@ if(MLX_BUILD_CPU)
       URL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.33/${OPENBLAS_ZIP}"
     )
     FetchContent_MakeAvailable(openblas)
-    target_link_libraries(
-      mlx PRIVATE "${openblas_SOURCE_DIR}/lib/${OPENBLAS_LIB}.lib")
     target_include_directories(mlx
                                PRIVATE "${openblas_SOURCE_DIR}/${OPENBLAS_INC}")
+    # Make openblas importable by dependencies when built as static library.
+    set(OPENBLAS_IMPORT_LIBRARY
+        "${openblas_SOURCE_DIR}/lib/${OPENBLAS_LIB}.lib")
+    add_library(MLX::OpenBLAS UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(MLX::OpenBLAS PROPERTIES IMPORTED_LOCATION
+                                                   "${OPENBLAS_IMPORT_LIBRARY}")
+    target_link_libraries(mlx PRIVATE MLX::OpenBLAS)
     # Make sure the DLL file is placed in the same dir with executables.
     set(OPENBLAS_DLL_FILE "${openblas_SOURCE_DIR}/bin/${OPENBLAS_LIB}.dll")
     add_custom_command(
@@ -356,7 +368,7 @@ target_include_directories(
 if(MLX_BUILD_CPU
    AND ${CMAKE_SYSTEM_NAME} MATCHES "Darwin"
    AND DEFINED MACOS_SDK_VERSION
-   AND MACOS_SDK_VERSION GREATER_EQUAL 26.2)
+   AND MACOS_SDK_VERSION VERSION_GREATER_EQUAL 26.2)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx/distributed/jaccl/lib
                    ${CMAKE_BINARY_DIR}/jaccl)
 endif()
@@ -388,7 +400,7 @@ if(MLX_BUILD_PYTHON_BINDINGS)
   FetchContent_Declare(
     nanobind
     GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-    GIT_TAG v2.13.0
+    GIT_TAG v3.1.0
     GIT_SHALLOW TRUE
     EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(nanobind)
@@ -417,6 +429,8 @@ if(WIN32)
   if(MLX_BUILD_CPU)
     # Install OpenBLAS.
     install(FILES ${OPENBLAS_DLL_FILE} TYPE BIN)
+    install(FILES ${OPENBLAS_IMPORT_LIBRARY}
+            DESTINATION ${CMAKE_INSTALL_LIBDIR})
   endif()
 endif()
 

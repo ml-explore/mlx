@@ -3,8 +3,10 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "mlx/allocator.h"
@@ -18,7 +20,6 @@ namespace mlx::core {
 // Forward declaration
 class Primitive;
 
-using Deleter = std::function<void(allocator::Buffer)>;
 using ShapeElem = int32_t;
 using Shape = SmallVector<ShapeElem>;
 using Strides = SmallVector<int64_t>;
@@ -68,25 +69,30 @@ class MLX_API array {
       Dtype dtype,
       const std::function<void(void*)>& deleter);
 
-  /* Build an array from a buffer */
-  explicit array(
-      allocator::Buffer data,
-      Shape shape,
-      Dtype dtype,
-      Deleter deleter = allocator::free);
+  /* Build an array from data */
+  explicit array(allocator::Data data, Shape shape, Dtype dtype);
 
   /** Assignment to rvalue does not compile. */
   array& operator=(const array& other) && = delete;
   array& operator=(array&& other) && = delete;
 
   /** Default copy and move constructors otherwise. */
-  array& operator=(array&& other) & = default;
   array(const array& other) = default;
   array(array&& other) = default;
 
+  /** Assignment goes through release() to break sibling reference cycle. */
   array& operator=(const array& other) & {
-    if (this->id() != other.id()) {
-      this->array_desc_ = other.array_desc_;
+    if (array_desc_ != other.array_desc_) {
+      // Hold the old descriptor while assigning, and then release it. Otherwise
+      // when |this| and |other| are siblings they would be both destroyed.
+      release(std::exchange(array_desc_, other.array_desc_));
+    }
+    return *this;
+  }
+
+  array& operator=(array&& other) & noexcept {
+    if (array_desc_ != other.array_desc_) {
+      release(std::exchange(array_desc_, std::move(other.array_desc_)));
     }
     return *this;
   }
@@ -228,22 +234,7 @@ class MLX_API array {
     return reinterpret_cast<std::uintptr_t>(array_desc_->primitive.get());
   }
 
-  struct Data {
-    allocator::Buffer buffer;
-    Deleter d;
-    Data(allocator::Buffer buffer, Deleter d = allocator::free)
-        : buffer(buffer), d(d) {}
-    // Not copyable
-    Data(const Data& d) = delete;
-    Data& operator=(const Data& d) = delete;
-    Data(Data&& o) : buffer(o.buffer), d(o.d) {
-      o.buffer = allocator::Buffer(nullptr);
-      o.d = [](allocator::Buffer) {};
-    }
-    ~Data() {
-      d(buffer);
-    }
-  };
+  using Data = allocator::Data;
 
   struct Flags {
     // True iff there are no gaps in the underlying data. Each item
@@ -292,7 +283,8 @@ class MLX_API array {
 
   /** True indicates the arrays buffer is safe to reuse */
   bool is_donatable() const {
-    return array_desc_.use_count() == 1 && (array_desc_->data.use_count() == 1);
+    return array_desc_.use_count() == 1 &&
+        (array_desc_->data.use_count() == 1) && array_desc_->data->is_owned();
   }
 
   /** The array's siblings. */
@@ -349,11 +341,8 @@ class MLX_API array {
     return array_desc_->data_size;
   }
 
-  allocator::Buffer& buffer() {
-    return array_desc_->data->buffer;
-  }
-  const allocator::Buffer& buffer() const {
-    return array_desc_->data->buffer;
+  allocator::Buffer buffer() const {
+    return array_desc_->data->buffer();
   }
 
   size_t buffer_size() const {
@@ -426,6 +415,7 @@ class MLX_API array {
   }
 
   void detach_event() const {
+    array_desc_->event.check_error();
     array_desc_->event = Event{};
   }
 
@@ -436,24 +426,14 @@ class MLX_API array {
   // Check if the array is a tracer array
   bool is_tracer() const;
 
-  void set_data(allocator::Buffer buffer, Deleter d = allocator::free);
+  void set_data(allocator::Data data);
 
   void set_data(
-      allocator::Buffer buffer,
+      allocator::Data data,
       size_t data_size,
       Strides strides,
       Flags flags,
-      Deleter d) {
-    set_data(buffer, data_size, std::move(strides), flags, 0, std::move(d));
-  }
-
-  void set_data(
-      allocator::Buffer buffer,
-      size_t data_size,
-      Strides strides,
-      Flags flags,
-      int64_t offset = 0,
-      Deleter d = allocator::free);
+      int64_t offset = 0);
 
   void copy_shared_buffer(
       const array& other,
@@ -465,10 +445,12 @@ class MLX_API array {
   void copy_shared_buffer(const array& other);
 
   void overwrite_descriptor(const array& other) {
-    array_desc_ = other.array_desc_;
+    release(std::exchange(array_desc_, other.array_desc_));
   }
 
-  ~array();
+  ~array() {
+    release(std::move(array_desc_));
+  }
 
  private:
   // Initialize the arrays data
@@ -531,6 +513,12 @@ class MLX_API array {
   // the primitive which knows how to compute the array's data from its inputs
   // and the list of array's inputs for the primitive.
   std::shared_ptr<ArrayDesc> array_desc_;
+
+  /**
+   * Lets go of an ArrayDesc, breaking the sibling reference cycle of a
+   * multi-output primitive.
+   */
+  static void release(std::shared_ptr<ArrayDesc> desc);
 };
 
 template <typename T>
@@ -578,20 +566,19 @@ T array::item() {
     throw std::invalid_argument("item can only be called on arrays of size 1.");
   }
   eval();
-  return *data<T>();
+  // Use memcpy to read unaligned data.
+  T value;
+  std::memcpy(&value, data<void>(), sizeof(T));
+  return value;
 }
 
 template <typename T>
 T array::item() const {
-  if (size() != 1) {
-    throw std::invalid_argument("item can only be called on arrays of size 1.");
-  }
   if (status() == Status::unscheduled) {
     throw std::invalid_argument(
         "item() const can only be called on evaled arrays");
   }
-  const_cast<array*>(this)->eval();
-  return *data<T>();
+  return const_cast<array*>(this)->item<T>();
 }
 
 template <typename It>

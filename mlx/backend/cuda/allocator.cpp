@@ -1,12 +1,17 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/backend/gpu/device_info.h"
+#include "mlx/device.h"
 #include "mlx/memory.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
+
+#ifdef _WIN32
+#include "mlx/backend/cuda/wddm.h"
+#endif
 
 #include <cuda_runtime.h>
 #include <fmt/format.h>
@@ -64,9 +69,9 @@ inline void* unified_malloc(size_t size) {
 
 inline void unified_free(void* data) {
   if (supports_managed_memory()) {
-    CHECK_CUDA_ERROR(cudaFree(data));
+    cudaFree(data);
   } else {
-    CHECK_CUDA_ERROR(cudaFreeHost(data));
+    cudaFreeHost(data);
   }
 }
 
@@ -186,7 +191,7 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
   if (!buf) {
     // If we have a lot of memory pressure try to reclaim memory from the cache.
     int64_t mem_to_free =
-        get_active_memory() + get_cache_memory() + size - memory_limit_;
+        get_active_memory() + get_cache_memory() + size - get_memory_limit();
     if (mem_to_free > 0) {
       buffer_cache_.release_cached_buffers(mem_to_free);
     }
@@ -246,6 +251,9 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
   if (buf->device >= 0 && buf->device != device) {
     move_to_unified_memory(*buf, stream);
   }
+#ifndef NDEBUG
+  track_allocation(buf->data, size);
+#endif
   return Buffer{buf};
 }
 
@@ -262,6 +270,10 @@ void CudaAllocator::free(Buffer buffer) {
     delete buf;
     return;
   }
+
+#ifndef NDEBUG
+  untrack_allocation(buf->data);
+#endif
 
   std::unique_lock lock(mutex_);
   active_memory_ -= buf->size;
@@ -296,6 +308,9 @@ void CudaAllocator::move_to_unified_memory(
     CHECK_CUDA_ERROR(cudaMemcpy(data, buf.data, buf.size, kind));
     free_async(buf);
   }
+#ifndef NDEBUG
+  swap_allocation(buf.data, data);
+#endif
   buf.data = data;
   buf.device = -1;
 }
@@ -319,9 +334,9 @@ void CudaAllocator::free_async(CudaBuffer& buf, cudaStream_t stream) {
       if (!stream) {
         stream = free_streams_[buf.device];
       }
-      CHECK_CUDA_ERROR(cudaFreeAsync(buf.data, stream));
+      cudaFreeAsync(buf.data, stream);
     } else {
-      CHECK_CUDA_ERROR(cudaFree(buf.data));
+      cudaFree(buf.data);
     }
   }
 }
@@ -340,7 +355,13 @@ void CudaAllocator::reset_peak_memory() {
 }
 
 size_t CudaAllocator::get_memory_limit() {
+#ifdef _WIN32
+  int device = default_device().index;
+  return std::min(
+      memory_limit_, get_wddm_memory_limit(device, mem_pools_[device]));
+#else
   return memory_limit_;
+#endif
 }
 
 size_t CudaAllocator::set_memory_limit(size_t limit) {
@@ -360,8 +381,17 @@ size_t CudaAllocator::set_cache_limit(size_t limit) {
 }
 
 void CudaAllocator::clear_cache() {
-  std::lock_guard lk(mutex_);
-  buffer_cache_.clear();
+  {
+    std::lock_guard lk(mutex_);
+    buffer_cache_.clear();
+  }
+  for (size_t i = 0; i < mem_pools_.size(); ++i) {
+    if (mem_pools_[i]) {
+      cu::device(static_cast<int>(i)).make_current();
+      CHECK_CUDA_ERROR(cudaStreamSynchronize(free_streams_[i]));
+      CHECK_CUDA_ERROR(cudaMemPoolTrimTo(mem_pools_[i], 0));
+    }
+  }
 }
 
 CudaAllocator& allocator() {
@@ -376,9 +406,10 @@ CudaAllocator& allocator() {
   return *allocator_;
 }
 
-Buffer malloc_async(size_t size, CommandEncoder& encoder) {
-  return allocator().malloc_async(
-      size, encoder.device().cuda_device(), encoder.stream());
+allocator::Data malloc_async(size_t size, CommandEncoder& encoder) {
+  return allocator::Data(
+      allocator().malloc_async(
+          size, encoder.device().cuda_device(), encoder.stream()));
 }
 
 } // namespace cu

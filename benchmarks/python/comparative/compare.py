@@ -4,6 +4,7 @@
 
 import argparse
 import re
+import sys
 from pathlib import Path
 from subprocess import run
 
@@ -22,15 +23,15 @@ def run_or_raise(*args, **kwargs):
 
 
 def compare(args):
-    t_mlx = run_or_raise(["python", BENCH_MLX] + args)
-    t_torch = run_or_raise(["python", BENCH_TORCH] + args)
+    t_mlx = run_or_raise([sys.executable, BENCH_MLX] + args)
+    t_torch = run_or_raise([sys.executable, BENCH_TORCH] + args)
 
     print((t_torch - t_mlx) / t_torch, " ".join(args), sep="\t")
 
 
 def compare_mlx_dtypes(args, dt1, dt2):
-    t_mlx_dt1 = run_or_raise(["python", BENCH_MLX] + args + ["--dtype", dt1])
-    t_mlx_dt2 = run_or_raise(["python", BENCH_MLX] + args + ["--dtype", dt2])
+    t_mlx_dt1 = run_or_raise([sys.executable, BENCH_MLX] + args + ["--dtype", dt1])
+    t_mlx_dt2 = run_or_raise([sys.executable, BENCH_MLX] + args + ["--dtype", dt2])
 
     print((t_mlx_dt2 - t_mlx_dt1) / t_mlx_dt2, " ".join(args), sep="\t")
 
@@ -47,15 +48,23 @@ def make_regex_search(regexes):
 def make_predicate(positive_filter, negative_filter):
     if positive_filter is not None:
         positive_filter_search = make_regex_search(positive_filter)
-        positive_filter = lambda x: all(positive_filter_search(x))
+
+        def positive_filter(x):
+            return all(positive_filter_search(x))
     else:
-        positive_filter = lambda x: True
+
+        def positive_filter(x):
+            return True
 
     if negative_filter is not None:
         negative_filter_search = make_regex_search(negative_filter)
-        negative_filter = lambda x: not any(negative_filter_search(x))
+
+        def negative_filter(x):
+            return not any(negative_filter_search(x))
     else:
-        negative_filter = lambda x: True
+
+        def negative_filter(x):
+            return True
 
     def predicate(x):
         return positive_filter(x) and negative_filter(x)
@@ -82,13 +91,19 @@ if __name__ == "__main__":
     _filter = make_predicate(args.filter, args.negative_filter)
 
     if args.mlx_dtypes:
-        compare_filtered = lambda x: (
-            compare_mlx_dtypes(x.split() + rest, args.mlx_dtypes[0], args.mlx_dtypes[1])
-            if _filter(x)
-            else None
-        )
+
+        def compare_filtered(x):
+            return (
+                compare_mlx_dtypes(
+                    x.split() + rest, args.mlx_dtypes[0], args.mlx_dtypes[1]
+                )
+                if _filter(x)
+                else None
+            )
     else:
-        compare_filtered = lambda x: compare(x.split() + rest) if _filter(x) else None
+
+        def compare_filtered(x):
+            return compare(x.split() + rest) if _filter(x) else None
 
     # Binary ops
     compare_filtered("add --size 10x1024x128 --size 1x1024x128 --cpu")
@@ -149,13 +164,15 @@ if __name__ == "__main__":
         "matmul --size 16x768x768 --size 16x768x768 --transpose= --transpose 0,2,1"
     )
     compare_filtered(
-        "matmul --size 16x768x768 --size 16x768x768 --transpose= --transpose 0,2,1 --cpu"
+        "matmul --size 16x768x768 --size 16x768x768 --transpose= --transpose 0,2,1 "
+        "--cpu"
     )
     compare_filtered(
         "matmul --size 16x768x128 --size 16x768x128 --transpose= --transpose 0,2,1"
     )
     compare_filtered(
-        "matmul --size 16x768x128 --size 16x768x128 --transpose= --transpose 0,2,1 --cpu"
+        "matmul --size 16x768x128 --size 16x768x128 --transpose= --transpose 0,2,1 "
+        "--cpu"
     )
     compare_filtered("matmul --size 512x8192 --size 8192x512")
     compare_filtered("matmul --size 512x8192 --size 8192x512 --cpu")
@@ -184,7 +201,8 @@ if __name__ == "__main__":
     compare_filtered("matmul --size 32x1x1000 --size 32x1000x128 --cpu")
     compare_filtered("matmul --size 32x1x1000 --size 32x1000x128")
     compare_filtered(
-        "matmul --size 32x1x1000 --size 32x128x1000 --transpose= --transpose 0,2,1 --cpu"
+        "matmul --size 32x1x1000 --size 32x128x1000 --transpose= --transpose 0,2,1 "
+        "--cpu"
     )
     compare_filtered(
         "matmul --size 32x1x1000 --size 32x128x1000 --transpose= --transpose 0,2,1"
@@ -217,7 +235,8 @@ if __name__ == "__main__":
     compare_filtered("step --size 32x16x1024 --cpu")
     compare_filtered("selu --size 32x16x1024")
     compare_filtered("selu --size 32x16x1024 --cpu")
-    # compare_filtered("mish --size 32x16x1024") NOTE: Torch does not implement Mish in MPS atm
+    # NOTE: Torch does not implement Mish in MPS atm
+    # compare_filtered("mish --size 32x16x1024")
     compare_filtered("mish --size 32x16x1024 --cpu")
     compare_filtered("prelu --size 32x16x1024")
     compare_filtered("prelu --size 32x16x1024 --cpu")

@@ -43,13 +43,13 @@ template <typename T, typename U, typename Op, typename IdxT, int NDIMS>
     row = in + loop.location();
     if (safe) {
       for (int i = 0; i < n_reads; i++) {
-        totals[i] = op(static_cast<U>(row[i]), totals[i]);
+        totals[i] = op(cast_to<U>(row[i]), totals[i]);
       }
     } else {
       U vals[n_reads];
       for (int i = 0; i < n_reads; i++) {
         vals[i] =
-            (column + i < reduction_stride) ? static_cast<U>(row[i]) : op.init;
+            (column + i < reduction_stride) ? cast_to<U>(row[i]) : op.init;
       }
       for (int i = 0; i < n_reads; i++) {
         totals[i] = op(vals[i], totals[i]);
@@ -117,7 +117,7 @@ template <typename T, typename U, typename Op, typename IdxT, int NDIMS>
 
   IdxT out_idx = gid.x + gsize.x * IdxT(gid.y);
   IdxT in_idx = elem_to_loc<IdxT>(out_idx, shape, strides, ndim);
-  in += in_idx + lid.x;
+  in += in_idx + IdxT(lid.x);
 
   U total = Op::init;
   IdxT total_rows = IdxT(non_col_reductions) * IdxT(reduction_size);
@@ -125,7 +125,7 @@ template <typename T, typename U, typename Op, typename IdxT, int NDIMS>
   for (IdxT r = gid.z * lsize.y + lid.y; r < total_rows;
        r += lsize.y * gsize.z) {
     row = in + loop.location();
-    total = op(static_cast<U>(*row), total);
+    total = op(cast_to<U>(*row), total);
     loop.next(lsize.y * gsize.z, reduce_shape, reduce_strides);
   }
 
@@ -172,6 +172,7 @@ template <
     const constant int64_t* reduce_strides [[buffer(8)]],
     const constant int& reduce_ndim [[buffer(9)]],
     const constant size_t& non_col_reductions [[buffer(10)]],
+    const constant int64_t& column_offset [[buffer(11)]],
     uint3 gid [[threadgroup_position_in_grid]],
     uint3 gsize [[threadgroups_per_grid]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
@@ -193,7 +194,7 @@ template <
 
   short lid = simd_group_id * simd_size + simd_lane_id;
   short2 offset((lid % n_read_blocks) * n_reads, lid / n_read_blocks);
-  IdxT column = BN * gid.x + offset.x;
+  IdxT column = IdxT(BN) * gid.x + IdxT(column_offset) + offset.x;
   bool safe = column + n_reads <= reduction_stride;
 
   IdxT out_idx = gid.y + gsize.y * IdxT(gid.z);
@@ -207,13 +208,13 @@ template <
 
     if (safe) {
       for (int i = 0; i < n_reads; i++) {
-        totals[i] = op(static_cast<U>(row[i]), totals[i]);
+        totals[i] = op(cast_to<U>(row[i]), totals[i]);
       }
     } else {
       U vals[n_reads];
       for (int i = 0; i < n_reads; i++) {
         vals[i] =
-            (column + i < reduction_stride) ? static_cast<U>(row[i]) : op.init;
+            (column + i < reduction_stride) ? cast_to<U>(row[i]) : op.init;
       }
       for (int i = 0; i < n_reads; i++) {
         totals[i] = op(vals[i], totals[i]);
@@ -243,7 +244,7 @@ template <
 
     // Write the output.
     if (simd_lane_id == 0) {
-      IdxT out_column = BN * gid.x + out_offset.x;
+      IdxT out_column = IdxT(BN) * gid.x + IdxT(column_offset) + out_offset.x;
       out += out_idx * IdxT(reduction_stride) + out_column;
       if (out_column + n_outputs <= reduction_stride) {
         for (int i = 0; i < n_outputs; i++) {
@@ -311,7 +312,8 @@ template <
     const constant int64_t* reduce_strides [[buffer(8)]],
     const constant int& reduce_ndim [[buffer(9)]],
     const constant size_t& non_col_reductions [[buffer(10)]],
-    const constant size_t& out_size [[buffer(11)]],
+    const constant int64_t& column_offset [[buffer(11)]],
+    const constant size_t& out_size [[buffer(12)]],
     uint3 gid [[threadgroup_position_in_grid]],
     uint3 gsize [[threadgroups_per_grid]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
@@ -336,7 +338,7 @@ template <
 
   short lid = simd_group_id * simd_size + simd_lane_id;
   short2 offset((lid % n_read_blocks) * n_reads, lid / n_read_blocks);
-  IdxT column = BN * gid.x + offset.x;
+  IdxT column = IdxT(BN) * gid.x + IdxT(column_offset) + offset.x;
   bool safe = column + n_reads <= reduction_stride;
 
   IdxT full_idx = gid.y + gsize.y * IdxT(gid.z);
@@ -352,13 +354,13 @@ template <
 
     if (safe) {
       for (int i = 0; i < n_reads; i++) {
-        totals[i] = op(static_cast<U>(row[i]), totals[i]);
+        totals[i] = op(cast_to<U>(row[i]), totals[i]);
       }
     } else {
       U vals[n_reads];
       for (int i = 0; i < n_reads; i++) {
         vals[i] =
-            (column + i < reduction_stride) ? static_cast<U>(row[i]) : op.init;
+            (column + i < reduction_stride) ? cast_to<U>(row[i]) : op.init;
       }
       for (int i = 0; i < n_reads; i++) {
         totals[i] = op(vals[i], totals[i]);
@@ -383,7 +385,7 @@ template <
 
   // Write the output.
   if (simd_lane_id == 0) {
-    IdxT out_column = BN * gid.x + out_offset.x;
+    IdxT out_column = IdxT(BN) * gid.x + IdxT(column_offset) + out_offset.x;
     out += full_idx * IdxT(reduction_stride) + out_column;
     if (out_column + n_outputs <= reduction_stride) {
       for (int i = 0; i < n_outputs; i++) {

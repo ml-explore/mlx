@@ -49,6 +49,7 @@ float expm1f_scaled_unchecked(float a, float b) {
   j = j - 12582912.0f; // 0x1.8p23
   i = (int)j;
   f = fma(j, -6.93145752e-1f, a);
+  f = fma(j, -1.42860677e-6f, f);
 
   // approximate r = exp(f)-1 on interval [-log(2)/2, +log(2)/2]
   s = f * f;

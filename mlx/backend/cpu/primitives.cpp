@@ -5,6 +5,7 @@
 #include <cmath>
 #include <numeric>
 #include <sstream>
+#include <type_traits>
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/slicing.h"
@@ -13,6 +14,7 @@
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/threefry.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -33,6 +35,14 @@ static std::pair<array, bool> compute_dynamic_offset(
     const Strides& strides,
     const std::vector<int>& axes,
     Stream stream) {
+  auto& encoder = cpu::get_command_encoder(stream);
+  // The kernel reads the indices contiguously
+  if (!indices.flags().row_contiguous) {
+    auto copy = contiguous_copy_cpu(indices, stream);
+    encoder.add_temporary(copy);
+    return compute_dynamic_offset(copy, strides, axes, stream);
+  }
+
   array offset({1}, int64, nullptr, {});
   bool donate = indices.is_donatable() &&
       (indices.data_size() * indices.itemsize()) >= offset.itemsize();
@@ -42,7 +52,6 @@ static std::pair<array, bool> compute_dynamic_offset(
     offset.set_data(allocator::malloc(offset.itemsize()));
   }
 
-  auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_input_array(indices);
   encoder.set_output_array(offset);
   auto compute_offset =
@@ -77,7 +86,14 @@ static std::pair<array, bool> compute_dynamic_offset(
 }
 
 void AsStrided::eval_cpu(const std::vector<array>& inputs, array& out) {
-  eval(inputs, out);
+  assert(inputs.size() == 1);
+  if (inputs[0].flags().row_contiguous) {
+    eval(inputs[0], out);
+  } else {
+    auto copy = contiguous_copy_cpu(inputs[0], stream());
+    // Donated to out.
+    eval(copy, out);
+  }
 }
 void Broadcast::eval_cpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
@@ -125,50 +141,14 @@ void Transpose::eval_cpu(const std::vector<array>& inputs, array& out) {
 void Arange::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 0);
   out.set_data(allocator::malloc(out.nbytes()));
-  switch (out.dtype()) {
-    case bool_:
+  dispatch_all_types(out.dtype(), [&](auto type_tag) {
+    using T = MLX_GET_TYPE(type_tag);
+    if constexpr (std::is_same_v<T, bool>) {
       throw std::runtime_error("Bool type unsupported for arange.");
-      break;
-    case uint8:
-      arange<uint8_t>(start_, start_ + step_, out, out.size(), stream());
-      break;
-    case uint16:
-      arange<uint16_t>(start_, start_ + step_, out, out.size(), stream());
-      break;
-    case uint32:
-      arange<uint32_t>(start_, start_ + step_, out, out.size(), stream());
-      break;
-    case uint64:
-      arange<uint64_t>(start_, start_ + step_, out, out.size(), stream());
-      break;
-    case int8:
-      arange<int8_t>(start_, start_ + step_, out, out.size(), stream());
-      break;
-    case int16:
-      arange<int16_t>(start_, start_ + step_, out, out.size(), stream());
-      break;
-    case int32:
-      arange<int32_t>(start_, start_ + step_, out, out.size(), stream());
-      break;
-    case int64:
-      arange<int64_t>(start_, start_ + step_, out, out.size(), stream());
-      break;
-    case float16:
-      arange<float16_t>(start_, start_ + step_, out, out.size(), stream());
-      break;
-    case float32:
-      arange<float>(start_, start_ + step_, out, out.size(), stream());
-      break;
-    case float64:
-      arange<double>(start_, start_ + step_, out, out.size(), stream());
-      break;
-    case bfloat16:
-      arange<bfloat16_t>(start_, start_ + step_, out, out.size(), stream());
-      break;
-    case complex64:
-      arange<complex64_t>(start_, start_ + step_, out, out.size(), stream());
-      break;
-  }
+    } else {
+      arange<T>(start_, start_ + step_, out, out.size(), stream());
+    }
+  });
 }
 
 void AsType::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -414,8 +394,20 @@ void View::eval_cpu(const std::vector<array>& inputs, array& out) {
       strides[i] *= ibytes;
       strides[i] /= obytes;
     }
+    // Last axis can have any stride
+    if (obytes < ibytes) {
+      strides.back() = 1;
+    }
+    auto flags = in.flags();
+    if (ibytes != obytes) {
+      // Last axis size can change contiguity
+      auto [_, row_contiguous, col_contiguous] =
+          check_contiguity(out.shape(), strides);
+      flags.row_contiguous = row_contiguous;
+      flags.col_contiguous = col_contiguous;
+    }
     out.copy_shared_buffer(
-        in, strides, in.flags(), in.data_size() * ibytes / obytes);
+        in, strides, flags, in.data_size() * ibytes / obytes);
   } else {
     auto tmp = array(
         in.shape(), in.dtype() == bool_ ? uint8 : in.dtype(), nullptr, {});

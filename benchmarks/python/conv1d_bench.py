@@ -1,6 +1,5 @@
 import argparse
 import math
-import os
 import subprocess
 import time
 
@@ -53,10 +52,10 @@ def make_pt_conv_1D(strides=1, padding=0, groups=1):
     return pt_conv_1D
 
 
-def bench_shape(N, iH, C, wH, O, strides, padding, np_dtype, groups):
+def bench_shape(N, iH, C, wH, OC, strides, padding, np_dtype, groups):
     scale = 1.0 / math.sqrt(wH * C)
     a_np = np.random.uniform(0, 0.5, (N, iH, C)).astype(np_dtype)
-    b_np = np.random.uniform(-scale, scale, (O, wH, int(C / groups))).astype(np_dtype)
+    b_np = np.random.uniform(-scale, scale, (OC, wH, int(C / groups))).astype(np_dtype)
 
     a_mx = mx.array(a_np)
     b_mx = mx.array(b_np)
@@ -83,7 +82,9 @@ def bench_shape(N, iH, C, wH, O, strides, padding, np_dtype, groups):
 
     if not np.allclose(out_pt, out_mx, atol=atol):
         print(
-            f"Failed at {(N, iH, C)}, {(O, wH, C)} [strides = {strides}, padding = {padding}, groups = {groups}] with max(|a - b|) = {np.max(np.abs(out_pt - out_mx))}"
+            f"Failed at {(N, iH, C)}, {(OC, wH, C)} [strides = {strides}, padding = "
+            f"{padding}, groups = {groups}] with max(|a - b|) = "
+            f"{np.max(np.abs(out_pt - out_mx))}"
         )
 
     return time_mlx, time_torch
@@ -108,15 +109,16 @@ if __name__ == "__main__":
 
     for dtype in dtypes:
         print("(N,  iH,  C),  (O,  wH,  C),   dtype,  stride, pads, groups, diff%")
-        for N, iH, C, wH, O, strides, padding, groups in shapes:
+        for N, iH, C, wH, OC, strides, padding, groups in shapes:
             np_dtype = getattr(np, dtype)
             time_mlx, time_torch = bench_shape(
-                N, iH, C, wH, O, strides, padding, np_dtype, groups
+                N, iH, C, wH, OC, strides, padding, np_dtype, groups
             )
             diff = time_torch / time_mlx - 1.0
 
             print(
-                f"({N}, {iH:3d}, {C:3d}), ({O:3d}, {wH:2d}, {C:3d}), {dtype}, {strides:5d}, {padding:4d}, {groups:6d}, {100. * diff:+5.2f}%"
+                f"({N}, {iH:3d}, {C:3d}), ({OC:3d}, {wH:2d}, {C:3d}), {dtype}, "
+                f"{strides:5d}, {padding:4d}, {groups:6d}, {100.0 * diff:+5.2f}%"
             )
 
             if time_mlx >= 2.0 * time_torch:

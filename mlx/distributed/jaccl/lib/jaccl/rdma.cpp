@@ -2,8 +2,10 @@
 
 #include <dlfcn.h>
 #include <unistd.h>
+#include <cerrno>
 #include <iostream>
 #include <sstream>
+#include <system_error>
 
 #include "jaccl/rdma.h"
 
@@ -54,6 +56,7 @@ IBVWrapper::IBVWrapper() {
 
   LOAD_SYMBOL(ibv_query_port, query_port);
   LOAD_SYMBOL(ibv_query_gid, query_gid);
+  LOAD_SYMBOL(ibv_query_qp, query_qp);
   LOAD_SYMBOL(ibv_modify_qp, modify_qp);
   LOAD_SYMBOL(ibv_reg_mr, reg_mr);
   LOAD_SYMBOL(ibv_dereg_mr, dereg_mr);
@@ -121,6 +124,10 @@ Connection::Connection(Connection&& c) : Connection(nullptr) {
   std::swap(completion_queue, c.completion_queue);
   std::swap(queue_pair, c.queue_pair);
   std::swap(src, c.src);
+  std::swap(failure_, c.failure_);
+  std::swap(empty_polls_, c.empty_polls_);
+  std::swap(stall_start_, c.stall_start_);
+  std::swap(last_query_, c.last_query_);
 }
 
 Connection::~Connection() {
@@ -135,6 +142,34 @@ Connection::~Connection() {
   }
   if (ctx != nullptr) {
     ibv().close_device(ctx);
+  }
+}
+
+void Connection::check_stalled() const {
+  throw_if_failed();
+  auto now = std::chrono::steady_clock::now();
+  if (empty_polls_ == STALL_CHECK_POLLS) {
+    stall_start_ = last_query_ = now;
+  } else if (now - last_query_ >= STALL_QUERY_INTERVAL) {
+    last_query_ = now;
+    check_queue_pair();
+  }
+}
+
+void Connection::check_stall_end() const {
+  if (std::chrono::steady_clock::now() - stall_start_ >= STALL_WAKE_QUERY) {
+    check_queue_pair();
+  }
+}
+
+void Connection::check_queue_pair() const {
+  ibv_qp_attr attr = {};
+  ibv_qp_init_attr init_attr = {};
+  if (ibv().query_qp(queue_pair, &attr, IBV_QP_STATE, &init_attr)) {
+    return;
+  }
+  if (attr.qp_state == IBV_QPS_ERR || attr.qp_state == IBV_QPS_SQE) {
+    fail("Queue pair is in error state");
   }
 }
 
@@ -170,7 +205,12 @@ void Connection::create_queue_pair() {
   queue_pair = ibv().create_qp(protection_domain, &init_attr);
 
   if (queue_pair == nullptr) {
-    throw std::runtime_error("[jaccl] Couldn't create queue pair");
+    int err = errno;
+    std::string error_message = std::generic_category().message(err);
+    std::ostringstream msg;
+    msg << "[jaccl] Creating the queue pair failed with '" << error_message
+        << " (" << errno << ")'.";
+    throw std::runtime_error(msg.str());
   }
 }
 
@@ -181,16 +221,28 @@ const Destination& Connection::info() {
 
   ibv_port_attr port_attr;
   ibv().query_port(ctx, 1, &port_attr);
-  ibv_gid gid;
+  ibv_gid gid = {};
+  bool found_gid = false;
   for (int i = 0; i < port_attr.gid_tbl_len; i++) {
     ibv_gid tmp;
     if (ibv().query_gid(ctx, 1, i, &tmp) == 0) {
       if (*(uint64_t*)&tmp.raw[0] == 0 && *(uint16_t*)&tmp.raw[8] == 0 &&
           *(uint16_t*)&tmp.raw[10] == 0xffff) {
         gid = tmp;
+        found_gid = true;
         break;
       }
     }
+  }
+
+  // Fail here rather than hand an unset GID to the queue pair.
+  if (!found_gid) {
+    std::ostringstream msg;
+    msg << "[jaccl] No IPv4-mapped GID for this device. Thunderbolt RDMA ports "
+        << "only publish one once the interface has an IPv4 address; assign a "
+        << "link-local address to it, for example: ifconfig <interface> inet "
+        << "169.254.0.1 netmask 255.255.0.0 alias";
+    throw std::runtime_error(msg.str());
   }
 
   src.local_id = port_attr.lid;
@@ -276,6 +328,7 @@ std::vector<Connection> create_connections(
     }
 
     // Search for the name and try to open the device
+    bool found = false;
     for (int i = 0; i < num_devices; i++) {
       if (name == ibv().get_device_name(devices[i])) {
         auto ctx = ibv().open_device(devices[i]);
@@ -285,8 +338,18 @@ std::vector<Connection> create_connections(
           throw std::runtime_error(msg.str());
         }
         connections.emplace_back(ctx);
+        found = true;
         break;
       }
+    }
+
+    // Returning a shorter vector than device_names would leave the callers,
+    // which size themselves from device_names, indexing past its end.
+    if (!found) {
+      std::ostringstream msg;
+      msg << "[jaccl] Could not find device " << name << " (" << num_devices
+          << " available)";
+      throw std::runtime_error(msg.str());
     }
   }
   ibv().free_device_list(devices);
@@ -294,7 +357,7 @@ std::vector<Connection> create_connections(
   return connections;
 }
 
-SideChannel::SideChannel(int rank, int size, const char* addr)
+TCPAllGather::TCPAllGather(int rank, int size, const char* addr)
     : rank_(rank), size_(size) {
   auto address = parse_address(addr);
 
@@ -329,8 +392,29 @@ SideChannel::SideChannel(int rank, int size, const char* addr)
   }
 }
 
+void TCPAllGather::operator()(const char* src, char* dst, size_t n_bytes) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (rank_ == 0) {
+    std::copy(src, src + n_bytes, dst);
+    for (int i = 1; i < size_; i++) {
+      sockets_[i - 1].recv(IBV_TAG, dst + i * n_bytes, n_bytes);
+    }
+    for (int i = 1; i < size_; i++) {
+      sockets_[i - 1].send(IBV_TAG, dst, size_ * n_bytes);
+    }
+  } else {
+    sockets_[0].send(IBV_TAG, src, n_bytes);
+    sockets_[0].recv(IBV_TAG, dst, size_ * n_bytes);
+  }
+}
+
+SideChannel::SideChannel(int rank, int size, AllGatherFn agf)
+    : rank_(rank), size_(size), all_gather_fn_(std::move(agf)) {}
+
 SideChannel::SideChannel(SideChannel&& sc)
-    : rank_(sc.rank_), size_(sc.size_), sockets_(std::move(sc.sockets_)) {
+    : rank_(sc.rank_),
+      size_(sc.size_),
+      all_gather_fn_(std::move(sc.all_gather_fn_)) {
   sc.rank_ = -1;
   sc.size_ = -1;
 }

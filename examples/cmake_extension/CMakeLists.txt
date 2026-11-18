@@ -1,0 +1,82 @@
+cmake_minimum_required(VERSION 3.27)
+
+project(mlx_sample_extensions LANGUAGES CXX)
+
+# ----------------------------- Setup -----------------------------
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+option(BUILD_SHARED_LIBS "Build extensions as a shared library" ON)
+
+# ----------------------------- Dependencies -----------------------------
+
+include(FetchContent)
+
+# Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
+cmake_policy(SET CMP0135 NEW)
+
+find_package(
+  Python 3.10
+  COMPONENTS Interpreter Development.Module
+  REQUIRED)
+FetchContent_Declare(
+  nanobind
+  GIT_REPOSITORY https://github.com/wjakob/nanobind.git
+  GIT_TAG v3.1.0
+  GIT_SHALLOW TRUE
+  EXCLUDE_FROM_ALL)
+FetchContent_MakeAvailable(nanobind)
+
+execute_process(
+  COMMAND "${Python_EXECUTABLE}" -m mlx --cmake-dir
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  OUTPUT_VARIABLE MLX_ROOT)
+find_package(MLX CONFIG REQUIRED)
+
+# ----------------------------- Extensions -----------------------------
+
+# Add library
+add_library(mlx_ext)
+
+# Add sources
+target_sources(mlx_ext PUBLIC ${CMAKE_CURRENT_LIST_DIR}/axpby/axpby.cpp)
+
+# Add include headers
+target_include_directories(mlx_ext PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+
+# Link to mlx
+target_link_libraries(mlx_ext PUBLIC mlx)
+
+# ----------------------------- Metal -----------------------------
+
+# Build metallib
+if(MLX_BUILD_METAL)
+  mlx_build_metallib(
+    TARGET
+    mlx_ext_metallib
+    TITLE
+    mlx_ext
+    SOURCES
+    ${CMAKE_CURRENT_LIST_DIR}/axpby/axpby.metal
+    INCLUDE_DIRS
+    ${PROJECT_SOURCE_DIR}
+    ${MLX_INCLUDE_DIRS}
+    OUTPUT_DIRECTORY
+    ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+
+  add_dependencies(mlx_ext mlx_ext_metallib)
+
+endif()
+
+# ----------------------------- Python Bindings -----------------------------
+nanobind_add_module(
+  mlx_sample_extensions
+  NB_STATIC
+  FREE_THREADED
+  LTO
+  NOMINSIZE
+  NB_DOMAIN
+  mlx
+  ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp)
+target_link_libraries(mlx_sample_extensions PRIVATE mlx_ext)

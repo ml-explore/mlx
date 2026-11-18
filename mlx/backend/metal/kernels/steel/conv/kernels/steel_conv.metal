@@ -43,13 +43,17 @@
     instantiate_implicit_conv_2d(name, itype, bm, bn, bk, wm, wn, 3, 3, l, false) \
     instantiate_implicit_conv_2d(name, itype, bm, bn, bk, wm, wn, 4, 4, l, false)
 
-#define instantiate_implicit_2d_blocks(name, itype)               \
-    instantiate_implicit_2d_filter(name, itype, 32,  8, 16, 4, 1) \
-    instantiate_implicit_2d_filter(name, itype, 64,  8, 16, 4, 1) \
-    instantiate_implicit_2d_filter(name, itype, 32, 32, 16, 2, 2) \
-    instantiate_implicit_2d_filter(name, itype, 32, 64, 16, 2, 2) \
-    instantiate_implicit_2d_filter(name, itype, 64, 32, 16, 2, 2) \
-    instantiate_implicit_2d_filter(name, itype, 64, 64, 16, 2, 2)
+// The 8 channel loader reads one row per thread and needs bm = 64
+#define instantiate_implicit_2d_blocks(name, itype)                              \
+    instantiate_implicit_2d_filter(name, itype, 32,  8, 16, 4, 1)                \
+    instantiate_implicit_2d_filter(name, itype, 64,  8, 16, 4, 1)                \
+    instantiate_implicit_2d_filter(name, itype, 32, 32, 16, 2, 2)                \
+    instantiate_implicit_2d_filter(name, itype, 32, 64, 16, 2, 2)                \
+    instantiate_implicit_2d_filter(name, itype, 64, 32, 16, 2, 2)                \
+    instantiate_implicit_2d_filter(name, itype, 64, 64, 16, 2, 2)                \
+    instantiate_implicit_conv_2d(name, itype, 64,  8, 16, 4, 1, 8, 8, l, false)  \
+    instantiate_implicit_conv_2d(name, itype, 64, 32, 16, 2, 2, 8, 8, l, false)  \
+    instantiate_implicit_conv_2d(name, itype, 64, 64, 16, 2, 2, 8, 8, l, false)
 
 instantiate_implicit_2d_blocks(float32, float);
 instantiate_implicit_2d_blocks(float16, half);

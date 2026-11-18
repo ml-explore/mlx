@@ -51,8 +51,8 @@ void segmented_mm_nax(
     k_start = segments[tid_s];
     k_end = segments[tid_s + 1];
   }
-  A += transpose_a ? k_start * params->lda : k_start;
-  B += transpose_b ? k_start : k_start * params->ldb;
+  A += transpose_a ? int64_t(k_start) * params->lda : k_start;
+  B += transpose_b ? k_start : int64_t(k_start) * params->ldb;
   C += tid_s * params->batch_stride_d;
 
   constexpr short SM = BM / WM;

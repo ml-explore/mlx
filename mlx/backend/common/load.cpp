@@ -51,7 +51,7 @@ void Load::eval_cpu(const std::vector<array>& inputs, array& out) {
     }
   };
   auto fut = io::thread_pool().enqueue(std::move(read_task)).share();
-  scheduler::enqueue(stream(), [fut = std::move(fut)]() { fut.wait(); });
+  scheduler::enqueue(stream(), [fut = std::move(fut)]() { fut.get(); });
 }
 
 } // namespace mlx::core

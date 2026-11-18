@@ -299,18 +299,20 @@ void slow_conv_2D(
         int oH_border_1 = is_idil_one
             ? ((padding_lo[0] + wt_strides[0] - 1) / wt_strides[0])
             : oH;
-        int oH_border_2 = std::max(
-            oH_border_1,
-            (iH + padding_lo[0] - wH * wt_dilation[0]) / wt_strides[0]);
+        oH_border_1 = std::min(std::max(oH_border_0, oH_border_1), oH);
+        int oH_border_2 =
+            (iH + padding_lo[0] - wH * wt_dilation[0]) / wt_strides[0];
+        oH_border_2 = std::min(std::max(oH_border_1, oH_border_2), oH);
         int oH_border_3 = oH;
 
         int oW_border_0 = 0;
         int oW_border_1 = is_idil_one
             ? ((padding_lo[1] + wt_strides[1] - 1) / wt_strides[1])
             : oW;
-        int oW_border_2 = std::max(
-            oW_border_1,
-            (iW + padding_lo[1] - wW * wt_dilation[1]) / wt_strides[1]);
+        oW_border_1 = std::min(std::max(oW_border_0, oW_border_1), oW);
+        int oW_border_2 =
+            (iW + padding_lo[1] - wW * wt_dilation[1]) / wt_strides[1];
+        oW_border_2 = std::min(std::max(oW_border_1, oW_border_2), oW);
         int oW_border_3 = oW;
 
         for (int n = 0; n < N; ++n) {
@@ -586,27 +588,30 @@ void slow_conv_3D(
     int oD_border_1 = is_idil_one
         ? ((padding_lo[0] + wt_strides[0] - 1) / wt_strides[0])
         : oD;
-    int oD_border_2 = std::max(
-        oD_border_1,
-        (iD + padding_lo[0] - wD * wt_dilation[0]) / wt_strides[0]);
+    oD_border_1 = std::min(std::max(oD_border_0, oD_border_1), oD);
+    int oD_border_2 =
+        (iD + padding_lo[0] - wD * wt_dilation[0]) / wt_strides[0];
+    oD_border_2 = std::min(std::max(oD_border_1, oD_border_2), oD);
     int oD_border_3 = oD;
 
     int oH_border_0 = 0;
     int oH_border_1 = is_idil_one
         ? ((padding_lo[1] + wt_strides[1] - 1) / wt_strides[1])
         : oH;
-    int oH_border_2 = std::max(
-        oH_border_1,
-        (iH + padding_lo[1] - wH * wt_dilation[1]) / wt_strides[1]);
+    oH_border_1 = std::min(std::max(oH_border_0, oH_border_1), oH);
+    int oH_border_2 =
+        (iH + padding_lo[1] - wH * wt_dilation[1]) / wt_strides[1];
+    oH_border_2 = std::min(std::max(oH_border_1, oH_border_2), oH);
     int oH_border_3 = oH;
 
     int oW_border_0 = 0;
     int oW_border_1 = is_idil_one
         ? ((padding_lo[2] + wt_strides[2] - 1) / wt_strides[2])
         : oW;
-    int oW_border_2 = std::max(
-        oW_border_1,
-        (iW + padding_lo[2] - wW * wt_dilation[2]) / wt_strides[2]);
+    oW_border_1 = std::min(std::max(oW_border_0, oW_border_1), oW);
+    int oW_border_2 =
+        (iW + padding_lo[2] - wW * wt_dilation[2]) / wt_strides[2];
+    oW_border_2 = std::min(std::max(oW_border_1, oW_border_2), oW);
     int oW_border_3 = oW;
 
     for (int n = 0; n < N; ++n) {
@@ -670,6 +675,24 @@ void slow_conv_3D(
   });
 }
 
+template <typename F>
+void dispatch_slow_conv_type(Dtype dtype, F&& f) {
+  switch (dtype) {
+    case float32:
+      f.template operator()<float>();
+      break;
+    case float16:
+      f.template operator()<float16_t>();
+      break;
+    case bfloat16:
+      f.template operator()<bfloat16_t>();
+      break;
+    default:
+      throw std::invalid_argument(
+          "[Convolution::eval] got unsupported data type.");
+  }
+}
+
 void dispatch_slow_conv_1D(
     const array& in,
     const array& wt,
@@ -681,8 +704,8 @@ void dispatch_slow_conv_1D(
     const std::vector<int>& in_dilation,
     bool flip,
     Stream stream) {
-  if (in.dtype() == float32) {
-    return slow_conv_1D<float>(
+  dispatch_slow_conv_type(in.dtype(), [&]<typename T>() {
+    slow_conv_1D<T>(
         in,
         wt,
         out,
@@ -693,34 +716,7 @@ void dispatch_slow_conv_1D(
         in_dilation,
         flip,
         stream);
-  } else if (in.dtype() == float16) {
-    return slow_conv_1D<float16_t>(
-        in,
-        wt,
-        out,
-        padding_lo,
-        padding_hi,
-        wt_strides,
-        wt_dilation,
-        in_dilation,
-        flip,
-        stream);
-  } else if (in.dtype() == bfloat16) {
-    return slow_conv_1D<bfloat16_t>(
-        in,
-        wt,
-        out,
-        padding_lo,
-        padding_hi,
-        wt_strides,
-        wt_dilation,
-        in_dilation,
-        flip,
-        stream);
-  } else {
-    throw std::invalid_argument(
-        "[Convolution::eval] got unsupported data type.");
-  }
+  });
 }
 
 void dispatch_slow_conv_2D(
@@ -734,8 +730,8 @@ void dispatch_slow_conv_2D(
     const std::vector<int>& in_dilation,
     bool flip,
     Stream stream) {
-  if (in.dtype() == float32) {
-    return slow_conv_2D<float>(
+  dispatch_slow_conv_type(in.dtype(), [&]<typename T>() {
+    slow_conv_2D<T>(
         in,
         wt,
         out,
@@ -746,34 +742,7 @@ void dispatch_slow_conv_2D(
         in_dilation,
         flip,
         stream);
-  } else if (in.dtype() == float16) {
-    return slow_conv_2D<float16_t>(
-        in,
-        wt,
-        out,
-        padding_lo,
-        padding_hi,
-        wt_strides,
-        wt_dilation,
-        in_dilation,
-        flip,
-        stream);
-  } else if (in.dtype() == bfloat16) {
-    return slow_conv_2D<bfloat16_t>(
-        in,
-        wt,
-        out,
-        padding_lo,
-        padding_hi,
-        wt_strides,
-        wt_dilation,
-        in_dilation,
-        flip,
-        stream);
-  } else {
-    throw std::invalid_argument(
-        "[Convolution::eval] got unsupported data type.");
-  }
+  });
 }
 
 void dispatch_slow_conv_3D(
@@ -787,8 +756,8 @@ void dispatch_slow_conv_3D(
     const std::vector<int>& in_dilation,
     bool flip,
     Stream stream) {
-  if (in.dtype() == float32) {
-    return slow_conv_3D<float>(
+  dispatch_slow_conv_type(in.dtype(), [&]<typename T>() {
+    slow_conv_3D<T>(
         in,
         wt,
         out,
@@ -799,34 +768,7 @@ void dispatch_slow_conv_3D(
         in_dilation,
         flip,
         stream);
-  } else if (in.dtype() == float16) {
-    return slow_conv_3D<float16_t>(
-        in,
-        wt,
-        out,
-        padding_lo,
-        padding_hi,
-        wt_strides,
-        wt_dilation,
-        in_dilation,
-        flip,
-        stream);
-  } else if (in.dtype() == bfloat16) {
-    return slow_conv_3D<bfloat16_t>(
-        in,
-        wt,
-        out,
-        padding_lo,
-        padding_hi,
-        wt_strides,
-        wt_dilation,
-        in_dilation,
-        flip,
-        stream);
-  } else {
-    throw std::invalid_argument(
-        "[Convolution::eval] got unsupported data type.");
-  }
+  });
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -877,7 +819,11 @@ void explicit_gemm_conv_1D_cpu(
   auto& encoder = cpu::get_command_encoder(stream);
 
   // Pad input
-  Shape padded_shape = {N, iH + padding_lo[0] + padding_hi[0], C};
+  Shape padded_shape = {
+      N,
+      safe_cast(
+          static_cast<int64_t>(iH) + padding_lo[0] + padding_hi[0], "conv"),
+      C};
   array in_padded(padded_shape, conv_dtype, nullptr, {});
 
   // Fill with zeros
@@ -1024,7 +970,8 @@ void explicit_gemm_conv_ND_cpu(
   Shape padded_shape(in.shape().size());
   padded_shape.front() = N;
   for (size_t i = 0; i < iDim.size(); i++) {
-    padded_shape[i + 1] = iDim[i] + padding_lo[i] + padding_hi[i];
+    padded_shape[i + 1] = safe_cast(
+        static_cast<int64_t>(iDim[i]) + padding_lo[i] + padding_hi[i], "conv");
   }
   padded_shape.back() = C;
   array in_padded(padded_shape, conv_dtype, nullptr, {});
