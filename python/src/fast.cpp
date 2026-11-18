@@ -412,6 +412,7 @@ void init_fast(nb::module_& parent_module) {
       "beta"_a,
       "initial_state"_a = nb::none(), // optional, defaults to None
       "mask"_a = nb::none(), // optional, defaults to None
+      "state_at"_a = nb::none(), // optional, defaults to None
       "stream"_a = nb::none(), // optional, defaults to None
       R"(
             Chunked gated delta network forward pass.
@@ -424,8 +425,22 @@ void init_fast(nb::module_& parent_module) {
                 beta: Delta update rates [B, T, Hv]
                 initial_state: Optional initial hidden state [B, T, Hk, Dv]
                 mask: Optional
+                state_at: Optional number of time steps ``c`` with
+                  ``0 < c < T``. If given, also return the state after the
+                  first ``c`` time steps.
             Returns:
-                Tuple of (output [B, T, Hv, Dv], final_state [B, T, Hk, Dv])
+                Tuple of (output [B, T, Hv, Dv], final_state [B, T, Hk, Dv]).
+                With ``state_at``, a third element holds the state after
+                the first ``state_at`` time steps. On Metal, unmasked inputs
+                with a supported shape and either a per-key gate ``gamma``
+                [B, T, Hv, Dk] or ``T <= 8`` (default chunking) produce it in
+                the same kernel pass. Other unmasked supported inputs, and
+                CUDA, compute it as two calls. CPU streams and the generic
+                fallback (masked or unsupported inputs) record it in the
+                per-step loop. Only the same-pass kernel is faster than two
+                separate calls. Its gradients go through the generic fallback
+                rather than the fused vjp kernel; in the two-call path each
+                call has its own vjp.
         )");
 
   m.def(

@@ -1083,6 +1083,7 @@ std::vector<array> gated_delta_update(
     const array& beta_,
     const std::optional<array>& initial_state, /* = std::nullopt */
     const std::optional<array>& mask_, /* = std::nullopt */
+    std::optional<int> state_at, /* = std::nullopt */
     StreamOrDevice s_ /* = {} */) {
   // determine output dtype
   auto s = to_stream(s_);
@@ -1108,13 +1109,20 @@ std::vector<array> gated_delta_update(
   int Hv = v.shape(2);
   int Dv = v.shape(3);
 
+  if (state_at && (*state_at <= 0 || *state_at >= T)) {
+    std::ostringstream msg;
+    msg << "[gated_delta_update] state_at must be in (0, T) but got "
+        << *state_at << " with T = " << T << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
   auto h0 = initial_state.has_value() ? astype(*initial_state, float32, s)
                                       : zeros({B, Hv, Dv, Dk}, float32, s);
 
   bool has_mask = mask_.has_value();
   auto mask = has_mask ? astype(*mask_, bool_, s) : array(false);
 
-  auto fallback = [B, T, Hk, Dk, Hv, Dv, has_mask, s](
+  auto fallback = [B, T, Hk, Dk, Hv, Dv, has_mask, state_at, s](
                       std::vector<array> inputs) {
     auto out_dtype = inputs[0].dtype();
     auto q = inputs[0];
@@ -1134,6 +1142,7 @@ std::vector<array> gated_delta_update(
     const array zero = array(0.0f, float32);
 
     std::vector<array> outputs;
+    std::optional<array> state_at_value;
     for (int t = 0; t < T; t++) {
       auto get_t = [&](const array& a, int t) {
         Shape start(a.ndim(), 0), stop = a.shape();
@@ -1184,8 +1193,14 @@ std::vector<array> gated_delta_update(
         o_t = where(out_mask, o_t, zero, s);
       }
       outputs.push_back(astype(o_t, out_dtype, s));
+      if (state_at && t == *state_at - 1) {
+        state_at_value = state;
+      }
     }
     auto out = stack(outputs, 1, s);
+    if (state_at_value) {
+      return std::vector<array>{out, state, *state_at_value};
+    }
     return std::vector<array>{out, state};
   };
 
@@ -1194,12 +1209,57 @@ std::vector<array> gated_delta_update(
     return fallback({q, k, v, g, beta, h0, mask});
   }
 
+  if (state_at &&
+      !GatedDeltaUpdate::supports_state_at(out_dtype, g.ndim() == 4, T, s)) {
+    // Run the two halves as separate calls so that each picks its own kernel.
+    int c = *state_at;
+    auto split_t = [&](const array& a, int start, int stop) {
+      Shape starts(a.ndim(), 0);
+      Shape stops = a.shape();
+      starts[1] = start;
+      stops[1] = stop;
+      return slice(a, std::move(starts), std::move(stops), s);
+    };
+    auto split_mask = [&](int start, int stop) -> std::optional<array> {
+      if (!mask_) {
+        return std::nullopt;
+      }
+      return split_t(*mask_, start, stop);
+    };
+    auto head = gated_delta_update(
+        split_t(queries, 0, c),
+        split_t(keys, 0, c),
+        split_t(values, 0, c),
+        split_t(gates, 0, c),
+        split_t(beta_, 0, c),
+        initial_state,
+        split_mask(0, c),
+        std::nullopt,
+        s);
+    auto tail = gated_delta_update(
+        split_t(queries, c, T),
+        split_t(keys, c, T),
+        split_t(values, c, T),
+        split_t(gates, c, T),
+        split_t(beta_, c, T),
+        head[1],
+        split_mask(c, T),
+        std::nullopt,
+        s);
+    return {concatenate({head[0], tail[0]}, 1, s), tail[1], head[1]};
+  }
+
+  std::vector<Shape> out_shapes = {{B, T, Hv, Dv}, {B, Hv, Dv, Dk}};
+  std::vector<Dtype> out_dtypes = {out_dtype, float32};
+  if (state_at) {
+    out_shapes.push_back({B, Hv, Dv, Dk});
+    out_dtypes.push_back(float32);
+  }
   return array::make_arrays(
-      /* output shapes */ {{B, T, Hv, Dv}, {B, Hv, Dv, Dk}},
-      /* dtypes */ {out_dtype, float32},
-      /* primitive */
-      std::make_shared<GatedDeltaUpdate>(s, fallback),
-      /* inputs */ {q, k, v, g, beta, h0});
+      std::move(out_shapes),
+      std::move(out_dtypes),
+      std::make_shared<GatedDeltaUpdate>(s, fallback, state_at),
+      {q, k, v, g, beta, h0});
 }
 
 std::vector<array> GatedDeltaUpdate::vjp(
@@ -1212,7 +1272,9 @@ std::vector<array> GatedDeltaUpdate::vjp(
   const int Hv = primals[2].shape(2);
   const int Dv = primals[2].shape(3);
 
-  if (GatedDeltaUpdateVJP::use_fallback(Hk, Dk, Hv, Dv, stream()) ||
+  // The fused vjp has no input for the state_at cotangent.
+  if (state_at_ ||
+      GatedDeltaUpdateVJP::use_fallback(Hk, Dk, Hv, Dv, stream()) ||
       config::get("MLX_GATED_DELTA_VJP_FALLBACK", 0)) {
     return Custom::vjp(primals, cotangents, argnums, outputs);
   }
