@@ -22,6 +22,7 @@ FFT
   irfftn
   stft
   istft
+  fftconvolve
   fftfreq
   rfftfreq
   fftshift
