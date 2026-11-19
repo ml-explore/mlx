@@ -388,6 +388,13 @@ swapaxes(const array& a, int axis1, int axis2, StreamOrDevice s = {});
 MLX_API array
 moveaxis(const array& a, int source, int destination, StreamOrDevice s = {});
 
+/** Move axes of an array. */
+MLX_API array moveaxis(
+    const array& a,
+    std::vector<int> source,
+    std::vector<int> destination,
+    StreamOrDevice s = {});
+
 /** Pad an array with a constant value */
 MLX_API array
 pad(const array& a,

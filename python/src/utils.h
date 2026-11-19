@@ -17,6 +17,7 @@ namespace mx = mlx::core;
 namespace nb = nanobind;
 
 using IntOrVec = std::variant<std::monostate, int, std::vector<int>>;
+using AxisOrAxes = std::variant<int, std::vector<int>>;
 using ScalarOrArray = std::variant<
     nb::bool_,
     nb::int_,

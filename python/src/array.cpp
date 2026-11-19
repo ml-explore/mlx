@@ -1239,7 +1239,23 @@ void init_array(nb::module_& m) {
           "See :func:`any`.")
       .def(
           "moveaxis",
-          &mx::moveaxis,
+          [](const mx::array& a,
+             const AxisOrAxes& source,
+             const AxisOrAxes& destination,
+             mx::StreamOrDevice s) {
+            if (auto source_axis = std::get_if<int>(&source)) {
+              if (auto destination_axis = std::get_if<int>(&destination)) {
+                return mx::moveaxis(a, *source_axis, *destination_axis, s);
+              }
+            }
+            auto to_axes = [](const AxisOrAxes& axes) {
+              if (auto axis = std::get_if<int>(&axes)) {
+                return std::vector<int>{*axis};
+              }
+              return std::get<std::vector<int>>(axes);
+            };
+            return mx::moveaxis(a, to_axes(source), to_axes(destination), s);
+          },
           "source"_a,
           "destination"_a,
           nb::kw_only(),

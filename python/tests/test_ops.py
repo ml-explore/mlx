@@ -820,9 +820,32 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertListEqual(mx.transpose(x, axes=(0, 2, 1)).tolist(), expected)
 
     def test_move_swap_axes(self):
-        x = mx.zeros((2, 3, 4))
+        x = mx.arange(24).reshape(2, 3, 4)
         self.assertEqual(mx.moveaxis(x, 0, 2).shape, (3, 4, 2))
         self.assertEqual(x.moveaxis(0, 2).shape, (3, 4, 2))
+        expected = mx.transpose(x)
+        self.assertTrue(mx.array_equal(mx.moveaxis(x, (0, 2), (2, 0)), expected))
+        self.assertTrue(mx.array_equal(x.moveaxis((-1, 0), (0, -1)), expected))
+        self.assertTrue(
+            mx.array_equal(mx.moveaxis(x, (0, 1), (1, 2)), mx.transpose(x, (2, 0, 1)))
+        )
+        self.assertTrue(mx.array_equal(mx.moveaxis(x, (), ()), x))
+        self.assertEqual(mx.moveaxis(mx.array(1), (), ()).shape, ())
+        self.assertTrue(mx.array_equal(mx.moveaxis(x, 0, (2,)), mx.moveaxis(x, 0, 2)))
+        empty = mx.zeros((0, 2, 3))
+        self.assertEqual(mx.moveaxis(empty, (0, 2), (2, 0)).shape, (3, 2, 0))
+        sliced = x[:, ::2, :]
+        self.assertTrue(
+            mx.array_equal(mx.moveaxis(sliced, (0, 2), (2, 0)), mx.transpose(sliced))
+        )
+        with self.assertRaises(ValueError):
+            mx.moveaxis(x, (0,), (0, 1))
+        with self.assertRaises(ValueError):
+            mx.moveaxis(x, (0, -3), (0, 1))
+        with self.assertRaises(ValueError):
+            mx.moveaxis(x, (0, 1), (0, -3))
+        with self.assertRaises(IndexError):
+            mx.moveaxis(x, (0, 1), (0, 3))
         self.assertEqual(mx.swapaxes(x, 0, 2).shape, (4, 3, 2))
         self.assertEqual(x.swapaxes(0, 2).shape, (4, 3, 2))
 

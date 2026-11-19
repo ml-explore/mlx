@@ -770,6 +770,22 @@ TEST_CASE("test swap and move axes") {
   CHECK_EQ(moveaxis(a, 0, 1).shape(), Shape{3, 2, 4});
   CHECK_EQ(moveaxis(a, 0, -1).shape(), Shape{3, 4, 2});
   CHECK_EQ(moveaxis(a, -2, 2).shape(), Shape{2, 4, 3});
+
+  auto x = reshape(arange(24), {2, 3, 4});
+  CHECK(array_equal(moveaxis(x, std::vector<int>{}, std::vector<int>{}), x)
+            .item<bool>());
+  CHECK_EQ(
+      moveaxis(array(1), std::vector<int>{}, std::vector<int>{}).shape(),
+      Shape{});
+  CHECK(array_equal(moveaxis(x, {0, 2}, {2, 0}), transpose(x)).item<bool>());
+  CHECK(array_equal(moveaxis(x, {-1, 0}, {0, -1}), transpose(x)).item<bool>());
+  CHECK(array_equal(moveaxis(x, {0, 1}, {1, 2}), transpose(x, {2, 0, 1}))
+            .item<bool>());
+  CHECK_THROWS(moveaxis(x, {0}, {0, 1}));
+  CHECK_THROWS(moveaxis(x, {0, -3}, {0, 1}));
+  CHECK_THROWS(moveaxis(x, {0, 1}, {0, -3}));
+  CHECK_THROWS(moveaxis(x, {0, 3}, {0, 1}));
+  CHECK_THROWS(moveaxis(x, {0, 1}, {0, 3}));
 }
 
 TEST_CASE("test transpose") {

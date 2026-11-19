@@ -2494,24 +2494,41 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "moveaxis",
-      &mx::moveaxis,
+      [](const mx::array& a,
+         const AxisOrAxes& source,
+         const AxisOrAxes& destination,
+         mx::StreamOrDevice s) {
+        if (auto source_axis = std::get_if<int>(&source)) {
+          if (auto destination_axis = std::get_if<int>(&destination)) {
+            return mx::moveaxis(a, *source_axis, *destination_axis, s);
+          }
+        }
+        auto to_axes = [](const AxisOrAxes& axes) {
+          if (auto axis = std::get_if<int>(&axes)) {
+            return std::vector<int>{*axis};
+          }
+          return std::get<std::vector<int>>(axes);
+        };
+        return mx::moveaxis(a, to_axes(source), to_axes(destination), s);
+      },
       nb::arg(),
       "source"_a,
       "destination"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def moveaxis(a: array, /, source: int, destination: int, *, stream: StreamOrDevice = None) -> array"),
+          "def moveaxis(a: array, /, source: int | Sequence[int], destination: int | Sequence[int], *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
-        Move an axis to a new position.
+        Move axes to new positions.
 
         Args:
             a (array): Input array.
-            source (int): Specifies the source axis.
-            destination (int): Specifies the destination axis.
+            source (int or sequence of ints): Specifies the source axes.
+            destination (int or sequence of ints): Specifies the destination
+              axes.
 
         Returns:
-            array: The array with the axis moved.
+            array: The array with the axes moved.
       )pbdoc");
   m.def(
       "swapaxes",

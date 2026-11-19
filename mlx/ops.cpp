@@ -1731,6 +1731,53 @@ array moveaxis(
   return transpose(a, reorder, s);
 }
 
+array moveaxis(
+    const array& a,
+    std::vector<int> source,
+    std::vector<int> destination,
+    StreamOrDevice s /* = {} */) {
+  if (source.size() != destination.size()) {
+    throw std::invalid_argument(
+        "[moveaxis] Source and destination must have the same number of axes.");
+  }
+
+  auto normalize_axes = [&a](std::vector<int>& axes, const char* name) {
+    std::set<int> unique_axes;
+    for (auto& axis : axes) {
+      axis = normalize_axis_index(axis, a.ndim(), "[moveaxis] ");
+      if (!unique_axes.insert(axis).second) {
+        std::ostringstream msg;
+        msg << "[moveaxis] " << name << " axes must be unique.";
+        throw std::invalid_argument(msg.str());
+      }
+    }
+    return unique_axes;
+  };
+
+  auto source_axes = normalize_axes(source, "Source");
+  normalize_axes(destination, "Destination");
+
+  const auto ndim = static_cast<int>(a.ndim());
+  std::vector<int> reorder;
+  reorder.reserve(ndim);
+  for (int axis = 0; axis < ndim; ++axis) {
+    if (!source_axes.count(axis)) {
+      reorder.push_back(axis);
+    }
+  }
+
+  std::vector<std::pair<int, int>> moves;
+  moves.reserve(source.size());
+  for (size_t i = 0; i < source.size(); ++i) {
+    moves.emplace_back(destination[i], source[i]);
+  }
+  std::sort(moves.begin(), moves.end());
+  for (auto [destination_axis, source_axis] : moves) {
+    reorder.insert(reorder.begin() + destination_axis, source_axis);
+  }
+  return transpose(a, std::move(reorder), s);
+}
+
 array swapaxes(
     const array& a,
     int axis1,

@@ -233,9 +233,6 @@ array_api_tests/test_manipulation_functions.py::test_reshape
 ## Other failures
 ### `repeats` only accepts int
 array_api_tests/test_manipulation_functions.py::test_repeat
-### `source` `destination` only accepts ints
-array_api_tests/test_manipulation_functions.py::test_moveaxis
-
 # test_data_type_functions.py
 ## Missing arguments
 ### Missing argument `copy`
