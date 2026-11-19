@@ -42,6 +42,17 @@ TEST_CASE("test simple allocations") {
   }
 }
 
+TEST_CASE("test size of a zero-sized allocation") {
+  auto buffer = allocator::allocator().malloc(0);
+  CHECK_EQ(allocator::allocator().size(buffer), 0);
+  allocator::allocator().free(buffer);
+
+  auto x = zeros({0});
+  auto y = remainder(x, array(2.0f));
+  eval(y);
+  CHECK_EQ(y.size(), 0);
+}
+
 TEST_CASE("test large allocations") {
   size_t size = 1 << 30;
   for (int i = 0; i < 100; ++i) {
