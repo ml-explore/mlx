@@ -263,29 +263,35 @@ __global__ void row_reduce_looped(
   }
 }
 
-// Second pass of a split row reduce. Each thread reduces the partial results
-// of one output.
+// Second pass of a split row reduce. Each warp reduces the partial results of
+// one output.
 template <typename U, typename A, typename Op>
 __global__ void
 row_reduce_combine(const A* partials, U* out, size_t n_out, int splits) {
-  size_t i = cg::this_grid().thread_rank();
+  auto warp = cg::tiled_partition<WARP_SIZE>(cg::this_thread_block());
+  size_t i = cg::this_grid().thread_rank() / WARP_SIZE;
   if (i >= n_out) {
     return;
   }
   Op op;
-  A total = partials[i];
-  for (int s = 1; s < splits; s++) {
+  A total = cast_to<A>(ReduceInit<Op, A>::value());
+  for (int s = warp.thread_rank(); s < splits; s += WARP_SIZE) {
     total = op(total, partials[s * n_out + i]);
   }
-  out[i] = cast_to<U>(total);
+  total = cg::reduce(warp, total, op);
+  if (warp.thread_rank() == 0) {
+    out[i] = cast_to<U>(total);
+  }
 }
 
 } // namespace cu
 
-// Split the looped row reduce when it uses fewer than SPLIT_TARGET_THREADS
-// threads, but keep at least SPLIT_MIN_ROWS rows per block.
+// Split the looped row reduce to reach SPLIT_TARGET_THREADS threads, with at
+// least SPLIT_MIN_ROWS rows per block. Fewer than SPLIT_MIN_SPLITS blocks per
+// output do not pay for the second pass.
 constexpr size_t SPLIT_TARGET_THREADS = 1 << 17;
 constexpr size_t SPLIT_MIN_ROWS = 16;
+constexpr size_t SPLIT_MIN_SPLITS = 4;
 
 void row_reduce_simple(
     cu::CommandEncoder& encoder,
@@ -373,14 +379,14 @@ void row_reduce_looped(
       int threads = warps * WARP_SIZE;
       dim3 block(threads, 1, 1);
 
-      // Split the rows of each output over more blocks if the grid is small
+      // Split the rows of each output over more blocks if the grid is small.
+      // LoopedElemToLoc takes the first row of a split as an int.
       args.n_out = out.size();
       size_t total_threads = args.n_out * threads;
-      if (total_threads < SPLIT_TARGET_THREADS &&
-          args.non_row_reductions >= 2 * SPLIT_MIN_ROWS) {
-        size_t splits = std::min(
-            (SPLIT_TARGET_THREADS + total_threads - 1) / total_threads,
-            args.non_row_reductions / SPLIT_MIN_ROWS);
+      size_t splits = std::min(
+          (SPLIT_TARGET_THREADS + total_threads - 1) / total_threads,
+          args.non_row_reductions / SPLIT_MIN_ROWS);
+      if (splits >= SPLIT_MIN_SPLITS && args.non_row_reductions <= INT32_MAX) {
         args.chunk = (args.non_row_reductions + splits - 1) / splits;
         args.splits = (args.non_row_reductions + args.chunk - 1) / args.chunk;
       }
@@ -424,7 +430,7 @@ void row_reduce_looped(
       encoder.set_output_array(out);
       encoder.add_kernel_node(
           cu::row_reduce_combine<U, A, OP>,
-          dim3((args.n_out + 255) / 256),
+          dim3((args.n_out * WARP_SIZE + 255) / 256),
           dim3(256),
           gpu_ptr<A>(partials),
           gpu_ptr<U>(out),

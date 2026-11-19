@@ -408,23 +408,44 @@ class TestReduce(mlx_tests.MLXTestCase):
 
     @unittest.skipIf(
         mx.metal.is_available(),
-        "Metal accumulates bfloat16 row reductions in bfloat16",
+        "Metal accumulates half precision row reductions in half precision",
     )
-    def test_bfloat16_row_reduce(self):
-        # Sums of many values into few outputs, like the gradient of a per
-        # channel scale. A bfloat16 accumulator loses precision on long sums.
+    def test_half_precision_row_reduce(self):
+        # Sums and products of many values into few outputs, like the gradient
+        # of a per channel scale. A half precision accumulator loses precision
+        # on long reductions.
+        dtypes = [(mx.bfloat16, 5e-3)]
+        if mx.default_device() == mx.gpu:
+            # The CPU accumulates float16 in float16
+            dtypes.append((mx.float16, 2e-3))
+
+        # Small values so that the float16 sums do not overflow
         for shape, axes in [
             ((2, 1 << 22), (1,)),
             ((1, 4096, 8, 1024), (0, 1, 3)),
             ((2, 512, 4, 256), (0, 1, 3)),
             ((64, 8, 4096), (0, 2)),
+            ((65, 3, 17), (0, 2)),
             ((8, 300, 6), (0, 2)),
         ]:
-            with self.subTest(shape=shape, axes=axes):
-                x = (mx.random.normal(shape) * 0.1 + 0.05).astype(mx.bfloat16)
-                expected = x.astype(mx.float32).sum(axis=axes)
-                out = x.sum(axis=axes).astype(mx.float32)
-                self.assertTrue(mx.allclose(out, expected, rtol=1e-2))
+            for dtype, rtol in dtypes:
+                with self.subTest(op="sum", shape=shape, axes=axes, dtype=dtype):
+                    x = (mx.random.normal(shape) * 0.01 + 0.005).astype(dtype)
+                    x_np = np.array(x.astype(mx.float32))
+                    expected = x_np.sum(axis=axes, dtype=np.float64)
+                    out = np.array(x.sum(axis=axes).astype(mx.float32))
+                    self.assertTrue(np.allclose(out, expected, rtol=rtol))
+
+        # 1 + 2**-7 times 1 - 2**-7 is 1 - 2**-14, which rounds to 1 in half
+        # precision. Each output is the product of 1 << 16 such pairs.
+        expected = (1 - 2**-14) ** (1 << 16)
+        for shape, axes in [((2, 1 << 17), (1,)), ((64, 4, 2048), (0, 2))]:
+            reps = (*shape[:-1], shape[-1] // 2)
+            for dtype, rtol in dtypes:
+                with self.subTest(op="prod", shape=shape, axes=axes, dtype=dtype):
+                    x = mx.tile(mx.array([1 + 2**-7, 1 - 2**-7], dtype), reps)
+                    out = np.array(x.prod(axis=axes).astype(mx.float32))
+                    self.assertTrue(np.allclose(out, expected, rtol=rtol))
 
 
 if __name__ == "__main__":
