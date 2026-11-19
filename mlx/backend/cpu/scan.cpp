@@ -229,7 +229,7 @@ void scan_dispatch(
       auto op = [](U y, T x) {
         if constexpr (is_floating_point_v<U>) {
           if (std::isnan(y) || std::isnan(static_cast<U>(x))) {
-            return std::numeric_limits<U>::quiet_NaN();
+            return static_cast<U>(std::numeric_limits<float>::quiet_NaN());
           }
         }
         return x < y ? x : y;
@@ -242,7 +242,7 @@ void scan_dispatch(
       auto op = [](U y, T x) {
         if constexpr (is_floating_point_v<U>) {
           if (std::isnan(y) || std::isnan(static_cast<U>(x))) {
-            return std::numeric_limits<U>::quiet_NaN();
+            return static_cast<U>(std::numeric_limits<float>::quiet_NaN());
           }
         }
         return x < y ? y : x;

@@ -2980,6 +2980,20 @@ class TestOps(mlx_tests.MLXTestCase):
                         msg=f"{op} reverse={reverse} inclusive={inclusive} "
                         f"arr={arr}\ngot={got}\nexp={expected}",
                     )
+                    for dtype in (mx.float16, mx.bfloat16):
+                        got = getattr(mx, op)(
+                            a_mx.astype(dtype), reverse=reverse, inclusive=inclusive
+                        )
+                        self.assertEqual(got.dtype, dtype)
+                        self.assertTrue(
+                            np.array_equal(
+                                np.array(got.astype(mx.float32)),
+                                expected,
+                                equal_nan=True,
+                            ),
+                            msg=f"{op} {dtype} reverse={reverse} "
+                            f"inclusive={inclusive} arr={arr}",
+                        )
 
     def test_diff(self):
         a = mx.array([1, 2, 4, 7, 0])
