@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <variant>
 
 #include "array.h"
@@ -260,6 +261,14 @@ MLX_API array istft(
     FFTNorm norm = FFTNorm::Backward,
     const std::optional<bool>& onesided = std::nullopt,
     const std::optional<int>& length = std::nullopt,
+    StreamOrDevice s = {});
+
+/** Convolve two arrays using the FFT. */
+MLX_API array fftconvolve(
+    const array& in1,
+    const array& in2,
+    const std::string& mode = "full",
+    const std::optional<std::vector<int>>& axes = std::nullopt,
     StreamOrDevice s = {});
 
 } // namespace mlx::core::fft

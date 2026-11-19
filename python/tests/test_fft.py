@@ -698,6 +698,136 @@ class TestFFT(mlx_tests.MLXTestCase):
         y = mx.fft.istft(z, hop_length=128, window=win_mx, norm="forward", length=16000)
         np.testing.assert_allclose(np.array(y)[1000:-1000], x[1000:-1000], atol=1e-4)
 
+    def test_fftconvolve(self):
+        def direct(a, b, mode, axes):
+            axes = [ax % a.ndim for ax in axes]
+            axes = [ax for ax in axes if a.shape[ax] != 1 and b.shape[ax] != 1]
+            shape = tuple(
+                a.shape[i] + b.shape[i] - 1
+                if i in axes
+                else max(a.shape[i], b.shape[i])
+                for i in range(a.ndim)
+            )
+            out = np.zeros(shape, dtype=np.result_type(a, b))
+            for ia in np.ndindex(a.shape):
+                for ib in np.ndindex(b.shape):
+                    if any(
+                        ia[i] != ib[i] and a.shape[i] != 1 and b.shape[i] != 1
+                        for i in range(a.ndim)
+                        if i not in axes
+                    ):
+                        continue
+                    index = tuple(
+                        ia[i] + ib[i] if i in axes else max(ia[i], ib[i])
+                        for i in range(a.ndim)
+                    )
+                    out[index] += a[ia] * b[ib]
+            if mode == "full":
+                return out
+            size = (
+                a.shape
+                if mode == "same"
+                else tuple(
+                    abs(a.shape[i] - b.shape[i]) + 1 if i in axes else shape[i]
+                    for i in range(a.ndim)
+                )
+            )
+            return out[
+                tuple(
+                    slice((n - k) // 2, (n - k) // 2 + k) for n, k in zip(shape, size)
+                )
+            ]
+
+        rng = np.random.default_rng(811)
+        cases = [
+            ((8,), (3,), [0]),
+            ((8,), (4,), [0]),
+            ((3,), (8,), [0]),
+            ((7,), (7,), [0]),
+            ((6, 5), (3, 2), [0, 1]),
+            ((2, 3), (5, 6), [1, 0]),
+            ((4, 3, 5), (2, 2, 2), [2, 0, 1]),
+            ((2, 6), (1, 3), [-1]),
+            ((1, 6), (3, 2), [1]),
+            ((1, 6), (3, 2), [0, 1]),
+            ((2, 1), (1, 3), [0, 1]),
+            ((1,), (4,), [0]),
+        ]
+        for complex_input, mode, (sa, sb, axes) in itertools.product(
+            (False, True), ("full", "same", "valid"), cases
+        ):
+            with self.subTest(complex=complex_input, mode=mode, shapes=(sa, sb)):
+                a, b = rng.normal(size=sa), rng.normal(size=sb)
+                if complex_input:
+                    a = a + 1j * rng.normal(size=sa)
+                    b = b + 1j * rng.normal(size=sb)
+                dtype = np.complex64 if complex_input else np.float32
+                a, b = a.astype(dtype), b.astype(dtype)
+                expected = direct(a, b, mode, axes)
+                out = mx.fft.fftconvolve(mx.array(a), mx.array(b), mode, axes)
+                self.assertEqual(out.shape, expected.shape)
+                self.assertEqual(
+                    out.dtype, mx.complex64 if complex_input else mx.float32
+                )
+                np.testing.assert_allclose(out, expected, atol=2e-5, rtol=2e-5)
+
+    def test_fftconvolve_dtypes_and_views(self):
+        for dtype in (
+            mx.bool_,
+            mx.int32,
+            mx.uint32,
+            mx.float16,
+            mx.bfloat16,
+            mx.float32,
+            mx.complex64,
+        ):
+            for sa, sb in (((3,), (2,)), ((3,), (1,)), ((0,), (2,))):
+                a, b = mx.ones(sa, dtype), mx.ones(sb, dtype)
+                out = mx.fft.fftconvolve(a, b)
+                self.assertEqual(
+                    out.dtype, mx.complex64 if dtype == mx.complex64 else mx.float32
+                )
+                expected = (
+                    np.convolve(np.ones(sa), np.ones(sb)) if sa[0] else np.array([])
+                )
+                np.testing.assert_allclose(out, expected, atol=1e-5)
+        a = mx.arange(30, dtype=mx.float32).reshape(5, 6).T[:, ::-2]
+        b = mx.array([[1.0], [-2.0], [0.5]])
+        out = mx.fft.fftconvolve(a, b, axes=0)
+        expected = np.stack(
+            [
+                np.convolve(np.array(a)[:, i], np.array(b)[:, 0])
+                for i in range(a.shape[1])
+            ],
+            axis=1,
+        )
+        np.testing.assert_allclose(out, expected, atol=1e-4)
+        self.assertEqual(mx.fft.fftconvolve(mx.array(2), mx.array(3)).item(), 6)
+        for mode in ("full", "same", "valid"):
+            self.assertEqual(
+                mx.fft.fftconvolve(mx.zeros((2, 0)), mx.ones((1, 3)), mode).shape, (0,)
+            )
+
+    def test_fftconvolve_errors(self):
+        a = mx.ones((3, 4))
+        for axes, error in (
+            ([], ValueError),
+            ([0, 0], ValueError),
+            ([0, -2], ValueError),
+            ([2], IndexError),
+            ([-3], IndexError),
+        ):
+            with self.subTest(axes=axes), self.assertRaises(error):
+                mx.fft.fftconvolve(a, a, axes=axes)
+        with self.assertRaises(ValueError):
+            mx.fft.fftconvolve(a, mx.ones(3))
+        with self.assertRaises(ValueError):
+            mx.fft.fftconvolve(a, a, "bogus")
+        with self.assertRaises(ValueError):
+            mx.fft.fftconvolve(a, mx.ones((4, 3)), "valid")
+        with self.assertRaises(ValueError):
+            mx.fft.fftconvolve(a, mx.ones((2, 4)), axes=1)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

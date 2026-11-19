@@ -754,4 +754,66 @@ void init_fft(nb::module_& parent_module) {
         Returns:
             array: The reconstructed signal.
       )pbdoc");
+
+  m.def(
+      "fftconvolve",
+      [](const mx::array& in1,
+         const mx::array& in2,
+         const std::string& mode,
+         const IntOrVec& axes,
+         mx::StreamOrDevice s) {
+        std::optional<std::vector<int>> axes_opt;
+        if (std::holds_alternative<std::monostate>(axes)) {
+          axes_opt = std::nullopt;
+        } else if (auto pv = std::get_if<int>(&axes); pv) {
+          axes_opt = std::vector<int>{*pv};
+        } else {
+          axes_opt = std::get<std::vector<int>>(axes);
+        }
+        return mx::fft::fftconvolve(in1, in2, mode, axes_opt, s);
+      },
+      "in1"_a,
+      "in2"_a,
+      "mode"_a = "full",
+      "axes"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Convolve two arrays using the Fast Fourier Transform.
+
+        Computes the discrete linear convolution of ``in1`` and ``in2`` via
+        FFTs with zero padding to the full convolution shape. Forward FFTs are
+        unscaled and inverse FFTs divide by the transform size. No extra scale
+        factor is applied. Large kernels can benefit from this method, while
+        small kernels or a small valid output can be faster with direct convolution.
+
+        Real array inputs produce float32 output, including integer and half
+        precision inputs. Complex inputs produce complex64 output. Integer
+        results can have roundoff error. Two scalar inputs use multiplication
+        with normal type promotion. If either array is empty, the result has
+        shape ``(0,)``. These rules follow the precision of MLX FFT primitives.
+
+        Args:
+            in1 (array): First input.
+            in2 (array): Second input. Must have the same number of dimensions
+               as ``in1``.
+            mode (str, optional): Size of the output:
+
+               * ``'full'``: the full discrete linear convolution (default).
+               * ``'same'``: the central part of the convolution with the same
+                 shape as ``in1``. The crop starts at
+                 ``(full_shape - in1.shape) // 2``.
+               * ``'valid'``: only elements that do not rely on zero-padding.
+                 One input must be at least as large as the other in every
+                 convolved dimension.
+
+            axes (int or list(int), optional): Axes over which to convolve.
+               The default is ``None``, which convolves over all axes. Axes of
+               length 1 are skipped and handled by broadcasting. Other axes
+               must have equal sizes or a size of 1. The output mode also
+               applies when all transform axes are skipped.
+
+        Returns:
+            array: The convolution of ``in1`` and ``in2``.
+      )pbdoc");
 }

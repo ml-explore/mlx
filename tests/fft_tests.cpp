@@ -462,3 +462,17 @@ TEST_CASE("test stft and istft") {
   CHECK_THROWS_AS(
       fft::stft(x, 16, 8, 16, win, true, "bogus"), std::invalid_argument);
 }
+
+TEST_CASE("test fftconvolve") {
+  auto a = array({1.0f, 2.0f, 3.0f});
+  auto b = array({0.0f, 1.0f, 0.5f});
+  auto y = fft::fftconvolve(a, b, "full");
+  auto expected = array({0.0f, 1.0f, 2.5f, 4.0f, 1.5f});
+  CHECK(allclose(y, expected, /*rtol=*/1e-5, /*atol=*/1e-5).item<bool>());
+
+  y = fft::fftconvolve(a, b, "same");
+  CHECK_EQ(y.shape(), a.shape());
+
+  CHECK_THROWS(fft::fftconvolve(a, b, "nope"));
+  CHECK_THROWS(fft::fftconvolve(reshape(a, {3, 1}), b, "full"));
+}
