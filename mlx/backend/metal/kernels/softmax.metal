@@ -10,10 +10,12 @@ using namespace metal;
 #include "mlx/backend/metal/kernels/softmax.h"
 
 #define instantiate_softmax(name, itype)                                \
+  instantiate_kernel("packed_softmax_" #name, softmax_packed, itype)    \
   instantiate_kernel("block_softmax_" #name, softmax_single_row, itype) \
   instantiate_kernel("looped_softmax_" #name, softmax_looped, itype)
 
 #define instantiate_softmax_precise(name, itype)                                       \
+  instantiate_kernel("packed_softmax_precise_" #name, softmax_packed, itype, float)    \
   instantiate_kernel("block_softmax_precise_" #name, softmax_single_row, itype, float) \
   instantiate_kernel("looped_softmax_precise_" #name, softmax_looped, itype, float)
 

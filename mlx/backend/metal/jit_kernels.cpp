@@ -342,6 +342,8 @@ MTL::ComputePipelineState* get_softmax_kernel(
     auto acc_type = get_type_string(precise ? float32 : out.dtype());
     kernel_source += metal::softmax();
     kernel_source += get_template_definition(
+        "packed_" + lib_name, "softmax_packed", in_type, acc_type);
+    kernel_source += get_template_definition(
         "block_" + lib_name, "softmax_single_row", in_type, acc_type);
     kernel_source += get_template_definition(
         "looped_" + lib_name, "softmax_looped", in_type, acc_type);
