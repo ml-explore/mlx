@@ -13,7 +13,7 @@ namespace cu {
 
 namespace cg = cooperative_groups;
 
-template <typename T, typename U, typename ReduceOp, int N = 4>
+template <typename T, typename U, typename A, typename ReduceOp, int N = 4>
 __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   // TODO: Process multiple "rows" in each thread
   constexpr int M = 1;
@@ -22,11 +22,11 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
 
-  const U init = cu::ReduceInit<ReduceOp, T>::value();
+  const A init = cast_to<A>(cu::ReduceInit<ReduceOp, T>::value());
   ReduceOp op;
 
   T vals[N];
-  U accs[M];
+  A accs[M];
   accs[0] = init;
 
   size_t start = grid.block_rank() * block_step;
@@ -37,7 +37,7 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   for (; i + block.size() * N <= check; i += block.size() * N) {
     cub::LoadDirectBlockedVectorized<T, N>(block.thread_rank(), in + i, vals);
     for (int j = 0; j < N; j++) {
-      accs[0] = op(accs[0], cast_to<U>(vals[j]));
+      accs[0] = op(accs[0], cast_to<A>(vals[j]));
     }
   }
 
@@ -45,15 +45,15 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
     cub::LoadDirectBlocked(
         block.thread_rank(), in + i, vals, check - i, cast_to<T>(init));
     for (int i = 0; i < N; i++) {
-      accs[0] = op(accs[0], cast_to<U>(vals[i]));
+      accs[0] = op(accs[0], cast_to<A>(vals[i]));
     }
   }
 
-  __shared__ U shared_accumulators[32];
+  __shared__ A shared_accumulators[32];
   block_reduce(block, warp, accs, shared_accumulators, op, init);
 
   if (block.thread_rank() == 0) {
-    out[grid.block_rank()] = accs[0];
+    out[grid.block_rank()] = cast_to<U>(accs[0]);
   }
 }
 
@@ -97,51 +97,59 @@ void all_reduce(
   int blocks, threads;
   size_t block_step;
   size_t insize = in.size();
-  Dtype dt = in.dtype();
-  void* indata = gpu_ptr<void>(in);
 
-  // Large array so allocate an intermediate and accumulate there
   std::tie(blocks, threads, block_step) = get_args(insize, N_READS);
   encoder.set_input_array(in);
-  if (blocks > 1) {
-    array intermediate({blocks}, out.dtype(), nullptr, {});
-    intermediate.set_data(cu::malloc_async(intermediate.nbytes(), encoder));
-    encoder.add_temporary(intermediate);
-    encoder.set_output_array(intermediate);
-    dispatch_all_types(dt, [&](auto type_tag) {
-      dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
-        using OP = MLX_GET_TYPE(reduce_type_tag);
-        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-        using U = typename cu::ReduceResult<OP, T>::type;
-        auto kernel = cu::all_reduce<T, U, OP, N_READS>;
-        encoder.add_kernel_node(
-            kernel,
-            blocks,
-            threads,
-            indata,
-            gpu_ptr<U>(intermediate),
-            block_step,
-            insize);
-      });
-    });
-
-    // Set the input for the next step and recalculate the blocks
-    indata = gpu_ptr<void>(intermediate);
-    dt = intermediate.dtype();
-    insize = intermediate.size();
-    std::tie(blocks, threads, block_step) = get_args(insize, N_READS);
-    encoder.set_input_array(intermediate);
-  }
-
-  encoder.set_output_array(out);
-  dispatch_all_types(dt, [&](auto type_tag) {
+  dispatch_all_types(in.dtype(), [&](auto type_tag) {
     dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
       using OP = MLX_GET_TYPE(reduce_type_tag);
       using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
       using U = typename cu::ReduceResult<OP, T>::type;
-      auto kernel = cu::all_reduce<T, U, OP, N_READS>;
+      using A = typename cu::ReduceAccum<OP, T>::type;
+
+      if (blocks == 1) {
+        encoder.set_output_array(out);
+        encoder.add_kernel_node(
+            cu::all_reduce<T, U, A, OP, N_READS>,
+            blocks,
+            threads,
+            gpu_ptr<T>(in),
+            gpu_ptr<U>(out),
+            block_step,
+            insize);
+        return;
+      }
+
+      // Large array so allocate an intermediate in the accumulator type and
+      // accumulate there
+      Dtype acc_dtype =
+          std::is_same_v<A, U> ? out.dtype() : static_cast<Dtype>(float32);
+      array intermediate({blocks}, acc_dtype, nullptr, {});
+      intermediate.set_data(cu::malloc_async(intermediate.nbytes(), encoder));
+      encoder.add_temporary(intermediate);
+      encoder.set_output_array(intermediate);
       encoder.add_kernel_node(
-          kernel, blocks, threads, indata, gpu_ptr<U>(out), block_step, insize);
+          cu::all_reduce<T, A, A, OP, N_READS>,
+          blocks,
+          threads,
+          gpu_ptr<T>(in),
+          gpu_ptr<A>(intermediate),
+          block_step,
+          insize);
+
+      // Reduce the intermediate into the output
+      insize = intermediate.size();
+      std::tie(blocks, threads, block_step) = get_args(insize, N_READS);
+      encoder.set_input_array(intermediate);
+      encoder.set_output_array(out);
+      encoder.add_kernel_node(
+          cu::all_reduce<A, U, A, OP, N_READS>,
+          blocks,
+          threads,
+          gpu_ptr<A>(intermediate),
+          gpu_ptr<U>(out),
+          block_step,
+          insize);
     });
   });
 }

@@ -86,17 +86,19 @@ struct ColReduceArgs {
 template <
     typename T,
     typename U,
+    typename A,
     typename Op,
     int NDIM,
     int BM,
     int BN,
     int N_READS = 4,
-    int BLOCKS = 1>
+    bool SPLIT = false>
 __global__ void col_reduce_looped(
     T* in,
     U* out,
     const __grid_constant__ ColReduceArgs args,
-    int64_t out_size) {
+    int64_t out_size,
+    size_t per_block) {
   auto grid = cg::this_grid();
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
@@ -120,19 +122,18 @@ __global__ void col_reduce_looped(
 
   // Initialize the running totals
   Op op;
-  U totals[N_READS];
+  A totals[N_READS];
   for (int i = 0; i < N_READS; i++) {
-    totals[i] = ReduceInit<Op, T>::value();
+    totals[i] = cast_to<A>(ReduceInit<Op, T>::value());
   }
 
+  // Compute the rows that this block reduces
   size_t total = args.non_col_reductions * args.reduction_size;
-  size_t per_block, start, end;
-  if constexpr (BLOCKS > 1) {
-    per_block = (total + BLOCKS - 1) / BLOCKS;
+  size_t start, end;
+  if constexpr (SPLIT) {
     start = tile_out * per_block + thread_y;
     end = min((tile_out + 1) * per_block, total);
   } else {
-    per_block = total;
     start = thread_y;
     end = total;
   }
@@ -145,7 +146,7 @@ __global__ void col_reduce_looped(
         T vals[N_READS];
         cub::LoadDirectBlockedVectorized(thread_x, in + loop.location(), vals);
         for (int i = 0; i < N_READS; i++) {
-          totals[i] = op(totals[i], cast_to<U>(vals[i]));
+          totals[i] = op(totals[i], cast_to<A>(vals[i]));
         }
         loop.next(BM, args.reduce_shape.data(), args.reduce_strides.data());
       }
@@ -154,7 +155,7 @@ __global__ void col_reduce_looped(
         T vals[N_READS];
         cub::LoadDirectBlocked(thread_x, in + loop.location(), vals);
         for (int i = 0; i < N_READS; i++) {
-          totals[i] = op(totals[i], cast_to<U>(vals[i]));
+          totals[i] = op(totals[i], cast_to<A>(vals[i]));
         }
         loop.next(BM, args.reduce_shape.data(), args.reduce_strides.data());
       }
@@ -169,7 +170,7 @@ __global__ void col_reduce_looped(
           args.reduction_stride - tile_x * BN,
           cast_to<T>(ReduceInit<Op, T>::value()));
       for (int i = 0; i < N_READS; i++) {
-        totals[i] = op(totals[i], cast_to<U>(vals[i]));
+        totals[i] = op(totals[i], cast_to<A>(vals[i]));
       }
       loop.next(BM, args.reduce_shape.data(), args.reduce_strides.data());
     }
@@ -178,7 +179,7 @@ __global__ void col_reduce_looped(
   // Do warp reduce for each output.
   constexpr int n_outputs = BN / threads_per_row;
   static_assert(BM == 32 && n_outputs == N_READS);
-  __shared__ U shared_vals[BM * BN];
+  __shared__ A shared_vals[BM * BN];
   short s_idx = thread_y * BN + thread_x * N_READS;
   for (int i = 0; i < N_READS; i++) {
     shared_vals[s_idx + i] = totals[i];
@@ -191,18 +192,22 @@ __global__ void col_reduce_looped(
 
   // Write result.
   if (warp.thread_rank() == 0) {
-    if (BLOCKS > 1) {
+    U results[n_outputs];
+    for (int i = 0; i < n_outputs; i++) {
+      results[i] = cast_to<U>(totals[i]);
+    }
+    if constexpr (SPLIT) {
       out += tile_out * out_size * args.reduction_stride;
     }
     cub::StoreDirectBlocked(
         warp.meta_group_rank(),
         out + tile_y * args.reduction_stride + tile_x * BN,
-        totals,
+        results,
         args.reduction_stride - tile_x * BN);
   }
 }
 
-template <typename T, typename U, typename Op, int N_READS = 4>
+template <typename T, typename U, typename A, typename Op, int N_READS = 4>
 __global__ void col_reduce_small(
     const T* in,
     U* out,
@@ -225,25 +230,34 @@ __global__ void col_reduce_small(
   in += offset;
   out += idx;
 
-  AlignedVector<U, N_READS> accumulator;
+  AlignedVector<A, N_READS> accumulator;
   for (int i = 0; i < N_READS; i++) {
-    accumulator[i] = ReduceInit<Op, T>::value();
+    accumulator[i] = cast_to<A>(ReduceInit<Op, T>::value());
   }
 
   for (int i = 0; i < args.reduction_size; i++) {
     auto values = load_vector<N_READS>(in, 0);
 
     for (int j = 0; j < N_READS; j++) {
-      accumulator[j] = op(accumulator[j], cast_to<U>(values[j]));
+      accumulator[j] = op(accumulator[j], cast_to<A>(values[j]));
     }
 
     in += args.reduction_stride;
   }
 
-  store_vector(out, 0, accumulator);
+  AlignedVector<U, N_READS> results;
+  for (int i = 0; i < N_READS; i++) {
+    results[i] = cast_to<U>(accumulator[i]);
+  }
+  store_vector(out, 0, results);
 }
 
 } // namespace cu
+
+// Split the column reduce when it uses fewer than SPLIT_TARGET_THREADS
+// threads, but keep at least SPLIT_MIN_ROWS rows per block.
+constexpr size_t SPLIT_TARGET_THREADS = 1 << 16;
+constexpr size_t SPLIT_MIN_ROWS = 128;
 
 inline auto output_grid_for_col_reduce(
     const array& out,
@@ -282,6 +296,7 @@ void col_reduce_looped(
         using OP = MLX_GET_TYPE(reduce_type_tag);
         using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
         using U = typename cu::ReduceResult<OP, T>::type;
+        using A = typename cu::ReduceAccum<OP, T>::type;
 
         constexpr int N_READS = 4;
         constexpr int BM = 32;
@@ -289,7 +304,7 @@ void col_reduce_looped(
         dim3 grid = output_grid_for_col_reduce(out, args, BN);
         int blocks = BM * BN / N_READS;
         auto kernel =
-            cu::col_reduce_looped<T, U, OP, reduce_ndim(), BM, BN, N_READS>;
+            cu::col_reduce_looped<T, U, A, OP, reduce_ndim(), BM, BN, N_READS>;
         encoder.add_kernel_node(
             kernel,
             grid,
@@ -297,7 +312,8 @@ void col_reduce_looped(
             gpu_ptr<T>(in),
             gpu_ptr<U>(out),
             static_cast<cu::ColReduceArgs>(args),
-            out.size() / args.reduction_stride);
+            out.size() / args.reduction_stride,
+            args.non_col_reductions * args.reduction_size);
       });
     });
   });
@@ -322,11 +338,12 @@ void col_reduce_small(
       using OP = MLX_GET_TYPE(reduce_type_tag);
       using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
       using U = typename cu::ReduceResult<OP, T>::type;
+      using A = typename cu::ReduceAccum<OP, T>::type;
 
       constexpr int N_READS = 16 / sizeof(T);
       auto tmp_grid = get_2d_grid_dims(out.shape(), out.strides());
       auto [grid, block] = get_grid_and_block(tmp_grid.x, tmp_grid.y, 1);
-      auto kernel = cu::col_reduce_small<T, U, OP, N_READS>;
+      auto kernel = cu::col_reduce_small<T, U, A, OP, N_READS>;
       encoder.add_kernel_node(
           kernel,
           grid,
@@ -346,14 +363,13 @@ void col_reduce_two_pass(
     Reduce::ReduceType reduce_type,
     const std::vector<int>& axes,
     const ReductionPlan& plan,
-    const cu::ColReduceArgs& args) {
+    const cu::ColReduceArgs& args,
+    int outer) {
   // Allocate data for the output using in's layout to access them as
   // contiguously as possible.
   allocate_same_layout(out, in, axes, encoder);
 
   // Allocate an intermediate array to hold the 1st pass result
-  constexpr int outer = 32;
-
   Shape intermediate_shape;
   intermediate_shape.push_back(outer);
   intermediate_shape.insert(
@@ -363,48 +379,6 @@ void col_reduce_two_pass(
   intermediate_strides.push_back(out.size());
   intermediate_strides.insert(
       intermediate_strides.end(), out.strides().begin(), out.strides().end());
-
-  array intermediate(intermediate_shape, out.dtype(), nullptr, {});
-  auto [data_size, rc, cc] =
-      check_contiguity(intermediate_shape, intermediate_strides);
-  auto fl = out.flags();
-  fl.row_contiguous = rc;
-  fl.col_contiguous = cc;
-  fl.contiguous = true;
-  intermediate.set_data(
-      cu::malloc_async(intermediate.nbytes(), encoder),
-      data_size,
-      intermediate_strides,
-      fl);
-
-  encoder.add_temporary(intermediate);
-  encoder.set_input_array(in);
-  encoder.set_output_array(intermediate);
-  dispatch_all_types(in.dtype(), [&](auto type_tag) {
-    dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
-      dispatch_reduce_ndim(args.reduce_ndim, [&](auto reduce_ndim) {
-        using OP = MLX_GET_TYPE(reduce_type_tag);
-        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-        using U = typename cu::ReduceResult<OP, T>::type;
-
-        constexpr int N_READS = 4;
-        constexpr int BM = 32;
-        constexpr int BN = 32;
-        dim3 grid = output_grid_for_col_reduce(out, args, BN, outer);
-        int blocks = BM * BN / N_READS;
-        auto kernel = cu::
-            col_reduce_looped<T, U, OP, reduce_ndim(), BM, BN, N_READS, outer>;
-        encoder.add_kernel_node(
-            kernel,
-            grid,
-            blocks,
-            gpu_ptr<T>(in),
-            gpu_ptr<U>(intermediate),
-            static_cast<cu::ColReduceArgs>(args),
-            out.size() / args.reduction_stride);
-      });
-    });
-  });
 
   // Prepare the reduction arguments for the 2nd pass
   cu::ColReduceArgs second_args = args;
@@ -416,31 +390,74 @@ void col_reduce_two_pass(
   second_args.reduce_ndim = 1;
   second_args.non_col_reductions = 1;
 
-  encoder.set_input_array(intermediate);
-  encoder.set_output_array(out);
-  dispatch_all_types(intermediate.dtype(), [&](auto type_tag) {
+  dispatch_all_types(in.dtype(), [&](auto type_tag) {
     dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
-      dispatch_reduce_ndim(second_args.reduce_ndim, [&](auto reduce_ndim) {
-        using OP = MLX_GET_TYPE(reduce_type_tag);
-        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-        using U = typename cu::ReduceResult<OP, T>::type;
+      using OP = MLX_GET_TYPE(reduce_type_tag);
+      using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+      using U = typename cu::ReduceResult<OP, T>::type;
+      using A = typename cu::ReduceAccum<OP, T>::type;
 
-        constexpr int N_READS = 4;
-        constexpr int BM = 32;
-        constexpr int BN = 32;
-        dim3 grid = output_grid_for_col_reduce(out, second_args, BN);
-        int blocks = BM * BN / N_READS;
-        auto kernel =
-            cu::col_reduce_looped<T, U, OP, reduce_ndim(), BM, BN, N_READS>;
+      constexpr int N_READS = 4;
+      constexpr int BM = 32;
+      constexpr int BN = 32;
+      int blocks = BM * BN / N_READS;
+
+      // Allocate the intermediate in the accumulator type
+      Dtype acc_dtype =
+          std::is_same_v<A, U> ? out.dtype() : static_cast<Dtype>(float32);
+      array intermediate(intermediate_shape, acc_dtype, nullptr, {});
+      auto [data_size, rc, cc] =
+          check_contiguity(intermediate_shape, intermediate_strides);
+      auto fl = out.flags();
+      fl.row_contiguous = rc;
+      fl.col_contiguous = cc;
+      fl.contiguous = true;
+      intermediate.set_data(
+          cu::malloc_async(intermediate.nbytes(), encoder),
+          data_size,
+          intermediate_strides,
+          fl);
+
+      encoder.add_temporary(intermediate);
+      encoder.set_input_array(in);
+      encoder.set_output_array(intermediate);
+      dispatch_reduce_ndim(args.reduce_ndim, [&](auto reduce_ndim) {
+        dim3 grid = output_grid_for_col_reduce(out, args, BN, outer);
+        auto kernel = cu::col_reduce_looped<
+            T,
+            A,
+            A,
+            OP,
+            reduce_ndim(),
+            BM,
+            BN,
+            N_READS,
+            true>;
         encoder.add_kernel_node(
             kernel,
             grid,
             blocks,
-            gpu_ptr<T>(intermediate),
-            gpu_ptr<U>(out),
-            second_args,
-            second_args.reduction_stride);
+            gpu_ptr<T>(in),
+            gpu_ptr<A>(intermediate),
+            static_cast<cu::ColReduceArgs>(args),
+            out.size() / args.reduction_stride,
+            cuda::ceil_div(
+                args.non_col_reductions * args.reduction_size, outer));
       });
+
+      encoder.set_input_array(intermediate);
+      encoder.set_output_array(out);
+      dim3 grid = output_grid_for_col_reduce(out, second_args, BN);
+      auto kernel = cu::col_reduce_looped<A, U, A, OP, 1, BM, BN, N_READS>;
+      encoder.add_kernel_node(
+          kernel,
+          grid,
+          blocks,
+          gpu_ptr<A>(intermediate),
+          gpu_ptr<U>(out),
+          second_args,
+          second_args.reduction_stride,
+          static_cast<size_t>(outer));
     });
   });
 }
@@ -466,10 +483,10 @@ void col_reduce(
   //
   // - col_reduce_two_pass
   //
-  //  It is a reduce for long columns. To increase parallelism, we split the
-  //  reduction in two passes. First we do a column reduce where many
-  //  threadblocks operate on different parts of the reduced axis. Then we
-  //  perform a final column reduce.
+  //  It is a reduce for long columns, and for half precision sums with few
+  //  tiles. To increase parallelism, we split the reduction in two passes.
+  //  First we do a column reduce where many threadblocks operate on different
+  //  parts of the reduced axis. Then we perform a final column reduce.
   //
   // Notes: As in row reduce we opt to read as much in order as possible and
   //        leave transpositions as they are (contrary to our Metal backend).
@@ -486,11 +503,26 @@ void col_reduce(
     return;
   }
 
-  // Long column with smallish row
+  // For long columns, and for half precision sums with few tiles, we split the
+  // rows of each tile over more blocks and reduce the partial results in a
+  // second pass.
+  size_t tiles = cuda::ceil_div(args.reduction_stride, 32) *
+      (out.size() / args.reduction_stride);
+  size_t threads = tiles * 256;
   size_t total_sums = args.non_col_reductions * args.reduction_size;
-  size_t approx_threads = out.size();
-  if (total_sums / approx_threads > 32) {
-    col_reduce_two_pass(encoder, in, out, reduce_type, axes, plan, args);
+  bool widened = (reduce_type == Reduce::Sum || reduce_type == Reduce::Prod) &&
+      (in.dtype() == float16 || in.dtype() == bfloat16);
+  size_t outer = (total_sums / out.size() > 32) ? 32 : 1;
+  if (threads < SPLIT_TARGET_THREADS &&
+      (outer > 1 || (widened && total_sums >= 64 * SPLIT_MIN_ROWS))) {
+    outer = std::max(
+        outer,
+        std::min(
+            (SPLIT_TARGET_THREADS + threads - 1) / threads,
+            total_sums / SPLIT_MIN_ROWS));
+  }
+  if (outer > 1) {
+    col_reduce_two_pass(encoder, in, out, reduce_type, axes, plan, args, outer);
     return;
   }
 

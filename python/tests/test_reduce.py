@@ -447,6 +447,27 @@ class TestReduce(mlx_tests.MLXTestCase):
                     out = np.array(x.prod(axis=axes).astype(mx.float32))
                     self.assertTrue(np.allclose(out, expected, rtol=rtol))
 
+    def test_half_precision_col_and_all_reduce(self):
+        # Column and full sums of many values. A half precision accumulator
+        # loses precision on long sums.
+        dtypes = [(mx.bfloat16, 5e-3)]
+        if mx.default_device() == mx.gpu:
+            # The CPU accumulates float16 in float16
+            dtypes.append((mx.float16, 2e-3))
+        for shape, axes in [
+            ((1, 4096, 8, 1024), (0, 1)),
+            ((8192, 512), (0,)),
+            ((1 << 20, 8), (0,)),
+            ((3000,), (0,)),
+            ((1000, 1000), (0, 1)),
+        ]:
+            for dtype, rtol in dtypes:
+                with self.subTest(shape=shape, axes=axes, dtype=dtype):
+                    x = (mx.random.normal(shape) * 0.1 + 0.05).astype(dtype)
+                    expected = x.astype(mx.float32).sum(axis=axes)
+                    out = x.sum(axis=axes).astype(mx.float32)
+                    self.assertTrue(mx.allclose(out, expected, rtol=rtol))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)
