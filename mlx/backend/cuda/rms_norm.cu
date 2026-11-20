@@ -544,6 +544,11 @@ void RMSNorm::eval_gpu(
   auto& out = outputs[0];
   auto& encoder = cu::get_command_encoder(s);
 
+  if (out.size() == 0) {
+    out.set_data(cu::malloc_async(0, encoder));
+    return;
+  }
+
   // Make sure that the last dimension is contiguous.
   auto set_output = [&s, &out, &encoder](const array& x) {
     bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
@@ -676,6 +681,16 @@ void RMSNormVJP::eval_gpu(
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
+  // Return 0s if the input is empty
+  if (inputs[0].size() == 0) {
+    array zero(0, outputs[0].dtype());
+    for (auto& out : outputs) {
+      fill_gpu(zero, out, s);
+    }
+    encoder.add_temporary(std::move(zero));
+    return;
+  }
+
   // Ensure row contiguity. We could relax this step by checking that the array
   // is contiguous (no broadcasts or holes) and that the input strides are the
   // same as the cotangent strides but for now this is simpler.
@@ -714,6 +729,9 @@ void RMSNormVJP::eval_gpu(
   }
   if (g_copied && !g_in_gx) {
     encoder.add_temporary(g);
+  }
+  if (!has_w) {
+    gw.set_data(cu::malloc_async(gw.nbytes(), encoder));
   }
 
   int32_t axis_size = x.shape().back();

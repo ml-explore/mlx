@@ -242,6 +242,12 @@ void quantize_impl(
     Stream s) {
   auto& w_pre = inputs[0];
   auto& out = outputs[0];
+  if (w_pre.size() == 0) {
+    for (auto& o : outputs) {
+      o.set_data(allocator::malloc(o.nbytes()));
+    }
+    return;
+  }
   out.set_data(allocator::malloc(out.nbytes()));
 
   auto& d = metal::device(s.device);
@@ -2274,7 +2280,18 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
+  // Return 0s if x is empty
+  if (inputs[0].size() == 0) {
+    array zero = array(0, out.dtype());
+    fill_gpu(zero, out, s);
+    metal::get_command_encoder(s).add_temporary(std::move(zero));
+    return;
+  }
+
   out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
 
   // Make sure the last two dims of x and w, s, b are contiguous. This should
   // be relaxed for x.
@@ -2362,7 +2379,18 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
+  // Return 0s if x is empty
+  if (inputs[0].size() == 0) {
+    array zero = array(0, out.dtype());
+    fill_gpu(zero, out, s);
+    metal::get_command_encoder(s).add_temporary(std::move(zero));
+    return;
+  }
+
   out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
 
   array x = ensure_row_contiguous_matrix(inputs[0], d, s);
   array w = ensure_row_contiguous_matrix(inputs[1], d, s);
@@ -2483,6 +2511,9 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto mode = quantization_mode_to_string(mode_);
 
   out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
 
   // - 2 inputs: x, w (non-quantized w)
   // - 3 inputs: x, w, scales_w (quantized w)
@@ -2583,6 +2614,9 @@ void GatherQQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto mode = quantization_mode_to_string(mode_);
 
   out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
 
   // - 4 inputs: x, w (non-quantized w)
   // - 5 inputs: x, w, scales_w (quantized w)

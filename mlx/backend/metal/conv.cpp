@@ -1752,6 +1752,19 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
   const array& in = inputs[0];
   const array& wt = inputs[1];
 
+  if (out.size() == 0) {
+    out.set_data(allocator::malloc(0));
+    return;
+  }
+
+  // Return 0s if either input is empty
+  if (in.size() == 0 || wt.size() == 0) {
+    array zero = array(0, out.dtype());
+    fill_gpu(zero, out, s);
+    metal::get_command_encoder(s).add_temporary(std::move(zero));
+    return;
+  }
+
   // 3D conv
   if (out.ndim() == 5) {
     conv_3D_gpu(

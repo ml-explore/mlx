@@ -224,6 +224,11 @@ inline bool is_donatable(const array& in, const array& out) {
 
 std::pair<bool, Strides> prepare_reshape(const array& in, const array& out);
 
+// Throw if a primitive did not set the data of each output.
+void check_outputs_have_data(
+    const char* primitive_name,
+    const std::vector<array>& outputs);
+
 void shared_buffer_reshape(
     const array& in,
     const Strides& out_strides,

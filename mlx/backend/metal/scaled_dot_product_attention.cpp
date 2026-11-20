@@ -1754,6 +1754,13 @@ void ScaledDotProductAttention::eval_gpu(
   auto& v_pre = inputs[2];
   auto& o = outputs[0];
 
+  if (o.size() == 0) {
+    for (auto& out : outputs) {
+      out.set_data(allocator::malloc(out.nbytes()));
+    }
+    return;
+  }
+
   std::vector<array> copies;
   // Define some copy functions to ensure the layout of the inputs is as
   // expected.
@@ -1957,6 +1964,16 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   if (has_sinks_) {
     throw std::runtime_error(
         "[ScaledDotProductAttentionVJP] NYI: attention sinks");
+  }
+
+  // Return 0s if q or k is empty
+  if (inputs[0].size() == 0 || inputs[1].size() == 0) {
+    array zero(0, outputs[0].dtype());
+    for (auto& out : outputs) {
+      fill_gpu(zero, out, s);
+    }
+    metal::get_command_encoder(s).add_temporary(std::move(zero));
+    return;
   }
 
   auto q = ensure_row_contiguous(inputs[0], d, s);

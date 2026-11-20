@@ -651,7 +651,7 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       ? CopyType::Scalar
       : (dst.flags().row_contiguous ? CopyType::Vector : CopyType::General);
   copy_gpu(dst, out, ct, s);
-  if (total == 0) {
+  if (total == 0 || src.size() == 0) {
     return;
   }
 

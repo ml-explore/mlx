@@ -627,6 +627,14 @@ void ScaledDotProductAttention::eval_gpu(
 
   auto& s = stream();
 
+  if (outputs[0].size() == 0) {
+    auto& encoder = cu::get_command_encoder(s);
+    for (auto& out : outputs) {
+      out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    }
+    return;
+  }
+
   array q = prepare_sdpa_input(inputs[0], s);
   array k = prepare_sdpa_input(inputs[1], s);
   array v = prepare_sdpa_input(inputs[2], s);
@@ -683,6 +691,16 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   nvtx3::scoped_range r("ScaledDotProductAttentionVJP::eval_gpu");
 
   auto& s = stream();
+
+  // Return 0s if q or k is empty
+  if (inputs[0].size() == 0 || inputs[1].size() == 0) {
+    array zero(0, outputs[0].dtype());
+    for (auto& out : outputs) {
+      fill_gpu(zero, out, s);
+    }
+    cu::get_command_encoder(s).add_temporary(std::move(zero));
+    return;
+  }
 
   assert(inputs.size() >= 6);
   int primals_size = inputs.size() - 3;

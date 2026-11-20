@@ -1,9 +1,12 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <dlfcn.h>
+#include <cstring>
 #include <numeric>
+#include <sstream>
 
 #include "mlx/backend/common/utils.h"
+#include "mlx/utils.h"
 
 namespace mlx::core {
 
@@ -250,6 +253,23 @@ std::pair<Dims, Dims> get_grid_and_block_common(int dim0, int dim1, int dim2) {
 
   return std::make_pair(
       std::make_tuple(gx, gy, gz), std::make_tuple(bx, by, bz));
+}
+
+void check_outputs_have_data(
+    const char* primitive_name,
+    const std::vector<array>& outputs) {
+  // The eval synchronizer has no output data.
+  if (std::strcmp(primitive_name, "Synchronize") == 0) {
+    return;
+  }
+  for (auto& out : outputs) {
+    if (!out.data_shared_ptr()) {
+      std::ostringstream msg;
+      msg << "[" << primitive_name << "] Output with shape " << out.shape()
+          << " has no data after eval.";
+      throw std::runtime_error(msg.str());
+    }
+  }
 }
 
 } // namespace mlx::core
