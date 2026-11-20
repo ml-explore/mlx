@@ -556,6 +556,43 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 tol = 1e-3 if dtype == mx.float32 else 1.5e-3
                 self.assertLess((y_q - y_hat).abs().max(), tol)
 
+    @unittest.skipIf(not mx.cuda.is_available(), "requires CUDA")
+    def test_gather_qmm_n64_cuda_short_k(self):
+        n = 64
+        tile_k = 64
+        factors = [0.5, 1.0, 2.0, 4.0]
+        scale_values = mx.array([48, 56, 64, 72], mx.uint8)
+        for dtype, tiles, layout in product(
+            (mx.float16, mx.bfloat16), (1, 2, 3, 4), ("balanced", "skew")
+        ):
+            with self.subTest(dtype=dtype, tiles=tiles, layout=layout):
+                k = tiles * tile_k
+                indices = [0] * 256 + [1] * 256 + [2] * 256 + [3] * 257
+                if layout == "skew":
+                    indices = [0] * 1022 + [1, 2, 3]
+                rows = len(indices)
+                row_factors = ((mx.arange(rows) % 2) + 1).astype(dtype)
+                columns = ((mx.arange(k) // tile_k) + 1).astype(dtype)
+                x = mx.contiguous(row_factors[:, None] * columns[None, :])
+                x = x.reshape(rows, 1, k)
+                w = mx.full((4, n, k // 8), 0x22222222, mx.uint32)
+                scales = mx.contiguous(
+                    mx.broadcast_to(scale_values.reshape((-1, 1, 1)), (4, n, k // 16))
+                )
+                rhs = mx.array(indices, mx.uint32)
+                bank_factors = mx.array([factors[i] for i in indices], dtype)
+                expected = row_factors * bank_factors
+                expected *= tile_k * tiles * (tiles + 1) // 2
+                mx.eval(x, w, scales, rhs)
+                actual = mx.gather_qmm(
+                    x, w, scales, rhs_indices=rhs, sorted_indices=True, mode="nvfp4"
+                )
+                self.assertTrue(
+                    mx.array_equal(
+                        actual, mx.broadcast_to(expected[:, None, None], (rows, 1, n))
+                    )
+                )
+
     def test_qmm_large_dims(self):
         # Regression test for an int16 overflow in the NAX qmm kernels:
         # the per-simdgroup edge sizes were computed as
@@ -2704,6 +2741,158 @@ class TestQuantized(mlx_tests.MLXTestCase):
         expected = mx.gather_qmm(x, qw, scales, sorted_indices=False, **kwargs)
         actual = mx.gather_qmm(x, qw, scales, sorted_indices=True, **kwargs)
         self.assertLess(mx.max(mx.abs(expected - actual)).item(), 1e-3)
+
+    @unittest.skipIf(
+        not mx.cuda.is_available() or mx.default_device() != mx.gpu,
+        "CUDA kernel path only",
+    )
+    def test_gather_qmm_n64_cuda(self):
+        mx.random.seed(0)
+        shapes = [
+            (rows, 8, 704, 256)
+            for rows in (127, 128, 129, 135, 136, 137, 255, 256, 257, 263, 264, 265)
+        ]
+        shapes += [(1023, 4, 64, 256), (1024, 4, 64, 256)]
+        shapes += [(65, 4, 1856, 2688), (65, 4, 2112, 256), (128, 4, 704, 160)]
+        shapes += [(16, 4, n, 256) for n in (63, 64, 65, 128, 256)]
+        for dtype in (mx.float16, mx.bfloat16):
+            for rows, experts, n, k in shapes:
+                with self.subTest(dtype=dtype, rows=rows, experts=experts, n=n, k=k):
+                    x = (mx.random.normal((rows, 1, k)) / k**0.5).astype(dtype)
+                    w = mx.random.normal((experts, n, k)).astype(dtype)
+                    wq = mx.quantize(w, mode="nvfp4")
+                    indices = (mx.arange(rows) * experts // rows).astype(mx.uint32)
+                    kwargs = dict(mode="nvfp4", rhs_indices=indices)
+                    expected = mx.gather_qmm(x, *wq, sorted_indices=False, **kwargs)
+                    mx.eval(expected)
+                    actual = mx.gather_qmm(x, *wq, sorted_indices=True, **kwargs)
+                    mx.eval(actual)
+                    self.assertEqual(actual.shape, (rows, 1, n))
+                    self.assertTrue(mx.allclose(actual, expected, atol=2e-2, rtol=2e-2))
+
+    @unittest.skipIf(
+        not mx.cuda.is_available() or mx.default_device() != mx.gpu,
+        "CUDA kernel path only",
+    )
+    def test_gather_qmm_n64_cuda_expert_tiles(self):
+        codes = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15]
+        values_by_code = [0.5, 1, 1.5, 2, 3, 4, 6, -0.5, -1, -1.5, -2, -3, -4, -6]
+        layouts = [
+            [16] * 8,
+            [121] + [1] * 7,
+            [122] + [1] * 7,
+            [130] + [1] * 7,
+            [258] + [1] * 7,
+            [0, 31, 0, 1, 0, 95, 1, 0],
+            [0, 0, 0, 137, 0, 0, 0, 0],
+            [1] + [0] * 31 + [528],
+            [0, 1, 0, 1, 0, 1, 0, 1],
+        ]
+        cases = [(n, counts) for n in (64, 704) for counts in layouts]
+        cases += [
+            (64, [0] * 256 + [4113]),
+            (64, [4113] + [0] * 255 + [16]),
+            (64, [0] * 4096 + [65553]),
+        ]
+        for dtype, (n, counts) in product((mx.float16, mx.bfloat16), cases):
+            with self.subTest(dtype=dtype, n=n, counts=len(counts)):
+                experts = len(counts)
+                indices = [e for e, count in enumerate(counts) for _ in range(count)]
+                rows = len(indices)
+                values = [1 + r % 7 for r in range(rows)]
+                x = mx.broadcast_to(
+                    mx.array(values, dtype)[:, None, None], (rows, 1, 192)
+                )
+                packed = [codes[e % len(codes)] * 0x11111111 for e in range(experts)]
+                w = mx.broadcast_to(
+                    mx.array(packed, mx.uint32)[:, None, None], (experts, n, 24)
+                )
+                scales = mx.full((experts, n, 12), 56, mx.uint8)
+                expected = mx.array(
+                    [
+                        192 * v * values_by_code[e % len(codes)]
+                        for v, e in zip(values, indices)
+                    ],
+                    dtype,
+                )[:, None, None]
+                actual = mx.gather_qmm(
+                    mx.contiguous(x),
+                    mx.contiguous(w),
+                    scales,
+                    rhs_indices=mx.array(indices, mx.uint32),
+                    sorted_indices=True,
+                    mode="nvfp4",
+                )
+                mx.eval(actual)
+                self.assertEqual(actual.shape, (rows, 1, n))
+                self.assertTrue(
+                    mx.array_equal(actual, mx.broadcast_to(expected, actual.shape))
+                )
+
+        packed = mx.array([codes[e] * 0x11111111 for e in range(8)], mx.uint32)
+        w = mx.contiguous(mx.broadcast_to(packed[:, None, None], (8, 704, 24)))
+        scales = mx.full((8, 704, 12), 56, mx.uint8)
+        x = mx.ones((137, 1, 192), mx.bfloat16)
+        run = mx.compile(
+            lambda x, i: mx.gather_qmm(
+                x, w, scales, rhs_indices=i, sorted_indices=True, mode="nvfp4"
+            )
+        )
+        with mx.stream(mx.new_stream(mx.gpu)):
+            for counts in ([18] + [17] * 7, [130] + [1] * 7, [0] * 7 + [137]):
+                indices = [e for e, count in enumerate(counts) for _ in range(count)]
+                actual = run(x, mx.array(indices, mx.uint32))
+                expected = mx.array([192 * values_by_code[e] for e in indices])
+                expected = expected.astype(mx.bfloat16)[:, None, None]
+                self.assertTrue(
+                    mx.array_equal(actual, mx.broadcast_to(expected, actual.shape))
+                )
+
+    @unittest.skipIf(
+        not mx.cuda.is_available() or mx.default_device() != mx.gpu,
+        "CUDA kernel path only",
+    )
+    def test_gather_qmm_n64_cuda_fallbacks(self):
+        mx.random.seed(0)
+        formats = [
+            ("affine", 64, 4),
+            ("affine", 64, 8),
+            ("mxfp4", 32, 4),
+            ("mxfp8", 32, 8),
+            ("nvfp4", 16, 4),
+        ]
+        indices = (mx.arange(128) // 16).astype(mx.uint32)
+        for dtype, (mode, group_size, bits) in product(
+            (mx.float16, mx.bfloat16, mx.float32), formats
+        ):
+            with self.subTest(dtype=dtype, mode=mode, bits=bits):
+                kwargs = dict(mode=mode, group_size=group_size, bits=bits)
+                k = 160 if mode == "nvfp4" and dtype != mx.float32 else 256
+                x = (mx.random.normal((128, 1, k)) / k**0.5).astype(dtype)
+                w = mx.random.normal((8, 704, k)).astype(dtype)
+                wq = mx.quantize(w, **kwargs)
+                w_hat = mx.dequantize(*wq, dtype=mx.float32, **kwargs)
+                expected = mx.matmul(
+                    x.astype(mx.float32).reshape(8, 16, k),
+                    w_hat.swapaxes(-1, -2),
+                    stream=mx.cpu,
+                )
+                expected = expected.reshape(128, 1, 704).astype(dtype)
+                actual = mx.gather_qmm(
+                    x, *wq, rhs_indices=indices, sorted_indices=True, **kwargs
+                )
+                self.assertTrue(mx.allclose(actual, expected, atol=2e-2, rtol=2e-2))
+
+        values = mx.array([1 + r % 7 for r in range(128)], mx.bfloat16)
+        x = mx.contiguous(mx.broadcast_to(values[:, None, None], (128, 1, 192)))
+        w = mx.full((1, 704, 24), 0x33333333, mx.uint32)
+        w = mx.broadcast_to(w, (8, 704, 24))
+        scales = mx.broadcast_to(mx.full((1, 704, 12), 56, mx.uint8), (8, 704, 12))
+        actual = mx.gather_qmm(
+            x, w, scales, rhs_indices=indices, sorted_indices=True, mode="nvfp4"
+        )
+        expected = mx.broadcast_to((288 * values)[:, None, None], (128, 1, 704))
+        self.assertTrue(mx.array_equal(actual, expected))
 
     def test_gather_qmm_grad(self):
         def gather_qmm_ref(x, w, s, b, lhs, rhs, trans, sort):
