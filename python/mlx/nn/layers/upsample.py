@@ -295,6 +295,8 @@ def upsample_linear(
     antialias: bool = False,
 ):
     _validate_antialias_align_corners(align_corners, antialias)
+    if x.ndim == 4 and not antialias:
+        return mx.fast.upsample_bilinear(x, tuple(scale_factor), align_corners)
     if antialias:
         return _interpolate_separable(
             x=x,

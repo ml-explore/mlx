@@ -155,6 +155,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/resident.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/upsample.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp)
 
 if(NOT MLX_METAL_PATH)
