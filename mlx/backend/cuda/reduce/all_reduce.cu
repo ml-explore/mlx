@@ -34,6 +34,15 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   size_t check = min(end, size);
 
   size_t i = start;
+  // All the loads are aligned when the first one is, so check it only once
+  if (is_aligned<N>(in)) {
+    for (; i + block.size() * N <= check; i += block.size() * N) {
+      auto v = unsafe_load_vector<N>(in + i, block.thread_rank());
+      for (int j = 0; j < N; j++) {
+        accs[0] = op(accs[0], cast_to<A>(v[j]));
+      }
+    }
+  }
   for (; i + block.size() * N <= check; i += block.size() * N) {
     cub::LoadDirectBlockedVectorized<T, N>(block.thread_rank(), in + i, vals);
     for (int j = 0; j < N; j++) {
