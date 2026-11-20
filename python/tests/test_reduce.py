@@ -468,6 +468,17 @@ class TestReduce(mlx_tests.MLXTestCase):
                     out = x.sum(axis=axes).astype(mx.float32)
                     self.assertTrue(mx.allclose(out, expected, rtol=rtol))
 
+    def test_col_reduce_unaligned(self):
+        # Column sums of views that do not start at an aligned address. The
+        # sums of an aligned copy are the reference.
+        for shape in [(256, 1024), (16384, 64)]:
+            for dtype in [mx.float32, mx.bfloat16, mx.float16]:
+                for offset in [1, 2, 4]:
+                    with self.subTest(shape=shape, dtype=dtype, offset=offset):
+                        x = mx.random.normal((offset + shape[0] * shape[1],))
+                        x = x.astype(dtype)[offset:].reshape(shape)
+                        self.assertTrue(mx.array_equal(x.sum(0), (x + 0).sum(0)))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)

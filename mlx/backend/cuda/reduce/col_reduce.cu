@@ -141,10 +141,28 @@ __global__ void col_reduce_looped(
   LoopedElemToLoc<NDIM, (NDIM > 2)> loop(args.reduce_ndim);
   loop.next(start, args.reduce_shape.data(), args.reduce_strides.data());
   if (tile_x * BN + BN <= args.reduction_stride) {
-    if (args.reduction_stride % N_READS == 0) {
-      for (size_t r = start; r < end; r += BM) {
-        T vals[N_READS];
-        cub::LoadDirectBlockedVectorized(thread_x, in + loop.location(), vals);
+    // All the rows are aligned when the first one is, so check it only once
+    if (args.reduction_stride % N_READS == 0 && is_aligned<N_READS>(in)) {
+      size_t r = start;
+      if constexpr (sizeof(T) == 2) {
+        // Load two rows before we add them so that the loads overlap
+        constexpr int ROWS = 2;
+        for (; r + (ROWS - 1) * BM < end; r += ROWS * BM) {
+          AlignedVector<T, N_READS> vals[ROWS];
+          for (int j = 0; j < ROWS; j++) {
+            vals[j] =
+                unsafe_load_vector<N_READS>(in + loop.location(), thread_x);
+            loop.next(BM, args.reduce_shape.data(), args.reduce_strides.data());
+          }
+          for (int j = 0; j < ROWS; j++) {
+            for (int i = 0; i < N_READS; i++) {
+              totals[i] = op(totals[i], cast_to<A>(vals[j][i]));
+            }
+          }
+        }
+      }
+      for (; r < end; r += BM) {
+        auto vals = unsafe_load_vector<N_READS>(in + loop.location(), thread_x);
         for (int i = 0; i < N_READS; i++) {
           totals[i] = op(totals[i], cast_to<A>(vals[i]));
         }
@@ -179,13 +197,15 @@ __global__ void col_reduce_looped(
   // Do warp reduce for each output.
   constexpr int n_outputs = BN / threads_per_row;
   static_assert(BM == 32 && n_outputs == N_READS);
-  __shared__ A shared_vals[BM * BN];
-  short s_idx = thread_y * BN + thread_x * N_READS;
+  // Pad the rows so that the reads of a column use different banks
+  constexpr int SN = BN + 1;
+  __shared__ A shared_vals[BM * SN];
+  short s_idx = thread_y * SN + thread_x * N_READS;
   for (int i = 0; i < N_READS; i++) {
     shared_vals[s_idx + i] = totals[i];
   }
   block.sync();
-  s_idx = warp.thread_rank() * BN + warp.meta_group_rank() * n_outputs;
+  s_idx = warp.thread_rank() * SN + warp.meta_group_rank() * n_outputs;
   for (int i = 0; i < n_outputs; i++) {
     totals[i] = cg::reduce(warp, shared_vals[s_idx + i], op);
   }
