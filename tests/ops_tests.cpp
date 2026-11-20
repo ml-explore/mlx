@@ -3601,6 +3601,34 @@ TEST_CASE("test quantize dequantize") {
   }
 }
 
+TEST_CASE("test qqmm nvfp4 global scale") {
+  // Small x (~1e-3) would underflow FP8 E4M3 group scale to 0 without
+  // global_scale_x, and global_scale_w scales the dequantized weights by
+  // global_scale_w / (448 * 6).
+  std::vector<float> x_vals(32, 1.5e-3f);
+  // Pre-quantized w_q (2x32 in 4-bit = 2x4 uint32): 0x22222222 -> all 1.0f in FP4_LUT
+  std::vector<uint32_t> w_vals(8, 0x22222222u);
+  // FP8 E4M3 0x38 = 1.0f
+  std::vector<uint8_t> s_vals(4, 0x38u);
+
+  auto w_q = array(w_vals.data(), {2, 4}, uint32);
+  auto scales = array(s_vals.data(), {2, 2}, uint8);
+  auto gsx = array(1.5e-3f, float32);
+  auto gsw = array(448.0f * 6.0f * 0.25f, float32);
+
+  for (auto dt : {float32, float16, bfloat16}) {
+    auto x = astype(array(x_vals.data(), {1, 32}, float32), dt);
+    auto out = qqmm(x, w_q, scales, 16, 4, "nvfp4", gsx, gsw);
+    // Expected per output element: 32 * 1.5e-3 * (1.0 * 0.25) = 0.012
+    float expected = 32.0f * 1.5e-3f * 0.25f;
+    auto out_f32 = astype(out, float32);
+    eval(out_f32);
+    CHECK(out_f32.shape() == Shape{1, 2});
+    CHECK(std::abs(out_f32.data<float>()[0] - expected) < 1e-3f);
+    CHECK(std::abs(out_f32.data<float>()[1] - expected) < 1e-3f);
+  }
+}
+
 TEST_CASE("test repeat") {
   auto data = array({13, 3, 16, 6, 14, 4, 15, 5, 11, 1, 12, 2}, {3, 2, 2});
   auto repeat_axis_0 = repeat(data, 2, 0);
