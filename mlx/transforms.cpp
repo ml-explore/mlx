@@ -121,6 +121,7 @@ int& detail::InExportTracing::counter() {
   return counter_;
 }
 thread_local int detail::RetainGraph::tracing_counter{0};
+thread_local int detail::InBackward::counter{0};
 
 array eval_impl(std::vector<array> outputs, bool async) {
   std::deque<array> tape;
@@ -544,6 +545,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
 
   // Run the tape backwards, computing vector-jacobian
   // products for each primitive
+  detail::InBackward in_backward;
   std::unordered_map<std::uintptr_t, array> cotan_map;
   for (auto [out_idx, cotan_idx] : output_cotan_pairs) {
     auto& o = outputs[out_idx];
