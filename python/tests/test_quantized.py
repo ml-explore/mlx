@@ -446,7 +446,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
     def test_qqmm_unquantized_w(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("Not implemented for CPU")
-            return
 
         key = mx.random.key(0)
         k1, k2, k3 = mx.random.split(key, 3)
