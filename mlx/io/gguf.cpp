@@ -93,6 +93,7 @@ std::tuple<allocator::Data, Dtype> extract_tensor_data(gguf_tensor* tensor) {
         out.buffer().raw_ptr(),
         tensor->weights_data,
         tensor->num_weights * equivalent_dtype.value().size());
+    allocator::move_to_device_memory(out.buffer());
     return {std::move(out), equivalent_dtype.value()};
   }
   // Otherwise, we convert to float16.
@@ -109,6 +110,7 @@ std::tuple<allocator::Data, Dtype> extract_tensor_data(gguf_tensor* tensor) {
   auto out = allocator::malloc(new_size);
   memcpy(out.buffer().raw_ptr(), data, new_size);
   free(data);
+  allocator::move_to_device_memory(out.buffer());
   return {std::move(out), float16};
 }
 

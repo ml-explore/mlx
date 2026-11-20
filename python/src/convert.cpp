@@ -172,6 +172,7 @@ mx::array cpu_nd_array_to_mlx(
           auto dst = out.data<DstT>();
           std::copy(src, src + storage_size, dst);
         });
+    mx::allocator::move_to_device_memory(out.buffer());
   }
   out.set_status(mx::array::Status::available);
   return out;
