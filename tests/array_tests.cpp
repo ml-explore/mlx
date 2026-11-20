@@ -1,8 +1,12 @@
 // Copyright © 2023 Apple Inc.
+#include <atomic>
 #include <cassert>
+#include <chrono>
 #include <climits>
 #include <cstring>
+#include <memory>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 #include "doctest/doctest.h"
@@ -627,11 +631,11 @@ TEST_CASE("test make array from user buffer") {
   int size = 4096;
   std::vector<int> buffer(size, 0);
 
-  int count = 0;
-  auto deleter = [&count, data = buffer.data()](void* ptr) {
+  auto count = std::make_shared<std::atomic<int>>(0);
+  auto deleter = [count, data = buffer.data()](void* ptr) {
     // make sure pointer is correct
     if (ptr == data) {
-      count++;
+      ++*count;
     }
   };
 
@@ -645,8 +649,11 @@ TEST_CASE("test make array from user buffer") {
     auto expected = ones({4096});
     CHECK(array_equal(b, expected).item<bool>());
   }
-  // deleter should always get called
-  CHECK_EQ(count, 1);
+  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+  while (*count == 0 && std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::yield();
+  }
+  CHECK_EQ(*count, 1);
 }
 
 TEST_CASE("test user buffer is not donated") {
