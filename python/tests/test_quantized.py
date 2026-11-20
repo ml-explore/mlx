@@ -1126,6 +1126,41 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 )
                 self.assertTrue(mx.array_equal(y, y_ref.astype(dtype)).item())
 
+    def test_fp_qmm_accumulation_precision(self):
+        # Same construction as test_qmm_accumulation_precision for the
+        # floating point modes. Every weight is exact after quantization and
+        # every partial sum is exact in float32.
+        N, K = 128, 256
+        for dtype, transpose, mode in product(
+            [mx.bfloat16, mx.float16],
+            [True, False],
+            ["mxfp4", "nvfp4", "mxfp8"],
+        ):
+            with self.subTest(dtype=dtype, transpose=transpose, mode=mode):
+                eps = 1 / 256 if dtype == mx.bfloat16 else 1 / 2048
+                x = mx.tile(mx.array([1, eps, -1, 0], dtype), K // 4)
+                x = mx.stack([x, -x])
+                if transpose:
+                    v = mx.arange(N)[:, None] + 3 * (mx.arange(K)[None] // 4)
+                else:
+                    v = mx.arange(K)[:, None] // 4 + 3 * mx.arange(N)[None]
+                w = (v % 4 + 1).astype(dtype)
+                q, scales = mx.quantize(w, mode=mode)
+                w = mx.dequantize(q, scales, mode=mode, dtype=mx.float32)
+                y_ref = x.astype(mx.float32) @ (w.T if transpose else w)
+                y_ref = y_ref.astype(dtype)
+                y = mx.quantized_matmul(x, q, scales, transpose=transpose, mode=mode)
+                self.assertTrue(mx.array_equal(y, y_ref).item())
+                y = mx.gather_qmm(
+                    x,
+                    q[None],
+                    scales[None],
+                    rhs_indices=mx.array([0], mx.uint32),
+                    transpose=transpose,
+                    mode=mode,
+                )
+                self.assertTrue(mx.array_equal(y, y_ref[None]).item())
+
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_qmv_fast_unaligned_n(self):
         # Output sizes that are not a multiple of 8 with an aligned input size.
