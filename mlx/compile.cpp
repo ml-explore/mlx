@@ -694,6 +694,12 @@ void compile_simplify(
     tape_order.insert({tape[i].id(), i});
   }
 
+  // Outputs were rewritten above, so output_map keys are no longer their ids.
+  std::unordered_set<uintptr_t> output_set;
+  for (auto& o : outputs) {
+    output_set.insert(o.id());
+  }
+
   // Multi-pass merge only keeping non-orphaned arrays in the tape
   for (int pass = 0; pass < passes; ++pass) {
     for (auto& arr : tape) {
@@ -713,7 +719,7 @@ void compile_simplify(
             auto& src = parents->second[src_idx].first;
             auto& dst = parents->second[dst_idx].first;
             if (src.id() != dst.id() && array_equivalent(src, dst) &&
-                output_map.find(src.id()) == output_map.end()) {
+                output_set.find(src.id()) == output_set.end()) {
               merge(dst, src, parents_map);
               mask[src_idx] = true;
             }
@@ -779,7 +785,7 @@ void compile_simplify(
           }
           return false;
         } else {
-          return output_map.find(a.id()) == output_map.end();
+          return output_set.find(a.id()) == output_set.end();
         }
       };
       bool discard = maybe_merge_parents(arr);
