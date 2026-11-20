@@ -2,8 +2,10 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <numeric>
 #include <set>
+#include <string>
 
 #include "mlx/fft.h"
 #include "mlx/ops.h"
@@ -565,6 +567,115 @@ array istft(
   Shape out_shape = lead;
   out_shape.push_back(signal.shape(-1));
   return reshape(signal, out_shape, s);
+}
+
+array fftconvolve(
+    const array& in1,
+    const array& in2,
+    const std::string& mode /* = "full" */,
+    const std::optional<std::vector<int>>& axes_ /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  if (mode != "full" && mode != "same" && mode != "valid") {
+    throw std::invalid_argument(
+        "[fftconvolve] Invalid mode. Expected 'full', 'same', or 'valid'.");
+  }
+  if (in1.ndim() != in2.ndim()) {
+    throw std::invalid_argument(
+        "[fftconvolve] Inputs must have the same number of dimensions.");
+  }
+  if (in1.ndim() == 0) {
+    return multiply(in1, in2, s);
+  }
+
+  bool complex_result = in1.dtype() == complex64 || in2.dtype() == complex64;
+  auto dtype = complex_result ? complex64 : float32;
+  if (in1.size() == 0 || in2.size() == 0) {
+    return zeros({0}, dtype, s);
+  }
+
+  std::vector<int> axes;
+  if (axes_) {
+    axes = *axes_;
+    if (axes.empty()) {
+      throw std::invalid_argument("[fftconvolve] Axes cannot be empty.");
+    }
+  } else {
+    axes.resize(in1.ndim());
+    std::iota(axes.begin(), axes.end(), 0);
+  }
+  std::set<int> axis_set;
+  for (int& ax : axes) {
+    ax = ax < 0 ? ax + in1.ndim() : ax;
+    if (ax < 0 || ax >= in1.ndim()) {
+      throw std::out_of_range("[fftconvolve] Invalid axis.");
+    }
+    if (!axis_set.insert(ax).second) {
+      throw std::invalid_argument("[fftconvolve] Duplicated axis.");
+    }
+  }
+  for (int i = 0; i < in1.ndim(); ++i) {
+    if (!axis_set.count(i) && in1.shape(i) != in2.shape(i) &&
+        in1.shape(i) != 1 && in2.shape(i) != 1) {
+      throw std::invalid_argument(
+          "[fftconvolve] Incompatible shapes for non-convolved axes.");
+    }
+  }
+
+  // A singleton axis only needs broadcast multiplication.
+  axes.erase(
+      std::remove_if(
+          axes.begin(),
+          axes.end(),
+          [&](int ax) { return in1.shape(ax) == 1 || in2.shape(ax) == 1; }),
+      axes.end());
+  bool larger1 = true;
+  bool larger2 = true;
+  for (int ax : axes) {
+    larger1 &= in1.shape(ax) >= in2.shape(ax);
+    larger2 &= in2.shape(ax) >= in1.shape(ax);
+  }
+  if (mode == "valid" && !larger1 && !larger2) {
+    throw std::invalid_argument(
+        "[fftconvolve] One input must be at least as large as the other "
+        "in every convolved dimension for 'valid' mode.");
+  }
+
+  auto a = astype(in1, dtype, s);
+  auto b = astype(in2, dtype, s);
+  Shape fft_shape;
+  for (int ax : axes) {
+    auto size = static_cast<int64_t>(in1.shape(ax)) + in2.shape(ax) - 1;
+    if (size > std::numeric_limits<int>::max()) {
+      throw std::invalid_argument(
+          "[fftconvolve] Output dimension is too large.");
+    }
+    fft_shape.push_back(static_cast<int>(size));
+  }
+  auto fa = complex_result ? fftn(a, fft_shape, axes, FFTNorm::Backward, s)
+                           : rfftn(a, fft_shape, axes, FFTNorm::Backward, s);
+  auto fb = complex_result ? fftn(b, fft_shape, axes, FFTNorm::Backward, s)
+                           : rfftn(b, fft_shape, axes, FFTNorm::Backward, s);
+  auto product = multiply(fa, fb, s);
+  auto out = complex_result
+      ? ifftn(product, fft_shape, axes, FFTNorm::Backward, s)
+      : irfftn(product, fft_shape, axes, FFTNorm::Backward, s);
+  if (mode == "full") {
+    return out;
+  }
+
+  auto shape = mode == "same" ? in1.shape() : out.shape();
+  if (mode == "valid") {
+    for (int ax : axes) {
+      shape[ax] = std::abs(in1.shape(ax) - in2.shape(ax)) + 1;
+    }
+  }
+  Shape start(out.ndim());
+  Shape stop(out.ndim());
+  for (int i = 0; i < out.ndim(); ++i) {
+    start[i] = (out.shape(i) - shape[i]) / 2;
+    stop[i] = start[i] + shape[i];
+  }
+  return slice(out, start, stop, s);
 }
 
 } // namespace mlx::core::fft
