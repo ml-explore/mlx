@@ -59,7 +59,7 @@ inline array l2_norm(
     bool keepdims,
     StreamOrDevice s) {
   if (issubdtype(a.dtype(), complexfloating)) {
-    return sqrt(sum(abs(a, s) * abs(a, s), axis, keepdims, s), s);
+    return sqrt(sum(multiply(abs(a, s), abs(a, s), s), axis, keepdims, s), s);
   } else {
     return sqrt(sum(square(a, s), axis, keepdims, s), s);
   }

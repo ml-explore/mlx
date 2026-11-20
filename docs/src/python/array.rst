@@ -61,5 +61,6 @@ Array
     array.swapaxes
     array.transpose
     array.T
+    array.mT
     array.var
     array.view

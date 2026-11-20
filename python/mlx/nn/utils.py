@@ -186,7 +186,8 @@ def clip_grad_norm_sharded(
     :func:`mlx.optimizers.clip_grad_norm`. Each member of the group holds only
     a shard of the gradients, so the global norm is computed by summing the
     local squared norms across the group before rescaling. It is useful for
-    clipping the gradients of a module wrapped with :func:`mlx.nn.fully_shard`.
+    clipping the gradients of a module wrapped with
+    :func:`mlx.nn.layers.distributed.fully_shard`.
 
     Args:
         gradients (Any): A Python tree containing the local shard of the
