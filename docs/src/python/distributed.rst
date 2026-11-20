@@ -5,9 +5,8 @@
 Distributed Communication
 ==========================
 
-MLX provides a distributed communication package using MPI. The MPI library is
-loaded at runtime; if MPI is available then distributed communication is also
-made available.
+MLX supports distributed communication with the MPI, Ring, JACCL, and NCCL
+backends. See :ref:`usage_distributed` for backend availability and setup.
 
 .. autosummary::
    :toctree: _autosummary

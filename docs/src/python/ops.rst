@@ -127,6 +127,7 @@ Operations
    logical_xor
    logsumexp
    matmul
+   matrix_transpose
    max
    maximum
    mean
