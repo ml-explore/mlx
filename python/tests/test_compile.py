@@ -1728,6 +1728,162 @@ class TestCompile(mlx_tests.MLXTestCase):
         x = mx.array([1.0, float("nan"), 3.0])
         self.assertTrue(mx.array_equal(mx.compile(fun)(x), mx.array([False, True])))
 
+    def test_compile_fused_reduce(self):
+        def is_fused(fun, *args):
+            out = mx.compile(fun)(*args)
+            s = StringIO()
+            mx.export_to_dot(s, out)
+            return any(
+                ("Compiled" in line and line.split('"')[1].endswith(r))
+                for line in s.getvalue().splitlines()
+                if "label" in line
+                for r in ["Sum", "Prod", "Max", "Min", "And", "Or"]
+            )
+
+        fusion = mx.default_device() == mx.gpu and mx.metal.is_available()
+
+        def check(fun, *args, fused=True, atol=1e-5, rtol=1e-5):
+            mx.eval(args)
+            expected = fun(*args)
+            out = mx.compile(fun)(*args)
+            self.assertEqual(out.shape, expected.shape)
+            self.assertEqual(out.dtype, expected.dtype)
+            self.assertTrue(
+                mx.allclose(out, expected, atol=atol, rtol=rtol, equal_nan=True)
+            )
+            if fusion:
+                self.assertEqual(is_fused(fun, *args), fused)
+
+        x = mx.random.normal((33, 47, 65))
+        y = mx.random.normal((33, 47, 65))
+
+        # Reduction types and axes
+        for op in [mx.sum, mx.prod, mx.max, mx.min]:
+            for axis in [None, -1, (1, 2), (0, 1, 2)]:
+                check(lambda a, b: op(mx.tanh(a) * b, axis=axis), x, y)
+        for op in [mx.all, mx.any]:
+            check(lambda a, b: op(a > b, axis=-1), x, y)
+            check(lambda a, b: op(a > b), x, y)
+        check(lambda a, b: mx.sum(a * b, axis=-1, keepdims=True), x, y)
+        check(lambda a, b: mx.mean(a * b, axis=(1, 2)), x, y)
+
+        # Broadcast and scalar inputs
+        w = mx.random.normal((65,))
+        mu = mx.random.normal((33, 47, 1))
+        s = mx.array(2.0)
+        check(lambda a, b: mx.sum(a * b, axis=-1), x, w)
+        check(lambda a, b: mx.sum(a * b, axis=-1), x, mu)
+        check(lambda a, b, c: mx.sum((a - b) * c + 1.0, axis=-1), x, mu, s)
+        check(lambda a: mx.var(a, axis=-1), x, atol=1e-4)
+        check(lambda a, b: mx.sum(a * b, axis=(1, 2)), x, w)
+
+        # Short, long and split rows
+        for shape in [(1000, 3), (1000, 64), (7, 100000), (1 << 20,)]:
+            a = mx.random.normal(shape)
+            b = mx.random.normal(shape)
+            check(lambda a, b: mx.sum(a * b, axis=-1), a, b, atol=1e-3, rtol=1e-4)
+            check(lambda a, b: mx.max(mx.abs(a - b), axis=-1), a, b)
+
+        # Column reductions
+        check(lambda a, b: mx.sum(a * b, axis=0), x, y)
+        check(lambda a, b: mx.sum(a * b, axis=1), x, y)
+        check(lambda a, b: mx.max(a * b, axis=(0, 1)), x, y)
+        check(lambda a, b: mx.sum(a * b, axis=0), x, w)
+        check(lambda a, b: mx.sum(a * b, axis=(0, 1)), x, mu)
+        check(lambda a, b: mx.sum(a * b, axis=-1), x.swapaxes(1, 2), y.swapaxes(1, 2))
+        for shape in [(100000, 3), (100000, 200), (50, 1000), (3, 64)]:
+            a = mx.random.normal(shape)
+            b = mx.random.normal(shape)
+            check(lambda a, b: mx.sum(a * b, axis=0), a, b, atol=1e-3, rtol=1e-4)
+            check(lambda a, b: mx.min(a - b, axis=0), a, b)
+
+        # Layouts which use the unfused kernels at run time
+        check(lambda a, b: mx.sum(a * b), x, w)
+        check(lambda a, b: mx.sum(a * b, axis=-1), x[::-1], y)
+        check(lambda a, b: mx.sum(a * b, axis=0), x[:, :, ::-1], y)
+        check(lambda a, b: mx.sum(a * b, axis=(0, 2)), x, y)
+        check(lambda a, b: mx.max(a * b, axis=(0, 2)), x[::-1], y)
+
+        # Non-contiguous inputs which are still fused
+        check(lambda a, b: mx.sum(a * b), x.T, y.T)
+        check(lambda a, b: mx.sum(a * b, axis=-1), x[:, 3:40, 5:], y[:, 3:40, 5:])
+
+        # Types
+        for t in [mx.float16, mx.bfloat16, mx.int32, mx.uint8, mx.bool_]:
+            half = t in [mx.float16, mx.bfloat16]
+            a = (x if half else x * 4).astype(t)
+            b = (y if half else y * 4).astype(t)
+            tol = 0.5 if half else 1e-5
+            check(lambda a, b: mx.sum(a + b, axis=-1), a, b, atol=tol, rtol=tol)
+            check(lambda a, b: mx.max(a * b, axis=-1), a, b, atol=tol, rtol=tol)
+            check(lambda a, b: mx.sum(a * b, axis=0), a, b, atol=tol, rtol=tol)
+        # CUDA codegen does not support complex casts
+        if fusion:
+            check(lambda a: mx.sum(mx.abs(a), axis=-1), x.astype(mx.complex64))
+
+        # Empty arrays
+        check(lambda a, b: mx.sum(a * b, axis=-1), x[:, :, :0], y[:, :, :0])
+        check(lambda a, b: mx.max(a * b, axis=-1), x[:0], y[:0])
+        check(lambda a, b: mx.sum(a * b, axis=0), x[::2, 0, :0], w[:0])
+
+        # NaN propagates
+        z = mx.where(x > 2.0, mx.nan, x)
+        check(lambda a, b: mx.max(a * b, axis=-1), z, y)
+
+        # Many inputs
+        xs = [mx.random.normal((64, 300)) for _ in range(28)]
+
+        def many(*a):
+            acc = a[0]
+            for b in a[1:]:
+                acc = acc * 0.5 + b
+            return acc
+
+        check(lambda *a: mx.sum(many(*a), axis=-1), *xs, atol=1e-4)
+        check(lambda *a: mx.sum(many(*a), axis=0), *xs, atol=1e-4)
+
+        # Intermediate outputs are not fused into the reduction
+        def fun(a, b):
+            c = a * b
+            return mx.sum(c, axis=-1), c
+
+        mx.eval(x, y)
+        out = mx.compile(fun)(x, y)
+        expected = fun(x, y)
+        self.assertTrue(mx.allclose(out[0], expected[0], atol=1e-5))
+        self.assertTrue(mx.array_equal(out[1], expected[1]))
+
+        # The shape before the reduction can not be inferred from the inputs
+        check(
+            lambda a: mx.sum(mx.broadcast_to(a[:, None], (33, 7)) * 2.0, axis=-1),
+            x[:, 0, 0],
+            fused=False,
+        )
+
+    def test_compile_fused_reduce_shapeless(self):
+        def fun(a, b):
+            return mx.sum(mx.exp(a) * b, axis=-1)
+
+        cfun = mx.compile(fun, shapeless=True)
+        shapes = [(4, 8), (16, 3), (2, 1000)]
+        if mx.default_device() == mx.gpu:
+            shapes.append((1, 1))
+        for shape in shapes:
+            a = mx.random.normal(shape)
+            b = mx.random.normal(shape)
+            out = cfun(a, b)
+            self.assertEqual(out.shape, shape[:1])
+            self.assertTrue(mx.allclose(out, fun(a, b), atol=1e-4, rtol=1e-4))
+
+        def fun(a, b):
+            return mx.max(a - b, axis=0)
+
+        cfun = mx.compile(fun, shapeless=True)
+        for shape in [(4, 8), (16, 3)]:
+            a = mx.random.normal(shape)
+            b = mx.random.normal(shape[-1:])
+            self.assertTrue(mx.allclose(cfun(a, b), fun(a, b)))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

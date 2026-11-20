@@ -126,6 +126,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/binary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device_info.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/compiled_reduce.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/custom_kernel.cpp
