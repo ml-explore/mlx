@@ -18,7 +18,7 @@ jobs:
     if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - env:
           # Can only use PAT with permissions: admin:org_hook, public_repo
           GITHUB_TOKEN: ${{ secrets.ZCBENZ_TOKEN_UPDATE_BYPASS_LIST }}
