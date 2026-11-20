@@ -3,6 +3,7 @@
 // Required for using M_PI_2 in MSVC.
 #define _USE_MATH_DEFINES
 #include <cmath>
+#include <limits>
 #include <numeric>
 #include <unordered_set>
 
@@ -3773,6 +3774,19 @@ TEST_CASE("test floor divide") {
   CHECK_EQ(out.dtype(), int8);
   CHECK_EQ(std::string(out.primitive().name()), "FloorDivide");
   CHECK(out.siblings().empty());
+
+  // The signed minimum divided by -1 gives the minimum (the arm64 hardware
+  // result) instead of trapping on x86. True divide promotes to floating
+  // point, so only the integer ops exercise the guarded CPU path.
+  auto mn = array(std::numeric_limits<int32_t>::min());
+  auto minus_one = array(-1);
+  CHECK_EQ(floor_divide(mn, minus_one).item<int32_t>(),
+           std::numeric_limits<int32_t>::min());
+  CHECK_EQ(remainder(mn, minus_one).item<int32_t>(), 0);
+  auto dm = divmod(mn, minus_one);
+  eval(dm);
+  CHECK_EQ(dm[0].item<int32_t>(), std::numeric_limits<int32_t>::min());
+  CHECK_EQ(dm[1].item<int32_t>(), 0);
 }
 
 TEST_CASE("test divmod") {

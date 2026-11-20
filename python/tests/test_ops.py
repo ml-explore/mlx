@@ -457,6 +457,26 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertEqual(result.tolist(), expected.tolist())
                 self.assertEqual(result.dtype, dtype)
 
+        # The signed minimum divided by -1 wraps to the minimum (the arm64
+        # hardware result) instead of crashing the process on x86.
+        for kind, dtype in mx_int_float_dtypes.items():
+            with self.subTest(dtype=dtype):
+                np_dtype = np_int_float_dtypes[kind]
+                if not np.issubdtype(np_dtype, np.integer):
+                    continue
+                mn = np.iinfo(np_dtype).min
+                expected = int(
+                    np.floor_divide(
+                        np.array(mn, dtype=np_dtype), np.array(-1, dtype=np_dtype)
+                    )
+                )
+                self.assertEqual(
+                    mx.floor_divide(
+                        mx.array(mn, dtype=dtype), mx.array(-1, dtype=dtype)
+                    ).item(),
+                    expected,
+                )
+
     def test_remainder(self):
         # Complex is not supported and has to say so rather than quietly
         # computing a componentwise remainder, which no other library defines
@@ -511,6 +531,17 @@ class TestOps(mlx_tests.MLXTestCase):
             z = x % -5
             self.assertEqual(y.tolist(), [0, 1, 2, 3, 4, 0, 1, 2, 3, 4])
             self.assertEqual(z.tolist(), [0, -4, -3, -2, -1, 0, -4, -3, -2, -1])
+
+        # The signed minimum modulo -1 is 0 (the arm64 hardware result)
+        # instead of crashing the process on x86.
+        for dt in [mx.int8, mx.int16, mx.int32, mx.int64]:
+            mn = mx.array(mx.iinfo(dt).min, dtype=dt)
+            minus_one = mx.array(-1, dtype=dt)
+            z = mn % minus_one
+            self.assertEqual(z.dtype, dt)
+            self.assertEqual(z.item(), 0)
+            z = mx.remainder(mn, minus_one)
+            self.assertEqual(z.item(), 0)
 
         z = -mx.ones(64) % mx.full(64, 2)
         self.assertTrue(mx.array_equal(z, mx.ones(64)))
@@ -3983,6 +4014,16 @@ class TestOps(mlx_tests.MLXTestCase):
         q, r = mx.divmod(af, bf)
         self.assertTrue(mx.array_equal(q, mx.array([-4.0, -4.0, -4.0, -4.0])))
         self.assertTrue(mx.array_equal(q * bf + r, af))
+
+        # The signed minimum against -1 keeps the arm64 hardware results
+        # (quotient = min, remainder = 0) instead of crashing on x86.
+        for dt in [mx.int8, mx.int16, mx.int32, mx.int64]:
+            mn = mx.array(mx.iinfo(dt).min, dtype=dt)
+            minus_one = mx.array(-1, dtype=dt)
+            q, r = mx.divmod(mn, minus_one)
+            self.assertEqual(q.item(), mx.iinfo(dt).min)
+            self.assertEqual(r.item(), 0)
+            self.assertTrue(mx.array_equal(q * minus_one + r, mn))
 
     def test_tile(self):
         self.assertCmpNumpy([(2,), [2]], mx.tile, np.tile)

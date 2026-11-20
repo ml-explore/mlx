@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <cmath>
 #include <complex>
+#include <limits>
 
 #include "mlx/backend/cpu/simd/base_simd.h"
 
@@ -233,11 +234,19 @@ Simd<T, N> minimum(Simd<T, N> a, Simd<T, N> b) {
   return out;
 }
 
-// Integer division by zero gives 0. See the scalar divide in base_simd.h.
+// Integer division by zero gives 0 and min / -1 gives min (the arm64
+// hardware results, which x86 traps on). See the scalar divide in base_simd.h.
 template <typename T, int N>
 Simd<T, N> divide(Simd<T, N> a, Simd<T, N> b) {
   if constexpr (std::is_integral_v<T>) {
-    return select(b == Simd<T, N>(0), Simd<T, N>(0), Simd<T, N>(a / b));
+    auto zero = b == Simd<T, N>(0);
+    auto q = a / select(zero, Simd<T, N>(1), b);
+    if constexpr (is_signed_v<T>) {
+      auto overflow = (b == Simd<T, N>(-1)) &&
+          (a == std::numeric_limits<T>::min());
+      q = select(overflow, a, q);
+    }
+    return select(zero, Simd<T, N>(0), q);
   } else {
     return a / b;
   }
