@@ -1648,6 +1648,7 @@ MLX_API array qqmm(
     const std::string& mode = "nvfp4",
     const std::optional<array>& global_scale_x = std::nullopt,
     const std::optional<array>& global_scale_w = std::nullopt,
+    const std::optional<array>& w_biases = std::nullopt, // affine only
     StreamOrDevice s = {});
 
 /** Convert an E4M3 float8 to the given floating point dtype. */
