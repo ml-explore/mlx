@@ -1391,22 +1391,38 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     bool split_d) {
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
+    // attention_nax_dsplit has no BV template parameter.
+    std::string template_def;
+    if (split_d) {
+      template_def = get_template_definition(
+          lib_name,
+          "attention_nax_dsplit",
+          get_type_string(q.dtype()),
+          bq,
+          bk,
+          bd,
+          wm,
+          wn,
+          get_type_string(m.dtype()));
+    } else {
+      template_def = get_template_definition(
+          lib_name,
+          "attention_nax",
+          get_type_string(q.dtype()),
+          bq,
+          bk,
+          bd,
+          bv,
+          wm,
+          wn,
+          get_type_string(m.dtype()));
+    }
     std::string kernel_source;
     concatenate(
         kernel_source,
         metal::utils(),
         metal::steel_attention_nax(),
-        get_template_definition(
-            lib_name,
-            split_d ? "attention_nax_dsplit" : "attention_nax",
-            get_type_string(q.dtype()),
-            bq,
-            bk,
-            bd,
-            bv,
-            wm,
-            wn,
-            get_type_string(m.dtype())));
+        template_def);
     return kernel_source;
   });
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
