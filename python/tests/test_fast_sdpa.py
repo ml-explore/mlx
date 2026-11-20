@@ -1595,6 +1595,99 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     out = mx.where(valid, out, 0)
                 self.assertTrue(mx.allclose(ref, out, atol=1e-5, rtol=1e-5))
 
+    @unittest.skipIf(not mx.cuda.is_available(), "CUDA kernel path only")
+    def test_sdpa_window_cuda(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+
+        # The cuDNN attention requires compute capability 8.0 or later.
+        has_cudnn = mx.device_info()["compute_capability_major"] >= 8
+        D = 128
+        scale = D**-0.5
+
+        def make_qkv(qL, kL):
+            q = mx.random.normal((1, 8, qL, D), mx.float16)
+            k = mx.random.normal((1, 2, kL, D), mx.float16)
+            v = mx.random.normal((1, 2, kL, D), mx.float16)
+            return q, k, v
+
+        def ref_attn(q, k, v, mask):
+            # GPU float32 GEMM may use TF32; keep the reference exact.
+            with mx.stream(mx.cpu):
+                return mlx_ref_attn(
+                    q.astype(mx.float32),
+                    k.astype(mx.float32),
+                    v.astype(mx.float32),
+                    scale=scale,
+                    mask=mask,
+                )
+
+        for qL, kL, window, causal in product(
+            (1, 3, 128, 256), (256, 2048), (1, 64, 1000), (False, True)
+        ):
+            # With a window, the vector kernel takes only one query.
+            if qL > 1 and not has_cudnn:
+                continue
+            with self.subTest(qL=qL, kL=kL, window=window, causal=causal):
+                q, k, v = make_qkv(qL, kL)
+                mask = make_window_mask(qL, kL, window)
+                if causal:
+                    mask = mask & make_causal_mask(qL, kL)
+                ref = ref_attn(q, k, v, mask)
+                out = mx.fast.scaled_dot_product_attention(
+                    q,
+                    k,
+                    v,
+                    scale=scale,
+                    window_size=window,
+                    mask="causal" if causal else None,
+                    force_fused=True,
+                )
+                self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
+
+        # Decoding from a fixed-size cache, with a window shorter and longer
+        # than the keys.
+        for window in (64, 1000):
+            with self.subTest(cache_window=window):
+                q, k, v = make_qkv(1, 512)
+                k = k[..., :300, :]
+                v = v[..., :300, :]
+                ref = ref_attn(q, k, v, make_window_mask(1, 300, window))
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, window_size=window, force_fused=True
+                )
+                self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
+
+        # The backward needs the cuDNN attention.
+        if not has_cudnn:
+            return
+        for kL, causal in product((128, 256), (False, True)):
+            with self.subTest(grad_kL=kL, grad_causal=causal):
+                q, k, v = make_qkv(128, kL)
+                cotan = mx.random.normal(q.shape, mx.float16)
+                mask = make_window_mask(128, kL, 32)
+                if causal:
+                    mask = mask & make_causal_mask(128, kL)
+
+                def sdpa_ref(q, k, v):
+                    return ref_attn(q, k, v, mask)
+
+                def sdpa_fused(q, k, v):
+                    return mx.fast.scaled_dot_product_attention(
+                        q,
+                        k,
+                        v,
+                        scale=scale,
+                        window_size=32,
+                        mask="causal" if causal else None,
+                        force_fused=True,
+                    )
+
+                _, ref = mx.vjp(sdpa_ref, [q, k, v], [cotan])
+                _, out = mx.vjp(sdpa_fused, [q, k, v], [cotan])
+                for r, o in zip(ref, out):
+                    self.assertTrue(mx.allclose(r, o, atol=1e-2, rtol=1e-2))
+
     def test_sdpa_window_size_errors(self):
         q = mx.random.normal((1, 2, 4, 32))
         for window in (0, -2):

@@ -1039,7 +1039,7 @@ std::vector<array> ScaledDotProductAttention::vjp(
     dtypes.push_back(primals[i].dtype());
   }
   auto primitive = std::make_shared<ScaledDotProductAttentionVJP>(
-      s, fallback, scale_, do_causal_, has_sinks_);
+      s, fallback, scale_, do_causal_, has_sinks_, window_size_);
   std::vector<array> inputs = primals;
   inputs.push_back(outputs[0]);
   inputs.push_back(outputs[1]);
@@ -1072,7 +1072,7 @@ bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttentionVJP& a_other =
       static_cast<const ScaledDotProductAttentionVJP&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
-      has_sinks_ == a_other.has_sinks_;
+      has_sinks_ == a_other.has_sinks_ && window_size_ == a_other.window_size_;
 }
 
 std::vector<array> gated_delta_update(
