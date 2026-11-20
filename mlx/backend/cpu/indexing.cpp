@@ -416,6 +416,9 @@ void Scatter::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto ctype =
       src.flags().row_contiguous ? CopyType::Vector : CopyType::General;
   copy_cpu(src, out, ctype, stream());
+  if (updates.size() == 0) {
+    return;
+  }
 
   auto& encoder = cpu::get_command_encoder(stream());
   std::vector<array> inds;
@@ -578,7 +581,9 @@ void masked_scatter_impl(const array& mask, const array& src, array& out) {
 
   for (size_t b = 0; b < batch_count; ++b) {
     size_t src_consumed = 0;
-    src_it.seek(b * src_batch_size);
+    if (src_batch_size > 0) {
+      src_it.seek(b * src_batch_size);
+    }
 
     for (size_t i = 0; i < mask_batch_size; ++i) {
       if (mask_ptr[mask_it.loc]) {

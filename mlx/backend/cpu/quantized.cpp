@@ -1,5 +1,7 @@
 // Copyright © 2023-2026 Apple Inc.
 
+#include <cstring>
+
 #include "mlx/backend/common/quantized.h"
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/cpu/copy.h"
@@ -965,6 +967,16 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto scales = ensure_row_contiguous(scales_pre, encoder, stream());
 
   out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+  if (x.size() == 0) {
+    encoder.set_output_array(out);
+    encoder.dispatch([out_ptr = out.data<void>(), nbytes = out.nbytes()]() {
+      std::memset(out_ptr, 0, nbytes);
+    });
+    return;
+  }
 
   encoder.set_input_array(x);
   encoder.set_input_array(w);
@@ -1026,6 +1038,16 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto scales = ensure_row_contiguous_last_dims(scales_pre);
 
   out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+  if (x.size() == 0) {
+    encoder.set_output_array(out);
+    encoder.dispatch([out_ptr = out.data<void>(), nbytes = out.nbytes()]() {
+      std::memset(out_ptr, 0, nbytes);
+    });
+    return;
+  }
 
   encoder.set_input_array(x);
   encoder.set_input_array(w);

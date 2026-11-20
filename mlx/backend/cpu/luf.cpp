@@ -47,7 +47,10 @@ void luf_impl(
   row_indices.set_data(allocator::malloc(row_indices.nbytes()));
   auto pivots_ptr = pivots.data<uint32_t>();
   auto row_indices_ptr = row_indices.data<uint32_t>();
-  size_t num_matrices = a.size() / (M * N);
+  size_t num_matrices = 1;
+  for (int i = 0; i < a.ndim() - 2; ++i) {
+    num_matrices *= a.shape(i);
+  }
   auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_input_array(a);
   encoder.set_output_array(lu);
@@ -56,16 +59,18 @@ void luf_impl(
 
   encoder.dispatch(
       [a_ptr, pivots_ptr, row_indices_ptr, num_matrices, M, N, K]() mutable {
-        int info;
+        int info = 0;
         for (size_t i = 0; i < num_matrices; ++i) {
           // Compute LU factorization of A
-          getrf<T>(
-              /* m */ &M,
-              /* n */ &N,
-              /* a */ a_ptr,
-              /* lda */ &M,
-              /* ipiv */ reinterpret_cast<int*>(pivots_ptr),
-              /* info */ &info);
+          if (K > 0) {
+            getrf<T>(
+                /* m */ &M,
+                /* n */ &N,
+                /* a */ a_ptr,
+                /* lda */ &M,
+                /* ipiv */ reinterpret_cast<int*>(pivots_ptr),
+                /* info */ &info);
+          }
 
           if (info < 0) {
             std::stringstream ss;

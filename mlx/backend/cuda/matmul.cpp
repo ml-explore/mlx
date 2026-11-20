@@ -257,6 +257,11 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& b_pre = inputs[1];
   auto c = inputs[2];
 
+  if (out.size() == 0) {
+    out.set_data(cu::malloc_async(0, encoder));
+    return;
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // Init checks and prep
 
