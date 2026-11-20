@@ -9,8 +9,10 @@
 
 #include <cuda_runtime.h>
 
+#include <cmath>
 #include <cstdint>
 #include <limits>
+#include <vector>
 
 using namespace mlx::core;
 
@@ -118,4 +120,32 @@ TEST_CASE("test eval after cuda error") {
   auto a = ones({4}, float32, s);
   CHECK_NOTHROW(eval(a));
   CHECK(array_equal(a, ones({4})).item<bool>());
+}
+
+TEST_CASE("test CUDA layer norm shared scratch") {
+  constexpr int width = 1024;
+  std::vector<float> data(width), expected(width);
+  double mean_value = 0;
+  for (int i = 0; i < width; ++i) {
+    data[i] = 2.0f + (i % 31 - 15) * 0.125f;
+    mean_value += data[i];
+  }
+  mean_value /= width;
+  double variance = 0;
+  for (float value : data) {
+    variance += (value - mean_value) * (value - mean_value);
+  }
+  const double inv = 1.0 / std::sqrt(variance / width + 1e-5);
+  for (int i = 0; i < width; ++i) {
+    expected[i] = (data[i] - mean_value) * inv;
+  }
+  auto x = array(data.data(), {1, width});
+  auto reference = array(expected.data(), {1, width});
+  auto w = ones({width});
+  auto b = zeros({width});
+  eval(x, reference, w, b);
+  for (int i = 0; i < 8; ++i) {
+    auto y = fast::layer_norm(x, w, b, 1e-5f);
+    CHECK(allclose(y, reference, 3e-5f, 3e-5f).item<bool>());
+  }
 }

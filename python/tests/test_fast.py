@@ -540,6 +540,50 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
 
+    def test_rms_norm_vjp_shared_scratch(self):
+        for dtype, tolerance in (
+            (mx.float32, 1e-4),
+            (mx.float16, 1e-2),
+            (mx.bfloat16, 8e-2),
+        ):
+            # Multiple rows per CUDA block exercise reduction scratch reuse.
+            for rows, width, w_stride in (
+                (1, 1024, 1),
+                (2048, 1024, 1),
+                (2048, 512, 1),
+                (3, 1025, 1),
+                (3, 4096, 1),
+                (3, 1024, 2),
+            ):
+                with self.subTest(
+                    dtype=dtype, rows=rows, width=width, w_stride=w_stride
+                ):
+                    x = (mx.arange(rows * width).reshape(rows, width) % 31).astype(
+                        dtype
+                    ) / 8
+                    w = (mx.arange(width * w_stride) % 5).astype(dtype) / 16 + 0.75
+                    w = w[::w_stride]
+                    g = (mx.arange(rows * width).reshape(rows, width) % 13).astype(
+                        dtype
+                    ) / 16
+                    mx.eval(x, w, g)
+                    actual, actual_grads = mx.vjp(
+                        lambda x, w: mx.fast.rms_norm(x, w, 1e-5), [x, w], [g]
+                    )
+                    expected, expected_grads = mx.vjp(
+                        lambda x, w: rms_norm(x, w, 1e-5), [x, w], [g]
+                    )
+                    mx.eval(actual, actual_grads, expected, expected_grads)
+                    for name, result, reference in zip(
+                        ("y", "dx", "dw"),
+                        actual + actual_grads,
+                        expected + expected_grads,
+                    ):
+                        with self.subTest(output=name):
+                            self.assertEqualArray(
+                                result, reference, atol=tolerance, rtol=tolerance
+                            )
+
     def test_cross_entropy(self):
         def cross_entropy_ref(logits, targets):
             score = mx.take_along_axis(logits, mx.expand_dims(targets, -1), -1).squeeze(
@@ -778,6 +822,40 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 5e-5)
         self.assertLess(mx.abs(gb1).max(), 1e-9)
         self.assertLess(mx.abs(gb2).max(), 1e-9)
+
+    def test_layer_norm_vjp_shared_scratch(self):
+        for dtype, tolerance in (
+            (mx.float32, 1e-4),
+            (mx.float16, 1e-2),
+            (mx.bfloat16, 8e-2),
+        ):
+            for width in (32, 128, 1024, 4096):
+                with self.subTest(dtype=dtype, width=width):
+                    x = (mx.arange(3 * width).reshape(3, width) % 31).astype(dtype) / 8
+                    w = (mx.arange(width) % 5).astype(dtype) / 16 + 0.75
+                    b = (mx.arange(width) % 3).astype(dtype) / 8
+                    g = (mx.arange(3 * width).reshape(3, width) % 13).astype(dtype) / 16
+                    mx.eval(x, w, b, g)
+                    actual, actual_grads = mx.vjp(
+                        lambda x, w, b: mx.fast.layer_norm(x, w, b, 1e-5),
+                        [x, w, b],
+                        [g],
+                    )
+                    expected, expected_grads = mx.vjp(
+                        lambda x, w, b: layer_norm(x, w, b, 1e-5),
+                        [x, w, b],
+                        [g],
+                    )
+                    mx.eval(actual, actual_grads, expected, expected_grads)
+                    for name, result, reference in zip(
+                        ("y", "dx", "dw", "db"),
+                        actual + actual_grads,
+                        expected + expected_grads,
+                    ):
+                        with self.subTest(output=name):
+                            self.assertEqualArray(
+                                result, reference, atol=tolerance, rtol=tolerance
+                            )
 
     def test_layer_norm_grad_no_bias(self):
         # Second-order gradient through layer_norm with weight but no bias.
