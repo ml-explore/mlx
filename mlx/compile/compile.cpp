@@ -352,12 +352,6 @@ ArrayFnWithExtra compile(
             entry.tape, parents_map, entry.outputs, /* passes */ 3);
       }
 
-      // Experimental: recompute cheap forward values in the backward
-      // instead of keeping them. Enable with MLX_COMPILE_RECOMPUTE=1.
-      if (config::get("MLX_COMPILE_RECOMPUTE", 0)) {
-        compile_recompute(entry.tape, parents_map);
-      }
-
       // Kernel fusion to generate Compiled primitives. The tape and
       // new outputs must be updated accordingly
       if (mode != CompileMode::no_fuse) {

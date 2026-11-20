@@ -8,15 +8,17 @@
 #include <unordered_set>
 
 #include "mlx/compile_impl.h"
+#include "mlx/config.h"
 #include "mlx/primitives.h"
 
-namespace mlx::core {
+namespace mlx::core::detail {
 
 constexpr int max_compile_depth = 11;
 constexpr int max_compile_arrays = 24;
-constexpr int max_fuse_distance = 0;
 
-namespace detail {
+inline int max_fuse_distance() {
+  return config::get("MLX_MAX_FUSE_DISTANCE", 0);
+}
 
 bool is_unary(const Primitive& p) {
   return (
@@ -60,17 +62,7 @@ bool is_broadcast(const Primitive& p) {
   return typeid(p) == typeid(Broadcast);
 }
 
-bool is_noop(const Primitive& p) {
-  return typeid(p) == typeid(Copy) || typeid(p) == typeid(StopGradient);
-}
-
-bool is_reduction(const Primitive& p) {
-  return typeid(p) == typeid(Reduce) || typeid(p) == typeid(ArgReduce);
-}
-
-bool is_fusable(const Primitive& p) {
-  return is_unary(p) || is_binary(p) || is_ternary(p) || is_broadcast(p);
-}
+namespace {
 
 // Any parent in the divider will continue to refer to `x` but any parent not
 // in the divider will refer to a copy of the operation.
@@ -96,11 +88,49 @@ array split_one(
   return y;
 }
 
-// Extract sub-graphs of the graph that can be compiled
-// and replace them with a Compiled Primitive.
+// The groups of arrays to fuse. Each group with more than one array becomes one
+// Compiled primitive.
+struct Groups {
+  std::vector<std::vector<array>> members;
+  std::unordered_map<uintptr_t, int> id_to_group;
+
+  // The group of `a`, or -1 if `a` is not fusable
+  int find(const array& a) const {
+    auto it = id_to_group.find(a.id());
+    return (it == id_to_group.end()) ? -1 : it->second;
+  }
+
+  void add(const array& a, int g) {
+    id_to_group[a.id()] = g;
+    members[g].push_back(a);
+  }
+
+  // Add a group
+  void make_group(const array& a) {
+    members.emplace_back();
+    add(a, members.size() - 1);
+  }
+
+  // Merge 2 groups
+  void merge(int dst, int src) {
+    for (auto& a : members[src]) {
+      add(a, dst);
+    }
+    members[src].clear();
+  }
+
+  // Undo merge(dst, src), where `n` is the size of `dst` before the merge
+  void unmerge(int dst, int src, int n) {
+    for (int i = n; i < members[dst].size(); ++i) {
+      add(members[dst][i], src);
+    }
+    members[dst].erase(members[dst].begin() + n, members[dst].end());
+  }
+};
+
 // Replace the arrays in `fused_tape` with one Compiled primitive. The arrays in
 // `old_outputs` become the outputs of the primitive.
-std::vector<array> make_compiled(
+std::vector<array> fuse_group(
     std::vector<array> fused_tape,
     const std::vector<array>& inputs,
     std::vector<array> old_outputs,
@@ -192,49 +222,10 @@ std::vector<array> make_compiled(
   return compiled_outputs;
 }
 
-// Groups of arrays to fuse. Each group with more than one array becomes one
-// Compiled primitive.
-struct FuseGroups {
-  std::vector<std::vector<array>> members;
-  std::unordered_map<uintptr_t, int> group_of;
-
-  // The group of `a`, or -1 if `a` is not fusable
-  int find(const array& a) const {
-    auto it = group_of.find(a.id());
-    return (it == group_of.end()) ? -1 : it->second;
-  }
-
-  void add(const array& a, int g) {
-    group_of[a.id()] = g;
-    members[g].push_back(a);
-  }
-
-  void make_group(const array& a) {
-    members.emplace_back();
-    add(a, members.size() - 1);
-  }
-
-  // Move the arrays of group `src` to group `dst`
-  void merge(int dst, int src) {
-    for (auto& a : members[src]) {
-      add(a, dst);
-    }
-    members[src].clear();
-  }
-
-  // Undo merge(dst, src), where `n` is the size of `dst` before the merge
-  void unmerge(int dst, int src, int n) {
-    for (int i = n; i < members[dst].size(); ++i) {
-      add(members[dst][i], src);
-    }
-    members[dst].erase(members[dst].begin() + n, members[dst].end());
-  }
-};
-
 // True if `a` is read outside of its group or is an output of the graph
-bool is_group_output(
+bool is_read_outside(
     const array& a,
-    const FuseGroups& groups,
+    const Groups& groups,
     const ParentsMap& parents_map,
     const std::unordered_map<uintptr_t, array>& output_map) {
   if (output_map.find(a.id()) != output_map.end()) {
@@ -251,16 +242,30 @@ bool is_group_output(
   return false;
 }
 
-// True if group `g` can become one Compiled primitive
-bool is_valid_group(
+// True if an array of group `g` is read outside of the group
+bool has_outputs(
     int g,
-    const FuseGroups& groups,
+    const Groups& groups,
+    const ParentsMap& parents_map,
+    const std::unordered_map<uintptr_t, array>& output_map) {
+  for (auto& a : groups.members[g]) {
+    if (is_read_outside(a, groups, parents_map, output_map)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// True if group `g` can become one Compiled primitive
+bool is_fusable_group(
+    int g,
+    const Groups& groups,
     const ParentsMap& parents_map,
     const std::unordered_map<uintptr_t, array>& output_map) {
   // All outputs have the same shape. Do not write out a broadcast.
   std::vector<array> outputs;
   for (auto& a : groups.members[g]) {
-    if (!is_group_output(a, groups, parents_map, output_map)) {
+    if (!is_read_outside(a, groups, parents_map, output_map)) {
       continue;
     }
     if (is_broadcast(a.primitive()) &&
@@ -301,11 +306,11 @@ bool is_valid_group(
 }
 
 // Give group `g` its own copy of the broadcast `b` with split_one. Return
-// true if the copy is fused into the group.
+// true if the group keeps the copy.
 bool split_broadcast(
     array b,
     int g,
-    FuseGroups& groups,
+    Groups& groups,
     ParentsMap& parents_map,
     const std::unordered_map<uintptr_t, array>& output_map) {
   std::unordered_set<uintptr_t> divider;
@@ -317,13 +322,13 @@ bool split_broadcast(
     parents_map[c.inputs()[i].id()].push_back({c, i});
   }
   groups.add(c, g);
-  if (is_valid_group(g, groups, parents_map, output_map)) {
+  if (is_fusable_group(g, groups, parents_map, output_map)) {
     return true;
   }
 
   // Undo the copy
   groups.members[g].pop_back();
-  groups.group_of.erase(c.id());
+  groups.id_to_group.erase(c.id());
   for (auto& in : c.inputs()) {
     auto& pairs = parents_map[in.id()];
     pairs.erase(
@@ -337,16 +342,16 @@ bool split_broadcast(
   return false;
 }
 
-// Fuse a group into the group that reads it, if all the readers of the group
+// Merge a group into the group that reads it, if all the readers of the group
 // are in that group. Return true if a group changed.
-bool compile_fuse_vertical(
-    FuseGroups& groups,
+bool merge_vertical(
+    Groups& groups,
     const std::vector<array>& tape,
     ParentsMap& parents_map,
     const std::unordered_map<uintptr_t, array>& output_map) {
   bool changed = false;
 
-  // Go through the tape in reverse order so readers are fused first
+  // Go through the tape in reverse order so readers are merged first
   for (int i = tape.size() - 1; i >= 0; --i) {
     auto& a = tape[i];
     int src = groups.find(a);
@@ -356,7 +361,7 @@ bool compile_fuse_vertical(
 
     // Find the groups that read the group of `a`
     std::vector<int> readers;
-    bool all_fusable = true;
+    bool all_readers_fusable = true;
     for (auto& m : groups.members[src]) {
       auto it = parents_map.find(m.id());
       if (it == parents_map.end()) {
@@ -365,7 +370,7 @@ bool compile_fuse_vertical(
       for (auto& [p, idx] : it->second) {
         int dst = groups.find(p);
         if (dst < 0) {
-          all_fusable = false;
+          all_readers_fusable = false;
         } else if (
             dst != src &&
             std::find(readers.begin(), readers.end(), dst) == readers.end()) {
@@ -377,14 +382,14 @@ bool compile_fuse_vertical(
     // Split a broadcast with readers in more than one place, so that each
     // group can fuse its own copy
     if (is_broadcast(a.primitive()) && groups.members[src].size() == 1 &&
-        (readers.size() > 1 || (readers.size() == 1 && !all_fusable))) {
+        (readers.size() > 1 || (readers.size() == 1 && !all_readers_fusable))) {
       for (int dst : readers) {
         changed |= split_broadcast(a, dst, groups, parents_map, output_map);
       }
       continue;
     }
 
-    if (!all_fusable || readers.size() != 1) {
+    if (!all_readers_fusable || readers.size() != 1) {
       continue;
     }
     int dst = readers[0];
@@ -393,7 +398,7 @@ bool compile_fuse_vertical(
     }
     int n = groups.members[dst].size();
     groups.merge(dst, src);
-    if (is_valid_group(dst, groups, parents_map, output_map)) {
+    if (is_fusable_group(dst, groups, parents_map, output_map)) {
       changed = true;
     } else {
       groups.unmerge(dst, src, n);
@@ -407,7 +412,7 @@ bool compile_fuse_vertical(
 bool is_connected(
     int g1,
     int g2,
-    const FuseGroups& groups,
+    const Groups& groups,
     const std::unordered_map<uintptr_t, int>& position,
     const ParentsMap& parents_map) {
   auto in_groups = [&](const array& a) {
@@ -463,16 +468,12 @@ bool is_connected(
   return false;
 }
 
-// Fuse two groups which read the same arrays, if no path through other arrays
-// connects them and they run at about the same time in the eval order. Return
-// true if a group changed.
-bool compile_fuse_horizontal(
-    FuseGroups& groups,
+// Score each pair of groups with the bytes of the arrays they both read. Pairs
+// which read no array together are not in the result.
+std::map<std::pair<int, int>, size_t> score_pairs(
+    const Groups& groups,
     const std::vector<array>& tape,
-    const std::unordered_map<uintptr_t, int>& position,
-    ParentsMap& parents_map,
-    const std::unordered_map<uintptr_t, array>& output_map) {
-  // Score each pair of groups with the bytes of the arrays they both read
+    const ParentsMap& parents_map) {
   std::map<std::pair<int, int>, size_t> scores;
   for (auto& x : tape) {
     // Scalars become constants in the kernel, so they are not read
@@ -498,11 +499,27 @@ bool compile_fuse_horizontal(
       }
     }
   }
+  return scores;
+}
+
+// Merge groups which read the same arrays, if no path through other arrays
+// connects them and they run at about the same time in the eval order. Return
+// true if a group changed.
+bool merge_horizontal(
+    Groups& groups,
+    const std::vector<array>& tape,
+    const std::unordered_map<uintptr_t, int>& position,
+    ParentsMap& parents_map,
+    const std::unordered_map<uintptr_t, array>& output_map) {
+  // Given a tape and groups of array for fusion, for every pair of groups
+  // (i, j) count the number of bytes it will save in i and j are fused
+  auto scores = score_pairs(groups, tape, parents_map);
 
   // Eval runs an array as late as possible, just before its readers. So the
   // level of an array, its longest path to an output, sets when it runs.
   std::unordered_map<uintptr_t, int> levels;
   std::function<int(const array&)> level;
+
   level = [&](const array& a) -> int {
     if (auto it = levels.find(a.id()); it != levels.end()) {
       return it->second;
@@ -521,7 +538,7 @@ bool compile_fuse_horizontal(
   auto group_level = [&](int g) {
     int l = 0;
     for (auto& a : groups.members[g]) {
-      if (is_group_output(a, groups, parents_map, output_map)) {
+      if (is_read_outside(a, groups, parents_map, output_map)) {
         l = std::max(l, level(a));
       }
     }
@@ -530,17 +547,10 @@ bool compile_fuse_horizontal(
   auto distance = [&](int g1, int g2) {
     return std::abs(group_level(g1) - group_level(g2));
   };
-  auto is_used = [&](int g) {
-    for (auto& a : groups.members[g]) {
-      if (is_group_output(a, groups, parents_map, output_map)) {
-        return true;
-      }
-    }
-    return false;
-  };
 
-  // Try the pairs with the most shared bytes first, then the closest pairs.
-  // Keep one array of each group, since groups change when they merge.
+  // Helper structure to organise horizontal merge proposals
+  // we sort candidates by the score and if score matches priorities
+  // closest group.
   struct Candidate {
     size_t score;
     int distance;
@@ -561,19 +571,22 @@ bool compile_fuse_horizontal(
   });
 
   // Merging groups at different levels moves a kernel in the eval order, and
-  // this can keep large arrays longer in memory
+  // this can keep large arrays longer in memory. Control it with
+  // max_fuse_distance
   bool changed = false;
   for (auto& c : candidates) {
     int g1 = groups.find(c.a);
     int g2 = groups.find(c.b);
     if (g1 == g2 || c.a.primitive().stream() != c.b.primitive().stream() ||
-        distance(g1, g2) > max_fuse_distance || !is_used(g1) || !is_used(g2) ||
+        distance(g1, g2) > max_fuse_distance() ||
+        !has_outputs(g1, groups, parents_map, output_map) ||
+        !has_outputs(g2, groups, parents_map, output_map) ||
         is_connected(g1, g2, groups, position, parents_map)) {
       continue;
     }
     int size = groups.members[g1].size();
     groups.merge(g1, g2);
-    if (is_valid_group(g1, groups, parents_map, output_map)) {
+    if (is_fusable_group(g1, groups, parents_map, output_map)) {
       changed = true;
     } else {
       groups.unmerge(g1, g2, size);
@@ -582,8 +595,18 @@ bool compile_fuse_horizontal(
   return changed;
 }
 
-// Fuse arrays in groups with the fusion rules, then replace each group with
-// one Compiled primitive.
+} // namespace
+
+bool is_noop(const Primitive& p) {
+  return typeid(p) == typeid(Copy) || typeid(p) == typeid(StopGradient);
+}
+
+bool is_fusable(const Primitive& p) {
+  return is_unary(p) || is_binary(p) || is_ternary(p) || is_broadcast(p);
+}
+
+// Merge the arrays into groups with the rules, then fuse each group into one
+// Compiled primitive.
 void compile_fuse(
     std::vector<array>& tape,
     ParentsMap& parents_map,
@@ -602,7 +625,7 @@ void compile_fuse(
   }
 
   // Start with one group for each fusable array
-  FuseGroups groups;
+  Groups groups;
   std::unordered_map<uintptr_t, int> position;
   for (int i = 0; i < tape.size(); ++i) {
     auto& a = tape[i];
@@ -615,9 +638,8 @@ void compile_fuse(
 
   // Merge groups until no rule changes them. A merge can make a new merge
   // possible, so repeat the rules.
-  while (compile_fuse_vertical(groups, tape, parents_map, output_map) ||
-         compile_fuse_horizontal(
-             groups, tape, position, parents_map, output_map)) {
+  while (merge_vertical(groups, tape, parents_map, output_map) ||
+         merge_horizontal(groups, tape, position, parents_map, output_map)) {
   }
 
   // Replace each group of more than one array with a Compiled primitive
@@ -676,7 +698,7 @@ void compile_fuse(
 
     std::vector<array> old_outputs;
     for (auto& f : fused_tape) {
-      if (is_group_output(f, groups, parents_map, output_map)) {
+      if (is_read_outside(f, groups, parents_map, output_map)) {
         old_outputs.push_back(f);
       }
     }
@@ -685,7 +707,7 @@ void compile_fuse(
     if (old_outputs.empty()) {
       continue;
     }
-    make_compiled(
+    fuse_group(
         std::move(fused_tape),
         inputs,
         std::move(old_outputs),
@@ -721,6 +743,4 @@ void compile_fuse(
   tape = std::move(new_tape);
 }
 
-} // namespace detail
-
-} // namespace mlx::core
+} // namespace mlx::core::detail
