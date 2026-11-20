@@ -7,6 +7,51 @@ inline T softmax_exp(T x) {
   return fast::exp(x);
 }
 
+template <typename T, typename AccT = T>
+[[kernel]] void softmax_packed(
+    const device T* in,
+    device T* out,
+    constant int& axis_size,
+    constant int64_t& n_rows,
+    uint gid [[thread_position_in_grid]]) {
+  constexpr int lanes = SOFTMAX_LANES_PER_ROW;
+  uint row = gid / lanes;
+  if (row >= n_rows) {
+    return;
+  }
+
+  int lane = gid % lanes;
+  size_t offset = size_t(row) * axis_size;
+  AccT vals[SOFTMAX_N_READS];
+  AccT maxval = Limits<AccT>::finite_min;
+  for (int i = 0; i < SOFTMAX_N_READS; ++i) {
+    int col = i * lanes + lane;
+    vals[i] = col < axis_size ? AccT(in[offset + col]) : Limits<AccT>::min;
+    maxval = max(maxval, vals[i]);
+  }
+  // XOR only the low lane bits so each row reduces independently.
+  for (ushort mask = lanes / 2; mask > 0; mask >>= 1) {
+    maxval = max(maxval, simd_shuffle_xor(maxval, mask));
+  }
+
+  AccT sum = 0;
+  for (int i = 0; i < SOFTMAX_N_READS; ++i) {
+    vals[i] = softmax_exp(vals[i] - maxval);
+    sum += vals[i];
+  }
+  for (ushort mask = lanes / 2; mask > 0; mask >>= 1) {
+    sum += simd_shuffle_xor(sum, mask);
+  }
+
+  AccT inv_sum = 1 / sum;
+  for (int i = 0; i < SOFTMAX_N_READS; ++i) {
+    int col = i * lanes + lane;
+    if (col < axis_size) {
+      out[offset + col] = T(vals[i] * inv_sum);
+    }
+  }
+}
+
 template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
 [[kernel]] void softmax_single_row(
     const device T* in,

@@ -2468,6 +2468,26 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.softmax(mx.array(1.0), axis=-1)
 
+    def test_softmax_short_rows(self):
+        rng = np.random.default_rng(0)
+        cases = [(mx.float32, 1e-5), (mx.float16, 4e-3), (mx.bfloat16, 3e-2)]
+        for width in range(1, 34):
+            # The last threadgroup has fewer rows than the first.
+            values = rng.normal(size=(35, width)).astype(np.float32)
+            values[::2] += 100
+            values[1, :] = -np.inf
+            for dtype, rtol in cases:
+                x = mx.array(values, dtype=dtype)
+                ref = np.array(x.astype(mx.float32))
+                with np.errstate(invalid="ignore"):
+                    exp = np.exp(ref - ref.max(axis=-1, keepdims=True))
+                    expected = exp / exp.sum(axis=-1, keepdims=True)
+                for precise in (False, True):
+                    out = mx.softmax(x, axis=-1, precise=precise)
+                    np.testing.assert_allclose(
+                        np.array(out.astype(mx.float32)), expected, rtol=rtol
+                    )
+
     def test_concatenate(self):
         a_npy = np.random.randn(32, 32, 32)
         b_npy = np.random.randn(32, 32, 32)

@@ -51,6 +51,10 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   const int looped_limit = SOFTMAX_LOOPED_LIMIT;
 
   std::string kernel_name = (axis_size > looped_limit) ? "looped_" : "block_";
+  const bool packed = axis_size <= SOFTMAX_LANES_PER_ROW * n_reads;
+  if (packed) {
+    kernel_name = "packed_";
+  }
   kernel_name += "softmax_";
   if (in.dtype() != float32 && precise_) {
     kernel_name += "precise_";
@@ -61,7 +65,11 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& compute_encoder = metal::get_command_encoder(s);
   {
     size_t threadgroup_size;
-    if (axis_size <= looped_limit) {
+    int rows_per_group = 1;
+    if (packed) {
+      threadgroup_size = 256;
+      rows_per_group = threadgroup_size / SOFTMAX_LANES_PER_ROW;
+    } else if (axis_size <= looped_limit) {
       size_t threadgroup_needed = (axis_size + n_reads - 1) / n_reads;
       size_t simds_needed = (threadgroup_needed + simd_size - 1) / simd_size;
       threadgroup_size = simd_size * simds_needed;
@@ -73,8 +81,13 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder.set_compute_pipeline_state(kernel);
     compute_encoder.set_bytes(axis_size, 2);
     const int64_t row_bytes = int64_t(axis_size) * out.itemsize();
+    const int64_t groups = (n_rows + rows_per_group - 1) / rows_per_group;
     dispatch_threadgroups_in_slices(
-        compute_encoder, n_rows, threadgroup_size, [&](int64_t row) {
+        compute_encoder, groups, threadgroup_size, [&](int64_t group) {
+          int64_t row = group * rows_per_group;
+          if (packed) {
+            compute_encoder.set_bytes(n_rows - row, 3);
+          }
           compute_encoder.set_input_array(in, 0, row * row_bytes);
           compute_encoder.set_output_array(out, 1, row * row_bytes);
         });
