@@ -1546,6 +1546,28 @@ bool gemv_wide(
   return true;
 }
 
+// On M5 Ultra parts with NAX, gemv (M == 1) and multi-pass gemv_wide
+// (M = 6..15) use only part of the memory bandwidth for large x @ W.T
+// projections, while steel_gemm_thin_nax streams the weights once for any
+// M <= 64. Route these rows to steel_matmul_axpby so they take the thin NAX
+// kernel. One-pass gemv_wide (M = 2..5) is on par with it over a whole MLP
+// block and stays. The thin kernel runs one threadgroup per 32 output
+// columns, so below N = 4096 it cannot fill the GPU and gemv is faster.
+inline bool use_thin_nax_for_small_m(
+    metal::Device& d,
+    const array& out,
+    int M,
+    int N,
+    int K,
+    int64_t batch_size_out,
+    bool a_transposed,
+    bool b_transposed) {
+  return metal::is_nax_available() && d.get_architecture().back() == 'd' &&
+      batch_size_out == 1 && !a_transposed && b_transposed &&
+      (M == 1 || (M > 5 && M < 16)) && N >= 4096 && K >= 2048 &&
+      (out.dtype() == float16 || out.dtype() == bfloat16);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Matmul implementation
 ///////////////////////////////////////////////////////////////////////////////
@@ -1617,9 +1639,13 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         /* int K = */ K,
         /* std::vector<array>& copies = */ copies);
   }
+
+  bool thin_nax = use_thin_nax_for_small_m(
+      d, out, M, N, K, batch_size_out, a_transposed, b_transposed);
+
   // The wide gemv route streams the weight matrix once per <= 5 input
   // vectors instead of running a row-padded GEMM tile.
-  if (!a_transposed && b_transposed &&
+  if (!thin_nax && !a_transposed && b_transposed &&
       gemv_wide(
           /* const Stream& s = */ s,
           /* metal::Device& d = */ d,
@@ -1644,7 +1670,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   // Route to gemv if needed
-  if (std::min(M, N) == 1) {
+  if (!thin_nax && std::min(M, N) == 1) {
     return gemv(
         /* const Stream& s = */ s,
         /* metal::Device& d = */ d,
@@ -1775,9 +1801,12 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   /////////////////////////////////////////////////////////////////////////////
   // Gemv specialization
 
+  bool thin_nax = use_thin_nax_for_small_m(
+      d, out, M, N, K, batch_size_out, transpose_a, transpose_b);
+
   // The wide gemv route streams the weight matrix once per <= 5 input
   // vectors instead of running a row-padded GEMM tile.
-  if (!transpose_a && transpose_b &&
+  if (!thin_nax && !transpose_a && transpose_b &&
       gemv_wide(
           /* const Stream& s = */ s,
           /* metal::Device& d = */ d,
@@ -1802,7 +1831,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   // Route to gemv if needed
-  if (std::min(M, N) == 1) {
+  if (!thin_nax && std::min(M, N) == 1) {
     return gemv_axbpy(
         /* const Stream& s = */ s,
         /* metal::Device& d = */ d,

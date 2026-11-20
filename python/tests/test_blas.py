@@ -931,10 +931,12 @@ class TestBlas(mlx_tests.MLXTestCase):
             self.skipTest("requires GPU")
 
         # few output columns or few rows with a transposed b takes the thin NAX
-        # kernel on Metal.
+        # kernel on Metal. On M5 Ultra parts it also takes M == 1 and M = 6..15
+        # with N >= 4096 and K >= 2048, which otherwise go to gemv / gemv_wide.
         np.random.seed(0)
         shapes = [(2048, 64, 2048), (2049, 48, 300), (4100, 16, 1), (1025, 24, 63)]
         shapes += [(20, 300, 1), (33, 1000, 999), (64, 2560, 128)]
+        shapes += [(1, 4096, 2048), (6, 4100, 2052), (11, 4098, 4096), (15, 8192, 2048)]
         for M, N, K in shapes:
             scale = K**-0.5
             a_np = np.random.normal(0.0, scale, (M, K)).astype(np.float32)
