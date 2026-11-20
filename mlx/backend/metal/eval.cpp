@@ -2,6 +2,7 @@
 #include <memory>
 
 #include "mlx/backend/gpu/eval.h"
+#include "mlx/backend/metal/allocator.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
@@ -29,10 +30,14 @@ void new_thread_unsafe_stream(Stream s) {
 void eval(array& arr) {
   auto pool = metal::new_scoped_memory_pool();
   auto s = arr.primitive().stream();
+  allocator::AllocationScope allocation_scope(s.index);
   auto& encoder = metal::get_command_encoder(s);
   auto* command_buffer = encoder.get_command_buffer();
 
   auto outputs = arr.outputs();
+  for (const auto& input : arr.inputs()) {
+    encoder.retain_array(input);
+  }
   {
     // If the array is a tracer hold a reference
     // to its inputs so they don't get donated
@@ -44,31 +49,18 @@ void eval(array& arr) {
     debug_set_primitive_buffer_label(command_buffer, arr.primitive());
     arr.primitive().eval_gpu(arr.inputs(), outputs);
   }
-  std::unordered_set<std::shared_ptr<array::Data>> buffers;
-  for (auto& in : arr.inputs()) {
-    buffers.insert(in.data_shared_ptr());
-  }
-  for (auto& s : arr.siblings()) {
-    buffers.insert(s.data_shared_ptr());
-  }
-  // Remove the output if it was donated to by an input
-  if (auto it = buffers.find(arr.data_shared_ptr()); it != buffers.end()) {
-    buffers.erase(it);
+  for (const auto& output : outputs) {
+    encoder.retain_array(output);
   }
 
 #ifndef NDEBUG
-  encoder.verify_graph(arr.primitive().name(), arr.inputs(), outputs);
+  encoder.verify_graph(arr.primitive().name());
 #endif
 
   if (encoder.needs_commit()) {
     encoder.end_encoding();
     scheduler::notify_new_task(s);
-    encoder.commit([s, buffers = std::move(buffers)]() {
-      scheduler::notify_task_completion(s);
-    });
-  } else {
-    command_buffer->addCompletedHandler(
-        [buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {});
+    encoder.commit([s]() { scheduler::notify_task_completion(s); });
   }
 }
 

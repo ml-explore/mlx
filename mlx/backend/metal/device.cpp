@@ -15,6 +15,7 @@
 #define MTL_PRIVATE_IMPLEMENTATION
 
 #include "mlx/backend/common/utils.h"
+#include "mlx/backend/metal/allocator.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/event.h"
 #include "mlx/backend/metal/metal.h"
@@ -342,7 +343,7 @@ CommandEncoder::CommandEncoder(
     Device& d,
     int index,
     ResidencySets& residency_sets)
-    : device_(d), residency_sets_(residency_sets) {
+    : device_(d), stream_index_(index), residency_sets_(residency_sets) {
   auto pool = new_scoped_memory_pool();
   queue_ = NS::TransferPtr(device_.mtl_device()->newCommandQueue());
   if (!queue_) {
@@ -378,6 +379,7 @@ void CommandEncoder::set_input_array(
     const array& a,
     int idx,
     int64_t offset /* = 0 */) {
+  retain_array(a);
   if (all_inputs_.insert(a.buffer().ptr()).second) {
     buffer_sizes_ += a.data_size();
   }
@@ -405,6 +407,7 @@ void CommandEncoder::set_output_array(
 }
 
 void CommandEncoder::register_output_array(const array& a) {
+  retain_array(a);
   all_outputs_.insert(a.buffer().ptr());
 #ifndef NDEBUG
   if (a.data_shared_ptr()->is_owned()) {
@@ -414,7 +417,13 @@ void CommandEncoder::register_output_array(const array& a) {
 
   auto buf = static_cast<MTL::Resource*>(const_cast<void*>(a.buffer().ptr()));
   if (concurrent_) {
-    concurrent_outputs_.insert(buf);
+    auto [it, inserted] = concurrent_outputs_.try_emplace(buf);
+    const auto& data = a.data_shared_ptr();
+    if (inserted || it->second.owner_before(data) ||
+        data.owner_before(it->second)) {
+      needs_barrier_ = needs_barrier_ | prev_inputs_.contains(buf);
+      it->second = data;
+    }
   } else {
     next_outputs_.insert(buf);
     needs_barrier_ =
@@ -422,15 +431,27 @@ void CommandEncoder::register_output_array(const array& a) {
   }
 }
 
+void CommandEncoder::retain_array(const array& a) {
+  const auto& data = a.data_shared_ptr();
+  if (!data) {
+    return;
+  }
+  if (!data->is_owned()) {
+    retained_data_.insert(data);
+  } else if (auto* buffer = static_cast<MTL::Buffer*>(a.buffer().ptr());
+             buffer && retained_buffers_.insert(buffer).second) {
+    allocator().retain_buffer(buffer, stream_index_);
+  }
+}
+
 void CommandEncoder::add_temporary(array arr) {
-  temporaries_.push_back(std::move(arr));
+  retain_array(arr);
 }
 
 void CommandEncoder::add_temporaries(std::vector<array> arrays) {
-  temporaries_.insert(
-      temporaries_.end(),
-      std::make_move_iterator(arrays.begin()),
-      std::make_move_iterator(arrays.end()));
+  for (const auto& arr : arrays) {
+    retain_array(arr);
+  }
 }
 
 void CommandEncoder::maybeInsertBarrier() {
@@ -469,39 +490,31 @@ void CommandEncoder::barrier() {
 }
 
 void CommandEncoder::end_encoding(bool wait_in_flight) {
-  // Each command encoder has a unique fence. We also store a map of
-  // all previous outputs of command encoders to their corresponding fence.
-  // - The command encoder records its inputs and outputs.
-  // - Wait on a fence if any inputs in the encoder are outputs of a previous
-  //   encoder.
-  // - Update the map of outputs to include this command encoder's outputs.
-  // - Always signal this command encoders fence.
-  // - Add a completion handler for this command encoder that removes outputs
-  //   from the map to limit the growth of the map and avoid unnecessary waits
-  // - Temporaries are a special case as they do not cross command encoder
-  //   boundaries. These can be removed early from the encoders inputs and
-  //   outputs since they don't need synchronization.
+  // Track each buffer's last writer and pending readers by encoder fence.
+  // Reads wait for the last writer. Writes also wait for all pending readers.
   if (!encoder_) {
     return;
   }
 
-  // Remove temporaries from inputs and outputs.
-  for (auto& t : temporaries_) {
-    all_outputs_.erase(t.buffer().ptr());
-    all_inputs_.erase(t.buffer().ptr());
-  }
-
-  // Keep references to the fences we waited on and put them in the completion
-  // handler so they are not prematurely released.
+  // Include temporary buffers because later encoders can reuse their storage.
+  auto accesses = std::move(all_inputs_);
+  accesses.insert(all_outputs_.begin(), all_outputs_.end());
   std::unordered_set<NS::SharedPtr<MTL::Fence>> waiting_on;
   {
     std::lock_guard lk(outputs_mtx_);
-    for (auto& in : all_inputs_) {
-      if (auto it = prev_ce_outputs_.find(in); it != prev_ce_outputs_.end()) {
-        // If we've already waited on a fence, don't wait on it again.
-        if (waiting_on.find(it->second) == waiting_on.end()) {
-          encoder_->waitForFence(it->second.get());
-          waiting_on.insert(it->second);
+    auto wait = [&](const NS::SharedPtr<MTL::Fence>& fence) {
+      if (fence && waiting_on.insert(fence).second) {
+        encoder_->waitForFence(fence.get());
+      }
+    };
+    for (auto* buffer : accesses) {
+      if (auto it = prev_ce_accesses_.find(buffer);
+          it != prev_ce_accesses_.end()) {
+        wait(it->second.writer);
+        if (all_outputs_.contains(buffer)) {
+          for (const auto& reader : it->second.readers) {
+            wait(reader);
+          }
         }
       }
     }
@@ -509,33 +522,49 @@ void CommandEncoder::end_encoding(bool wait_in_flight) {
     // earlier operations to be finished.
     // See https://github.com/ml-explore/mlx/pull/4689
     if (wait_in_flight) {
-      for (auto& [_, fence] : prev_ce_outputs_) {
-        if (waiting_on.insert(fence).second) {
-          encoder_->waitForFence(fence.get());
+      for (const auto& [_, access] : prev_ce_accesses_) {
+        wait(access.writer);
+        for (const auto& reader : access.readers) {
+          wait(reader);
         }
       }
     }
-    for (auto& out : all_outputs_) {
-      prev_ce_outputs_[out] = fence_;
+    for (auto* buffer : accesses) {
+      auto& access = prev_ce_accesses_[buffer];
+      if (all_outputs_.contains(buffer)) {
+        access.writer = fence_;
+        access.readers.clear();
+      } else {
+        access.readers.push_back(fence_);
+      }
     }
   }
 
   encoder_->updateFence(fence_.get());
-  buffer_->addCompletedHandler([this,
-                                fence = std::move(fence_),
-                                temporaries = std::move(temporaries_),
-                                all_outputs = std::move(all_outputs_),
-                                waiting_on = std::move(waiting_on)](
-                                   MTL::CommandBuffer*) mutable {
-    std::lock_guard lk(outputs_mtx_);
-    for (auto& o : all_outputs) {
-      if (auto it = prev_ce_outputs_.find(o); it != prev_ce_outputs_.end()) {
-        if (it->second == fence) {
-          prev_ce_outputs_.erase(it);
+  // Retain this encoder's fence and the fences it waits on until the command
+  // buffer completes. Remove only the records that match this encoder's fence.
+  buffer_->addCompletedHandler(
+      [this,
+       fence = std::move(fence_),
+       accesses = std::move(accesses),
+       waiting_on = std::move(waiting_on)](MTL::CommandBuffer*) mutable {
+        std::lock_guard lk(outputs_mtx_);
+        for (auto* buffer : accesses) {
+          if (auto it = prev_ce_accesses_.find(buffer);
+              it != prev_ce_accesses_.end()) {
+            auto& access = it->second;
+            if (access.writer == fence) {
+              access.writer.reset();
+            }
+            std::erase_if(access.readers, [&](const auto& reader) {
+              return reader == fence;
+            });
+            if (!access.writer && access.readers.empty()) {
+              prev_ce_accesses_.erase(it);
+            }
+          }
         }
-      }
-    }
-  });
+      });
 
   encoder_->endEncoding();
   encoder_.reset();
@@ -547,6 +576,7 @@ void CommandEncoder::end_encoding(bool wait_in_flight) {
   next_outputs_.clear();
   concurrent_outputs_.clear();
   all_inputs_.clear();
+  all_outputs_.clear();
 #ifndef NDEBUG
   registered_data_ptrs_.clear();
 #endif
@@ -577,9 +607,13 @@ void CommandEncoder::commit(std::function<void()> completion) {
   residency_sets_.attach_new_sets(queue_.get(), sets_attached_);
   buffer_->addCompletedHandler(
       [&error_ = error_,
+       stream_index = stream_index_,
+       buffers = std::move(retained_buffers_),
+       data = std::move(retained_data_),
        wait_events = std::move(wait_events_),
        signal_events = std::move(signal_events_),
        completion = std::move(completion)](MTL::CommandBuffer* cbuf) mutable {
+        allocator().release_buffers(buffers, stream_index);
         if (completion) {
           completion();
         }
@@ -632,10 +666,7 @@ void CommandEncoder::synchronize() {
 }
 
 #ifndef NDEBUG
-void CommandEncoder::verify_graph(
-    const char* primitive_name,
-    const std::vector<array>& inputs,
-    const std::vector<array>& outputs) {
+void CommandEncoder::verify_graph(const char* primitive_name) {
   if (exiting_) {
     return;
   }
@@ -646,25 +677,6 @@ void CommandEncoder::verify_graph(
             "which is a bug that corrupts the graph, and usually caused by "
             "temporary arrays not registered with \"add_temporary\" method.",
             primitive_name));
-  }
-  for (const auto& temp : temporaries_) {
-    auto pred = [&temp](auto& arr) {
-      return arr.data_shared_ptr() == temp.data_shared_ptr();
-    };
-    if (std::find_if(inputs.begin(), inputs.end(), pred) != inputs.end()) {
-      throw std::runtime_error(
-          fmt::format(
-              "An input of array is registered as temporary when calling "
-              "{}::eval_gpu, which is a bug that corrupts the graph.",
-              primitive_name));
-    }
-    if (std::find_if(outputs.begin(), outputs.end(), pred) != outputs.end()) {
-      throw std::runtime_error(
-          fmt::format(
-              "A output of array is registered as temporary when calling "
-              "{}::eval_gpu, which is a bug that corrupts the graph.",
-              primitive_name));
-    }
   }
 }
 #endif
