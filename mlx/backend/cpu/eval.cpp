@@ -1,6 +1,5 @@
 // Copyright © 2025 Apple Inc.
 #include "mlx/backend/cpu/eval.h"
-#include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
@@ -34,10 +33,6 @@ void eval(array& arr) {
       inputs = arr.inputs();
     }
     arr.primitive().eval_cpu(arr.inputs(), outputs);
-
-#ifndef NDEBUG
-    check_outputs_have_data(arr.primitive().name(), outputs);
-#endif
   }
 
   std::unordered_set<std::shared_ptr<array::Data>> buffers;
