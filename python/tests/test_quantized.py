@@ -443,9 +443,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), tol)
 
-    @unittest.skipIf(
-        not mx.metal.is_available(), "Global scale is only supported on Metal backend"
-    )
     def test_qqmm_unquantized_w(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("Not implemented for CPU")
@@ -470,6 +467,9 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     )
                     self.assertTrue(mx.array_equal(y, y_q))
 
+    @unittest.skipIf(
+        not mx.metal.is_available(), "Global scale is only supported on Metal backend"
+    )
     def test_qqmm_global_scale_matrix_kernels(self):
         mx.random.seed(0)
         dtype = mx.bfloat16
