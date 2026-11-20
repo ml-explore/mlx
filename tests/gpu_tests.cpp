@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <future>
+#include <latch>
 
 #include "doctest/doctest.h"
 #include "mlx/mlx.h"
@@ -652,6 +653,27 @@ TEST_CASE("test memory info") {
 
   clear_cache();
   CHECK_EQ(get_cache_memory(), 0);
+}
+
+TEST_CASE("test Metal memory stats during allocation") {
+  if (!metal::is_available()) {
+    return;
+  }
+  auto first = allocator::malloc(4096);
+  auto first_size = allocator::allocator().size(first.buffer());
+  std::latch start(2);
+  auto stats = std::async(std::launch::async, [&start] {
+    start.arrive_and_wait();
+    return std::pair{get_active_memory(), get_peak_memory()};
+  });
+  start.arrive_and_wait();
+  auto second = allocator::malloc(4096);
+  auto [active, peak] = stats.get();
+  CHECK_GE(active, first_size);
+  CHECK_GE(peak, first_size);
+  auto total = first_size + allocator::allocator().size(second.buffer());
+  CHECK_GE(get_active_memory(), total);
+  CHECK_GE(get_peak_memory(), total);
 }
 
 TEST_CASE("test scatter_prod with NaN does not hang") {
