@@ -1220,17 +1220,18 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             out, vjps = mx.vjp(f, [q, k, v], [cotan])
             return out + vjps
 
+        # cuDNN attention runs on CUDA GPUs from sm80 on. Require the fused
+        # kernels there, and use the default path elsewhere.
+        fused = (
+            mx.default_device() == mx.gpu
+            and mx.cuda.is_available()
+            and mx.device_info(mx.gpu)["compute_capability_major"] >= 8
+        )
+        eager = partial(attention, fused=fused)
+        compiled = mx.compile(eager)
         for dtype in (mx.float16, mx.bfloat16):
             inputs = [x.astype(dtype) for x in (q, k, v)]
             ct = cotan.astype(dtype)
-            # Use the fused kernels when they take a mask with the gradients.
-            try:
-                attention(*inputs, keys, ct, True)
-                fused = True
-            except ValueError:
-                fused = False
-            eager = partial(attention, fused=fused)
-            compiled = mx.compile(eager)
             tol = 4e-2 if dtype == mx.bfloat16 else 1e-2
             for name, mask in masks.items():
                 expected = reference(q, k, v, mask, cotan)
