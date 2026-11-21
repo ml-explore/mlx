@@ -338,6 +338,28 @@ MTL::Library* load_library(
 
 } // namespace
 
+void DataRefs::drop_shared() {
+  // One lock for all walks, so a wait sees all earlier refs dropped. The
+  // vectors release the data and the refs after the unlock.
+  static std::mutex mtx;
+  std::vector<std::shared_ptr<array::Data>> dropped_data;
+  std::vector<std::shared_ptr<DataRefs>> walked;
+  std::lock_guard lk(mtx);
+  for (auto* r = this; r && !r->dropped; r = walked.back().get()) {
+    r->dropped = true;
+    // Only owned, shared data can block a donation. If the other holder is a
+    // duplicate ref, the data is freed here; the kept buffer makes it safe.
+    for (auto& d : r->data) {
+      if (d.use_count() > 1 && d->is_owned() && d->buffer().ptr()) {
+        r->buffers.push_back(
+            NS::RetainPtr(static_cast<MTL::Buffer*>(d->buffer().ptr())));
+        dropped_data.push_back(std::move(d));
+      }
+    }
+    walked.push_back(r->prev.lock());
+  }
+}
+
 CommandEncoder::CommandEncoder(
     Device& d,
     int index,
@@ -353,6 +375,7 @@ CommandEncoder::CommandEncoder(
   residency_sets_.attach_new_sets(queue_.get(), sets_attached_);
   debug_set_stream_queue_label(queue_.get(), index);
   buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
+  open_refs();
 }
 
 CommandEncoder::~CommandEncoder() {
@@ -552,9 +575,18 @@ void CommandEncoder::end_encoding(bool wait_in_flight) {
 #endif
 }
 
+void CommandEncoder::open_refs(std::weak_ptr<DataRefs> prev) {
+  auto refs = std::make_shared<DataRefs>();
+  refs->prev = std::move(prev);
+  refs_.push_back(std::move(refs));
+}
+
 void CommandEncoder::signal_event(Event event, uint64_t value) {
   end_encoding();
   buffer_->encodeSignalEvent(event.cast<EventImpl>().mtl_event(), value);
+  // A wait on this signal can drop the refs before it.
+  event.cast<EventImpl>().set_refs(value, refs_.back());
+  open_refs(refs_.back());
   signal_events_.push_back({std::move(event), value});
 }
 
@@ -575,11 +607,15 @@ void CommandEncoder::commit(std::function<void()> completion) {
   // Metal locks a command buffer's residency at commit time, so attach any
   // sets created since the last commit first.
   residency_sets_.attach_new_sets(queue_.get(), sets_attached_);
+  auto refs = std::move(refs_);
+  open_refs(refs.back());
   buffer_->addCompletedHandler(
       [&error_ = error_,
+       refs = std::move(refs),
        wait_events = std::move(wait_events_),
        signal_events = std::move(signal_events_),
        completion = std::move(completion)](MTL::CommandBuffer* cbuf) mutable {
+        refs.clear();
         if (completion) {
           completion();
         }

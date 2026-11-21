@@ -170,6 +170,18 @@ class TestEval(mlx_tests.MLXTestCase):
         post = mx.get_peak_memory()
         self.assertEqual(pre, post)
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_donation_after_eval(self):
+        # An array that the last eval read can be updated in place.
+        for _ in range(10):
+            x = mx.zeros((4096, 4096))
+            mx.eval(mx.sum(x))
+            mx.reset_peak_memory()
+            x = mx.abs(x)
+            mx.eval(x)
+            # abs reuses the buffer of x, so nothing is allocated after the reset.
+            self.assertEqual(mx.get_peak_memory(), 0)
+
     @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
     def test_multistream_deadlock(self):
         s1 = mx.default_stream(mx.gpu)

@@ -21,6 +21,19 @@ using MTLFCList =
 
 class Device;
 
+// Data that the ops read between two signals or commits. A wait on a later
+// signal can drop it before the command buffer completes.
+struct DataRefs {
+  // Drop the shared data here and in all earlier refs.
+  void drop_shared();
+
+  bool dropped{false};
+  std::vector<std::shared_ptr<array::Data>> data;
+  // Buffers of the dropped data, because Metal does not retain them.
+  std::vector<NS::SharedPtr<MTL::Buffer>> buffers;
+  std::weak_ptr<DataRefs> prev;
+};
+
 class MLX_API CommandEncoder {
  public:
   CommandEncoder(Device& d, int index, ResidencySets& residency_sets);
@@ -51,6 +64,12 @@ class MLX_API CommandEncoder {
 
   void add_temporary(array arr);
   void add_temporaries(std::vector<array> arrays);
+
+  // Keep the data alive until the GPU is done with it. Call only from the
+  // encoding thread; no wait can reach the open refs.
+  void add_ref(std::shared_ptr<array::Data> data) {
+    refs_.back()->data.push_back(std::move(data));
+  }
 
   void dispatch_threadgroups(MTL::Size grid_dims, MTL::Size group_dims);
   void dispatch_threads(MTL::Size grid_dims, MTL::Size group_dims);
@@ -113,6 +132,8 @@ class MLX_API CommandEncoder {
 
  private:
   MTL::ComputeCommandEncoder* get_command_encoder();
+  // Open new refs after prev. The first refs of a queue have no prev.
+  void open_refs(std::weak_ptr<DataRefs> prev = {});
 
   Device& device_;
   bool exiting_{false};
@@ -122,6 +143,9 @@ class MLX_API CommandEncoder {
   NS::SharedPtr<MTL::CommandBuffer> buffer_;
   int buffer_ops_{0};
   size_t buffer_sizes_{0};
+
+  // The refs of the current command buffer, split at signals. The last is open.
+  std::vector<std::shared_ptr<DataRefs>> refs_;
 
   // The residency set and how many of its sets this queue has attached.
   ResidencySets& residency_sets_;
