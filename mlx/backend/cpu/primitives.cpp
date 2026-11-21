@@ -255,11 +255,14 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
   // keys has shape (N1, ..., NK, 2)
   // out has shape (N1, ..., NK, M1, M2, ...)
   auto& keys = inputs[0];
-  size_t num_keys = keys.size() / 2;
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
 
+  size_t num_keys = keys.size() / 2;
   size_t elems_per_key = out.size() / num_keys;
   size_t bytes_per_key = out.itemsize() * elems_per_key;
-  out.set_data(allocator::malloc(out.nbytes()));
 
   auto kptr = inputs[0].data<uint32_t>();
   auto cptr = out.data<char>();

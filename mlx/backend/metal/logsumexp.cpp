@@ -17,6 +17,10 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
     throw std::runtime_error(
         "[logsumexp] Does not support non-floating point types.");
   }
+  if (out.size() == 0) {
+    out.set_data(allocator::malloc(0));
+    return;
+  }
   auto& s = stream();
   auto& d = metal::device(s.device);
   auto& compute_encoder = metal::get_command_encoder(s);

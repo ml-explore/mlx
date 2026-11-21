@@ -26,6 +26,20 @@ namespace mlx::core {
 
 namespace {
 
+#ifndef NDEBUG
+// Throw if a primitive did not set the data of each output.
+void check_outputs_have_data(const array& arr) {
+  for (auto& out : arr.outputs()) {
+    if (!out.data_shared_ptr()) {
+      std::ostringstream msg;
+      msg << "[" << arr.primitive().name() << "] Output with shape "
+          << out.shape() << " has no data after eval.";
+      throw std::runtime_error(msg.str());
+    }
+  }
+}
+#endif
+
 // Get the stream of the first array that has a primitive, else the default.
 StreamOrDevice find_stream(const std::vector<array>& arrays) {
   for (auto& a : arrays) {
@@ -317,6 +331,13 @@ array eval_impl(std::vector<array> outputs, bool async) {
       } else {
         cpu::eval(arr);
       }
+
+#ifndef NDEBUG
+      // The synchronizer has no output data.
+      if (arr.id() != synchronizer.id()) {
+        check_outputs_have_data(arr);
+      }
+#endif
 
       scheduler::wait_for_capacity(open_streams);
 

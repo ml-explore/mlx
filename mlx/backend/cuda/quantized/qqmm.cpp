@@ -102,6 +102,9 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   const array& w_pre = inputs[1];
 
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  if (out.size() == 0) {
+    return;
+  }
 
   // - 2 inputs: x, w (non-quantized w)
   // - 3 inputs: x, w, scales_w (quantized w)
@@ -219,6 +222,9 @@ void GatherQQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   const array& rhs_indices = ensure_row_contiguous(inputs[3], encoder, s);
 
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  if (out.size() == 0) {
+    return;
+  }
 
   // - 4 inputs: x, w, lhs_indices, rhs_indices (non-quantized w)
   // - 5 inputs: x, w, lhs_indices, rhs_indices, scales_w (quantized w)
