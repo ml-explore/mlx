@@ -898,7 +898,15 @@ struct GemvWide {
   }
 };
 
-template <typename T, const int vecs_per_tg, const int k_lanes>
+// With staged = true, each threadgroup copies one K chunk of all vectors to
+// threadgroup memory, and 16 matrix rows read it there. Fewer vector values
+// stay in registers than in the default path, which spilled to L1 for the
+// float32 shapes that gemv_wide_config routes here.
+template <
+    typename T,
+    const int vecs_per_tg,
+    const int k_lanes,
+    const bool staged = false>
 [[kernel]] void gemv_wide(
     const device T* mat [[buffer(0)]],
     const device T* in_vec [[buffer(1)]],
@@ -926,7 +934,8 @@ template <typename T, const int vecs_per_tg, const int k_lanes>
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 tgpg [[threadgroups_per_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
-    uint simd_lid [[thread_index_in_simdgroup]]) {
+    uint simd_lid [[thread_index_in_simdgroup]],
+    uint lid [[thread_index_in_threadgroup]]) {
   if (gemv_wide_has_batch) {
     in_vec += elem_to_loc(tid.z, batch_shape, vector_batch_stride, batch_ndim);
     mat += elem_to_loc(tid.z, batch_shape, matrix_batch_stride, batch_ndim);
@@ -943,6 +952,70 @@ template <typename T, const int vecs_per_tg, const int k_lanes>
     }
   }
   out_vec += int64_t(tid.z) * M * out_vec_size;
+
+  if constexpr (staged) {
+    using AccT = typename DefaultAccT<T>::type;
+    constexpr int rows_per_tg = 16;
+    constexpr int unroll = 4;
+    constexpr int chunk_vec4 = k_lanes * unroll; // vec4 elements of K per chunk
+    threadgroup vec<T, 4> x_chunk[vecs_per_tg * chunk_vec4];
+
+    const int k_lane = lid % k_lanes;
+    const int out_row = tid.y * rows_per_tg + lid / k_lanes;
+    const int row = min(out_row, out_vec_size - 1);
+    auto w4 = (const device vec<T, 4>*)(mat + int64_t(row) * matrix_ld);
+    auto x4 = (const device vec<T, 4>*)in_vec;
+    const int n_v4 = in_vec_size / 4;
+
+    AccT result[vecs_per_tg] = {0};
+    for (int base = 0; base < n_v4; base += chunk_vec4) {
+      // Wait until all threads are done with the last chunk, load the next
+      // one, then wait until it is fully loaded before any thread reads it.
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      for (int i = lid; i < vecs_per_tg * chunk_vec4;
+           i += rows_per_tg * k_lanes) {
+        int v = i / chunk_vec4, idx = base + i % chunk_vec4;
+        x_chunk[i] = (v < M && idx < n_v4)
+            ? x4[int64_t(v) * (vector_ld / 4) + idx]
+            : vec<T, 4>(0);
+      }
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+
+      vec<AccT, 4> wf[unroll];
+      MLX_MTL_PRAGMA_UNROLL
+      for (int i = 0; i < unroll; i++) {
+        int idx = base + i * k_lanes + k_lane;
+        wf[i] = idx < n_v4 ? vec<AccT, 4>(w4[idx]) : vec<AccT, 4>(0);
+      }
+      MLX_MTL_PRAGMA_UNROLL
+      for (int v = 0; v < vecs_per_tg; v++) {
+        AccT acc = 0;
+        MLX_MTL_PRAGMA_UNROLL
+        for (int i = 0; i < unroll; i++) {
+          acc +=
+              dot(wf[i],
+                  vec<AccT, 4>(x_chunk[v * chunk_vec4 + i * k_lanes + k_lane]));
+        }
+        result[v] += acc;
+      }
+    }
+
+    for (int v = 0; v < vecs_per_tg && v < M; v++) {
+      for (ushort off = k_lanes / 2; off >= 1; off >>= 1) {
+        result[v] += simd_shuffle_down(result[v], off);
+      }
+      if (k_lane == 0 && out_row < out_vec_size) {
+        int64_t out_idx = int64_t(v) * out_vec_size + out_row;
+        AccT r = result[v];
+        if (gemv_wide_do_axpby) {
+          r = alpha * r +
+              beta * AccT(bias[int64_t(v) * bias_ld + out_row * bias_fd]);
+        }
+        out_vec[out_idx] = static_cast<T>(r);
+      }
+    }
+    return;
+  }
 
   GemvWide<T, vecs_per_tg, k_lanes>::run(
       mat,

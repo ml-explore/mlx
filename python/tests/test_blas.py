@@ -628,6 +628,9 @@ class TestBlas(mlx_tests.MLXTestCase):
                     (2048, 256),
                     (2048, 32),
                     (2052, 1000),
+                    # float32 takes the staged route from N * K >= 2**22
+                    (4096, 1024),
+                    (4100, 1027),
                 ):
                     run_test(dtype, (M, K), (N, K), nt_np, nt_mx)
 
@@ -739,6 +742,58 @@ class TestBlas(mlx_tests.MLXTestCase):
 
         self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
         self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-5))
+
+    def test_wide_gather_float32(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("requires GPU")
+
+        # A staged-size float32 shape must still run through gather_mm,
+        # which has no staged kernel.
+        a = mx.random.normal((6, 4, 4096)) * 4096**-0.5
+        b = mx.random.normal((3, 1024, 4096)) * 4096**-0.5
+        idx = mx.array([0, 2, 1, 1, 0, 2], dtype=mx.uint32)
+        out = mx.gather_mm(a, mx.swapaxes(b, -1, -2), rhs_indices=idx)
+        expected = mx.stack([a[i] @ b[int(j)].T for i, j in enumerate(idx)])
+        self.assertTrue(mx.allclose(out, expected, atol=1e-4))
+
+    def test_wide_float32_boundaries(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("requires GPU")
+
+        # float32 takes the staged route for 2 <= M <= 6 and N * K >= 2**22.
+        # Cover both sides of each bound, strided operands, and addmm biases.
+        # References are float64; outputs are about 1e-2, errors about 3e-8.
+        def check(out, expected):
+            np.testing.assert_allclose(np.array(out), expected, rtol=1e-4, atol=1e-5)
+
+        K = 4096
+        rng = np.random.default_rng(11)
+        w_np = rng.standard_normal((1025, K + 8)).astype(np.float32) / K**0.5
+        x_np = rng.standard_normal((14, K)).astype(np.float32) / K**0.5
+        w, x = mx.array(w_np), mx.array(x_np)
+        w64, x64 = w_np.astype(np.float64), x_np.astype(np.float64)
+        for N in (1023, 1024, 1025):  # N * K below, at and above 2**22
+            for M in (1, 2, 6, 7):
+                check(x[:M] @ w[:N, :K].T, x64[:M] @ w64[:N, :K].T)
+        # strided rows of x (6 of 12) and an 8-aligned column slice of w
+        check(x[:12:2] @ w[:, 8 : K + 8].T, x64[:12:2] @ w64[:, 8 : K + 8].T)
+        # per-batch weights
+        wb = mx.stack([w[:1024, :K], w[1:, :K]])
+        wb64 = np.stack([w64[:1024, :K], w64[1:, :K]])
+        check(
+            x[:12].reshape(2, 6, K) @ mx.swapaxes(wb, -1, -2),
+            x64[:12].reshape(2, 6, K) @ np.swapaxes(wb64, -1, -2),
+        )
+        # addmm with broadcast, column and transposed bias layouts
+        prod = x64[:5] @ w64[:1024, :K].T
+        c_t = mx.array(rng.standard_normal((1024, 5)).astype(np.float32))
+        for c in (
+            mx.array(rng.standard_normal((1024,)).astype(np.float32)),
+            mx.array(rng.standard_normal((5, 1)).astype(np.float32)),
+            mx.swapaxes(c_t, 0, 1),  # a transposed view, not a copy
+        ):
+            out = mx.addmm(c, x[:5], w[:1024, :K].T, 0.5, 2.0)
+            check(out, 0.5 * prod + 2.0 * np.array(c, dtype=np.float64))
 
     def test_addmm(self):
         np.random.seed(0)
@@ -915,6 +970,12 @@ class TestBlas(mlx_tests.MLXTestCase):
                     for alpha, beta in ((1.0, 1.0), (2.5, 0.5), (1.0, 0.0)):
                         run_test(dtype, None, M, 512, 250, c_shape, alpha, beta)
             run_test(dtype, 3, 4, 512, 250, (3, 4, 250), 1.0, 1.0)
+
+            # float32 takes the staged route at this size
+            for M in (2, 6):
+                for c_shape in ((1027,), (M, 1027)):
+                    run_test(dtype, None, M, 4100, 1027, c_shape, 2.5, 0.5)
+            run_test(dtype, 3, 4, 4096, 1024, (3, 4, 1024), 1.0, 1.0)
 
             # the epilogue must scale the accumulator before narrowing: a
             # product past the fp16 max rescued by alpha stays finite (M = 4

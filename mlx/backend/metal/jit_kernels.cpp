@@ -892,7 +892,8 @@ MTL::ComputePipelineState* get_gemv_wide_kernel(
     const metal::MTLFCList& func_consts,
     const array& out,
     int vecs_per_tg,
-    int k_lanes) {
+    int k_lanes,
+    bool staged) {
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
@@ -902,7 +903,8 @@ MTL::ComputePipelineState* get_gemv_wide_kernel(
                          "gemv_wide",
                          get_type_string(out.dtype()),
                          vecs_per_tg,
-                         k_lanes);
+                         k_lanes,
+                         staged);
     return kernel_source.str();
   });
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
