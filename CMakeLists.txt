@@ -268,7 +268,7 @@ if(WIN32)
   endblock()
   target_include_directories(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src")
   target_sources(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src/dlfcn.c")
-  target_link_libraries(mlx PRIVATE Psapi.lib)
+  target_link_libraries(mlx PRIVATE psapi)
 endif()
 
 if(MLX_BUILD_CPU)

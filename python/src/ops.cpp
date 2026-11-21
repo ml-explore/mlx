@@ -1514,7 +1514,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arange(start : int | float, stop : None | int | float, step : None | int | float, dtype: Dtype | None = None, *, stream: StreamOrDevice = None) -> array"),
+          "def arange(start : int | float, stop : None | int | float, step : None | int | float = None, dtype: Dtype | None = None, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Generates ranges of numbers.
 

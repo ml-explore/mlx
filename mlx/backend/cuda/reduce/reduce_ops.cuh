@@ -154,6 +154,33 @@ struct ReduceResult<Max, T> {
   using type = T;
 };
 
+// Traits to get the accumulator type of reduce op. Half precision sums and
+// products accumulate in float32 to keep precision on long reductions.
+template <typename Op, typename T>
+struct ReduceAccum {
+  using type = typename ReduceResult<Op, T>::type;
+};
+
+template <>
+struct ReduceAccum<Sum, __half> {
+  using type = float;
+};
+
+template <>
+struct ReduceAccum<Sum, __nv_bfloat16> {
+  using type = float;
+};
+
+template <>
+struct ReduceAccum<Prod, __half> {
+  using type = float;
+};
+
+template <>
+struct ReduceAccum<Prod, __nv_bfloat16> {
+  using type = float;
+};
+
 // Traits to get the init value of reduce op.
 template <typename Op, typename T>
 struct ReduceInit;
