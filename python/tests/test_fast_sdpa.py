@@ -1327,6 +1327,63 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 test_grad(loss_slow, loss_fast, [q, k, v])
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_grad_large_scores(self):
+        # The fused backward rebuilds P = exp(scale * S - lse) from the scores
+        # S = Q @ K.T and the float32 lse of the forward. If S is rounded to
+        # half precision, large scores put the rounding error into the exponent
+        # (and float16 S overflows), and the gradients blow up.
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        mx.random.seed(0)
+        B, H, Hk, qL, kL, D = 2, 4, 2, 200, 232, 64
+        scale = D**-0.5
+
+        def rel_err(x, expected):
+            x = x.astype(mx.float32)
+            return (mx.linalg.norm(x - expected) / mx.linalg.norm(expected)).item()
+
+        for dtype, mask in product((mx.bfloat16, mx.float16), (None, "causal")):
+            q = 32 * mx.random.normal((B, H, qL, D))
+            k = 32 * mx.random.normal((B, Hk, kL, D))
+            # One key per kv head equal to a query, so the largest |q.k| is
+            # about 6.5e4: past the float16 max, while scale * q.k still fits.
+            k[:, :, 0] = q[:, :: H // Hk, -1]
+            v = mx.random.normal((B, Hk, kL, D))
+            cotan = mx.random.normal((B, H, qL, D))
+            q, k, v, cotan = (x.astype(dtype) for x in (q, k, v, cotan))
+
+            def fast(q, k, v):
+                return mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask=mask
+                )
+
+            def ref(q, k, v):
+                return mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+
+            # The fused backward, with small tiles so it runs several ragged
+            # tiles per axis.
+            with mx.config.scoped_update(
+                MLX_SDPA_VJP_FALLBACK=0, MLX_SDPA_VJP_BQ=64, MLX_SDPA_VJP_BK=48
+            ):
+                _, grads = mx.vjp(fast, [q, k, v], [cotan])
+                mx.eval(grads)
+
+            # The same values in float32
+            primals = [x.astype(mx.float32) for x in (q, k, v)]
+            _, expected = mx.vjp(ref, primals, [cotan.astype(mx.float32)])
+
+            # dq and dk carry the half precision rounding of dS and dP; dv only
+            # that of P.
+            if dtype == mx.bfloat16:
+                tols = (0.3, 0.3, 1e-2)
+            else:
+                tols = (5e-2, 5e-2, 2e-3)
+            for name, g, e, tol in zip(("dq", "dk", "dv"), grads, expected, tols):
+                with self.subTest(dtype=dtype, mask=mask, grad=name):
+                    self.assertTrue(mx.all(mx.isfinite(g)).item())
+                    self.assertLess(rel_err(g, e), tol)
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
     def test_sdpa_force_fused_metal(self):
         if mx.default_device() != mx.gpu:
             self.skipTest("requires GPU")
