@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <bit>
+
 #include "mlx/backend/cpu/simd/type.h"
 
 namespace mlx::core::simd {
@@ -51,11 +53,17 @@ Simd<T, N> exp(Simd<T, N> in) {
     x = fma(x, fpart, 1.000000000000000f);
 
     // generate 2**ipart in the floating point representation using integer
-    // bitshifting
-    Simd<int, N> epart = (Simd<int, N>(ipart) + 127) << 23;
+    // bitshifting. Adding 1.5 * 2**23 puts the integer value of ipart in the
+    // low bits of the mantissa, which avoids a float to int conversion that is
+    // undefined for inf, nan and large values. The result is only used for
+    // |x| <= 88, the selects below handle the rest. Unsigned math wraps.
+    auto ibits = std::bit_cast<Simd<uint32_t, N>>(ipart + 12582912.0f);
+    constexpr uint32_t bias = 127u - 0x4B400000u;
+    Simd<uint32_t, N> epart = (ibits + bias) << 23;
 
     // Deal with NaN and Inf
-    auto result = select(isnan(x_init), x_init, (*(Simd<float, N>*)&epart) * x);
+    auto result =
+        select(isnan(x_init), x_init, std::bit_cast<Simd<float, N>>(epart) * x);
     result = select(x_init > 88.0f, Simd<float, N>(inf), result);
     result = select(x_init < -88.0f, Simd<float, N>(0), result);
     return Simd<T, N>(result);
