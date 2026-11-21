@@ -443,6 +443,29 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), tol)
 
+    def test_qqmm_unquantized_w(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Not implemented for CPU")
+
+        key = mx.random.key(0)
+        k1, k2, k3 = mx.random.split(key, 3)
+        x = mx.random.normal((33, 512), key=k1)
+        ws = [
+            ("contiguous", mx.random.normal((256, 512), key=k2)),
+            ("transposed", mx.random.normal((512, 256), key=k3).T),
+        ]
+        for mode in ["mxfp8", "nvfp4"]:
+            for layout, w in ws:
+                with self.subTest(mode=mode, layout=layout):
+                    gx = mx.max(mx.abs(x)) if mode == "nvfp4" else None
+                    gw = mx.max(mx.abs(w)) if mode == "nvfp4" else None
+                    y = mx.qqmm(x, w, mode=mode, global_scale_x=gx, global_scale_w=gw)
+                    w_q, scales = mx.quantize(w, mode=mode, global_scale=gw)
+                    y_q = mx.qqmm(
+                        x, w_q, scales, mode=mode, global_scale_x=gx, global_scale_w=gw
+                    )
+                    self.assertTrue(mx.array_equal(y, y_q))
+
     @unittest.skipIf(
         not mx.metal.is_available(), "Global scale is only supported on Metal backend"
     )

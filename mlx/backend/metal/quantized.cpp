@@ -242,7 +242,6 @@ void quantize_impl(
     Stream s) {
   auto& w_pre = inputs[0];
   auto& out = outputs[0];
-  out.set_data(allocator::malloc(out.nbytes()));
 
   auto& d = metal::device(s.device);
   auto& compute_encoder = metal::get_command_encoder(s);
@@ -264,10 +263,8 @@ void quantize_impl(
     compute_encoder.set_output_array(out, 3);
   } else {
     auto& scales = outputs[1];
-    scales.set_data(allocator::malloc(scales.nbytes()));
     if (has_biases) {
       auto& biases = outputs[2];
-      biases.set_data(allocator::malloc(biases.nbytes()));
       compute_encoder.set_output_array(biases, 3);
     } else if (has_global_scale) {
       compute_encoder.set_input_array(inputs[1], 3);
@@ -328,8 +325,10 @@ auto quantize_input(
       array(wq_shape, uint32, nullptr, {}),
       array(scales_shape, uint8, nullptr, {})};
   auto& compute_encoder = metal::get_command_encoder(s);
-  compute_encoder.add_temporary(outputs[0]);
-  compute_encoder.add_temporary(outputs[1]);
+  for (auto& out : outputs) {
+    out.set_data(allocator::malloc(out.nbytes()));
+    compute_encoder.add_temporary(out);
+  }
   quantize_impl(inputs, outputs, mode, group_size, bits, false, s);
   return std::make_tuple(outputs[0], outputs[1]);
 }
@@ -2698,6 +2697,9 @@ void GatherQQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 void fast::Quantize::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
+  for (auto& out : outputs) {
+    out.set_data(allocator::malloc(out.nbytes()));
+  }
   quantize_impl(
       inputs, outputs, mode_, group_size_, bits_, dequantize_, stream());
 }
