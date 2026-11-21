@@ -4463,6 +4463,36 @@ TEST_CASE("test conv2d") {
   }
 }
 
+TEST_CASE("test conv empty batch weight gradients") {
+  SUBCASE("conv1d") {
+    for (int groups : {1, 2}) {
+      auto in = zeros({0, 5, 2});
+      auto wt = ones({4, 3, 2 / groups});
+      auto conv_w = [&](const std::vector<array>& primals) {
+        return std::vector<array>{conv1d(in, primals[0], 1, 0, 1, groups)};
+      };
+      auto cotan = ones_like(conv_w({wt})[0]);
+      auto grad = vjp(conv_w, {wt}, {cotan}).second[0];
+      CHECK_EQ(grad.shape(), wt.shape());
+      CHECK_EQ(grad.dtype(), wt.dtype());
+      CHECK(array_equal(grad, zeros_like(wt)).item<bool>());
+    }
+  }
+
+  SUBCASE("conv2d") {
+    auto in = zeros({0, 5, 5, 2}, float16);
+    auto wt = ones({4, 3, 3, 2}, float16);
+    auto conv_w = [&](const std::vector<array>& primals) {
+      return std::vector<array>{conv2d(in, primals[0])};
+    };
+    auto cotan = ones_like(conv_w({wt})[0]);
+    auto grad = vjp(conv_w, {wt}, {cotan}).second[0];
+    CHECK_EQ(grad.shape(), wt.shape());
+    CHECK_EQ(grad.dtype(), wt.dtype());
+    CHECK(array_equal(grad, zeros_like(wt)).item<bool>());
+  }
+}
+
 TEST_CASE("test trace") {
   auto in = eye(3);
   auto out = trace(in).item<float>();

@@ -24,8 +24,6 @@
 
 namespace mlx::core {
 
-static constexpr int MAX_ACTIVE_TASKS = 10;
-
 namespace {
 
 #ifndef NDEBUG
@@ -341,21 +339,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
       }
 #endif
 
-      if (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS ||
-          (get_active_memory() > get_memory_limit() &&
-           scheduler::n_active_tasks() > 0)) {
-        // Commit any open streams
-        for (auto& s : open_streams) {
-          if (s.device == Device::gpu) {
-            gpu::finalize(s);
-          }
-        }
-        scheduler::wait_for_one();
-        while (get_active_memory() > get_memory_limit() &&
-               scheduler::n_active_tasks() > 0) {
-          scheduler::wait_for_one();
-        }
-      }
+      scheduler::wait_for_capacity(open_streams);
 
       auto maybe_update_fence =
           [&fences, &needs_fence, stream](const array& a) {

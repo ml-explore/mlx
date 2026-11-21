@@ -1104,6 +1104,15 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(y - y_hat1).max(), 0.0005)
         self.assertLess(mx.abs(y - y_hat2).max(), 0.025)
 
+        # The float16 gradient stays finite where x**3 overflows
+        x = mx.array([-60000.0, -150.0, -9.0, 0.5, 9.0, 150.0], dtype=mx.float16)
+        dx = mx.grad(lambda x: nn.gelu_approx(x).astype(mx.float32).sum())(x)
+        expected = mx.grad(lambda x: nn.gelu_approx(x).sum())(x.astype(mx.float32))
+        self.assertTrue(mx.allclose(dx, expected, atol=1e-3))
+        cotan = mx.full(x.shape, 4000.0, dtype=mx.float16)
+        _, (dx,) = mx.vjp(nn.gelu_approx, [x], [cotan])
+        self.assertTrue(mx.allclose(dx, cotan * expected, rtol=1e-2))
+
     def test_sin_pe(self):
         m = nn.SinusoidalPositionalEncoding(16, min_freq=0.01)
         x = mx.arange(10)

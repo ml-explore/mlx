@@ -253,7 +253,7 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
         _, (dq, dr) = mx.jvp(fun, [mx.array(7.0)], [mx.array(1.0)])
         self.assertEqual(dq.item(), 0.0)
-        self.assertEqual(dr.item(), 0.0)
+        self.assertEqual(dr.item(), -1.0)
 
         # slice_update with dynamic start indices and a subset of traced
         # inputs (issue #3634)
@@ -278,6 +278,58 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
         _, (j,) = mx.jvp(fun, [src, upd], [mx.ones(4), mx.full(2, 2.0)])
         self.assertEqual(j.tolist(), [1.0, 2.0, 2.0, 1.0])
+
+    def test_divmod_grads(self):
+        x = mx.array([5.5, -3.25, 7.0, -7.5, 0.5])
+        y = mx.array([2.0, 1.5, -2.5, -2.0, 4.0])
+        q, _ = mx.divmod(x, y)
+        self.assertTrue(mx.array_equal(q, mx.floor_divide(x, y)))
+
+        def rem(x, y):
+            return mx.divmod(x, y)[1]
+
+        def quo(x, y):
+            return mx.divmod(x, y)[0]
+
+        wq = mx.array([1.0, -2.0, 3.0, 0.5, 4.0])
+        wr = mx.array([0.5, 2.0, -1.0, 3.0, 1.5])
+
+        # vjp
+        gx, gy = mx.vjp(lambda x, y: mx.divmod(x, y), [x, y], [wq, wr])[1]
+        self.assertTrue(mx.allclose(gx, wr))
+        self.assertTrue(mx.allclose(gy, -q * wr))
+
+        gx, gy = mx.vjp(lambda x, y: mx.divmod(x, y), [x, y], [wq, mx.zeros_like(wr)])[
+            1
+        ]
+        self.assertTrue(mx.array_equal(gx, mx.zeros_like(x)))
+        self.assertTrue(mx.array_equal(gy, mx.zeros_like(y)))
+
+        # Same gradients as remainder
+        gx, gy = mx.grad(lambda x, y: rem(x, y).sum(), argnums=(0, 1))(x, y)
+        ex, ey = mx.grad(lambda x, y: mx.remainder(x, y).sum(), argnums=(0, 1))(x, y)
+        self.assertTrue(mx.allclose(gx, ex))
+        self.assertTrue(mx.allclose(gy, ey))
+        self.assertTrue(mx.allclose(gx, mx.ones_like(x)))
+        gx, gy = mx.grad(lambda x, y: quo(x, y).sum(), argnums=(0, 1))(x, y)
+        self.assertTrue(mx.array_equal(gx, mx.zeros_like(x)))
+        self.assertTrue(mx.array_equal(gy, mx.zeros_like(y)))
+
+        # jvp
+        tx = mx.array([1.0, 2.0, -1.0, 0.5, 3.0])
+        ty = mx.array([0.5, -1.0, 2.0, 1.0, -0.5])
+
+        _, (dq, dr) = mx.jvp(lambda x, y: mx.divmod(x, y), [x, y], [tx, ty])
+        self.assertTrue(mx.array_equal(dq, mx.zeros_like(x)))
+        self.assertTrue(mx.allclose(dr, tx - q * ty))
+
+        _, (dq, dr) = mx.jvp(lambda x: mx.divmod(x, y), [x], [tx])
+        self.assertTrue(mx.array_equal(dq, mx.zeros_like(x)))
+        self.assertTrue(mx.allclose(dr, tx))
+
+        _, (dq, dr) = mx.jvp(lambda y: mx.divmod(x, y), [y], [ty])
+        self.assertTrue(mx.array_equal(dq, mx.zeros_like(x)))
+        self.assertTrue(mx.allclose(dr, -q * ty))
 
     def test_grad(self):
         def fun(x):
