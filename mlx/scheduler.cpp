@@ -3,10 +3,10 @@
 #include <future>
 #include <thread>
 
+#include "mlx/allocator.h"
 #include "mlx/backend/cpu/eval.h"
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/compile_impl.h"
-#include "mlx/memory.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
 
@@ -95,11 +95,8 @@ struct StreamThread {
 };
 
 void Scheduler::wait_for_capacity(const std::set<Stream>& open_streams) {
-  auto over_memory_limit = [] {
-    return get_active_memory() > get_memory_limit();
-  };
   int n = n_active_tasks_.load();
-  if (n <= MAX_ACTIVE_TASKS && !(n > 0 && over_memory_limit())) {
+  if (n <= MAX_ACTIVE_TASKS && !(n > 0 && allocator::over_memory_limit())) {
     return;
   }
   // Commit any open streams
@@ -115,7 +112,7 @@ void Scheduler::wait_for_capacity(const std::set<Stream>& open_streams) {
       n_active_tasks_.wait(n);
       n = n_active_tasks_.load();
     }
-  } while (n > 0 && over_memory_limit());
+  } while (n > 0 && allocator::over_memory_limit());
 }
 
 Scheduler::Scheduler() {
