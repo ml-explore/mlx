@@ -5006,6 +5006,16 @@ array quantized_matmul(
       std::move(inputs));
 }
 
+void validate_qqmm_mode(std::string_view tag, QuantizationMode qmode) {
+  // Affine mode needs biases, and qqmm does not take them.
+  if (qmode == QuantizationMode::Affine) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] Only 'nvfp4', 'mxfp4' and 'mxfp8' quantization "
+        << "modes are supported but received 'affine'.";
+    throw std::invalid_argument(msg.str());
+  }
+}
+
 void validate_qqmm_inputs(
     const array& x,
     const array& w,
@@ -5108,6 +5118,7 @@ array qqmm(
     StreamOrDevice s /* = {} */) {
   auto stream = to_stream(s);
   auto qmode = string_to_quantization_mode(mode, "qqmm");
+  validate_qqmm_mode("qqmm", qmode);
   // we need to check 2 cases:
   // 1. w is quantized, scales is provided
   // 2. w is not quantized, scales is not provided
@@ -5863,6 +5874,7 @@ array gather_qqmm(
     StreamOrDevice s) {
   auto stream = to_stream(s);
   auto qmode = string_to_quantization_mode(mode, "gather_qqmm");
+  validate_qqmm_mode("gather_qqmm", qmode);
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
 

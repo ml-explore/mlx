@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <queue>
+#include <set>
 #include <shared_mutex>
 #include <unordered_map>
 
@@ -34,45 +35,26 @@ class MLX_API Scheduler {
   void check_error(Stream s);
 
   void notify_new_task(const Stream& stream) {
-    {
-      std::lock_guard<std::mutex> lk(mtx);
-      n_active_tasks_++;
-    }
-    completion_cv.notify_all();
+    n_active_tasks_.fetch_add(1);
   }
 
   void notify_task_completion(const Stream& stream) {
-    {
-      std::lock_guard<std::mutex> lk(mtx);
-      n_active_tasks_--;
-    }
-    completion_cv.notify_all();
+    n_active_tasks_.fetch_sub(1);
+    n_active_tasks_.notify_all();
   }
 
-  int n_active_tasks() const {
-    return n_active_tasks_;
-  }
-
-  void wait_for_one() {
-    std::unique_lock<std::mutex> lk(mtx);
-    int n_tasks_old = n_active_tasks();
-    if (n_tasks_old > 1) {
-      completion_cv.wait(lk, [this, n_tasks_old] {
-        return this->n_active_tasks() < n_tasks_old;
-      });
-    }
-  }
+  // Block the caller when too many tasks or too much memory is in flight.
+  // Commits the GPU streams in open_streams first so that tasks can finish.
+  void wait_for_capacity(const std::set<Stream>& open_streams);
 
  private:
   friend Stream mlx::core::new_stream(Device d);
 
   StreamThread& get_thread(Stream s);
 
-  int n_active_tasks_{0};
+  std::atomic<int> n_active_tasks_{0};
   std::unordered_map<int, std::unique_ptr<StreamThread>> threads_;
   std::shared_mutex threads_mtx_;
-  std::condition_variable completion_cv;
-  std::mutex mtx;
 };
 
 MLX_API Scheduler& scheduler();
@@ -98,10 +80,6 @@ inline void check_error(Stream s) {
   scheduler().check_error(s);
 }
 
-inline int n_active_tasks() {
-  return scheduler().n_active_tasks();
-}
-
 inline void notify_new_task(const Stream& stream) {
   scheduler().notify_new_task(stream);
 }
@@ -110,8 +88,8 @@ inline void notify_task_completion(const Stream& stream) {
   scheduler().notify_task_completion(stream);
 }
 
-inline void wait_for_one() {
-  scheduler().wait_for_one();
+inline void wait_for_capacity(const std::set<Stream>& open_streams) {
+  scheduler().wait_for_capacity(open_streams);
 }
 
 } // namespace mlx::core::scheduler

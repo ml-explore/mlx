@@ -237,7 +237,11 @@
   instantiate_quantized_all(type, group_size, 5)         \
   instantiate_quantized_all(type, group_size, 6)         \
   instantiate_quantized_all(type, group_size, 8)         \
+  instantiate_qmv_mma_all(type, group_size, 2)           \
+  instantiate_qmv_mma_all(type, group_size, 3)           \
   instantiate_qmv_mma_all(type, group_size, 4)           \
+  instantiate_qmv_mma_all(type, group_size, 5)           \
+  instantiate_qmv_mma_all(type, group_size, 6)           \
   instantiate_qmv_mma_all(type, group_size, 8)
 
 #define instantiate_quantized_all_groups(type) \

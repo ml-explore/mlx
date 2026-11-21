@@ -69,6 +69,21 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.full([3, 2], mx.array([2.0, 3.0]))
         self.assertEqual(x.tolist(), [[2, 3], [2, 3], [2, 3]])
 
+        x = mx.full((2,), mx.array(0.5), dtype=mx.bfloat16)
+        self.assertEqual(x.dtype, mx.bfloat16)
+        self.assertEqual(x.tolist(), [0.5, 0.5])
+
+        x = mx.full((2,), mx.array(3), dtype=mx.float32)
+        self.assertEqual(x.dtype, mx.float32)
+        self.assertEqual(x.tolist(), [3.0, 3.0])
+
+        x = mx.full((2,), 3.5, dtype=mx.int32)
+        self.assertEqual(x.dtype, mx.int32)
+        self.assertEqual(x.tolist(), [3, 3])
+
+        x = mx.full((2,), mx.array(0.5, dtype=mx.float16))
+        self.assertEqual(x.dtype, mx.float16)
+
         x = mx.zeros(2)
         self.assertEqual(x.shape, (2,))
         self.assertEqual(x.tolist(), [0.0, 0.0])
@@ -4895,6 +4910,18 @@ class TestOps(mlx_tests.MLXTestCase):
             expected = mx.array([0.0 + 1j, 2.0 + 1j, 3.0 + 1j, nan_val])
             sorted_x = mx.take(x, mx.argsort(x))
             self.assertTrue(mx.array_equal(sorted_x, expected, equal_nan=True))
+
+    def test_sort_bool(self):
+        np.random.seed(0)
+        # Small sizes use the single block sort, large sizes the multi-block sort
+        for size in [10, 5000, 50000]:
+            with self.subTest(size=size):
+                a_np = np.random.uniform(size=size) < 0.5
+                a_mx = mx.array(a_np)
+                self.assertTrue(np.array_equal(mx.sort(a_mx), np.sort(a_np)))
+                self.assertEqual(mx.sort(a_mx).dtype, mx.bool_)
+                idx = mx.argsort(a_mx)
+                self.assertTrue(np.array_equal(mx.take(a_mx, idx), np.sort(a_np)))
 
     def test_to_from_fp8(self):
         vals = mx.array(
