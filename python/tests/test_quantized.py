@@ -556,6 +556,39 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 tol = 1e-3 if dtype == mx.float32 else 1.5e-3
                 self.assertLess((y_q - y_hat).abs().max(), tol)
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_affine_large_tiles(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        tests = [
+            (511, 1280, 256),
+            (512, 1280, 256),
+            (639, 1281, 256),
+            (640, 1280, 256),
+            (2049, 1280, 256),
+        ]
+        for (M, N, K), group_size, bits, dtype in product(
+            tests, [32, 64, 128], [4, 8], [mx.float32, mx.float16, mx.bfloat16]
+        ):
+            with self.subTest(
+                shape=(M, N, K), group_size=group_size, bits=bits, dtype=dtype
+            ):
+                x = mx.random.normal(shape=(M, K), key=k1) / K**0.5
+                w = mx.random.normal(shape=(N, K), key=k2) / K**0.5
+                x = x.astype(dtype)
+                w = w.astype(dtype)
+                w_q, scales, biases = mx.quantize(w, group_size, bits)
+                w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
+                y_q = mx.quantized_matmul(
+                    x, w_q, scales, biases, True, group_size, bits
+                )
+                y_hat = x @ w_hat.T
+                self.assertEqual(y_q.shape, y_hat.shape)
+                tol = 1e-3 if dtype == mx.float32 else 1.5e-3
+                self.assertLess((y_q - y_hat).abs().max(), tol)
+
     def test_qmm_large_dims(self):
         # Regression test for an int16 overflow in the NAX qmm kernels:
         # the per-simdgroup edge sizes were computed as
