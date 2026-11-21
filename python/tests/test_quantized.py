@@ -949,6 +949,44 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 )
                 self.assertLess(rel_err(out, y_ref), tol)
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_affine_qmm_few_rows_large(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        mx.random.seed(0)
+
+        def rel_err(got, expected):
+            d = mx.abs(got.astype(mx.float32) - expected.astype(mx.float32))
+            return d.max() / mx.abs(expected.astype(mx.float32)).max()
+
+        # (K, N) of at least 4096 reach qmv_mma on non-NAX GPUs, except Ultras
+        # before gen 15. A narrow output (N = 1024) stays on qmv_wide on Ultra.
+        shapes = [(4096, 4160), (4224, 1024)]
+        Ms = [2, 3, 4, 5, 6, 7, 8, 9, 12, 16]
+        for (K, N), dtype in product(shapes, [mx.bfloat16, mx.float16, mx.float32]):
+            tol = 1e-5 if dtype == mx.float32 else 3e-2
+            w = mx.random.normal((N, K), dtype=dtype)
+            x_all = (mx.random.normal((16, K)) / K**0.5).astype(dtype)
+            for bits, gs in product([4, 8], [32, 64, 128]):
+                w_q, scales, biases = mx.quantize(w, group_size=gs, bits=bits)
+                w_hat = mx.dequantize(w_q, scales, biases, group_size=gs, bits=bits)
+                for M in Ms:
+                    with self.subTest(M=M, N=N, K=K, bits=bits, gs=gs, dtype=dtype):
+                        x = x_all[:M]
+                        out = mx.quantized_matmul(
+                            x, w_q, scales, biases, group_size=gs, bits=bits
+                        )
+                        self.assertLess(rel_err(out, x @ w_hat.T), tol)
+
+            # Views at odd offsets must not reach the Metal vector loads
+            x = (mx.random.normal((8 * K + 1,)) / K**0.5).astype(dtype)
+            x = x[1:].reshape(8, K)
+            w_q, scales, biases = mx.quantize(w, group_size=64, bits=4)
+            w_hat = mx.dequantize(w_q, scales, biases, group_size=64, bits=4)
+            with self.subTest(N=N, K=K, dtype=dtype, offset="x"):
+                out = mx.quantized_matmul(x, w_q, scales, biases)
+                self.assertLess(rel_err(out, x @ w_hat.T), tol)
+
     def test_qmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
