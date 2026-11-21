@@ -847,9 +847,11 @@ class CustomTransforms : public Primitive {
           const std::vector<int>&)> jvp,
       std::function<std::pair<std::vector<array>, std::vector<int>>(
           const std::vector<array>&,
-          const std::vector<int>&)> vmap)
+          const std::vector<int>&)> vmap,
+      bool synchronize_vjps = false)
       : Primitive(stream),
         num_outputs_(num_outputs),
+        synchronize_vjps_(synchronize_vjps),
         vjp_fun_(std::move(vjp)),
         jvp_fun_(std::move(jvp)),
         vmap_fun_(std::move(vmap)) {}
@@ -867,6 +869,7 @@ class CustomTransforms : public Primitive {
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 
   int num_outputs_;
+  bool synchronize_vjps_;
 
   std::function<std::vector<array>(
       const std::vector<array>&,

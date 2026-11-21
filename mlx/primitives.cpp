@@ -1819,6 +1819,11 @@ std::vector<array> CustomTransforms::vjp(
     vjps.push_back(all_vjps[arg]);
   }
 
+  // Finish all requested vjps before any of them can start an earlier
+  // checkpoint.
+  if (synchronize_vjps_ && vjps.size() > 1) {
+    return depends(vjps, vjps);
+  }
   return vjps;
 }
 
