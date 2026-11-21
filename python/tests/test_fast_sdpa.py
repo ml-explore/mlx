@@ -1155,6 +1155,30 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask=mask)
         self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    def test_sdpa_bool_mask_memory(self):
+        B, H, L, D = 1, 8, 1024, 64
+        q, k, v = (mx.random.normal((B, H, L, D), mx.float16) for _ in range(3))
+        bool_mask = make_causal_mask(L, L)
+        add_mask = mx.where(bool_mask, 0.0, -mx.inf).astype(mx.float16)
+        mx.eval(q, k, v, bool_mask, add_mask)
+
+        def run(mask):
+            mx.synchronize()
+            mx.reset_peak_memory()
+            before = mx.get_active_memory()
+            out = mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=D**-0.5, mask=mask
+            )
+            mx.eval(out)
+            mx.synchronize()
+            return out, mx.get_peak_memory() - before
+
+        out_add, mem_add = run(add_mask)
+        out_bool, mem_bool = run(bool_mask)
+        self.assertTrue(mx.allclose(out_bool, out_add, atol=1e-3, rtol=1e-3))
+        # The bool mask can add one additive mask, not one for each head.
+        self.assertLess(mem_bool - mem_add, 2 * add_mask.nbytes)
+
     def test_sdpa_noncontiguous_inputs(self):
         mask = mx.ones(shape=(4, 1, 7, 7), dtype=mx.bool_)
         mx.random.seed(0)
