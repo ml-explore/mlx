@@ -24,9 +24,11 @@ class MetalAllocator : public allocator::Allocator {
   virtual void release(Buffer buffer) override;
 
   size_t get_active_memory() {
+    std::unique_lock lk(mutex_);
     return active_memory_;
   };
   size_t get_peak_memory() {
+    std::unique_lock lk(mutex_);
     return peak_memory_;
   };
   void reset_peak_memory() {
@@ -34,8 +36,13 @@ class MetalAllocator : public allocator::Allocator {
     peak_memory_ = 0;
   };
   size_t get_cache_memory() {
+    std::unique_lock lk(mutex_);
     return buffer_cache_.cache_size();
   };
+  bool over_memory_limit() {
+    std::unique_lock lk(mutex_);
+    return active_memory_ > block_limit_;
+  }
   size_t set_cache_limit(size_t limit);
   size_t set_memory_limit(size_t limit);
   size_t get_memory_limit();

@@ -1,7 +1,10 @@
 // Copyright © 2023-2026 Apple Inc.
 
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <future>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <thread>
@@ -51,6 +54,57 @@ TEST_CASE("test size of a zero-sized allocation") {
   auto y = remainder(x, array(2.0f));
   eval(y);
   CHECK_EQ(y.size(), 0);
+}
+
+TEST_CASE("test peak memory is the largest active memory") {
+  clear_cache();
+  reset_peak_memory();
+  size_t size = 1 << 20;
+  size_t active_with_buffer = 0;
+  for (int i = 0; i < 10; ++i) {
+    auto buffer = allocator::allocator().malloc(size);
+    active_with_buffer = std::max(active_with_buffer, get_active_memory());
+    allocator::allocator().free(buffer);
+  }
+  CHECK_GE(get_peak_memory(), active_with_buffer);
+  CHECK_GE(get_peak_memory(), size);
+  CHECK_LT(get_peak_memory(), 5 * size);
+  clear_cache();
+}
+
+TEST_CASE("test memory stats are readable while another thread allocates") {
+  std::atomic<bool> done{false};
+  std::thread allocating([&done] {
+    for (int i = 0; i < 1000; ++i) {
+      auto buffer = allocator::allocator().malloc(4096);
+      allocator::allocator().free(buffer);
+    }
+    done = true;
+  });
+  bool peak_never_decreased = true;
+  auto last_peak = get_peak_memory();
+  do {
+    get_active_memory();
+    get_cache_memory();
+    get_memory_limit();
+    allocator::over_memory_limit();
+    auto peak = get_peak_memory();
+    peak_never_decreased = peak_never_decreased && peak >= last_peak;
+    last_peak = peak;
+  } while (!done);
+  allocating.join();
+  CHECK(peak_never_decreased);
+  CHECK_GE(get_peak_memory(), 4096);
+}
+
+TEST_CASE("test over memory limit follows the memory limit") {
+  auto buffer = allocator::allocator().malloc(1 << 20);
+  auto old_limit = set_memory_limit(1);
+  CHECK(allocator::over_memory_limit());
+  set_memory_limit(std::numeric_limits<size_t>::max());
+  CHECK_FALSE(allocator::over_memory_limit());
+  set_memory_limit(old_limit);
+  allocator::allocator().free(buffer);
 }
 
 TEST_CASE("test large allocations") {

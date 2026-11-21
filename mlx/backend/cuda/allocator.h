@@ -62,19 +62,21 @@ class CudaAllocator : public allocator::Allocator {
   size_t get_peak_memory() const;
   void reset_peak_memory();
   size_t get_memory_limit();
+  bool over_memory_limit();
   size_t set_memory_limit(size_t limit);
   size_t get_cache_memory() const;
   size_t set_cache_limit(size_t limit);
   void clear_cache();
 
  private:
+  size_t memory_limit_locked();
   void free_cuda_buffer(CudaBuffer* buf);
   void free_async(CudaBuffer& buf, cudaStream_t stream = nullptr);
 
   CudaAllocator();
   friend CudaAllocator& allocator();
 
-  std::mutex mutex_;
+  mutable std::mutex mutex_;
   size_t memory_limit_;
   size_t free_limit_;
   size_t total_memory_;
