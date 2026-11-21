@@ -1075,6 +1075,7 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const array& x,
+    const array& scales,
     const std::string& mode,
     int group_size,
     int bits,
@@ -1091,10 +1092,14 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     concatenate(
         kernel_source, metal::utils(), metal::quantized_utils(), metal::gemm());
     bool is_affine = (mode == "affine");
+    auto input_type = get_type_string(x.dtype());
+    if (is_affine) {
+      input_type += ", " + get_type_string(scales.dtype());
+    }
     auto template_def = get_template_definition(
         lib_name,
         is_affine ? "affine_gather_qmm_rhs" : "fp_gather_qmm_rhs",
-        get_type_string(x.dtype()),
+        input_type,
         group_size,
         bits,
         has_global_scale,
@@ -1298,6 +1303,7 @@ MTL::ComputePipelineState* get_gather_qmm_nax_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const array& x,
+    const array& scales,
     const std::string& mode,
     int group_size,
     int bits,
@@ -1317,10 +1323,14 @@ MTL::ComputePipelineState* get_gather_qmm_nax_kernel(
         metal::gemm_nax(),
         metal::quantized_utils());
     bool is_affine = (mode == "affine");
+    auto input_type = get_type_string(x.dtype());
+    if (is_affine) {
+      input_type += ", " + get_type_string(scales.dtype());
+    }
     auto template_def = get_template_definition(
         lib_name,
         is_affine ? "affine_gather_qmm_rhs_nax" : "fp_gather_qmm_rhs_nax",
-        get_type_string(x.dtype()),
+        input_type,
         group_size,
         bits,
         has_global_scale,

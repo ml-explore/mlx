@@ -36,20 +36,72 @@ auto get_quantized_kernel_wrapped(
 }
 
 template <typename... Args>
+auto get_quantized_matmul_kernel_wrapped(
+    metal::Device& d,
+    const std::string& name,
+    const std::string& func,
+    const std::string& mode,
+    const std::string& type,
+    const array& scales,
+    int group_size,
+    int bits,
+    Args... args) {
+  if (mode != "affine") {
+    return get_quantized_kernel_wrapped(
+        d,
+        name,
+        func,
+        mode,
+        type,
+        group_size,
+        bits,
+        std::forward<Args>(args)...);
+  }
+  auto scale_type = get_type_string(scales.dtype());
+  auto kname = name + (scale_type == type ? "" : "_scales_" + scale_type);
+  auto template_def = get_template_definition(
+      kname,
+      "affine_" + func,
+      type,
+      scale_type,
+      group_size,
+      bits,
+      std::forward<Args>(args)...);
+  return get_quantized_kernel(d, kname, template_def, mode);
+}
+
+template <typename... Args>
 auto get_qmm_nax_kernel_wrapped(
     metal::Device& d,
     const std::string& name,
     const std::string& func,
     const std::string& mode,
     const std::string& type,
+    const array& scales,
     int group_size,
     int bits,
     Args... args) {
+  auto fname = ((mode == "affine") ? "affine_" : "fp_") + func;
+  std::string kname = name;
   std::string template_def;
-  std::string fname = ((mode == "affine") ? "affine_" : "fp_") + func;
-  template_def = get_template_definition(
-      name, fname, type, group_size, bits, std::forward<Args>(args)...);
-  return get_qmm_nax_kernel(d, name, template_def, mode);
+  if (mode == "affine") {
+    auto scale_type = get_type_string(scales.dtype());
+    if (scale_type != type) {
+      kname += "_scales_" + scale_type;
+    }
+    template_def = get_template_definition(
+        kname,
+        fname,
+        type,
+        scale_type,
+        group_size,
+        bits,
+        std::forward<Args>(args)...);
+  } else {
+    template_def = get_template_definition(
+        kname, fname, type, group_size, bits, std::forward<Args>(args)...);
+  }
+  return get_qmm_nax_kernel(d, kname, template_def, mode);
 }
 
 inline array
@@ -438,8 +490,17 @@ void qmv_quad(
       "_d_",
       K,
       B > 1 ? "_batch_1" : "_batch_0");
-  auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "qmv_quad", mode, type_string, group_size, bits, K, B > 1);
+  auto kernel = get_quantized_matmul_kernel_wrapped(
+      d,
+      kname,
+      "qmv_quad",
+      mode,
+      type_string,
+      scales,
+      group_size,
+      bits,
+      K,
+      B > 1);
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -505,12 +566,13 @@ void qmv(
       partial_rows ? "_pr_1" : "_pr_0",
       "_r_",
       results_per_simdgroup);
-  auto kernel = get_quantized_kernel_wrapped(
+  auto kernel = get_quantized_matmul_kernel_wrapped(
       d,
       kname,
       (fast ? "qmv_fast" : "qmv"),
       mode,
       type_string,
+      scales,
       group_size,
       bits,
       global_scale.has_value(),
@@ -598,12 +660,13 @@ void qmv_wide(
       "_kl_",
       k_lanes,
       batched ? "_batch_1" : "_batch_0");
-  auto kernel = get_quantized_kernel_wrapped(
+  auto kernel = get_quantized_matmul_kernel_wrapped(
       d,
       kname,
       "qmv_wide",
       mode,
       type_string,
+      scales,
       group_size,
       bits,
       vecs_per_tg,
@@ -745,11 +808,30 @@ void qmv_mma(
   MTL::ComputePipelineState* kernel;
   if (nax) {
     kernel = get_qmm_nax_kernel_wrapped(
-        d, kname, "qmv_nax", mode, type_string, group_size, bits, wk, bn);
+        d,
+        kname,
+        "qmv_nax",
+        mode,
+        type_string,
+        scales,
+        group_size,
+        bits,
+        wk,
+        bn);
   } else {
     concatenate(kname, "_tm_", tm);
-    kernel = get_quantized_kernel_wrapped(
-        d, kname, "qmv_mma", mode, type_string, group_size, bits, wk, bn, tm);
+    kernel = get_quantized_matmul_kernel_wrapped(
+        d,
+        kname,
+        "qmv_mma",
+        mode,
+        type_string,
+        scales,
+        group_size,
+        bits,
+        wk,
+        bn,
+        tm);
   }
 
   auto& compute_encoder = metal::get_command_encoder(s);
@@ -859,8 +941,16 @@ void qvm_splitk(
       split_k);
 
   // Encode and dispatch kernel
-  auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "qvm_splitk", mode, type_string, group_size, bits, split_k);
+  auto kernel = get_quantized_matmul_kernel_wrapped(
+      d,
+      kname,
+      "qvm_splitk",
+      mode,
+      type_string,
+      scales,
+      group_size,
+      bits,
+      split_k);
 
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -936,12 +1026,13 @@ void qvm(
       bits,
       global_scale ? "_hgs_1" : "_hgs_0",
       B > 1 ? "_batch_1" : "_batch_0");
-  auto kernel = get_quantized_kernel_wrapped(
+  auto kernel = get_quantized_matmul_kernel_wrapped(
       d,
       kname,
       "qvm",
       mode,
       type_string,
+      scales,
       group_size,
       bits,
       global_scale.has_value(),
@@ -1041,6 +1132,7 @@ void qmm_nax(
       transpose ? "qmm_t_nax" : "qmm_n_nax",
       mode,
       type_string,
+      scales,
       group_size,
       bits,
       global_scale.has_value(),
@@ -1135,6 +1227,7 @@ void gather_qmm_nax(
       transpose ? "gather_qmm_t_nax" : "gather_qmm_n_nax",
       mode,
       type_string,
+      scales,
       group_size,
       bits,
       global_scale.has_value(),
@@ -1268,12 +1361,13 @@ void qmm(
       "_bn_",
       bm);
   std::string template_def;
-  MTL::ComputePipelineState* kernel = get_quantized_kernel_wrapped(
+  MTL::ComputePipelineState* kernel = get_quantized_matmul_kernel_wrapped(
       d,
       kname,
       transpose ? "qmm_t" : "qmm_n",
       mode,
       type_string,
+      scales,
       group_size,
       bits,
       global_scale.has_value(),
@@ -1429,6 +1523,7 @@ void qmm_splitk_nax(
       "qmm_t_nax_splitk",
       mode,
       type_string,
+      scales,
       group_size,
       bits,
       false, // has_global_scale
@@ -1559,12 +1654,13 @@ void qmm_splitk(
       "_hgs_0",
       aligned ? "_alN_1" : "_alN_0",
       "_batch_0_bm_32_bn_32");
-  auto kernel = get_quantized_kernel_wrapped(
+  auto kernel = get_quantized_matmul_kernel_wrapped(
       d,
       kname,
       "qmm_t_splitk",
       mode,
       type_string,
+      scales,
       group_size,
       bits,
       false, // has_global_scale
@@ -1674,12 +1770,13 @@ void gather_qmm(
       bm,
       "_bn_",
       bn);
-  MTL::ComputePipelineState* kernel = get_quantized_kernel_wrapped(
+  MTL::ComputePipelineState* kernel = get_quantized_matmul_kernel_wrapped(
       d,
       kname,
       transpose ? "gather_qmm_t" : "gather_qmm_n",
       mode,
       type_string,
+      scales,
       group_size,
       bits,
       global_scale.has_value(),
@@ -1751,12 +1848,13 @@ void gather_qmv(
       bits,
       global_scale ? "_hgs_1" : "_hgs_0");
 
-  auto kernel = get_quantized_kernel_wrapped(
+  auto kernel = get_quantized_matmul_kernel_wrapped(
       d,
       kname,
       (fast ? "gather_qmv_fast" : "gather_qmv"),
       mode,
       type_string,
+      scales,
       group_size,
       bits,
       global_scale.has_value());
@@ -1821,12 +1919,13 @@ void gather_qvm(
       "_b_",
       bits,
       global_scale ? "_hgs_1" : "_hgs_0");
-  auto kernel = get_quantized_kernel_wrapped(
+  auto kernel = get_quantized_matmul_kernel_wrapped(
       d,
       kname,
       "gather_qvm",
       mode,
       type_string,
+      scales,
       group_size,
       bits,
       global_scale.has_value());
@@ -1931,6 +2030,10 @@ void gather_qmm_rhs_nax(
       "_bn_",
       bn);
 
+  if (mode == "affine" && scales.dtype() != x.dtype()) {
+    kname += "_scales_" + get_type_string(scales.dtype());
+  }
+
   metal::MTLFCList func_consts = {
       {&align_N, MTL::DataType::DataTypeBool, 201},
       {&align_K, MTL::DataType::DataTypeBool, 202},
@@ -1957,6 +2060,7 @@ void gather_qmm_rhs_nax(
       hash_name,
       func_consts,
       x,
+      scales,
       mode,
       group_size,
       bits,
@@ -2086,6 +2190,10 @@ void gather_qmm_rhs(
       global_scale ? "_hgs_1" : "_hgs_0",
       transpose ? "_t_1" : "_t_0");
 
+  if (mode == "affine" && scales.dtype() != x.dtype()) {
+    kname += "_scales_" + get_type_string(scales.dtype());
+  }
+
   metal::MTLFCList func_consts = {
       {&align_N, MTL::DataType::DataTypeBool, 201},
       {&align_K, MTL::DataType::DataTypeBool, 202},
@@ -2112,6 +2220,7 @@ void gather_qmm_rhs(
       hash_name,
       func_consts,
       x,
+      scales,
       mode,
       group_size,
       bits,

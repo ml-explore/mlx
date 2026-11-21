@@ -3709,6 +3709,7 @@ std::vector<array> QuantizedMatmul::vjp(
         wq = unflatten(wq, -1, {-1, group_size_}, stream());
         vjps.push_back(sum(multiply(*dsb, wq, stream()), -1, false, stream()));
       }
+      vjps.back() = astype(vjps.back(), primals[arg].dtype(), stream());
     }
   }
   return vjps;
@@ -3956,6 +3957,7 @@ std::vector<array> GatherQMM::vjp(
                 false,
                 stream()));
       }
+      vjps.back() = astype(vjps.back(), primals[arg].dtype(), stream());
     }
   }
   return vjps;

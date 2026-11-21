@@ -4951,6 +4951,18 @@ void validate_global_scale(
   }
 }
 
+static bool use_narrow_affine_constants(
+    const array& x,
+    const array& scales,
+    const std::optional<array>& biases,
+    QuantizationMode mode,
+    StreamOrDevice s) {
+  return mode == QuantizationMode::Affine && x.dtype() == float32 && biases &&
+      (scales.dtype() == float16 || scales.dtype() == bfloat16) &&
+      biases->dtype() == scales.dtype() && to_stream(s).device == Device::gpu &&
+      metal::is_available();
+}
+
 array quantized_matmul(
     const array& x,
     const array& w,
@@ -4983,7 +4995,11 @@ array quantized_matmul(
     throw std::invalid_argument(msg.str());
   }
   std::vector<array> inputs;
-  if (qmode == QuantizationMode::Affine) {
+  bool narrow_constants =
+      use_narrow_affine_constants(x, scales, biases, qmode, s);
+  if (narrow_constants) {
+    inputs = {x, w, scales, *biases};
+  } else if (qmode == QuantizationMode::Affine) {
     inputs = {
         astype(x, dtype, s),
         w,
@@ -5829,7 +5845,15 @@ array gather_qmm(
   out_shape.push_back(x.shape(-2));
   out_shape.push_back(w_outer_dims);
   std::vector<array> inputs;
-  if (qmode == QuantizationMode::Affine) {
+  if (use_narrow_affine_constants(x, scales, biases, qmode, s)) {
+    inputs = {
+        x,
+        std::move(w),
+        std::move(scales),
+        std::move(*biases),
+        std::move(lhs_indices),
+        std::move(rhs_indices)};
+  } else if (qmode == QuantizationMode::Affine) {
     inputs = {
         astype(x, out_type, s),
         std::move(w),
