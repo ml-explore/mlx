@@ -6,6 +6,7 @@
 #include <fmt/format.h>
 
 #include <TargetConditionals.h>
+#include <pthread.h>
 #if TARGET_OS_OSX
 #include <IOKit/IOKitLib.h>
 #endif
@@ -1025,7 +1026,7 @@ CommandEncoder& get_command_encoder(Stream s) {
 }
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders() {
-  if (is_main_thread()) {
+  if (pthread_main_np()) {
     static auto* encoders = new std::unordered_map<int, CommandEncoder>();
     return *encoders;
   } else {
