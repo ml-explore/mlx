@@ -97,6 +97,9 @@ bool use_cudnn_for_decoding(
   auto is_slice = [](const array& kv) {
     // Get pre-sliced sequence length from strides, and check if the buffer
     // belongs to a contiguous kv cache.
+    if (kv.strides(2) == 0) {
+      return false;
+    }
     int64_t T_kv = kv.strides(1) / kv.strides(2);
     if (kv.size() / kv.shape(2) * T_kv != kv.buffer_size() / kv.itemsize()) {
       return false;
@@ -383,8 +386,9 @@ bool supports_sdpa_cudnn(
   }
 
   if (window_size > 0) {
-    // cuDNN supports these windows from 9.6.
-    if (cudnnGetVersion() < 90600) {
+    // Older cuDNN does not support sinks (before 9.13) and gives wrong
+    // gradients when T_kv % 128 != 0 (before 9.15.1).
+    if (cudnnGetVersion() < 91501) {
       return false;
     }
     // cuDNN does not support a window with an array mask, or when T_q > T_kv.
@@ -778,7 +782,7 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   }
   std::optional<array> sinks;
   if (has_sinks_) {
-    sinks = prepare_sdpa_sinks(inputs.back(), s);
+    sinks = prepare_sdpa_sinks(inputs[primals_size - 1], s);
   }
 
   assert(outputs.size() == 3);
