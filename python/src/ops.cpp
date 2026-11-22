@@ -6010,7 +6010,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def roll(a: array, shift: int | tuple[int], axis: None | int | tuple[int] = None, /, *, stream: StreamOrDevice = None) -> array"),
+          "def roll(a: array, /, shift: int | tuple[int], axis: None | int | tuple[int] = None, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Roll array elements along a given axis.
 
