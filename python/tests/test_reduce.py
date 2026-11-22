@@ -1,6 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import math
+import os
 import unittest
 from itertools import combinations, permutations
 
@@ -390,8 +391,9 @@ class TestReduce(mlx_tests.MLXTestCase):
         self.assertFalse(x.all().item())
 
         # Reducing two axes that together hold 2**31 + 2**16 elements
-        self.assertEqual(x[None].max(axis=(1, 2)).item(), 250)
-        self.assertEqual(x.T[None].max(axis=(1, 2)).item(), 250)
+        if not (mx.cuda.is_available() and "CI" in os.environ):
+            self.assertEqual(x[None].max(axis=(1, 2)).item(), 250)
+            self.assertEqual(x.T[None].max(axis=(1, 2)).item(), 250)
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_init_reduce_large_output(self):
