@@ -103,6 +103,7 @@ struct MLX_API finfo {
 struct MLX_API iinfo {
   explicit iinfo(Dtype dtype);
   Dtype dtype;
+  int bits;
   int64_t min;
   uint64_t max;
 };
