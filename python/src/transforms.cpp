@@ -462,7 +462,7 @@ struct PyCompiledFun {
   nb::object captured_inputs;
   nb::object captured_outputs;
   bool shapeless;
-  mx::detail::CompileCacheWeakPtr cache;
+  mx::detail::CompileCaches caches;
 
   // Data to attach to the compiled function that contains the python output
   // structure and the number of arrays in said structure.
@@ -499,13 +499,11 @@ struct PyCompiledFun {
         captured_inputs(std::move(other.captured_inputs)),
         captured_outputs(std::move(other.captured_outputs)),
         shapeless(other.shapeless),
-        cache(other.cache) {
+        caches(std::move(other.caches)) {
     other.fun_id = 0;
   };
 
   nb::object call_impl(const nb::args& args, const nb::kwargs& kwargs) {
-    cache = mx::detail::compile_cache();
-
     // Flat array inputs
     std::vector<mx::array> inputs;
 
@@ -571,6 +569,9 @@ struct PyCompiledFun {
     recurse(kwargs);
     auto compile_fun = [this, &args, &kwargs, num_args](
                            const std::vector<mx::array>& a) {
+      // Only tracing adds an entry to the cache of this thread
+      caches.insert_current();
+
       // Put tracers into captured inputs
       std::vector<mx::array> flat_in_captures;
       std::vector<mx::array> trace_captures;
@@ -639,7 +640,7 @@ struct PyCompiledFun {
   ~PyCompiledFun() {
     nb::gil_scoped_acquire gil;
 
-    mx::detail::compile_erase(cache, fun_id);
+    caches.erase(fun_id);
     fun.reset();
     captured_inputs.reset();
     captured_outputs.reset();
