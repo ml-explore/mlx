@@ -2353,6 +2353,11 @@ array mean(
     }
   }
   auto dtype = at_least_float(a.dtype());
+  // Reduce half-precision inputs in float32; the sum can overflow float16.
+  if (dtype == float16 || dtype == bfloat16) {
+    auto out = mean(astype(a, float32, s), axes, keepdims, s);
+    return astype(out, dtype, s);
+  }
   auto normalizer = number_of_elements(a, axes, true, dtype, s);
   return multiply(sum(a, axes, keepdims, s), normalizer, s);
 }
@@ -2473,6 +2478,11 @@ array var(
     int ddof /* = 0*/,
     StreamOrDevice s /* = {}*/) {
   auto dtype = at_least_float(a.dtype());
+  // Compute half-precision variance in float32; the sums can overflow float16.
+  if (dtype == float16 || dtype == bfloat16) {
+    auto out = var(astype(a, float32, s), axes, keepdims, ddof, s);
+    return astype(out, dtype, s);
+  }
   auto mu = mean(a, axes, /* keepdims= */ true, s);
   auto d = subtract(a, mu, s);
   // The variance of complex values is the mean squared magnitude. Squaring the

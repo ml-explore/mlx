@@ -1154,6 +1154,45 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.var(x).dtype, mx.float32)
         self.assertAlmostEqual(mx.var(x).item(), x_np.var().item(), places=5)
 
+    def test_half_mean_var_overflow(self):
+        # The sum of these values is above the float16 max of 65504.
+        devices = [mx.cpu] + ([mx.gpu] if mx.metal.is_available() else [])
+        for device in devices:
+            with mx.stream(device):
+                for n in [2048, 2184, 8192]:
+                    x = mx.full((n,), 30.0, dtype=mx.float16)
+                    out = mx.mean(x)
+                    self.assertEqual(out.dtype, mx.float16)
+                    self.assertEqual(out.item(), 30.0)
+                    self.assertEqual(mx.var(x).item(), 0.0)
+
+                x = mx.full((4096, 4), 30.0, dtype=mx.float16)
+                self.assertEqual(mx.mean(x, axis=0).tolist(), [30.0] * 4)
+                self.assertEqual(mx.var(x, axis=0).tolist(), [0.0] * 4)
+
+                # Deviations of +-10 around 30: the sum of squares is 409600.
+                x = mx.array([20.0, 40.0] * 2048, dtype=mx.float16)
+                out = mx.var(x)
+                self.assertEqual(out.dtype, mx.float16)
+                self.assertEqual(out.item(), 100.0)
+                self.assertEqual(mx.var(x, ddof=1).item(), 100.0)
+
+                for dtype in [mx.float16, mx.bfloat16]:
+                    x = mx.random.normal((64, 33)).astype(dtype)
+                    x_np = np.array(x.astype(mx.float32))
+                    mean, var = mx.mean(x, axis=1), mx.var(x, axis=1)
+                    self.assertEqual(mean.dtype, dtype)
+                    self.assertEqual(var.dtype, dtype)
+                    mean, var = mean.astype(mx.float32), var.astype(mx.float32)
+                    self.assertTrue(np.allclose(mean, x_np.mean(axis=1), atol=1e-2))
+                    self.assertTrue(np.allclose(var, x_np.var(axis=1), atol=2e-2))
+
+                x = mx.random.normal((64, 33))
+                x_np = np.array(x)
+                self.assertEqual(mx.mean(x).dtype, mx.float32)
+                self.assertAlmostEqual(mx.mean(x).item(), x_np.mean().item(), places=5)
+                self.assertAlmostEqual(mx.var(x).item(), x_np.var().item(), places=5)
+
     def test_std(self):
         x = mx.random.uniform(shape=(5, 5))
         x_np = np.array(x)
