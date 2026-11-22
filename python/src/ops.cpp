@@ -5177,7 +5177,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def vecdot(a: array, b: array, /, *, axis: int = -1, stream: StreamOrDevice = None) -> array"),
+          "def vecdot(a: array, b: array, /, axis: int = -1, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Compute the vector dot product of two arrays along an axis.
 
