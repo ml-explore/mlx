@@ -1694,42 +1694,35 @@ bool ScaledDotProductAttention::use_fallback(
     return false;
   }
 
+  const bool nax = metal::is_nax_available();
   const int query_sequence_length = q.shape(2);
   const int query_head_dim = q.shape(-1);
   const int value_head_dim = v.shape(-1);
 
-  if (query_head_dim == 512 && query_sequence_length > 8) {
-    constexpr int64_t min_query_blocks = 1024;
-    const int64_t query_blocks = int64_t(q.shape(0)) * q.shape(1) *
-        int64_t(ceildiv(query_sequence_length, 32));
-    // The D512 kernel needs this many query blocks to match fallback speed.
-    const bool eligible = metal::is_nax_available() &&
-        (env::enable_tf32() || q.dtype() != float32) &&
-        query_sequence_length >= 1024 && do_causal && !has_arr_mask &&
-        query_blocks >= min_query_blocks;
-    return !eligible;
-  }
-
   // Use headdim-split kernel when NAX is enabled and there are enough query
   // blocks to fill the machine.
-  if (metal::is_nax_available() &&
-      (env::enable_tf32() || q.dtype() != float32) &&
-      query_sequence_length >= 1024 && query_head_dim == 256 &&
+  if (nax && (env::enable_tf32() || q.dtype() != float32) &&
+      (query_head_dim == 256 || query_head_dim == 512) &&
       (do_causal || has_arr_mask)) {
-    return false;
+    if (query_head_dim == 256 && query_sequence_length >= 1024) {
+      return false;
+    }
+
+    if (query_head_dim == 256 &&
+        (q.dtype() == float16 || q.dtype() == bfloat16) &&
+        query_sequence_length >= 512 && int64_t(q.shape(0)) * q.shape(1) >= 8) {
+      return false;
+    }
+
+    int64_t query_blocks =
+        int64_t(q.shape(0)) * q.shape(1) * ceildiv(query_sequence_length, 32);
+    if (query_head_dim == 512 && query_sequence_length >= 1024 &&
+        query_blocks >= 1024) {
+      return false;
+    }
   }
 
-  // Causal 16-bit queries with 512 to 1023 rows (e.g. the last chunk of a
-  // chunked prefill) are also faster on the fused kernel, as long as there are
-  // enough heads to keep the GPU busy.
-  if (metal::is_nax_available() &&
-      (q.dtype() == float16 || q.dtype() == bfloat16) &&
-      query_head_dim == 256 && do_causal && !has_arr_mask &&
-      query_sequence_length >= 512 && int64_t(q.shape(0)) * q.shape(1) >= 8) {
-    return false;
-  }
-
-  if (!metal::is_nax_available() && q.dtype() != float32 && do_causal &&
+  if (!nax && (q.dtype() == float16 || q.dtype() == bfloat16) && do_causal &&
       query_head_dim == 256 && query_sequence_length >= 2048 &&
       query_sequence_length == k.shape(2)) {
     return false;
@@ -1738,7 +1731,8 @@ bool ScaledDotProductAttention::use_fallback(
   // Unfused path is faster for following shapes.
   // Full attention:
   if (query_sequence_length > 8) {
-    return query_head_dim == 192 || query_head_dim == 256;
+    return query_head_dim == 192 || query_head_dim == 256 ||
+        query_head_dim == 512;
   }
   // Split attention:
   const int rows = query_sequence_length * (q.shape(1) / k.shape(1));
