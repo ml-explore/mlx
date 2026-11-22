@@ -4960,9 +4960,15 @@ array quantized_matmul(
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
+    bool quantize_input /* = false */,
     StreamOrDevice s /* = {} */) {
   auto [dtype, qmode] = validate_mode_with_type(
       "quantized_matmul", scales, biases, std::nullopt, mode);
+  if (quantize_input && qmode != QuantizationMode::Affine) {
+    throw std::invalid_argument(
+        "[quantized_matmul] quantize_input is only supported with 'affine' "
+        "quantization.");
+  }
 
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
@@ -5002,7 +5008,7 @@ array quantized_matmul(
       std::move(out_shape),
       dtype,
       std::make_shared<QuantizedMatmul>(
-          to_stream(s), group_size, bits, qmode, transpose),
+          to_stream(s), group_size, bits, qmode, transpose, quantize_input),
       std::move(inputs));
 }
 
@@ -5768,7 +5774,7 @@ array gather_qmm(
           "[gather_qmm] Global scale is not supported without indices.");
     }
     return quantized_matmul(
-        x, w, scales, biases, transpose, group_size_, bits_, mode, s);
+        x, w, scales, biases, transpose, group_size_, bits_, mode, false, s);
   }
 
   auto [out_type, qmode] =

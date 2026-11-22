@@ -992,6 +992,88 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 )
                 self.assertLess(rel_err(out, y_ref), tol)
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_quantize_input(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        mx.random.seed(0)
+
+        # x is quantized to signed 8 bits whatever the bits of w
+        def int8_dequantized(x, group_size):
+            xg = x.astype(mx.float32).reshape(*x.shape[:-1], -1, group_size)
+            amax = mx.abs(xg).max(axis=-1, keepdims=True)
+            inv = mx.where(amax > 0, 127 / amax, 0)
+            return (mx.round(xg * inv) * (amax / 127)).reshape(x.shape)
+
+        for B, M, N, bits, group_size, dtype, transpose in product(
+            [(), (2,)],
+            [8, 256],
+            [128, 4096],
+            [4, 6, 8],
+            [32, 64, 128],
+            [mx.float16, mx.bfloat16],
+            [True, False],
+        ):
+            K = 512
+            with self.subTest(
+                shape=(*B, M, N, K),
+                bits=bits,
+                group_size=group_size,
+                dtype=dtype,
+                transpose=transpose,
+            ):
+                x = mx.random.normal((*B, M, K)).astype(dtype)
+                w = mx.random.normal((N, K) if transpose else (K, N)).astype(dtype)
+                w_q, scales, biases = mx.quantize(w, group_size=group_size, bits=bits)
+                w_hat = mx.dequantize(
+                    w_q,
+                    scales,
+                    biases,
+                    group_size=group_size,
+                    bits=bits,
+                    dtype=mx.float32,
+                )
+                w_hat = w_hat.T if transpose else w_hat
+                expected = int8_dequantized(x, group_size) @ w_hat
+                actual = mx.quantized_matmul(
+                    x,
+                    w_q,
+                    scales,
+                    biases,
+                    transpose=transpose,
+                    group_size=group_size,
+                    bits=bits,
+                    quantize_input=True,
+                )
+                delta = mx.abs(actual.astype(mx.float32) - expected)
+                relative_error = delta.max() / mx.abs(expected).max()
+                self.assertLess(relative_error, 1e-2)
+
+        x = mx.random.normal((8, 512))
+        w = mx.random.normal((128, 512))
+        w_q, scales, biases = mx.quantize(w)
+
+        # The gradient wrt x does not quantize the cotangent
+        def grad_x(quantize_input):
+            def f(x):
+                y = mx.quantized_matmul(
+                    x, w_q, scales, biases, quantize_input=quantize_input
+                )
+                return y.sum()
+
+            return mx.grad(f)(x)
+
+        self.assertTrue(mx.array_equal(grad_x(True), grad_x(False)))
+
+        with self.assertRaises(RuntimeError):
+            y = mx.quantized_matmul(
+                x, w_q, scales, biases, quantize_input=True, stream=mx.cpu
+            )
+            mx.eval(y)
+        w_q, scales = mx.quantize(w, mode="mxfp8")
+        with self.assertRaises(ValueError):
+            mx.quantized_matmul(x, w_q, scales, mode="mxfp8", quantize_input=True)
+
     def test_qmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)

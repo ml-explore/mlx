@@ -1615,6 +1615,7 @@ MLX_API array quantized_matmul(
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
+    bool quantize_input = false,
     StreamOrDevice s = {});
 
 /** Quantize a matrix along its last axis */

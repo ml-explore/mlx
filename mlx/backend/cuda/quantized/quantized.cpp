@@ -15,6 +15,10 @@ namespace mlx::core {
 
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("QuantizedMatmul::eval_gpu");
+  if (quantize_input_) {
+    throw std::runtime_error(
+        "[QuantizedMatmul] quantize_input is not supported on CUDA yet.");
+  }
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 

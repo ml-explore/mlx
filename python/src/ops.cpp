@@ -4800,9 +4800,10 @@ void init_ops(nb::module_& m) {
       "bits"_a = nb::none(),
       "mode"_a = "affine",
       nb::kw_only(),
+      "quantize_input"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantized_matmul(x: array, w: array, /, scales: array, biases: array | None = None, transpose: bool = True, group_size: int | None = None, bits: int | None = None, mode: str = 'affine', *, stream: StreamOrDevice = None) -> array"),
+          "def quantized_matmul(x: array, w: array, /, scales: array, biases: array | None = None, transpose: bool = True, group_size: int | None = None, bits: int | None = None, mode: str = 'affine', *, quantize_input: bool = False, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Perform the matrix multiplication with the quantized matrix ``w``. The
         quantization uses one floating point scale and bias per ``group_size`` of
@@ -4825,6 +4826,12 @@ void init_ops(nb::module_& m) {
             ``w`` in the quantized array. See supported values and defaults in the
             :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
           mode (str, optional): The quantization mode. Default: ``"affine"``.
+          quantize_input (bool, optional): If ``True``, ``x`` is quantized to
+            signed 8-bit integers before the multiplication, with one scale
+            per ``group_size`` elements: the largest absolute value over 127.
+            On chips with NAX this runs on 8-bit integer matrix units, which
+            can be faster. Only ``"affine"`` mode on Metal is supported.
+            Default: ``False``.
 
         Returns:
           array: The result of the multiplication of ``x`` with ``w``.
