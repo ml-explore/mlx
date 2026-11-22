@@ -3782,7 +3782,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def astype(a: array, dtype: Dtype, /, *, stream: StreamOrDevice = None) -> array"),
+          "def astype(a: array, /, dtype: Dtype, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Cast the array to a specified type.
 
