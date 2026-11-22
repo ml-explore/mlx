@@ -2642,7 +2642,7 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def count_nonzero(a: array, /, *, axis: None | int | Sequence[int] = None, keepdims: bool = False, stream: StreamOrDevice = None) -> array"),
+          "def count_nonzero(a: array, /, axis: None | int | Sequence[int] = None, *, keepdims: bool = False, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Count the number of non-zero elements along the given axis.
 
