@@ -35,6 +35,7 @@ NB_MODULE(core, m) {
   auto array_namespace_info = nb::module_::import_("mlx.__array_api_info");
   m.attr("__array_namespace_info__") =
       array_namespace_info.attr("__array_namespace_info__");
+  m.attr("__array_api_version__") = "2025.12";
 
   init_mlx_func(m);
   init_config(m);
