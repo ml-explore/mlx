@@ -42,9 +42,11 @@ class CommonAllocator : public Allocator {
   virtual size_t size(Buffer buffer) const override;
 
   size_t get_active_memory() const {
+    std::unique_lock lk(mutex_);
     return active_memory_;
   };
   size_t get_peak_memory() const {
+    std::unique_lock lk(mutex_);
     return peak_memory_;
   };
   void reset_peak_memory() {
@@ -52,7 +54,12 @@ class CommonAllocator : public Allocator {
     peak_memory_ = 0;
   };
   size_t get_memory_limit() {
+    std::unique_lock lk(mutex_);
     return memory_limit_;
+  }
+  bool over_memory_limit() const {
+    std::unique_lock lk(mutex_);
+    return active_memory_ > memory_limit_;
   }
   size_t set_memory_limit(size_t limit) {
     std::unique_lock lk(mutex_);
@@ -169,6 +176,10 @@ CommonAllocator& common_allocator() {
 
 Allocator& allocator() {
   return common_allocator();
+}
+
+bool over_memory_limit() {
+  return common_allocator().over_memory_limit();
 }
 
 void* Buffer::raw_ptr() {

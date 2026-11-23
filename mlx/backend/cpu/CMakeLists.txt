@@ -18,7 +18,7 @@ set(COMPILE_DEPS
     unary_ops.h
     binary_ops.h)
 
-if(WIN32)
+if(CMAKE_HOST_WIN32)
   set(SHELL_EXT ps1)
   set(SHELL_CMD powershell -ExecutionPolicy Bypass -File)
 else()

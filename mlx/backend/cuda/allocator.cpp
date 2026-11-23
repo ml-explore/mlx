@@ -18,6 +18,7 @@
 
 #include <cassert>
 #include <fstream>
+#include <limits>
 #include <string>
 
 namespace mlx::core {
@@ -190,10 +191,14 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
   CudaBuffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
     // If we have a lot of memory pressure try to reclaim memory from the cache.
-    int64_t mem_to_free =
-        get_active_memory() + get_cache_memory() + size - get_memory_limit();
-    if (mem_to_free > 0) {
-      buffer_cache_.release_cached_buffers(mem_to_free);
+    auto cache_size = buffer_cache_.cache_size();
+    assert(active_memory_ <= std::numeric_limits<size_t>::max() - cache_size);
+    assert(
+        size <=
+        std::numeric_limits<size_t>::max() - active_memory_ - cache_size);
+    size_t mem_required = active_memory_ + cache_size + size;
+    if (auto limit = memory_limit_locked(); mem_required > limit) {
+      buffer_cache_.release_cached_buffers(mem_required - limit);
     }
 
     // Try the scalar pool first
@@ -225,7 +230,7 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
     // If any cuda memory pool has too much reserved memory, clear some
     // memory from the cache. This prevents graph / kernel execution failing
     // from OOM
-    if (get_cache_memory() > 0) {
+    if (buffer_cache_.cache_size() > 0) {
       for (auto p : mem_pools_) {
         if (p) {
           size_t used = 0;
@@ -243,8 +248,9 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
   peak_memory_ = std::max(active_memory_, peak_memory_);
 
   // Maintain the cache below the requested limit.
-  if (get_cache_memory() > max_pool_size_) {
-    buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
+  if (buffer_cache_.cache_size() > max_pool_size_) {
+    buffer_cache_.release_cached_buffers(
+        buffer_cache_.cache_size() - max_pool_size_);
   }
   lock.unlock();
   // Copy to unified memory here if the buffer is not on the right device.
@@ -277,7 +283,7 @@ void CudaAllocator::free(Buffer buffer) {
 
   std::unique_lock lock(mutex_);
   active_memory_ -= buf->size;
-  if (get_cache_memory() < max_pool_size_) {
+  if (buffer_cache_.cache_size() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
     free_cuda_buffer(buf);
@@ -342,10 +348,12 @@ void CudaAllocator::free_async(CudaBuffer& buf, cudaStream_t stream) {
 }
 
 size_t CudaAllocator::get_active_memory() const {
+  std::lock_guard lock(mutex_);
   return active_memory_;
 }
 
 size_t CudaAllocator::get_peak_memory() const {
+  std::lock_guard lock(mutex_);
   return peak_memory_;
 }
 
@@ -355,6 +363,16 @@ void CudaAllocator::reset_peak_memory() {
 }
 
 size_t CudaAllocator::get_memory_limit() {
+  std::lock_guard lock(mutex_);
+  return memory_limit_locked();
+}
+
+bool CudaAllocator::over_memory_limit() {
+  std::lock_guard lock(mutex_);
+  return active_memory_ > memory_limit_locked();
+}
+
+size_t CudaAllocator::memory_limit_locked() {
 #ifdef _WIN32
   int device = default_device().index;
   return std::min(
@@ -371,6 +389,7 @@ size_t CudaAllocator::set_memory_limit(size_t limit) {
 }
 
 size_t CudaAllocator::get_cache_memory() const {
+  std::lock_guard lock(mutex_);
   return buffer_cache_.cache_size();
 }
 
@@ -431,6 +450,10 @@ void* Buffer::raw_ptr() {
 
 bool can_reuse_alien_buffer(void* ptr) {
   return true;
+}
+
+bool over_memory_limit() {
+  return cu::allocator().over_memory_limit();
 }
 
 } // namespace allocator

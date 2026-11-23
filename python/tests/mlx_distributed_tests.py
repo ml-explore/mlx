@@ -424,6 +424,29 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
                 )
             )
 
+    def test_clip_grad_norm_sharded_float16(self):
+        world = mx.distributed.init()
+        N = world.size()
+
+        # 300^2 overflows float16
+        grads_slice = {"a": mx.full((4,), 300.0, dtype=mx.float16)}
+        expected_norm = math.sqrt(N * 4) * 300.0
+
+        for max_norm in (1.0, 1e-5):
+            clipped, grad_norm = clip_grad_norm_sharded(
+                grads_slice, max_norm=max_norm, group=world
+            )
+            mx.eval(clipped, grad_norm)
+            self.assertEqual(grad_norm.dtype, mx.float32)
+            self.assertTrue(
+                mx.allclose(grad_norm, mx.array(expected_norm), rtol=self.rtol)
+            )
+            self.assertEqual(clipped["a"].dtype, mx.float16)
+            expected = 300.0 * max_norm / expected_norm
+            self.assertTrue(
+                mx.allclose(clipped["a"], mx.array(expected), rtol=1e-3, atol=1e-7)
+            )
+
     def test_jaccl_all_gather_factory_validation(self):
         # A custom side-channel factory is only valid with the jaccl backend.
         with self.assertRaises(ValueError):

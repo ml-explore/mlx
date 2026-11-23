@@ -883,6 +883,11 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& in = inputs[0];
 
+  if (out.size() == 0) {
+    out.set_data(allocator::malloc(0));
+    return;
+  }
+
   if (axes_.size() > 1) {
     nd_fft_op(in, out, axes_, inverse_, real_, s);
   } else {

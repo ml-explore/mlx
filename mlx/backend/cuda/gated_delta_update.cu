@@ -204,6 +204,13 @@ void GatedDeltaUpdate::eval_gpu(
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
+  // With no steps the final state is the initial state
+  if (outputs[0].size() == 0) {
+    outputs[0].set_data(cu::malloc_async(0, encoder));
+    copy_gpu(inputs[5], outputs[1], CopyType::General, s);
+    return;
+  }
+
   auto q = ensure_row_contiguous(inputs[0], encoder, s);
   auto k = ensure_row_contiguous(inputs[1], encoder, s);
   auto v = ensure_row_contiguous(inputs[2], encoder, s);

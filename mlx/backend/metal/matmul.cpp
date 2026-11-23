@@ -2943,6 +2943,11 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& lhs_indices = inputs[2];
   auto& rhs_indices = inputs[3];
 
+  if (out.size() == 0) {
+    out.set_data(allocator::malloc(0));
+    return;
+  }
+
   // Return 0s if either input is empty
   if (a.size() == 0 || b.size() == 0) {
     array zero = array(0, a.dtype());
@@ -3166,6 +3171,19 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& a = inputs[0];
   auto& b = inputs[1];
   auto& segments = inputs[2];
+
+  if (out.size() == 0) {
+    out.set_data(allocator::malloc(0));
+    return;
+  }
+
+  // Return 0s if either input is empty
+  if (a.size() == 0 || b.size() == 0) {
+    array zero = array(0, a.dtype());
+    fill_gpu(zero, out, s);
+    metal::get_command_encoder(s).add_temporary(std::move(zero));
+    return;
+  }
 
   out.set_data(allocator::malloc(out.nbytes()));
 

@@ -47,13 +47,11 @@ using Int = integral_constant<int, val>;
 // Binary Operators on Integral constants
 ///////////////////////////////////////////////////////////////////////////////
 
-#define integral_const_binop(__op__, __operator__)          \
-  template <typename T, T tv, typename U, U uv>             \
-  METAL_FUNC constexpr auto __operator__(                   \
-      integral_constant<T, tv>, integral_constant<U, uv>) { \
-    constexpr auto res = tv __op__ uv;                      \
-    using res_t = metal::remove_addrspace_t<decltype(res)>; \
-    return integral_constant<res_t, res>{};                 \
+#define integral_const_binop(__op__, __operator__)                            \
+  template <typename T, T tv, typename U, U uv>                               \
+  METAL_FUNC constexpr auto __operator__(                                     \
+      integral_constant<T, tv>, integral_constant<U, uv>) {                   \
+    return integral_constant<const decltype(tv __op__ uv), (tv __op__ uv)>{}; \
   }
 
 integral_const_binop(+, operator+);
