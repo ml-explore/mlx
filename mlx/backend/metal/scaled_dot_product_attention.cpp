@@ -1,5 +1,6 @@
 // Copyright © 2024-26 Apple Inc.
 #include <algorithm>
+#include <optional>
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
@@ -1426,10 +1427,19 @@ void sdpa_vjp_blocked(
   auto red_add = d.get_kernel("sdpa_vjp_reduce_add_" + tname);
   auto red_set = d.get_kernel("sdpa_vjp_reduce_set_" + tname);
 
-  // Temporary tiles
-  array s_buf = vjp_alloc({BH, BQ, BK}, ctype, s);
+  // Temporary tiles. The scores S stay in float32 to keep precision.
+  array s_buf = vjp_alloc({BH, BQ, BK}, float32, s);
   array dp_buf = vjp_alloc({BH, BQ, BK}, ctype, s);
   array p_buf = vjp_alloc({BH, BQ, BK}, ctype, s);
+
+  // For half precision inputs Q and K operands stay in float32 too.
+  const bool upcast = (ctype != float32);
+  std::optional<array> q32_buf;
+  std::optional<array> k32_buf;
+  if (upcast) {
+    q32_buf = vjp_alloc({B, H, BQ, D}, float32, s);
+    k32_buf = vjp_alloc({B, Hk, BK, D}, float32, s);
+  }
 
   // Output of the gemms
   array dq_tile = vjp_alloc({BH, BQ, D}, ctype, s);
@@ -1484,6 +1494,15 @@ void sdpa_vjp_blocked(
     array k_sl = vjp_row_slice(k, j0, bk_len);
     array v_sl = vjp_row_slice(v, j0, bk_len);
 
+    // The K operand of S = Q @ K.T
+    array k_op = k_sl;
+    Strides k_op_bs = k_bs;
+    if (upcast) {
+      k_op = vjp_view(*k32_buf, {B, Hk, bk_len, D});
+      copy_gpu_inplace(k_sl, k_op, CopyType::General, s);
+      k_op_bs = {Hk * int64_t(bk_len) * D, int64_t(bk_len) * D, 0};
+    }
+
     bool kv_accum = false;
 
     for (int ii = 0; ii < n_i; ++ii) {
@@ -1497,13 +1516,25 @@ void sdpa_vjp_blocked(
       array q_sl = vjp_row_slice(q, i0, bq_len);
       array o_sl = vjp_row_slice(cot_o, i0, bq_len);
 
+      // The Q operand of S = Q @ K.T
+      array q_op = q_sl;
+      Strides q_op_bs = q_bs;
+      if (upcast) {
+        q_op = vjp_view(*q32_buf, {B, H, bq_len, D});
+        copy_gpu_inplace(q_sl, q_op, CopyType::General, s);
+        q_op_bs = {
+            H * int64_t(bq_len) * D,
+            G * int64_t(bq_len) * D,
+            int64_t(bq_len) * D};
+      }
+
       array s_v = vjp_view(s_buf, {BH, bq_len, bk_len});
       // S = Q @ K.T
       steel_matmul(
           s,
           d,
-          q_sl,
-          k_sl,
+          q_op,
+          k_op,
           s_v,
           bq_len,
           bk_len,
@@ -1515,8 +1546,8 @@ void sdpa_vjp_blocked(
           true,
           copies,
           bshape,
-          q_bs,
-          k_bs);
+          q_op_bs,
+          k_op_bs);
 
       array dp_v = vjp_view(dp_buf, {BH, bq_len, bk_len});
       // dP = dO @ V.T
@@ -1539,7 +1570,8 @@ void sdpa_vjp_blocked(
           o_bs,
           v_bs);
 
-      array ds_v = vjp_view(s_buf, {BH, bq_len, bk_len});
+      // dS overwrites dP; each element is read once and written once
+      array ds_v = vjp_view(dp_buf, {BH, bq_len, bk_len});
       array p_v = vjp_view(p_buf, {BH, bq_len, bk_len});
 
       SDPAVJPTileParams params{
@@ -1551,7 +1583,7 @@ void sdpa_vjp_blocked(
       compute_encoder.set_input_array(dp_v, 1);
       compute_encoder.set_input_array(lse, 2);
       compute_encoder.set_input_array(odo, 3);
-      compute_encoder.set_output_array(s_v, 4);
+      compute_encoder.set_output_array(ds_v, 4);
       compute_encoder.set_output_array(p_v, 5);
       compute_encoder.set_bytes(params, 6);
       compute_encoder.dispatch_threads(

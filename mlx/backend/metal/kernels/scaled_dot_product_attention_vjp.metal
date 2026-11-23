@@ -47,7 +47,7 @@ struct SDPAVJPTileParams {
 
 template <typename T>
 [[kernel]] void sdpa_vjp_ds(
-    const device T* S [[buffer(0)]], // [BH, bq, bk]
+    const device float* S [[buffer(0)]], // [BH, bq, bk]
     const device T* dP [[buffer(1)]], // [BH, bq, bk]
     const device float* lse [[buffer(2)]], // [B, H, qL]
     const device float* odo [[buffer(3)]], // [B, H, qL]
@@ -75,7 +75,7 @@ template <typename T>
   if (dead || (p.causal != 0 && (p.j0 + col) > lim)) {
     pv = 0.0f;
   } else {
-    pv = metal::fast::exp(static_cast<float>(S[sbase + col]) * p.scale - l);
+    pv = metal::fast::exp(S[sbase + col] * p.scale - l);
   }
   float dsv = pv * (static_cast<float>(dP[sbase + col]) - dlt) * p.scale;
 
