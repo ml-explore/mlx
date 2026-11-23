@@ -344,6 +344,11 @@ template <
       values[i] = op(values[i], prev_thread);
     }
 
+    // An exclusive scan writes the first value of a block with the block, not
+    // with the previous block, so that the scan can work in place.
+    uint block_start = r * lsize.x * N_READS;
+    uint block_end = min(block_start + lsize.x * N_READS, uint(axis_size));
+
     // Write the values
     if (reverse) {
       if (inclusive) {
@@ -355,10 +360,10 @@ template <
               values, out + axis_size - offset - N_READS, offset, axis_size);
         }
       } else {
-        if (lid.x == 0 && offset == 0) {
-          out[axis_size - 1] = Op::init;
+        if (lid.x == 0) {
+          out[axis_size - 1 - block_start] = prefix;
         }
-        if ((offset + N_READS + 1) < axis_size) {
+        if ((offset + N_READS) < block_end) {
           write_unsafe<U, N_READS, reverse>(
               values, out + axis_size - offset - 1 - N_READS);
         } else {
@@ -366,7 +371,7 @@ template <
               values,
               out + axis_size - offset - 1 - N_READS,
               offset + 1,
-              axis_size);
+              block_end);
         }
       }
     } else {
@@ -378,14 +383,14 @@ template <
               values, out + offset, offset, axis_size);
         }
       } else {
-        if (lid.x == 0 && offset == 0) {
-          out[0] = Op::init;
+        if (lid.x == 0) {
+          out[block_start] = prefix;
         }
-        if ((offset + N_READS + 1) < axis_size) {
+        if ((offset + N_READS) < block_end) {
           write_unsafe<U, N_READS, reverse>(values, out + offset + 1);
         } else {
           write_safe<U, N_READS, reverse>(
-              values, out + offset + 1, offset + 1, axis_size);
+              values, out + offset + 1, offset + 1, block_end);
         }
       }
     }
@@ -488,7 +493,13 @@ template <
     for (int i = 0; i < n_scans; i++) {
       values[i] = op.simd_scan(values[i]);
       values[i] = op(values[i], prefix[i]);
-      prefix[i] = simd_shuffle(values[i], simd_size - 1);
+      U total = simd_shuffle(values[i], simd_size - 1);
+      if (!inclusive) {
+        // Take the value of the previous row, so that each row is written
+        // where it was read and the scan can work in place.
+        values[i] = simd_shuffle_and_fill_up(values[i], prefix[i], 1);
+      }
+      prefix[i] = total;
     }
 
     // Write to SM
@@ -498,28 +509,6 @@ template <
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
     // Write to device memory
-    if (!inclusive) {
-      if (check_index_y == 0) {
-        if ((read_offset_x + N_READS) < stride_limit) {
-          for (int i = 0; i < N_READS; i++) {
-            out[index_y * stride + i] = Op::init;
-          }
-        } else {
-          for (int i = 0; i < N_READS; i++) {
-            if ((read_offset_x + i) < stride_limit) {
-              out[index_y * stride + i] = Op::init;
-            }
-          }
-        }
-      }
-      if (reverse) {
-        index_y -= 1;
-        check_index_y += 1;
-      } else {
-        index_y += 1;
-        check_index_y += 1;
-      }
-    }
     if (check_index_y < axis_size && (read_offset_x + N_READS) < stride_limit) {
       for (int i = 0; i < N_READS; i++) {
         out[index_y * stride + i] = read_into[i];
