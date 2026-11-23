@@ -324,14 +324,15 @@ finfo::finfo(Dtype dtype) : dtype(dtype) {
 }
 
 template <typename T>
-void set_iinfo_limits(int64_t& min, uint64_t& max) {
+void set_iinfo_limits(int& bits, int64_t& min, uint64_t& max) {
+  bits = 8 * sizeof(T);
   min = std::numeric_limits<T>::min();
   max = std::numeric_limits<T>::max();
 }
 
 iinfo::iinfo(Dtype dtype) : dtype(dtype) {
   dispatch_int_types(dtype, "[iinfo]", [&](auto type_tag) {
-    set_iinfo_limits<MLX_GET_TYPE(type_tag)>(min, max);
+    set_iinfo_limits<MLX_GET_TYPE(type_tag)>(bits, min, max);
   });
 }
 

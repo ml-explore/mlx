@@ -238,26 +238,6 @@ array_api_tests/test_manipulation_functions.py::test_moveaxis
 array_api_tests/test_data_type_functions.py::test_astype
 ### 
 array_api_tests/test_data_type_functions.py::test_can_cast
-### 
-array_api_tests/test_data_type_functions.py::test_finfo[dtype0]
-### 
-array_api_tests/test_data_type_functions.py::test_finfo[dtype1]
-### Missing attribute `bits`
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype0]
-### Missing attribute `bits`
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype1]
-### Missing attribute `bits`
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype2]
-### Missing attribute `bits`
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype3]
-### Missing attribute `bits`
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype4]
-### Missing attribute `bits`
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype5]
-### Missing attribute `bits`
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype6]
-### Missing attribute `bits`
-array_api_tests/test_data_type_functions.py::test_iinfo[dtype7]
 
 ## Other failures
 ### MLX result_type() does not accept Python scalar values alongside dtypes
