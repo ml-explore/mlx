@@ -2920,17 +2920,18 @@ class TestOps(mlx_tests.MLXTestCase):
     def test_exclusive_scan_in_place(self):
         # Non-contiguous inputs are scanned in place, over more than one block.
         for shape, axis in (((2, 10000), 1), ((34, 16), 0)):
-            a_np = np.random.randint(-5, 6, shape).astype(np.float32)
-            a = mx.array(a_np)[:, ::2]
-            a_np = a_np[:, ::2]
-            for reverse in (False, True):
-                with self.subTest(shape=shape, reverse=reverse):
-                    out = mx.cumsum(a, axis=axis, reverse=reverse, inclusive=False)
-                    x = np.flip(a_np, axis) if reverse else a_np
-                    expected = np.cumsum(x, axis) - x
-                    if reverse:
-                        expected = np.flip(expected, axis)
-                    self.assertTrue(np.array_equal(out, expected))
+            for dtype in (np.float32, np.int64):
+                a_np = np.random.randint(-5, 6, shape).astype(dtype)
+                a = mx.array(a_np)[:, ::2]
+                a_np = a_np[:, ::2]
+                for reverse in (False, True):
+                    with self.subTest(shape=shape, dtype=dtype, reverse=reverse):
+                        out = mx.cumsum(a, axis=axis, reverse=reverse, inclusive=False)
+                        x = np.flip(a_np, axis) if reverse else a_np
+                        expected = np.cumsum(x, axis) - x
+                        if reverse:
+                            expected = np.flip(expected, axis)
+                        self.assertTrue(np.array_equal(out, expected))
 
     def test_scans_complex_exclusive(self):
         a = mx.array([-3 + 1j, -1 + 2j, -4 + 0j, 0 + 5j, 2 - 1j])
