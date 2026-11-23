@@ -825,52 +825,9 @@ std::pair<array, array> quantize_rows_int8(
   return {x_q, x_s};
 }
 
-// Quantizes x to signed 8 bits with one scale per group, and returns the
-// dequantized values. The routes other than qmm_int_nax use it.
-array int8_quantize_dequantize(
-    array x,
-    int group_size,
-    metal::Device& d,
-    const Stream& s) {
-  auto& compute_encoder = metal::get_command_encoder(s);
-  if (!x.flags().row_contiguous || x.offset() % (8 * x.itemsize()) != 0) {
-    x = contiguous_copy_gpu(x, s);
-    compute_encoder.add_temporary(x);
-  }
-  array x_hat(allocator::malloc(x.nbytes()), x.shape(), x.dtype());
-  compute_encoder.add_temporary(x_hat);
-  int K = x.shape(-1);
-  int M = x.size() / K;
-  std::string type_string = get_type_string(x.dtype());
-  std::string kname;
-  concatenate(
-      kname,
-      "affine_int8_quantize_dequantize_",
-      type_string,
-      "_gs_",
-      group_size,
-      "_b_8");
-  auto kernel = get_quantized_kernel_wrapped(
-      d,
-      kname,
-      "int8_quantize_dequantize",
-      "affine",
-      type_string,
-      group_size,
-      8);
-  compute_encoder.set_compute_pipeline_state(kernel);
-  compute_encoder.set_input_array(x, 0);
-  compute_encoder.set_output_array(x_hat, 1);
-  compute_encoder.set_bytes(K, 2);
-  int tx = (K / 8 + 31) / 32 * 32;
-  compute_encoder.dispatch_threads(
-      MTL::Size(tx, M, 1), MTL::Size(std::min(tx, 256), 1, 1));
-  return x_hat;
-}
-
 // qmm_int_nax needs about 1.5 output tiles per GPU core (the K split fills the
-// rest), and groups of 64 or more values. Otherwise the fp-weight routes on the
-// dequantized x are as fast or faster.
+// rest), and groups of 64 or more values. Otherwise the fp routes are as fast
+// or faster.
 bool use_qmm_int_nax(
     const array& x,
     int M,
@@ -878,9 +835,10 @@ bool use_qmm_int_nax(
     int K,
     int group_size,
     int bits) {
-  if (!metal::is_nax_available() || (bits != 4 && bits != 6 && bits != 8) ||
-      (group_size < 64) || (x.dtype() != float16 && x.dtype() != bfloat16) ||
-      (K % 64 != 0) || (N % 64 != 0) || (x.offset() % 16 != 0)) {
+  if (!config::get("MLX_ENABLE_INT8_QMM", 1) || !metal::is_nax_available() ||
+      (bits != 4 && bits != 6 && bits != 8) || (group_size < 64) ||
+      (x.dtype() != float16 && x.dtype() != bfloat16) || (K % 64 != 0) ||
+      (N % 64 != 0) || (x.offset() % 16 != 0)) {
     return false;
   }
   int cores = metal::gpu_core_count();
@@ -2430,6 +2388,13 @@ void dispatch_qmm_t(
     return;
   }
 
+  // For affine weights use int8 MMAs when output is large enough.
+  if (non_batched && (qmode == QuantizationMode::Affine) &&
+      use_qmm_int_nax(x, M, N, K, group_size, bits)) {
+    qmm_int_nax(x, w, scales, *biases, out, group_size, bits, M, N, K, d, s);
+    return;
+  }
+
   // For mid rows use NAX qmm when output is large enough.
   if (non_batched && (M >= 8) && (M < vector_limit) && (M * N >= 16384) &&
       use_qmm_nax_splitk(x, M, N, K, group_size)) {
@@ -2514,17 +2479,6 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int K = x.shape(-1);
   int M = non_batched ? x.size() / K : x.shape(-2);
   int N = out.shape(-1);
-
-  if (quantize_input_) {
-    if (transpose_ && non_batched &&
-        use_qmm_int_nax(x, M, N, K, group_size_, bits_)) {
-      qmm_int_nax(
-          x, w, scales, *biases, out, group_size_, bits_, M, N, K, d, s);
-      return;
-    }
-    // The other routes run on the dequantized x
-    x = int8_quantize_dequantize(x, group_size_, d, s);
-  }
 
   if (transpose_) {
     dispatch_qmm_t(

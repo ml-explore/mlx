@@ -28,6 +28,12 @@ General
    on supported hardware. The default is ``1``. Set it to ``0`` to keep these
    operations in full ``float32`` precision. See :doc:`precision`.
 
+.. envvar:: MLX_ENABLE_INT8_QMM
+
+   Allow :func:`mlx.core.quantized_matmul` to quantize the input to 8-bit
+   integers on supported hardware. The default is ``1``. Set it to ``0`` to
+   keep the input precision. See :doc:`precision`.
+
 Distributed
 -----------
 

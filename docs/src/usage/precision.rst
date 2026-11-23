@@ -31,3 +31,14 @@ To disable Winograd, set :envvar:`MLX_CONV_WINOGRAD` to ``0``:
 .. code-block:: shell
 
   MLX_CONV_WINOGRAD=0 python my_script.py
+
+On Metal, ``quantized_matmul`` with ``"affine"`` weights can quantize large
+``float16`` or ``bfloat16`` inputs to 8-bit integers on supported hardware.
+This is faster, but the added error can be as large as the error of 8-bit
+weights.
+
+To keep the input precision, set :envvar:`MLX_ENABLE_INT8_QMM` to ``0``:
+
+.. code-block:: shell
+
+  MLX_ENABLE_INT8_QMM=0 python my_script.py

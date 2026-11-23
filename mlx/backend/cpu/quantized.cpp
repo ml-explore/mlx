@@ -1013,10 +1013,6 @@ void fp_bs_qmm_dispatch(
 } // namespace
 
 void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
-  if (quantize_input_) {
-    throw std::runtime_error(
-        "[QuantizedMatmul] quantize_input is not supported on CPU yet.");
-  }
   auto& x_pre = inputs[0];
   auto& w_pre = inputs[1];
   auto& scales_pre = inputs[2];

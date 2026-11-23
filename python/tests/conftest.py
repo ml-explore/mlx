@@ -7,6 +7,8 @@ import mlx.core as mx
 def pytest_configure(config):
     # Use regular fp32 precision for tests
     mx.config.update("MLX_ENABLE_TF32", 0)
+    # Keep the input precision of quantized_matmul for tests
+    mx.config.update("MLX_ENABLE_INT8_QMM", 0)
     # Do not abort on cache thrashing
     mx.config.update("MLX_ENABLE_CACHE_THRASHING_CHECK", 0)
 
