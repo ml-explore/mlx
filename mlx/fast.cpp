@@ -976,14 +976,18 @@ array scaled_dot_product_attention(
           force_fused,
           stream)) {
     if (has_bool_mask && !ScaledDotProductAttention::supports_bool_mask()) {
-      // Convert bool mask to additive mask.
+      // Convert bool mask to additive mask before the broadcast, so it is not
+      // copied for each head. The fused kernel needs a contiguous last axis.
       float inf = std::numeric_limits<float>::infinity();
-      array& mask = inputs[3];
-      mask = where(
-          mask,
-          full_like(mask, 0, final_type, stream),
-          full_like(mask, -inf, final_type, stream),
+      auto shape = mask_arr->ndim() > 0 ? mask_arr->shape() : Shape{1};
+      shape.back() = keys.shape(-2);
+      auto mask = where(
+          broadcast_to(*mask_arr, shape, stream),
+          array(0.0f, final_type),
+          array(-inf, final_type),
           stream);
+      mask = contiguous(mask, false, stream);
+      inputs[3] = broadcast_to(mask, inputs[3].shape(), stream);
     }
     Shape out_shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
     auto primitive = std::make_shared<ScaledDotProductAttention>(
