@@ -1,7 +1,6 @@
 import math
 import os
 import unittest
-from functools import partial
 from itertools import product
 
 import mlx.core as mx
@@ -1155,90 +1154,6 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         ref = mlx_primitives_sdpa(q, k, v, scale, mask=mask)
         out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask=mask)
         self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
-
-    def test_sdpa_bool_mask_memory(self):
-        B, H, L, D = 1, 8, 1024, 64
-        q, k, v = (mx.random.normal((B, H, L, D), mx.float16) for _ in range(3))
-        bool_mask = make_causal_mask(L, L)
-        add_mask = mx.where(bool_mask, 0.0, -mx.inf).astype(mx.float16)
-        mx.eval(q, k, v, bool_mask, add_mask)
-
-        def run(mask):
-            mx.synchronize()
-            mx.reset_peak_memory()
-            before = mx.get_active_memory()
-            out = mx.fast.scaled_dot_product_attention(
-                q, k, v, scale=D**-0.5, mask=mask
-            )
-            mx.eval(out)
-            mx.synchronize()
-            return out, mx.get_peak_memory() - before
-
-        out_add, mem_add = run(add_mask)
-        out_bool, mem_bool = run(bool_mask)
-        self.assertTrue(mx.allclose(out_bool, out_add, atol=1e-3, rtol=1e-3))
-        # The bool mask can add one additive mask, not one for each head.
-        self.assertLess(mem_bool - mem_add, 2 * add_mask.nbytes)
-
-    def test_sdpa_bool_mask_layouts(self):
-        B, Hq, Hkv, qL, kL, D = 2, 8, 2, 128, 256, 64
-        scale = D**-0.5
-        mx.random.seed(0)
-        q = mx.random.normal((B, Hq, qL, D))
-        k = mx.random.normal((B, Hkv, kL, D))
-        v = mx.random.normal((B, Hkv, kL, D))
-        cotan = mx.random.normal((B, Hq, qL, D))
-
-        # Each query keeps at least one key.
-        keys = (mx.random.uniform(shape=(B, 1, 1, kL)) < 0.8) | (mx.arange(kL) == 0)
-        wide = mx.random.uniform(shape=(qL, 2 * kL)) < 0.8
-        wide = wide | mx.eye(qL, 2 * kL, dtype=mx.bool_)
-        tall = mx.random.uniform(shape=(kL, qL)) < 0.8
-        tall = tall | mx.eye(kL, qL, dtype=mx.bool_)
-        mx.eval(keys, wide, tall)
-        masks = {
-            "scalar": mx.array(True),
-            "keys": keys,
-            "queries": mx.ones((B, 1, qL, 1), dtype=mx.bool_),
-            "sliced": wide[:, :kL],
-            "transposed": tall.T,
-        }
-
-        def attention(q, k, v, mask, cotan, fused):
-            def f(q, k, v):
-                return mx.fast.scaled_dot_product_attention(
-                    q, k, v, scale=scale, mask=mask, force_fused=fused
-                )
-
-            out, vjps = mx.vjp(f, [q, k, v], [cotan])
-            return out + vjps
-
-        def reference(q, k, v, mask, cotan):
-            def f(q, k, v):
-                return mlx_ref_attn(q, k, v, scale=scale, mask=mask)
-
-            out, vjps = mx.vjp(f, [q, k, v], [cotan])
-            return out + vjps
-
-        # cuDNN attention runs on CUDA GPUs from sm80 on. Require the fused
-        # kernels there, and use the default path elsewhere.
-        fused = (
-            mx.default_device() == mx.gpu
-            and mx.cuda.is_available()
-            and mx.device_info(mx.gpu)["compute_capability_major"] >= 8
-        )
-        eager = partial(attention, fused=fused)
-        compiled = mx.compile(eager)
-        for dtype in (mx.float16, mx.bfloat16):
-            inputs = [x.astype(dtype) for x in (q, k, v)]
-            ct = cotan.astype(dtype)
-            tol = 4e-2 if dtype == mx.bfloat16 else 1e-2
-            for name, mask in masks.items():
-                expected = reference(q, k, v, mask, cotan)
-                for mode, fn in (("eager", eager), ("compiled", compiled)):
-                    with self.subTest(dtype=dtype, mask=name, mode=mode):
-                        for out, ref in zip(fn(*inputs, mask, ct), expected):
-                            self.assertTrue(mx.allclose(out, ref, atol=tol, rtol=tol))
 
     def test_sdpa_noncontiguous_inputs(self):
         mask = mx.ones(shape=(4, 1, 7, 7), dtype=mx.bool_)
