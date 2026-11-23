@@ -426,28 +426,12 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
     def test_sdpa_full_head_dim_512_nax(self):
         if mx.default_device() != mx.gpu:
             self.skipTest("requires GPU")
+        if not mx.metal.is_nax_available():
+            self.skipTest("D512 full attention requires NAX")
 
         D = 512
         scale = D**-0.5
         mx.random.seed(0)
-
-        q_probe = mx.random.normal(shape=(1, 2, 9, D)).astype(mx.bfloat16)
-        k_probe = mx.random.normal(shape=(1, 1, 31, D)).astype(mx.bfloat16)
-        v_probe = mx.random.normal(shape=(1, 1, 31, D)).astype(mx.bfloat16)
-        try:
-            mx.eval(
-                mx.fast.scaled_dot_product_attention(
-                    q_probe,
-                    k_probe,
-                    v_probe,
-                    scale=scale,
-                    force_fused=True,
-                )
-            )
-        except ValueError as e:
-            if "plus head dim 512 on NAX GPUs" not in str(e):
-                raise
-            self.skipTest("D512 full attention requires NAX")
 
         cases = [
             # Multiple query tiles with GQA.
