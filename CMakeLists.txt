@@ -133,8 +133,6 @@ if(USE_TSAN)
       FATAL_ERROR
         "ThreadSanitizer (TSan) is not supported by the MSVC compiler. Please use Clang or GCC."
     )
-  elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    message(FATAL_ERROR "ThreadSanitizer (TSan) is not supported on macOS.")
   else()
     list(APPEND SANITIZER_COMPILE_FLAGS -fsanitize=thread)
     list(APPEND SANITIZER_LINK_FLAGS -fsanitize=thread)
