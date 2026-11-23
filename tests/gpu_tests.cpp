@@ -6,6 +6,7 @@
 #include <future>
 
 #include "doctest/doctest.h"
+#include "mlx/config.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -554,10 +555,8 @@ TEST_CASE("test gpu validation") {
 TEST_CASE("test dynamic slice update waits for its start") {
   // Regression for #3880: a donated array-valued start could be read
   // stale when a command-buffer boundary lands between its producer
-  // and the dynamic slice. The boundary occurs when the buffer's op
-  // or memory limits split the graph (or with MLX_MAX_OPS_PER_BUFFER
-  // set low); without a split the checks still assert the correct
-  // update position.
+  // and the dynamic slice. Commit after each op to get that boundary.
+  auto split = config::scoped_update({{"MLX_MAX_OPS_PER_BUFFER", 0}});
   auto source = ones({2, 1 << 26}, int32);
   auto target = zeros({4, 4}, int32);
   auto update = full({1, 1}, 7, int32);

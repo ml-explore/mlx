@@ -16,7 +16,7 @@ if(MLX_BUILD_CUDA)
 endif()
 
 if(MLX_BUILD_METAL)
-  list(APPEND GPU_TEST_SOURCES residency_tests.cpp)
+  list(APPEND GPU_TEST_SOURCES command_encoder_tests.cpp residency_tests.cpp)
 endif()
 
 if(TARGET jaccl)

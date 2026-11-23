@@ -1,4 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
+#include <algorithm>
 #include <memory>
 
 #include "mlx/backend/gpu/eval.h"
@@ -43,6 +44,15 @@ void eval(array& arr) {
 
     debug_set_primitive_buffer_label(command_buffer, arr.primitive());
     arr.primitive().eval_gpu(arr.inputs(), outputs);
+  }
+  // Count only new memory: an output that shares an input's data adds none.
+  for (auto& out : outputs) {
+    auto shares_data = [&out](const array& in) {
+      return in.data_shared_ptr() == out.data_shared_ptr();
+    };
+    if (std::none_of(arr.inputs().begin(), arr.inputs().end(), shares_data)) {
+      encoder.count_allocation_bytes(out);
+    }
   }
   std::unordered_set<std::shared_ptr<array::Data>> buffers;
   for (auto& in : arr.inputs()) {
