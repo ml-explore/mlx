@@ -2918,9 +2918,8 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(np.array_equal(mx.cumsum(a), np.cumsum(a_np[::2])))
 
     def test_exclusive_scan_in_place(self):
-        # Non-contiguous inputs are copied to the output and scanned in place.
-        # The axes are longer than one block of the kernel.
-        for shape, axis in (((2, 8194), 1), ((34, 16), 0)):
+        # Non-contiguous inputs are scanned in place, over more than one block.
+        for shape, axis in (((2, 10000), 1), ((34, 16), 0)):
             a_np = np.random.randint(-5, 6, shape).astype(np.float32)
             a = mx.array(a_np)[:, ::2]
             a_np = a_np[:, ::2]
