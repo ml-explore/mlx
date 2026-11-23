@@ -172,7 +172,7 @@ __global__ void contiguous_scan(const T* in, U* out, int32_t axis_size) {
     } else {
       // Write the block's first value here, so the scan can work in place.
       int32_t block_start = r * block.size() * N_READS;
-      int32_t block_end = cuda::std::min<int32_t>(
+      int32_t block_end = cuda::std::min<int64_t>(
           block_start + block.size() * N_READS, axis_size);
       store_values<reverse, 1>(index, out, values, axis_size, block_end);
       if (block.thread_rank() == 0) {
