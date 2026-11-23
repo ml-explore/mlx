@@ -45,8 +45,6 @@ struct SDPAVJPTileParams {
   int causal;
 };
 
-// S is float32 for every T: P is rebuilt from S against the float32 lse of the
-// forward pass, so any rounding of S lands in the exponent. dS may alias dP.
 template <typename T>
 [[kernel]] void sdpa_vjp_ds(
     const device float* S [[buffer(0)]], // [BH, bq, bk]

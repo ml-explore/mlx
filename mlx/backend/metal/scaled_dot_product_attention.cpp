@@ -1427,18 +1427,13 @@ void sdpa_vjp_blocked(
   auto red_add = d.get_kernel("sdpa_vjp_reduce_add_" + tname);
   auto red_set = d.get_kernel("sdpa_vjp_reduce_set_" + tname);
 
-  // Temporary tiles. The scores S stay in float32 for every input dtype: the
-  // ds kernel rebuilds P = exp(scale * S - lse) against the float32 lse of the
-  // forward pass, so rounding S to half precision would put the rounding error
-  // into the exponent (and S can overflow float16 while scale * S still fits).
-  // dS is written over dP.
+  // Temporary tiles. The scores S stay in float32 to keep precision.
   array s_buf = vjp_alloc({BH, BQ, BK}, float32, s);
   array dp_buf = vjp_alloc({BH, BQ, BK}, ctype, s);
   array p_buf = vjp_alloc({BH, BQ, BK}, ctype, s);
 
-  // For half precision inputs S = Q @ K.T is a float32 matmul on float32
-  // copies of the Q and K tiles. The copies are exact.
-  const bool upcast = ctype != float32;
+  // For half precision inputs Q and K operands stay in float32 too.
+  const bool upcast = (ctype != float32);
   std::optional<array> q32_buf;
   std::optional<array> k32_buf;
   if (upcast) {
@@ -1500,12 +1495,12 @@ void sdpa_vjp_blocked(
     array v_sl = vjp_row_slice(v, j0, bk_len);
 
     // The K operand of S = Q @ K.T
-    array k_s = k_sl;
-    Strides ks_bs = k_bs;
+    array k_op = k_sl;
+    Strides k_op_bs = k_bs;
     if (upcast) {
-      k_s = vjp_view(*k32_buf, {B, Hk, bk_len, D});
-      copy_gpu_inplace(k_sl, k_s, CopyType::General, s);
-      ks_bs = {Hk * int64_t(bk_len) * D, int64_t(bk_len) * D, 0};
+      k_op = vjp_view(*k32_buf, {B, Hk, bk_len, D});
+      copy_gpu_inplace(k_sl, k_op, CopyType::General, s);
+      k_op_bs = {Hk * int64_t(bk_len) * D, int64_t(bk_len) * D, 0};
     }
 
     bool kv_accum = false;
@@ -1522,12 +1517,12 @@ void sdpa_vjp_blocked(
       array o_sl = vjp_row_slice(cot_o, i0, bq_len);
 
       // The Q operand of S = Q @ K.T
-      array q_s = q_sl;
-      Strides qs_bs = q_bs;
+      array q_op = q_sl;
+      Strides q_op_bs = q_bs;
       if (upcast) {
-        q_s = vjp_view(*q32_buf, {B, H, bq_len, D});
-        copy_gpu_inplace(q_sl, q_s, CopyType::General, s);
-        qs_bs = {
+        q_op = vjp_view(*q32_buf, {B, H, bq_len, D});
+        copy_gpu_inplace(q_sl, q_op, CopyType::General, s);
+        q_op_bs = {
             H * int64_t(bq_len) * D,
             G * int64_t(bq_len) * D,
             int64_t(bq_len) * D};
@@ -1538,8 +1533,8 @@ void sdpa_vjp_blocked(
       steel_matmul(
           s,
           d,
-          q_s,
-          k_s,
+          q_op,
+          k_op,
           s_v,
           bq_len,
           bk_len,
@@ -1551,8 +1546,8 @@ void sdpa_vjp_blocked(
           true,
           copies,
           bshape,
-          qs_bs,
-          ks_bs);
+          q_op_bs,
+          k_op_bs);
 
       array dp_v = vjp_view(dp_buf, {BH, bq_len, bk_len});
       // dP = dO @ V.T

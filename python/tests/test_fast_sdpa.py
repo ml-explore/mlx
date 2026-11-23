@@ -1354,7 +1354,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
             def fast(q, k, v):
                 return mx.fast.scaled_dot_product_attention(
-                    q, k, v, scale=scale, mask=mask
+                    q, k, v, scale=scale, mask=mask, force_fused=True
                 )
 
             def ref(q, k, v):
