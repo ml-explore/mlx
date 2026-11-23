@@ -1387,6 +1387,12 @@ void fast::ConvertFP8::eval_cpu(
   encoder.dispatch([in = array::unsafe_weak_copy(in),
                     out = array::unsafe_weak_copy(out),
                     to_fp8 = to_fp8_]() mutable {
+#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) && \
+    __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 150000
+    constexpr bool support_float64 = false;
+#else
+    constexpr bool support_float64 = true;
+#endif
     if (to_fp8) {
       switch (in.dtype()) {
         case float16:
@@ -1399,8 +1405,10 @@ void fast::ConvertFP8::eval_cpu(
           unary_op<float, uint8_t>(in, out, detail::ToFP8());
           break;
         case float64:
-          unary_op<double, uint8_t>(in, out, detail::ToFP8());
-          break;
+          if constexpr (support_float64) {
+            unary_op<double, uint8_t>(in, out, detail::ToFP8());
+            break;
+          }
         default:
           throw std::runtime_error(
               "[fast::ConvertFP8::eval_cpu] Unsupported input type.");
@@ -1417,8 +1425,10 @@ void fast::ConvertFP8::eval_cpu(
           unary_op<uint8_t, float>(in, out, detail::FromFP8());
           break;
         case float64:
-          unary_op<uint8_t, double>(in, out, detail::FromFP8());
-          break;
+          if constexpr (support_float64) {
+            unary_op<uint8_t, double>(in, out, detail::FromFP8());
+            break;
+          }
         default:
           throw std::runtime_error(
               "[fast::ConvertFP8::eval_cpu] Unsupported output type.");
