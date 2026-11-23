@@ -2642,7 +2642,7 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def count_nonzero(a: array, /, *, axis: None | int | Sequence[int] = None, keepdims: bool = False, stream: StreamOrDevice = None) -> array"),
+          "def count_nonzero(a: array, /, axis: None | int | Sequence[int] = None, *, keepdims: bool = False, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Count the number of non-zero elements along the given axis.
 
@@ -3782,7 +3782,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def astype(a: array, dtype: Dtype, /, *, stream: StreamOrDevice = None) -> array"),
+          "def astype(a: array, /, dtype: Dtype, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Cast the array to a specified type.
 
@@ -5177,7 +5177,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def vecdot(a: array, b: array, /, *, axis: int = -1, stream: StreamOrDevice = None) -> array"),
+          "def vecdot(a: array, b: array, /, axis: int = -1, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Compute the vector dot product of two arrays along an axis.
 
@@ -6010,7 +6010,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def roll(a: array, shift: int | tuple[int], axis: None | int | tuple[int] = None, /, *, stream: StreamOrDevice = None) -> array"),
+          "def roll(a: array, /, shift: int | tuple[int], axis: None | int | tuple[int] = None, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Roll array elements along a given axis.
 
