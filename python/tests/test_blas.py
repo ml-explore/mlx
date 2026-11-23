@@ -1637,6 +1637,48 @@ class TestBlas(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(dc1[0], dc2[0], atol=1e-4))
         self.assertTrue(mx.allclose(dc1[1], dc2[1], atol=1e-4))
 
+    def test_gather_mm_sorted_aligned(self):
+        if not mx.cuda.is_available() or mx.default_device() == mx.cpu:
+            self.skipTest("CUDA only")
+
+        # Uneven rows per expert, with empty experts at both ends
+        counts = [0, 1, 7, 8, 31, 32, 33, 0]
+        rhs = [e for e, c in enumerate(counts) for _ in range(c)]
+        rhs = mx.array(rhs, dtype=mx.uint32)
+        E, R, K, N = len(counts), rhs.size, 128, 256
+
+        def gather_mm_ref(a, b):
+            return a @ b[rhs]
+
+        def gather_mm_test(a, b):
+            return mx.gather_mm(a, b, rhs_indices=rhs, sorted_indices=True)
+
+        def check(a, b, tol):
+            cotan = mx.random.normal((R, 1, N)).astype(a.dtype)
+            primals = [a.astype(mx.float32), b.astype(mx.float32)]
+            c1, dc1 = mx.vjp(gather_mm_ref, primals, [cotan.astype(mx.float32)])
+            c2, dc2 = mx.vjp(gather_mm_test, [a, b], [cotan])
+            for x, y in zip(c1 + dc1, c2 + dc2):
+                self.assertTrue(mx.allclose(x, y, rtol=tol, atol=tol))
+            self.assertEqual(mx.abs(dc2[1][0]).max().item(), 0)
+            self.assertEqual(mx.abs(dc2[1][-1]).max().item(), 0)
+
+        # Half types with K and N multiples of 8 take the aligned kernel
+        for dtype, tol in [(mx.float16, 1e-3), (mx.bfloat16, 1e-2)]:
+            for b_transposed in (True, False):
+                with self.subTest(dtype=dtype, b_transposed=b_transposed):
+                    a = mx.random.normal((R, 1, K)).astype(dtype)
+                    if b_transposed:
+                        b = mx.random.normal((E, N, K)).astype(dtype).swapaxes(-1, -2)
+                    else:
+                        b = mx.random.normal((E, K, N)).astype(dtype)
+                    check(a, b, tol)
+
+        # Data that is not 16-byte aligned takes the unaligned kernel
+        a = mx.random.normal((R * K + 1,)).astype(mx.bfloat16)[1:]
+        b = mx.random.normal((E, K, N)).astype(mx.bfloat16)
+        check(a.reshape(R, 1, K), b, 1e-2)
+
     def test_segmented_mm(self):
         def segmented_mm_ref(a, b, s):
             s = s.tolist()
