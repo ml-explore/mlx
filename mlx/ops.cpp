@@ -5340,10 +5340,7 @@ std::vector<array> fp_quantize(
       auto dec = from_fp8(scales, w.dtype(), s);
       auto zero = array(0, dec.dtype());
       wq = where(
-          not_equal(dec, zero, s),
-          divide(wq, dec, s),
-          multiply(wq, zero, s),
-          s);
+          not_equal(dec, zero, s), divide(wq, dec, s), zeros_like(wq, s), s);
       wq = multiply(wq, scale_encode, s);
     } else {
       // convert to e8m0
