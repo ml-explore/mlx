@@ -6,7 +6,6 @@
 #include <fmt/format.h>
 
 #include <TargetConditionals.h>
-#include <pthread.h>
 #if TARGET_OS_OSX
 #include <IOKit/IOKitLib.h>
 #endif
