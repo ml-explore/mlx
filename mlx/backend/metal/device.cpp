@@ -1026,7 +1026,7 @@ CommandEncoder& get_command_encoder(Stream s) {
 }
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders() {
-  if (pthread_main_np()) {
+  if (is_main_thread()) {
     static auto* encoders = new std::unordered_map<int, CommandEncoder>();
     return *encoders;
   } else {

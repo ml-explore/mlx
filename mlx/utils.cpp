@@ -126,8 +126,12 @@ void set_printoptions(PrintOptions options) {
 }
 
 bool is_main_thread() {
+#if defined(__APPLE__)
+  return pthread_main_np() != 0;
+#else
   static auto main_thread_id = std::this_thread::get_id();
   return main_thread_id == std::this_thread::get_id();
+#endif
 }
 
 Dtype result_type(const std::vector<array>& arrays) {
