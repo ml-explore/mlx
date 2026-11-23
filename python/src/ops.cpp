@@ -4678,7 +4678,7 @@ void init_ops(nb::module_& m) {
       "arrays"_a,
       "metadata"_a = nb::none(),
       nb::sig(
-          "def save_gguf(file: file | str | pathlib.Path, arrays: dict[str, array], metadata: dict[str, array | str | list[str]])"),
+          "def save_gguf(file: file | str | pathlib.Path, arrays: dict[str, array], metadata: dict[str, array | str | list[str]] | None = None)"),
       R"pbdoc(
         Save array(s) to a binary file in ``.gguf`` format.
 
@@ -4690,9 +4690,10 @@ void init_ops(nb::module_& m) {
             file (file, str, pathlib.Path): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to
               be saved.
-            metadata (dict(str, Union[array, str, list(str)])): The dictionary
+            metadata (dict(str, Union[array, str, list(str)]), optional): The dictionary
                of metadata to be saved. The values can be a scalar or 1D
                obj:`array`, a :obj:`str`, or a :obj:`list` of :obj:`str`.
+               Defaults to ``None``.
       )pbdoc");
   m.def(
       "where",
