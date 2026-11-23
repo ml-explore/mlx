@@ -10,8 +10,8 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/build-docs
+      - uses: actions/checkout@v7.0.1
+      - uses: $/.github/actions/build-docs
 
   deploy:
     needs: build
@@ -25,4 +25,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@v5.0.1

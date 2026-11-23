@@ -257,6 +257,11 @@ void RoPE::eval_gpu(
   auto& offset = inputs[1];
   auto& out = outputs[0];
 
+  if (in.size() == 0) {
+    out.set_data(cu::malloc_async(0, encoder));
+    return;
+  }
+
   cuda::std::array<int64_t, 4> strides;
   cuda::std::array<int64_t, 4> out_strides;
   bool donated = false;

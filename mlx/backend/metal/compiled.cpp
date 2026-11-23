@@ -265,6 +265,14 @@ inline void build_kernel(
 void Compiled::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
+  // All outputs have the same shape
+  if (outputs[0].size() == 0) {
+    for (auto& out : outputs) {
+      out.set_data(allocator::malloc(0));
+    }
+    return;
+  }
+
   if (auto& p = tape_.back().primitive(); typeid(p) == typeid(Reduce)) {
     return compiled_reduce(
         stream(),

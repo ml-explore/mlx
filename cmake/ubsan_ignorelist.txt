@@ -1,0 +1,5 @@
+# metal-cpp calls release() on a null pointer when it assigns a NS::SharedPtr.
+# This is a no-op in Objective-C, but undefined behavior in C++.
+[undefined]
+src:*/Foundation/NSObject.hpp
+src:*/Foundation/NSSharedPtr.hpp

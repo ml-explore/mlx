@@ -31,6 +31,12 @@ struct RowReduceArgs {
   // The number of rows we are reducing. Namely prod(reduce_shape).
   size_t non_row_reductions;
 
+  // Split the rows of each output over `splits` blocks of `chunk` rows. Used
+  // when there are few outputs.
+  size_t n_out{0};
+  int splits{1};
+  size_t chunk{0};
+
   RowReduceArgs(
       const array& in,
       const ReductionPlan& plan,
@@ -80,18 +86,24 @@ struct RowReduceArgs {
   }
 };
 
-template <typename T, typename U, typename ReduceOp, int N = 4, int M = 1>
+template <
+    typename T,
+    typename U,
+    typename A,
+    typename ReduceOp,
+    int N = 4,
+    int M = 1>
 __global__ void
 row_reduce_simple(const T* in, U* out, size_t n_rows, int size) {
   auto grid = cg::this_grid();
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
 
-  const U init = cu::ReduceInit<ReduceOp, T>::value();
+  const A init = cast_to<A>(cu::ReduceInit<ReduceOp, T>::value());
   ReduceOp op;
 
   AlignedVector<T, N> vals[M];
-  AlignedVector<U, M> accs;
+  AlignedVector<A, M> accs;
   for (int i = 0; i < M; i++) {
     accs[i] = init;
   }
@@ -109,7 +121,7 @@ row_reduce_simple(const T* in, U* out, size_t n_rows, int size) {
     }
     for (int k = 0; k < M; k++) {
       for (int j = 0; j < N; j++) {
-        accs[k] = op(accs[k], cast_to<U>(vals[k][j]));
+        accs[k] = op(accs[k], cast_to<A>(vals[k][j]));
       }
     }
 
@@ -126,43 +138,63 @@ row_reduce_simple(const T* in, U* out, size_t n_rows, int size) {
     }
     for (int k = 0; k < M; k++) {
       for (int j = 0; j < N; j++) {
-        accs[k] = op(accs[k], cast_to<U>(vals[k][j]));
+        accs[k] = op(accs[k], cast_to<A>(vals[k][j]));
       }
     }
   }
 
-  __shared__ U shared_accumulators[32 * M];
+  __shared__ A shared_accumulators[32 * M];
   block_reduce(block, warp, accs.val, shared_accumulators, op, init);
 
   if (block.thread_rank() == 0) {
+    AlignedVector<U, M> results;
+    for (int i = 0; i < M; i++) {
+      results[i] = cast_to<U>(accs[i]);
+    }
     if (grid.block_rank() * M + M <= n_rows) {
-      store_vector(out, 0, accs);
+      store_vector(out, 0, results);
     } else {
       short offset = grid.block_rank() * M + M - n_rows;
       for (int i = offset; i < M; i++) {
-        out[i] = accs[i];
+        out[i] = results[i];
       }
     }
   }
 }
 
-template <typename T, typename U, typename Op, int NDIM, int N_READS = 4>
+template <
+    typename T,
+    typename U,
+    typename A,
+    typename Op,
+    int NDIM,
+    int N_READS = 4>
 __global__ void row_reduce_looped(
     const T* in,
     U* out,
+    A* partials,
     const __grid_constant__ RowReduceArgs args) {
   auto grid = cg::this_grid();
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
 
+  // Compute the output index and the rows that this block reduces
   size_t out_idx = grid.block_rank();
+  size_t first = 0;
+  size_t last = args.non_row_reductions;
+  if (args.splits > 1) {
+    out_idx = grid.block_rank() % args.n_out;
+    first = (grid.block_rank() / args.n_out) * args.chunk;
+    last = min(first + args.chunk, args.non_row_reductions);
+  }
 
   Op op;
 
-  U total[1];
-  U init = ReduceInit<Op, T>::value();
+  A total[1];
+  A init = cast_to<A>(ReduceInit<Op, T>::value());
   total[0] = init;
   LoopedElemToLoc<NDIM, (NDIM > 2)> loop(args.reduce_ndim);
+  loop.next(first, args.reduce_shape.data(), args.reduce_strides.data());
   const size_t full_blocks = args.row_size / (block.size() * N_READS);
   const size_t final_offset = full_blocks * (block.size() * N_READS);
 
@@ -177,13 +209,13 @@ __global__ void row_reduce_looped(
           (final_offset + block.thread_rank() * N_READS + i) < args.row_size;
     }
 
-    for (size_t n = 0; n < args.non_row_reductions; n++) {
+    for (size_t n = first; n < last; n++) {
       const T* inlocal = in + loop.location();
 
       for (size_t r = 0; r < full_blocks; r++) {
         auto vals = load_vector<N_READS>(inlocal, 0);
         for (int i = 0; i < N_READS; i++) {
-          total[0] = op(total[0], cast_to<U>(vals[i]));
+          total[0] = op(total[0], cast_to<A>(vals[i]));
         }
         inlocal += block.size() * N_READS;
       }
@@ -194,7 +226,7 @@ __global__ void row_reduce_looped(
           vals[i] = mask[i] ? inlocal[i] : cast_to<T>(init);
         }
         for (int i = 0; i < N_READS; i++) {
-          total[0] = op(total[0], cast_to<U>(vals[i]));
+          total[0] = op(total[0], cast_to<A>(vals[i]));
         }
       }
 
@@ -204,13 +236,13 @@ __global__ void row_reduce_looped(
 
   // Aligned case
   else {
-    for (size_t n = 0; n < args.non_row_reductions; n++) {
+    for (size_t n = first; n < last; n++) {
       const T* inlocal = in + loop.location();
 
       for (size_t r = 0; r < full_blocks; r++) {
         auto vals = load_vector<N_READS>(inlocal, 0);
         for (int i = 0; i < N_READS; i++) {
-          total[0] = op(total[0], cast_to<U>(vals[i]));
+          total[0] = op(total[0], cast_to<A>(vals[i]));
         }
         inlocal += block.size() * N_READS;
       }
@@ -219,15 +251,47 @@ __global__ void row_reduce_looped(
     }
   }
 
-  __shared__ U shared_accumulators[32];
+  __shared__ A shared_accumulators[32];
   block_reduce(block, warp, total, shared_accumulators, op, init);
 
   if (block.thread_rank() == 0) {
-    out[out_idx] = total[0];
+    if (args.splits > 1) {
+      partials[grid.block_rank()] = total[0];
+    } else {
+      out[out_idx] = cast_to<U>(total[0]);
+    }
+  }
+}
+
+// Second pass of a split row reduce. Each warp reduces the partial results of
+// one output.
+template <typename U, typename A, typename Op>
+__global__ void
+row_reduce_combine(const A* partials, U* out, size_t n_out, int splits) {
+  auto warp = cg::tiled_partition<WARP_SIZE>(cg::this_thread_block());
+  size_t i = cg::this_grid().thread_rank() / WARP_SIZE;
+  if (i >= n_out) {
+    return;
+  }
+  Op op;
+  A total = cast_to<A>(ReduceInit<Op, A>::value());
+  for (int s = warp.thread_rank(); s < splits; s += WARP_SIZE) {
+    total = op(total, partials[s * n_out + i]);
+  }
+  total = cg::reduce(warp, total, op);
+  if (warp.thread_rank() == 0) {
+    out[i] = cast_to<U>(total);
   }
 }
 
 } // namespace cu
+
+// Split the looped row reduce to reach SPLIT_TARGET_THREADS threads, with at
+// least SPLIT_MIN_ROWS rows per block. Fewer than SPLIT_MIN_SPLITS blocks per
+// output do not pay for the second pass.
+constexpr size_t SPLIT_TARGET_THREADS = 1 << 17;
+constexpr size_t SPLIT_MIN_ROWS = 16;
+constexpr size_t SPLIT_MIN_SPLITS = 4;
 
 void row_reduce_simple(
     cu::CommandEncoder& encoder,
@@ -249,6 +313,7 @@ void row_reduce_simple(
       using OP = MLX_GET_TYPE(reduce_type_tag);
       using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
       using U = typename cu::ReduceResult<OP, T>::type;
+      using A = typename cu::ReduceAccum<OP, T>::type;
 
       constexpr int N_READS = 16 / sizeof(T);
 
@@ -262,10 +327,10 @@ void row_reduce_simple(
       dim3 block(threads, 1, 1);
 
       // Pick the kernel
-      auto kernel = cu::row_reduce_simple<T, U, OP, N_READS>;
+      auto kernel = cu::row_reduce_simple<T, U, A, OP, N_READS>;
       if (grid.x >= 1024) {
         grid.x = (grid.x + 1) / 2;
-        kernel = cu::row_reduce_simple<T, U, OP, N_READS, 2>;
+        kernel = cu::row_reduce_simple<T, U, A, OP, N_READS, 2>;
       }
 
       int size = plan.shape.back();
@@ -300,6 +365,7 @@ void row_reduce_looped(
       using OP = MLX_GET_TYPE(reduce_type_tag);
       using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
       using U = typename cu::ReduceResult<OP, T>::type;
+      using A = typename cu::ReduceAccum<OP, T>::type;
 
       constexpr int N_READS = 16 / sizeof(T);
 
@@ -313,14 +379,63 @@ void row_reduce_looped(
       int threads = warps * WARP_SIZE;
       dim3 block(threads, 1, 1);
 
+      // Split the rows of each output over more blocks if the grid is small.
+      // LoopedElemToLoc takes the first row of a split as an int.
+      args.n_out = out.size();
+      size_t total_threads = args.n_out * threads;
+      size_t splits = std::min(
+          (SPLIT_TARGET_THREADS + total_threads - 1) / total_threads,
+          args.non_row_reductions / SPLIT_MIN_ROWS);
+      if (splits >= SPLIT_MIN_SPLITS && args.non_row_reductions <= INT32_MAX) {
+        args.chunk = (args.non_row_reductions + splits - 1) / splits;
+        args.splits = (args.non_row_reductions + args.chunk - 1) / args.chunk;
+      }
+
       // Pick the kernel
-      auto kernel = cu::row_reduce_looped<T, U, OP, 1, N_READS>;
+      auto kernel = cu::row_reduce_looped<T, U, A, OP, 1, N_READS>;
       dispatch_reduce_ndim(args.reduce_ndim, [&](auto reduce_ndim) {
-        kernel = cu::row_reduce_looped<T, U, OP, reduce_ndim.value, N_READS>;
+        kernel = cu::row_reduce_looped<T, U, A, OP, reduce_ndim.value, N_READS>;
       });
 
+      if (args.splits == 1) {
+        encoder.add_kernel_node(
+            kernel,
+            grid,
+            block,
+            gpu_ptr<T>(in),
+            gpu_ptr<U>(out),
+            static_cast<A*>(nullptr),
+            args);
+        return;
+      }
+
+      Dtype partials_type = std::is_same_v<A, float> ? float32 : out.dtype();
+      array partials(
+          {args.splits, static_cast<int>(args.n_out)},
+          partials_type,
+          nullptr,
+          {});
+      partials.set_data(cu::malloc_async(partials.nbytes(), encoder));
+      encoder.add_temporary(partials);
+      encoder.set_output_array(partials);
       encoder.add_kernel_node(
-          kernel, grid, block, gpu_ptr<T>(in), gpu_ptr<U>(out), args);
+          kernel,
+          dim3(args.n_out * args.splits),
+          block,
+          gpu_ptr<T>(in),
+          gpu_ptr<U>(out),
+          gpu_ptr<A>(partials),
+          args);
+      encoder.set_input_array(partials);
+      encoder.set_output_array(out);
+      encoder.add_kernel_node(
+          cu::row_reduce_combine<U, A, OP>,
+          dim3((args.n_out * WARP_SIZE + 255) / 256),
+          dim3(256),
+          gpu_ptr<A>(partials),
+          gpu_ptr<U>(out),
+          args.n_out,
+          args.splits);
     });
   });
 }
@@ -344,7 +459,9 @@ void row_reduce(
   //
   //   It is a general row reduction. We are computing 1 output per
   //   threadblock. We read the fastest moving axis vectorized and loop over
-  //   the rest of the axes.
+  //   the rest of the axes. If there are few outputs, we split the rows of
+  //   each output over many threadblocks and reduce the partial results in a
+  //   second pass.
   //
   // Notes: We opt to read as much in order as possible and leave
   //        transpositions as they are (contrary to our Metal backend).

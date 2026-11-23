@@ -1,5 +1,6 @@
 // Copyright © 2024-26 Apple Inc.
 #include <algorithm>
+#include <optional>
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
@@ -1426,10 +1427,19 @@ void sdpa_vjp_blocked(
   auto red_add = d.get_kernel("sdpa_vjp_reduce_add_" + tname);
   auto red_set = d.get_kernel("sdpa_vjp_reduce_set_" + tname);
 
-  // Temporary tiles
-  array s_buf = vjp_alloc({BH, BQ, BK}, ctype, s);
+  // Temporary tiles. The scores S stay in float32 to keep precision.
+  array s_buf = vjp_alloc({BH, BQ, BK}, float32, s);
   array dp_buf = vjp_alloc({BH, BQ, BK}, ctype, s);
   array p_buf = vjp_alloc({BH, BQ, BK}, ctype, s);
+
+  // For half precision inputs Q and K operands stay in float32 too.
+  const bool upcast = (ctype != float32);
+  std::optional<array> q32_buf;
+  std::optional<array> k32_buf;
+  if (upcast) {
+    q32_buf = vjp_alloc({B, H, BQ, D}, float32, s);
+    k32_buf = vjp_alloc({B, Hk, BK, D}, float32, s);
+  }
 
   // Output of the gemms
   array dq_tile = vjp_alloc({BH, BQ, D}, ctype, s);
@@ -1484,6 +1494,15 @@ void sdpa_vjp_blocked(
     array k_sl = vjp_row_slice(k, j0, bk_len);
     array v_sl = vjp_row_slice(v, j0, bk_len);
 
+    // The K operand of S = Q @ K.T
+    array k_op = k_sl;
+    Strides k_op_bs = k_bs;
+    if (upcast) {
+      k_op = vjp_view(*k32_buf, {B, Hk, bk_len, D});
+      copy_gpu_inplace(k_sl, k_op, CopyType::General, s);
+      k_op_bs = {Hk * int64_t(bk_len) * D, int64_t(bk_len) * D, 0};
+    }
+
     bool kv_accum = false;
 
     for (int ii = 0; ii < n_i; ++ii) {
@@ -1497,13 +1516,25 @@ void sdpa_vjp_blocked(
       array q_sl = vjp_row_slice(q, i0, bq_len);
       array o_sl = vjp_row_slice(cot_o, i0, bq_len);
 
+      // The Q operand of S = Q @ K.T
+      array q_op = q_sl;
+      Strides q_op_bs = q_bs;
+      if (upcast) {
+        q_op = vjp_view(*q32_buf, {B, H, bq_len, D});
+        copy_gpu_inplace(q_sl, q_op, CopyType::General, s);
+        q_op_bs = {
+            H * int64_t(bq_len) * D,
+            G * int64_t(bq_len) * D,
+            int64_t(bq_len) * D};
+      }
+
       array s_v = vjp_view(s_buf, {BH, bq_len, bk_len});
       // S = Q @ K.T
       steel_matmul(
           s,
           d,
-          q_sl,
-          k_sl,
+          q_op,
+          k_op,
           s_v,
           bq_len,
           bk_len,
@@ -1515,8 +1546,8 @@ void sdpa_vjp_blocked(
           true,
           copies,
           bshape,
-          q_bs,
-          k_bs);
+          q_op_bs,
+          k_op_bs);
 
       array dp_v = vjp_view(dp_buf, {BH, bq_len, bk_len});
       // dP = dO @ V.T
@@ -1539,7 +1570,8 @@ void sdpa_vjp_blocked(
           o_bs,
           v_bs);
 
-      array ds_v = vjp_view(s_buf, {BH, bq_len, bk_len});
+      // dS overwrites dP; each element is read once and written once
+      array ds_v = vjp_view(dp_buf, {BH, bq_len, bk_len});
       array p_v = vjp_view(p_buf, {BH, bq_len, bk_len});
 
       SDPAVJPTileParams params{
@@ -1551,7 +1583,7 @@ void sdpa_vjp_blocked(
       compute_encoder.set_input_array(dp_v, 1);
       compute_encoder.set_input_array(lse, 2);
       compute_encoder.set_input_array(odo, 3);
-      compute_encoder.set_output_array(s_v, 4);
+      compute_encoder.set_output_array(ds_v, 4);
       compute_encoder.set_output_array(p_v, 5);
       compute_encoder.set_bytes(params, 6);
       compute_encoder.dispatch_threads(
@@ -1694,32 +1726,35 @@ bool ScaledDotProductAttention::use_fallback(
     return false;
   }
 
+  const bool nax = metal::is_nax_available();
   const int query_sequence_length = q.shape(2);
   const int query_head_dim = q.shape(-1);
   const int value_head_dim = v.shape(-1);
 
-  if (query_head_dim == 512 && query_sequence_length > 8) {
-    constexpr int64_t min_query_blocks = 1024;
-    const int64_t query_blocks = int64_t(q.shape(0)) * q.shape(1) *
-        int64_t(ceildiv(query_sequence_length, 32));
-    // The D512 kernel needs this many query blocks to match fallback speed.
-    const bool eligible = metal::is_nax_available() &&
-        (env::enable_tf32() || q.dtype() != float32) &&
-        query_sequence_length >= 1024 && do_causal && !has_arr_mask &&
-        query_blocks >= min_query_blocks;
-    return !eligible;
-  }
-
   // Use headdim-split kernel when NAX is enabled and there are enough query
   // blocks to fill the machine.
-  if (metal::is_nax_available() &&
-      (env::enable_tf32() || q.dtype() != float32) &&
-      query_sequence_length >= 1024 && query_head_dim == 256 &&
+  if (nax && (env::enable_tf32() || q.dtype() != float32) &&
+      (query_head_dim == 256 || query_head_dim == 512) &&
       (do_causal || has_arr_mask)) {
-    return false;
+    if (query_head_dim == 256 && query_sequence_length >= 1024) {
+      return false;
+    }
+
+    if (query_head_dim == 256 &&
+        (q.dtype() == float16 || q.dtype() == bfloat16) &&
+        query_sequence_length >= 512 && int64_t(q.shape(0)) * q.shape(1) >= 8) {
+      return false;
+    }
+
+    int64_t query_blocks =
+        int64_t(q.shape(0)) * q.shape(1) * ceildiv(query_sequence_length, 32);
+    if (query_head_dim == 512 && query_sequence_length >= 1024 &&
+        query_blocks >= 1024) {
+      return false;
+    }
   }
 
-  if (!metal::is_nax_available() && q.dtype() != float32 && do_causal &&
+  if (!nax && (q.dtype() == float16 || q.dtype() == bfloat16) && do_causal &&
       query_head_dim == 256 && query_sequence_length >= 2048 &&
       query_sequence_length == k.shape(2)) {
     return false;
@@ -1728,7 +1763,8 @@ bool ScaledDotProductAttention::use_fallback(
   // Unfused path is faster for following shapes.
   // Full attention:
   if (query_sequence_length > 8) {
-    return query_head_dim == 192 || query_head_dim == 256;
+    return query_head_dim == 192 || query_head_dim == 256 ||
+        query_head_dim == 512;
   }
   // Split attention:
   const int rows = query_sequence_length * (q.shape(1) / k.shape(1));
@@ -1753,6 +1789,13 @@ void ScaledDotProductAttention::eval_gpu(
   auto& k_pre = inputs[1];
   auto& v_pre = inputs[2];
   auto& o = outputs[0];
+
+  if (o.size() == 0) {
+    for (auto& out : outputs) {
+      out.set_data(allocator::malloc(out.nbytes()));
+    }
+    return;
+  }
 
   std::vector<array> copies;
   // Define some copy functions to ensure the layout of the inputs is as
@@ -1957,6 +2000,16 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   if (has_sinks_) {
     throw std::runtime_error(
         "[ScaledDotProductAttentionVJP] NYI: attention sinks");
+  }
+
+  // Return 0s if q or k is empty
+  if (inputs[0].size() == 0 || inputs[1].size() == 0) {
+    array zero(0, outputs[0].dtype());
+    for (auto& out : outputs) {
+      fill_gpu(zero, out, s);
+    }
+    metal::get_command_encoder(s).add_temporary(std::move(zero));
+    return;
   }
 
   auto q = ensure_row_contiguous(inputs[0], d, s);

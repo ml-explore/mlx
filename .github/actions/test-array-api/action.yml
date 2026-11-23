@@ -5,7 +5,7 @@ runs:
   using: 'composite'
   steps:
     - name: Checkout array-api-tests
-      uses: actions/checkout@v7
+      uses: actions/checkout@v7.0.1
       with:
         repository: data-apis/array-api-tests
         ref: 'ef5b39f1190d54dca0d9a12646033d2d123afdd5' # v2026.09.08

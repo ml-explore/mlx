@@ -232,6 +232,11 @@ void LayerNorm::eval_gpu(
   auto& out = outputs[0];
   auto& encoder = cu::get_command_encoder(s);
 
+  if (out.size() == 0) {
+    out.set_data(cu::malloc_async(0, encoder));
+    return;
+  }
+
   // Make sure that the last dimension is contiguous.
   auto set_output = [&s, &out, &encoder](const array& x) {
     bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
@@ -297,6 +302,16 @@ void LayerNormVJP::eval_gpu(
   nvtx3::scoped_range r("LayerNormVJP::eval_gpu");
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
+
+  // Return 0s if the input is empty
+  if (inputs[0].size() == 0) {
+    array zero(0, outputs[0].dtype());
+    for (auto& out : outputs) {
+      fill_gpu(zero, out, s);
+    }
+    encoder.add_temporary(std::move(zero));
+    return;
+  }
 
   // Ensure row contiguity. We could relax this step by checking that the array
   // is contiguous (no broadcasts or holes) and that the input strides are the
@@ -365,6 +380,11 @@ void LayerNormVJP::eval_gpu(
     ReductionPlan plan(
         ReductionOpType::ContiguousStridedReduce, {n_rows}, {axis_size});
     col_reduce(encoder, g, gb, Reduce::ReduceType::Sum, {0}, plan);
+  } else {
+    gb.set_data(cu::malloc_async(gb.nbytes(), encoder));
+  }
+  if (!has_w) {
+    gw.set_data(cu::malloc_async(gw.nbytes(), encoder));
   }
 
   // Insert dependency if `g` was donated

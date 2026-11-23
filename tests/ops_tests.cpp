@@ -1453,6 +1453,32 @@ TEST_CASE("test irregular binary ops") {
   }
 }
 
+TEST_CASE("test exp of inf, nan and large values on cpu") {
+  auto inf = std::numeric_limits<float>::infinity();
+  auto nan = std::numeric_limits<float>::quiet_NaN();
+  for (auto dt : {float32, float16, bfloat16}) {
+    auto x = array({-inf, -60000.0f, 0.0f, 1.0f, 60000.0f, inf, nan}, {7});
+    auto y = astype(exp(astype(x, dt), Device::cpu), float32);
+    eval(y);
+    auto* p = y.data<float>();
+    CHECK_EQ(p[0], 0.0f);
+    CHECK_EQ(p[1], 0.0f);
+    CHECK_EQ(p[2], 1.0f);
+    CHECK_LT(std::abs(p[3] / std::exp(1.0f) - 1.0f), 1e-2f);
+    CHECK_EQ(p[4], inf);
+    CHECK_EQ(p[5], inf);
+    CHECK(std::isnan(p[6]));
+  }
+  auto x = array({-1e30f, -88.0f, 88.0f, 1e30f}, {4});
+  auto y = exp(x, Device::cpu);
+  eval(y);
+  auto* p = y.data<float>();
+  CHECK_EQ(p[0], 0.0f);
+  CHECK_LE(p[1], 1e-37f);
+  CHECK_LT(std::abs(p[2] / std::exp(88.0f) - 1.0f), 1e-4f);
+  CHECK_EQ(p[3], inf);
+}
+
 TEST_CASE("test arithmetic unary ops") {
   // Test negative
   {
@@ -4460,6 +4486,36 @@ TEST_CASE("test conv2d") {
 
     auto out = conv2d(in, wt, stride, padding, /* dilation= */ {1, 1}, groups);
     CHECK(allclose(out, expected).item<bool>());
+  }
+}
+
+TEST_CASE("test conv empty batch weight gradients") {
+  SUBCASE("conv1d") {
+    for (int groups : {1, 2}) {
+      auto in = zeros({0, 5, 2});
+      auto wt = ones({4, 3, 2 / groups});
+      auto conv_w = [&](const std::vector<array>& primals) {
+        return std::vector<array>{conv1d(in, primals[0], 1, 0, 1, groups)};
+      };
+      auto cotan = ones_like(conv_w({wt})[0]);
+      auto grad = vjp(conv_w, {wt}, {cotan}).second[0];
+      CHECK_EQ(grad.shape(), wt.shape());
+      CHECK_EQ(grad.dtype(), wt.dtype());
+      CHECK(array_equal(grad, zeros_like(wt)).item<bool>());
+    }
+  }
+
+  SUBCASE("conv2d") {
+    auto in = zeros({0, 5, 5, 2}, float16);
+    auto wt = ones({4, 3, 3, 2}, float16);
+    auto conv_w = [&](const std::vector<array>& primals) {
+      return std::vector<array>{conv2d(in, primals[0])};
+    };
+    auto cotan = ones_like(conv_w({wt})[0]);
+    auto grad = vjp(conv_w, {wt}, {cotan}).second[0];
+    CHECK_EQ(grad.shape(), wt.shape());
+    CHECK_EQ(grad.dtype(), wt.dtype());
+    CHECK(array_equal(grad, zeros_like(wt)).item<bool>());
   }
 }
 

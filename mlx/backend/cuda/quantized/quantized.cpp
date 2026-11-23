@@ -4,6 +4,7 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
 #include "mlx/backend/cuda/quantized/quantized_utils.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
@@ -16,6 +17,19 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("QuantizedMatmul::eval_gpu");
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
+
+  if (out.size() == 0) {
+    out.set_data(cu::malloc_async(0, encoder));
+    return;
+  }
+
+  // Return 0s if x is empty
+  if (inputs[0].size() == 0) {
+    array zero(0, out.dtype());
+    encoder.add_temporary(zero);
+    fill_gpu(zero, out, s);
+    return;
+  }
 
   array x = ensure_row_contiguous(inputs[0], encoder, s);
   const array& w = inputs[1];
@@ -155,6 +169,19 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("GatherQMM::eval_gpu");
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
+
+  if (out.size() == 0) {
+    out.set_data(cu::malloc_async(0, encoder));
+    return;
+  }
+
+  // Return 0s if x is empty
+  if (inputs[0].size() == 0) {
+    array zero(0, out.dtype());
+    encoder.add_temporary(zero);
+    fill_gpu(zero, out, s);
+    return;
+  }
 
   array x = ensure_row_contiguous(inputs[0], encoder, s);
   const array& w = inputs[1];
@@ -326,6 +353,12 @@ void fast::Quantize::eval_gpu(
   nvtx3::scoped_range r("Quantize::eval_gpu");
   auto& s = stream();
   auto& enc = cu::get_command_encoder(s);
+  if (inputs[0].size() == 0) {
+    for (auto& out : outputs) {
+      out.set_data(cu::malloc_async(out.nbytes(), enc));
+    }
+    return;
+  }
   if (dequantize_) {
     auto wq = ensure_row_contiguous(inputs[0], enc, s);
     auto scales = ensure_row_contiguous(inputs[1], enc, s);

@@ -1884,6 +1884,16 @@ class TestCompile(mlx_tests.MLXTestCase):
             b = mx.random.normal(shape[-1:])
             self.assertTrue(mx.allclose(cfun(a, b), fun(a, b)))
 
+    def test_compile_output_through_noop_is_kept(self):
+        def fun(x):
+            a = x.astype(mx.float32) * 2
+            b = mx.stop_gradient(x.astype(mx.float32))
+            return a, b
+
+        a, b = mx.compile(fun)(mx.array([1, 2, 3]))
+        self.assertTrue(mx.array_equal(a, mx.array([2.0, 4.0, 6.0])))
+        self.assertTrue(mx.array_equal(b, mx.array([1.0, 2.0, 3.0])))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

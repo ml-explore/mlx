@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
+#include <cstring>
 #include <numeric>
 
 #include "mlx/backend/cpu/copy.h"
@@ -1239,9 +1240,22 @@ void conv_3D_cpu(
 
 void Convolution::eval_cpu(const std::vector<array>& inputs, array& out) {
   out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
 
   auto& in = inputs[0];
   auto& wt = inputs[1];
+
+  // Return 0s if either input is empty
+  if (in.size() == 0 || wt.size() == 0) {
+    auto& encoder = cpu::get_command_encoder(stream());
+    encoder.set_output_array(out);
+    encoder.dispatch([out_ptr = out.data<void>(), nbytes = out.nbytes()]() {
+      std::memset(out_ptr, 0, nbytes);
+    });
+    return;
+  }
 
   // 3D convolution
   if (in.ndim() == (3 + 2)) {

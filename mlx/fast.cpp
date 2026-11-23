@@ -976,14 +976,18 @@ array scaled_dot_product_attention(
           force_fused,
           stream)) {
     if (has_bool_mask && !ScaledDotProductAttention::supports_bool_mask()) {
-      // Convert bool mask to additive mask.
+      // Convert bool mask to additive mask before the broadcast, so it is not
+      // copied for each head. The fused kernel needs a contiguous last axis.
       float inf = std::numeric_limits<float>::infinity();
-      array& mask = inputs[3];
-      mask = where(
-          mask,
-          full_like(mask, 0, final_type, stream),
-          full_like(mask, -inf, final_type, stream),
+      auto shape = mask_arr->ndim() > 0 ? mask_arr->shape() : Shape{1};
+      shape.back() = keys.shape(-2);
+      auto mask = where(
+          broadcast_to(*mask_arr, shape, stream),
+          array(0.0f, final_type),
+          array(-inf, final_type),
           stream);
+      mask = contiguous(mask, false, stream);
+      inputs[3] = broadcast_to(mask, inputs[3].shape(), stream);
     }
     Shape out_shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
     auto primitive = std::make_shared<ScaledDotProductAttention>(
@@ -1022,14 +1026,18 @@ std::vector<array> ScaledDotProductAttention::vjp(
     return Custom::vjp(primals, cotangents, argnums, outputs);
   }
 
-  if (outputs.size() != 2) {
+  // The fused backward computes only the gradients of q, k and v.
+  bool other_grads = std::any_of(
+      argnums.begin(), argnums.end(), [](int arg) { return arg >= 3; });
+  if (outputs.size() != 2 || other_grads) {
     return Custom::vjp(primals, cotangents, argnums, outputs);
   }
 
+  // The inputs are the primals, the output, the logsumexp and the cotangent.
   auto fallback = [sdpa = fallback_, s](const std::vector<array>& inputs) {
-    std::vector<array> primals(inputs.begin(), std::prev(inputs.end()));
+    std::vector<array> primals(inputs.begin(), inputs.end() - 3);
     auto [_, vjps] = mlx::core::vjp(sdpa, primals, {inputs.back()});
-    return vjps;
+    return std::vector<array>(vjps.begin(), vjps.begin() + 3);
   };
 
   std::vector<Shape> shapes;
@@ -1039,7 +1047,7 @@ std::vector<array> ScaledDotProductAttention::vjp(
     dtypes.push_back(primals[i].dtype());
   }
   auto primitive = std::make_shared<ScaledDotProductAttentionVJP>(
-      s, fallback, scale_, do_causal_, has_sinks_);
+      s, fallback, scale_, do_causal_, has_sinks_, window_size_);
   std::vector<array> inputs = primals;
   inputs.push_back(outputs[0]);
   inputs.push_back(outputs[1]);
@@ -1048,11 +1056,6 @@ std::vector<array> ScaledDotProductAttention::vjp(
 
   std::vector<array> returned_vjps;
   for (int arg : argnums) {
-    if (arg >= 3) {
-      throw std::invalid_argument(
-          "[scale_dot_product_attention] Does not support VJP with respect "
-          " to mask or attention sinks.");
-    }
     returned_vjps.push_back(std::move(vjps[arg]));
   }
   return returned_vjps;
@@ -1072,7 +1075,7 @@ bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttentionVJP& a_other =
       static_cast<const ScaledDotProductAttentionVJP&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
-      has_sinks_ == a_other.has_sinks_;
+      has_sinks_ == a_other.has_sinks_ && window_size_ == a_other.window_size_;
 }
 
 std::vector<array> gated_delta_update(

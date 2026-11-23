@@ -255,6 +255,111 @@ class TestEval(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(x == 6.0).item())
         self.assertEqual((mx.ones((4,), stream=mx.cpu) + 1).sum().item(), 8.0)
 
+    def test_empty_outputs(self):
+        # Read each output on the CPU, so an output with no data fails
+        def check(outs):
+            outs = outs if isinstance(outs, (list, tuple)) else [outs]
+            mx.eval(outs)
+            for o in outs:
+                self.assertTrue(mx.array_equal(o, o, stream=mx.cpu).item())
+
+        z = mx.zeros
+
+        def q(w):
+            return mx.quantize(w, 64, 4)
+
+        for s in [mx.cpu, mx.gpu]:
+            if not mx.is_available(s):
+                continue
+            with self.subTest(stream=s), mx.stream(s):
+                check(mx.matmul(z((0, 32)), z((32, 16)), stream=s))
+                check(mx.matmul(z((0, 32)), z((32,)), stream=s))
+                check(mx.addmm(z((0, 16)), z((0, 32)), z((32, 16)), stream=s))
+                check(mx.block_masked_mm(z((0, 64)), z((64, 64)), 32, stream=s))
+                idx = mx.array([], dtype=mx.uint32)
+                check(mx.gather_mm(z((2, 4, 8)), z((2, 8, 5)), idx, idx, stream=s))
+                check(mx.pad(z((0, 4)), [(0, 0), (1, 1)], stream=s))
+                check(mx.quantize(z((0, 64)), 64, 4, stream=s))
+                if s == mx.gpu:
+                    check(mx.dequantize(*q(z((0, 64))), 64, 4, stream=s))
+                check(mx.quantized_matmul(z((0, 64)), *q(z((32, 64))), stream=s))
+                check(mx.conv2d(z((0, 8, 8, 4)), z((2, 3, 3, 4)), stream=s))
+                check(mx.conv2d(z((2, 8, 8, 4)), z((0, 3, 3, 4)), stream=s))
+                check(mx.fft.rfft(z((0, 8)), stream=s))
+                check(mx.softmax(z((4, 0)), axis=-1, stream=s))
+                check(mx.fast.rms_norm(z((0, 4)), z((4,)), 1e-5, stream=s))
+                check(
+                    mx.fast.rope(
+                        z((0, 4, 8)),
+                        8,
+                        traditional=False,
+                        base=1e4,
+                        scale=1.0,
+                        offset=0,
+                        stream=s,
+                    )
+                )
+                qkv = z((0, 2, 4, 64))
+                check(
+                    mx.fast.scaled_dot_product_attention(
+                        qkv, qkv, qkv, scale=1.0, stream=s
+                    )
+                )
+                keys = z((0, 2), mx.uint32)
+                check(mx.vmap(lambda k: mx.random.uniform(shape=(3,), key=k))(keys))
+                idx = mx.array([0, 1])
+                check(z((4, 0)).at[idx].add(z((2, 0))))
+                a = z((4, 4))
+                a[a > 1] = z((0,))
+                check(a)
+
+                # Compiled kernel with empty output
+                f = mx.compile(lambda a, b: mx.exp(a) * b)
+                check(f(z((17, 0)), z((0,))))
+
+                # Empty input with non-empty output must give zeros
+                out = mx.conv2d(z((2, 8, 8, 0)), z((2, 3, 3, 0)), stream=s)
+                self.assertTrue(mx.array_equal(out, z((2, 6, 6, 2))))
+                out = mx.segmented_mm(
+                    z((4, 0)), z((0, 5)), mx.array([[0, 0]], dtype=mx.uint32)
+                )
+                self.assertTrue(mx.array_equal(out, z((1, 4, 5))))
+                o = mx.ones
+                out = mx.quantized_matmul(o((4, 0)), *q(o((32, 0))), stream=s)
+                self.assertTrue(mx.array_equal(out, z((4, 32))))
+
+                # Gradient of a weight with an empty input is zero
+                w = mx.ones((4,))
+                g = mx.grad(lambda w: mx.fast.rms_norm(z((0, 4)), w, 1e-5).sum())(w)
+                self.assertTrue(mx.array_equal(g, z((4,))))
+
+    def test_empty_lu(self):
+        p, lower, upper = mx.linalg.lu(mx.zeros((2, 3, 0)), stream=mx.cpu)
+        self.assertTrue(mx.array_equal(p, mx.array([[0, 1, 2], [0, 1, 2]])))
+        self.assertEqual(lower.shape, (2, 3, 0))
+        self.assertEqual(upper.shape, (2, 0, 0))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_kernel_empty_and_nonempty_outputs(self):
+        kernel = mx.fast.metal_kernel(
+            name="empty_and_nonempty",
+            input_names=["a"],
+            output_names=["out0", "out1"],
+            source="uint e = thread_position_in_grid.x; out1[e] = a[e];",
+        )
+        a = mx.ones((4,))
+        out0, out1 = kernel(
+            inputs=[a],
+            grid=(4, 1, 1),
+            threadgroup=(4, 1, 1),
+            output_shapes=[(0,), (4,)],
+            output_dtypes=[mx.float32, mx.float32],
+            init_value=0,
+        )
+        mx.eval(out0, out1)
+        self.assertTrue(mx.array_equal(out0, out0, stream=mx.cpu))
+        self.assertTrue(mx.array_equal(out1, a))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
