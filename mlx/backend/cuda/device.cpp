@@ -389,6 +389,9 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
   // Also checks if the sub-graph is updatable as CUDA graphs do not get
   // updated correctly if a kernel node getting updated has a different cluster
   // shape than the node it's being updated with.
+  // On NVIDIA drivers older than 595.112.07, updating a kernel node to a
+  // different function can also retain the old function's launch settings
+  // (cuBLAS nvjet 2x2f to 2x1 keeps 4-CTA clusters and hangs).
   std::string key = "(";
   size_t num_nodes = 0;
   CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, nullptr, &num_nodes));

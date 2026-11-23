@@ -329,6 +329,7 @@ class TestBlas(mlx_tests.MLXTestCase):
                     (2, 2),
                     (32, 32),
                     (64, 64),
+                    (300, 40),
                     (2048, 2048),
                 ):
                     for mi in (-1, 0, 1):
@@ -369,6 +370,8 @@ class TestBlas(mlx_tests.MLXTestCase):
                     ((32, 1, 128), (128, 64)),
                     ((1, 128), (32, 128, 64)),
                     ((1, 8, 4, 1, 128), (1, 8, 1, 128, 6)),
+                    ((3, 1, 300), (3, 300, 40)),
+                    ((2, 1, 1, 300), (1, 3, 300, 40)),
                 ):
                     self.__gemv_test(
                         shape_mat, shape_vec, mat_first=False, np_dtype=np_dtype
@@ -814,6 +817,21 @@ class TestBlas(mlx_tests.MLXTestCase):
                 self.assertListEqual(list(d_npy.shape), list(d_mlx.shape))
                 self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-5))
 
+            # Matmul with vector and a long K, on a local generator to keep
+            # the global numpy state for later tests
+            rng = np.random.default_rng(0)
+            for k, n, batch in ((512, 128, (4,)), (8192, 2048, ())):
+                a_npy = rng.normal(0.0, 1.0 / 128, (k,)).astype(np.float32)
+                b_npy = rng.normal(0.0, 1.0 / 128, batch + (k, n)).astype(np.float32)
+
+                for c_shape in ((1,), (n,), batch + (n,)):
+                    c_npy = np.ones(c_shape).astype(np.float32)
+                    d_npy = alpha * (a_npy @ b_npy) + beta * c_npy
+                    d_mlx = mx.addmm(
+                        mx.array(c_npy), mx.array(a_npy), mx.array(b_npy), alpha, beta
+                    )
+                    self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-5))
+
             # Matmul with vector
             a_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
             b_npy = np.random.normal(0.0, 1.0 / 128, (16,)).astype(np.float32)
@@ -951,6 +969,19 @@ class TestBlas(mlx_tests.MLXTestCase):
                         out = mx.addmm(c, a, b_mx, 0.5, 2.0).astype(mx.float32)
                         ref_c = 0.5 * ref + 2.0 * c_r
                         self.assertTrue(np.allclose(out, ref_c, 1e-2, 0.125 * scale))
+
+    def test_matmul_large_output(self):
+        if not mx.cuda.is_available() or mx.default_device() == mx.cpu:
+            self.skipTest("CUDA only")
+
+        # M * N = 2**32 does not fit in int32
+        a = mx.ones((16384, 64), mx.float16)
+        b = mx.ones((64, 262144), mx.float16)
+        c = mx.ones((262144,), mx.float16)
+        out = a @ b
+        self.assertEqual(out[-1, -1].item(), 64.0)
+        out = mx.addmm(c, a, b, 1.0, 2.0)
+        self.assertEqual(out[-1, -1].item(), 66.0)
 
     def test_addmm_grad(self):
         def make_ref_addmm(alpha, beta):

@@ -158,6 +158,12 @@ void reduction_op(
     array& out,
     const std::vector<int>& axes,
     U init) {
+  // Nothing to reduce just initialize the output
+  if (x.size() == 0) {
+    std::fill_n(out.data<U>(), out.size(), init);
+    return;
+  }
+
   ReductionPlan plan = get_reduction_plan(x, axes);
 
   auto in_ptr = x.data<T>();

@@ -568,8 +568,8 @@ void row_reduce_general_dispatch(
   // Prepare the arguments for the kernel
   RowReduceArgs args(in, plan, axes);
 
-  // Case 1: The row is small
-  if (args.row_size <= 64) {
+  // Case 1: The row is small and the kernel's 32-bit counter cannot wrap
+  if (args.row_size <= 64 && args.non_row_reductions <= UINT32_MAX - 31) {
     return row_reduce_small(in, out, op_name, args, compute_encoder, d, s);
   }
 

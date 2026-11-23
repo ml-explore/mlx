@@ -127,7 +127,8 @@ void init_memory(nb::module_& m) {
            memory size.
 
       The wired limit is the total size in bytes of memory that will be kept
-      resident. The default value is ``0``.
+      resident. The default value is ``0``. It applies to memory MLX allocates;
+      arrays that wrap caller-owned memory without a copy are not wired.
 
       Setting a wired limit larger than system wired limit is an error. You can
       increase the system wired limit with:
