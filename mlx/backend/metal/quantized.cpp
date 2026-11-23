@@ -646,12 +646,14 @@ inline bool use_qmv_mma(
   bool nax = metal::is_nax_available();
   bool affine = mode == QuantizationMode::Affine;
   // affine_qmv_mma beats qmv from 3 rows on gen 13 and 14 GPUs (4 on their
-  // Ultras) and qmv_wide from 4 rows on gen 15 and above; the other paths
-  // from 6.
+  // Ultras) and qmv_wide from 4 rows on gen 15 and above. 4-bit
+  // affine_qmv_nax from 4 rows; the other paths from 6.
   bool ultra = d.get_architecture().back() == 'd';
   int min_rows = 6;
   if (affine && !nax) {
     min_rows = (ultra || d.get_architecture_gen() >= 15) ? 4 : 3;
+  } else if (affine && bits == 4) {
+    min_rows = 4;
   }
   if ((M < min_rows) || (K % 128 != 0)) {
     return false;
@@ -669,14 +671,18 @@ inline bool use_qmv_mma(
           (x.dtype() == float16 || x.dtype() == bfloat16) && (N >= 512) &&
           (K >= 1024) && (N % 32 == 0);
     } else { // non-nax
-      // M3 Ultra and newer keep the vector kernels.
-      if (ultra && d.get_architecture_gen() >= 15) {
+      // qmv_mma reads 2 to 8 bits (not 7).
+      if (bits < 2 || bits == 7) {
         return false;
       }
-      // qmv_mma reads 2 to 8 bits (not 7). Affine pays off from a smaller
-      // N * K than fp, and from 2^20 on gen 15+ (M4).
+      // On M3 Ultra and newer, as for fp, only for large layers.
+      if (ultra && d.get_architecture_gen() >= 15) {
+        return (N >= 4096) && (K >= 4096) && (N % 16 == 0);
+      }
+      // Affine pays off from a smaller N * K than fp, and from 2^20 on gen 15+
+      // (M4).
       int nk_log2 = d.get_architecture_gen() >= 15 ? 20 : 21;
-      return (bits >= 2 && bits != 7) && (N >= 512) && (K >= 512) &&
+      return (N >= 512) && (K >= 512) &&
           (int64_t(N) * K >= (int64_t(1) << nk_log2)) && (N % 16 == 0);
     }
   } else { // fp quantization
