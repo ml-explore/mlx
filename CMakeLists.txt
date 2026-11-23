@@ -124,6 +124,14 @@ if(USE_UBSAN)
   else()
     list(APPEND SANITIZER_COMPILE_FLAGS -fsanitize=undefined)
     list(APPEND SANITIZER_LINK_FLAGS -fsanitize=undefined)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      # Not part of the installed targets, and nvcc does not know this flag.
+      list(
+        APPEND
+        SANITIZER_COMPILE_FLAGS
+        "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:-fsanitize-ignorelist=${CMAKE_CURRENT_SOURCE_DIR}/cmake/ubsan_ignorelist.txt>>"
+      )
+    endif()
   endif()
 endif()
 
