@@ -1241,7 +1241,17 @@ void gemv_axbpy(
   std::ostringstream kname;
 
   if (transpose_mat) {
-    if (in_vector_len >= 8192 && out_vector_len >= 2048) {
+    // Specialized kernel for very small outputs
+    tn = out_vector_len < tn ? 1 : tn;
+
+    // A long K with few outputs launches too few simdgroups to fill the GPU,
+    // so split K or use smaller threadgroups
+    bool large_mat = in_vector_len >= 8192 && out_vector_len >= 2048;
+    size_t n_simdgroups =
+        batch_size_out * ceildiv(out_vector_len, (large_mat ? 8 : 4) * tn);
+    bool few_simdgroups = tn == 4 && in_vector_len >= 256 && n_simdgroups < 128;
+
+    if (large_mat && !few_simdgroups) {
       sm = 4;
       sn = 8;
     } else {
@@ -1249,16 +1259,18 @@ void gemv_axbpy(
       sn = 4;
     }
 
-    if (out_vector_len >= 2048) {
+    if (few_simdgroups && out_vector_len < 1024) {
+      bm = 4;
+      bn = 2;
+    } else if (few_simdgroups && large_mat) {
+      bn = 8;
+    } else if (out_vector_len >= 2048) {
       bn = 16;
     } else if (out_vector_len >= 512) {
       bn = 4;
     } else {
       bn = 2;
     }
-
-    // Specialized kernel for very small outputs
-    tn = out_vector_len < tn ? 1 : tn;
 
     n_out_per_tgp = bn * sn * tn;
     kname << "gemv_t_" << type_to_name(out);

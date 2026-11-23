@@ -206,6 +206,11 @@ void init_array(nb::module_& m) {
       Get information on floating-point types.
       )pbdoc")
       .def(nb::init<mx::Dtype>())
+      .def(
+          "__init__",
+          [](mx::finfo* self, const mx::array& a) {
+            new (self) mx::finfo(a.dtype());
+          })
       .def_ro(
           "bits",
           &mx::finfo::bits,
@@ -248,6 +253,15 @@ void init_array(nb::module_& m) {
       Get information on integer types.
       )pbdoc")
       .def(nb::init<mx::Dtype>())
+      .def(
+          "__init__",
+          [](mx::iinfo* self, const mx::array& a) {
+            new (self) mx::iinfo(a.dtype());
+          })
+      .def_ro(
+          "bits",
+          &mx::iinfo::bits,
+          R"pbdoc(The number of bits occupied by the type.)pbdoc")
       .def_ro(
           "min",
           &mx::iinfo::min,

@@ -1468,6 +1468,32 @@ TEST_CASE("test irregular binary ops") {
   }
 }
 
+TEST_CASE("test exp of inf, nan and large values on cpu") {
+  auto inf = std::numeric_limits<float>::infinity();
+  auto nan = std::numeric_limits<float>::quiet_NaN();
+  for (auto dt : {float32, float16, bfloat16}) {
+    auto x = array({-inf, -60000.0f, 0.0f, 1.0f, 60000.0f, inf, nan}, {7});
+    auto y = astype(exp(astype(x, dt), Device::cpu), float32);
+    eval(y);
+    auto* p = y.data<float>();
+    CHECK_EQ(p[0], 0.0f);
+    CHECK_EQ(p[1], 0.0f);
+    CHECK_EQ(p[2], 1.0f);
+    CHECK_LT(std::abs(p[3] / std::exp(1.0f) - 1.0f), 1e-2f);
+    CHECK_EQ(p[4], inf);
+    CHECK_EQ(p[5], inf);
+    CHECK(std::isnan(p[6]));
+  }
+  auto x = array({-1e30f, -88.0f, 88.0f, 1e30f}, {4});
+  auto y = exp(x, Device::cpu);
+  eval(y);
+  auto* p = y.data<float>();
+  CHECK_EQ(p[0], 0.0f);
+  CHECK_LE(p[1], 1e-37f);
+  CHECK_LT(std::abs(p[2] / std::exp(88.0f) - 1.0f), 1e-4f);
+  CHECK_EQ(p[3], inf);
+}
+
 TEST_CASE("test arithmetic unary ops") {
   // Test negative
   {
