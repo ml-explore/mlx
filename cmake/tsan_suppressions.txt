@@ -1,0 +1,5 @@
+# Use with: TSAN_OPTIONS=suppressions=<path to this file>
+#
+# Metal runs completion handlers on its own threads, and passes the handler to
+# them in a way that TSan cannot see. Ignore the races it reports for it.
+race:MTL::CommandBuffer::addCompletedHandler
