@@ -1,5 +1,7 @@
 # Copyright © 2024 Apple Inc.
 
+from functools import partial
+
 import mlx.core as mx
 import mlx.nn as nn
 import mlx_distributed_tests
@@ -160,25 +162,78 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             loss = mx.distributed.all_sum(loss, group=world) / N
             mx.eval(loss, grads)
 
+            grads_ref = dict(tree_flatten(grads))
             for checkpoint in (False, True):
-                # Shard the model
-                model_sharded = MLP(dims)
-                model_sharded.update(params)
-                model_sharded = nn.fully_shard(
-                    model_sharded, compute_dtype=dtype, checkpoint=checkpoint
-                )
-                loss_sharded, grads_sharded = mx.value_and_grad(loss_fn)(
-                    model_sharded, x, y
-                )
-
-                loss_sharded = mx.distributed.all_sum(loss_sharded, group=world) / N
-                mx.eval(loss_sharded, grads_sharded)
-                grads_ref = dict(tree_flatten(grads))
-                self.assertTrue(mx.allclose(loss, loss_sharded, atol=1e-4, rtol=1e-4))
-                for k, gs in tree_flatten(grads_sharded["module"]):
-                    self.assertTrue(
-                        mx.allclose(gs, grads_ref[k][part], atol=atol, rtol=rtol)
+                for per_layer in (False, True):
+                    # Shard the model, or each layer
+                    model_sharded = MLP(dims)
+                    model_sharded.update(params)
+                    shard = partial(
+                        nn.fully_shard, compute_dtype=dtype, checkpoint=checkpoint
                     )
+                    if per_layer:
+                        model_sharded.l1 = shard(model_sharded.l1)
+                        model_sharded.l2 = shard(model_sharded.l2)
+                    else:
+                        model_sharded = shard(model_sharded)
+                    loss_sharded, grads_sharded = mx.value_and_grad(loss_fn)(
+                        model_sharded, x, y
+                    )
+
+                    loss_sharded = mx.distributed.all_sum(loss_sharded, group=world) / N
+                    mx.eval(loss_sharded, grads_sharded)
+                    self.assertTrue(
+                        mx.allclose(loss, loss_sharded, atol=1e-4, rtol=1e-4)
+                    )
+                    for k, gs in tree_flatten(grads_sharded):
+                        k = k.replace("module.", "")
+                        self.assertTrue(
+                            mx.allclose(gs, grads_ref[k][part], atol=atol, rtol=rtol)
+                        )
+
+    def test_fully_shard_embedding(self):
+        world = mx.distributed.init()
+        N = world.size()
+        rank = world.rank()
+        vocab, dims = 8 * N, 16
+        part = slice(rank * vocab // N, (rank + 1) * vocab // N)
+
+        # Integer inputs, positional and keyword, and a tied output layer
+        def tied(model, ids):
+            return model.as_linear(model(ids)).square().mean()
+
+        def keyword(model, ids):
+            return model(x=ids).square().mean()
+
+        mx.random.seed(0)
+        ids = mx.random.randint(0, vocab, (4, 8), key=mx.random.key(rank))
+        params = nn.Embedding(vocab, dims).trainable_parameters()
+
+        for loss_fn in (tied, keyword):
+            # DDP reference
+            model = nn.Embedding(vocab, dims)
+            model.update(params)
+            loss, grads = mx.value_and_grad(loss_fn)(model, ids)
+            grads = average_gradients(grads, group=world)
+            mx.eval(loss, grads)
+
+            for checkpoint in (False, True):
+                model_sharded = nn.Embedding(vocab, dims)
+                model_sharded.update(params)
+                model_sharded = nn.fully_shard(model_sharded, checkpoint=checkpoint)
+                loss_sharded, grads_sharded = mx.value_and_grad(loss_fn)(
+                    model_sharded, ids
+                )
+                mx.eval(loss_sharded, grads_sharded)
+                self.assertTrue(mx.allclose(loss, loss_sharded, atol=1e-5, rtol=1e-5))
+                self.assertTrue(
+                    mx.allclose(
+                        grads_sharded["module"]["weight"],
+                        grads["weight"][part],
+                        atol=1e-5,
+                        rtol=1e-5,
+                    )
+                )
 
     def test_fully_shard_checkpoint_memory(self):
         dims, num_layers = 1024, 8

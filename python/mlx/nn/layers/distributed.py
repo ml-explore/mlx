@@ -9,7 +9,7 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.linear import Linear
 from mlx.nn.layers.quantized import QuantizedLinear
-from mlx.utils import tree_flatten, tree_map_with_path, tree_unflatten
+from mlx.utils import tree_flatten, tree_map, tree_map_with_path, tree_unflatten
 
 
 @lru_cache
@@ -692,6 +692,12 @@ def _maybe_shard(m, k, v):
     return Module.valid_parameter_filter(m, k, v)
 
 
+def _stop_integer_gradient(x):
+    if isinstance(x, mx.array) and not mx.issubdtype(x.dtype, mx.inexact):
+        return mx.stop_gradient(x)
+    return x
+
+
 class FullyShardedModule(Module):
     """Wrap a module so each member of the group holds only a shard of its
     parameters.
@@ -707,6 +713,9 @@ class FullyShardedModule(Module):
     again and recomputes the forward pass of the module. A checkpoint of the
     wrapped module (for example with :func:`mlx.nn.utils.checkpoint`) does
     not free them, because the full parameters are inputs of the checkpoint.
+    As with any gradient checkpoint, random operations (for example in
+    :class:`mlx.nn.Dropout`) draw new values when the backward pass
+    recomputes them.
 
     Every parameter is sharded along axis 0, so each parameter's size along
     that axis must be divisible by the size of ``group``.
@@ -779,6 +788,8 @@ class FullyShardedModule(Module):
         # Gather inside the checkpoint, so that its saved inputs are the shards
         def inner_fn(params, *args, **kwargs):
             self.module.update(params)
+            # Integer inputs (for example indices) have no gradient
+            args, kwargs = tree_map(_stop_integer_gradient, (args, kwargs))
             return self._gathered_call(fn, *args, **kwargs)
 
         params = self.module.trainable_parameters()
