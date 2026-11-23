@@ -2917,6 +2917,22 @@ class TestOps(mlx_tests.MLXTestCase):
         a = mx.array(a_np)[::2]
         self.assertTrue(np.array_equal(mx.cumsum(a), np.cumsum(a_np[::2])))
 
+    def test_exclusive_scan_in_place(self):
+        # Non-contiguous inputs are copied to the output and scanned in place.
+        # The axes are longer than one block of the kernel.
+        for shape, axis in (((2, 8194), 1), ((34, 16), 0)):
+            a_np = np.random.randint(-5, 6, shape).astype(np.float32)
+            a = mx.array(a_np)[:, ::2]
+            a_np = a_np[:, ::2]
+            for reverse in (False, True):
+                with self.subTest(shape=shape, reverse=reverse):
+                    out = mx.cumsum(a, axis=axis, reverse=reverse, inclusive=False)
+                    x = np.flip(a_np, axis) if reverse else a_np
+                    expected = np.cumsum(x, axis) - x
+                    if reverse:
+                        expected = np.flip(expected, axis)
+                    self.assertTrue(np.array_equal(out, expected))
+
     def test_scans_complex_exclusive(self):
         a = mx.array([-3 + 1j, -1 + 2j, -4 + 0j, 0 + 5j, 2 - 1j])
         for op in ("cummax", "cummin", "logcumsumexp"):
