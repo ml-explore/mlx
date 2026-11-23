@@ -344,8 +344,7 @@ template <
       values[i] = op(values[i], prev_thread);
     }
 
-    // An exclusive scan writes the first value of a block with the block, not
-    // with the previous block, so that the scan can work in place.
+    // Write the block's first value here, so the scan can work in place.
     uint block_start = r * lsize.x * N_READS;
     uint block_end = min(block_start + lsize.x * N_READS, uint(axis_size));
 
@@ -495,8 +494,7 @@ template <
       values[i] = op(values[i], prefix[i]);
       U total = simd_shuffle(values[i], simd_size - 1);
       if (!inclusive) {
-        // Take the value of the previous row, so that each row is written
-        // where it was read and the scan can work in place.
+        // Shift by one row in registers, so the scan can work in place.
         values[i] = simd_shuffle_and_fill_up(values[i], prefix[i], 1);
       }
       prefix[i] = total;

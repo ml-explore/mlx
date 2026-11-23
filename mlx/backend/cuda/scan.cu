@@ -68,13 +68,14 @@ load_values(int index, const T* in, U (&values)[N_READS], int size, U init) {
   }
 }
 
+// Write only the positions before `end`.
 template <bool reverse, int offset, typename T, int N_READS>
 inline __device__ void
-store_values(int index, T* out, T (&values)[N_READS], int size) {
+store_values(int index, T* out, T (&values)[N_READS], int size, int end) {
   int start = index * N_READS + offset;
-  int remaining = size - start;
+  int remaining = end - start;
   if constexpr (reverse) {
-    out += remaining - N_READS;
+    out += size - start - N_READS;
     if (remaining < N_READS) {
       for (int i = 0; i < N_READS; ++i) {
         if (N_READS - i - 1 < remaining) {
@@ -167,17 +168,15 @@ __global__ void contiguous_scan(const T* in, U* out, int32_t axis_size) {
 
     // Write the values.
     if (inclusive) {
-      store_values<reverse, 0>(index, out, values, axis_size);
+      store_values<reverse, 0>(index, out, values, axis_size, axis_size);
     } else {
-      store_values<reverse, 1>(index, out, values, axis_size);
-      if (reverse) {
-        if (block.thread_rank() == 0 && index == 0) {
-          out[axis_size - 1] = init;
-        }
-      } else {
-        if (block.thread_rank() == 0 && index == 0) {
-          out[0] = init;
-        }
+      // Write the block's first value here, so the scan can work in place.
+      int32_t block_start = r * block.size() * N_READS;
+      int32_t block_end = cuda::std::min<int32_t>(
+          block_start + block.size() * N_READS, axis_size);
+      store_values<reverse, 1>(index, out, values, axis_size, block_end);
+      if (block.thread_rank() == 0) {
+        out[reverse ? axis_size - 1 - block_start : block_start] = prefix;
       }
     }
     block.sync();
@@ -276,7 +275,15 @@ __global__ void strided_scan(
     for (int i = 0; i < n_scans; ++i) {
       values[i] = cg::inclusive_scan(warp, values[i], op);
       values[i] = op(values[i], prefix[i]);
-      prefix[i] = warp.shfl(values[i], WARP_SIZE - 1);
+      U total = warp.shfl(values[i], WARP_SIZE - 1);
+      if (!inclusive) {
+        // Shift by one row in registers, so the scan can work in place.
+        values[i] = warp.shfl_up(values[i], 1);
+        if (warp.thread_rank() == 0) {
+          values[i] = prefix[i];
+        }
+      }
+      prefix[i] = total;
     }
 
     // Write to SM.
@@ -286,28 +293,6 @@ __global__ void strided_scan(
     block.sync();
 
     // Write to device memory.
-    if (!inclusive) {
-      if (check_index_y == 0) {
-        if ((read_offset_x + N_READS) < stride_limit) {
-          for (int i = 0; i < N_READS; ++i) {
-            out[index_y * stride + i] = init;
-          }
-        } else {
-          for (int i = 0; i < N_READS; ++i) {
-            if ((read_offset_x + i) < stride_limit) {
-              out[index_y * stride + i] = init;
-            }
-          }
-        }
-      }
-      if (reverse) {
-        index_y -= 1;
-        check_index_y += 1;
-      } else {
-        index_y += 1;
-        check_index_y += 1;
-      }
-    }
     if (check_index_y < axis_size && (read_offset_x + N_READS) < stride_limit) {
       for (int i = 0; i < N_READS; ++i) {
         out[index_y * stride + i] = read_into[i];
