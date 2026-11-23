@@ -124,6 +124,14 @@ __global__ void prepare_segmented_mm_data(
   int64_t end = segments[2 * idx + 1];
   int K_i = (end > start) ? static_cast<int>(end - start) : 0;
 
+  // The multistage GEMM still loads a few tiles for an empty segment. Point
+  // these loads at the start of the inputs with zero strides to stay in bounds.
+  if (K_i == 0) {
+    start = 0;
+    lda = 0;
+    ldb = 0;
+  }
+
   problem_sizes[idx] = {M, N, K_i};
   a_lds[idx] = lda;
   b_lds[idx] = ldb;
@@ -197,6 +205,19 @@ struct GemmConfiguration<float, cutlass::arch::Sm80, kAlignmentC, true>
   using InstructionShape = cutlass::gemm::GemmShape<16, 8, 8>;
   static const int kAlignmentAB = 1;
   static const int kStages = 3; // use SM80_CP_ASYNC
+};
+
+// Specialized GEMM configuration for 16-bit types with 128-bit loads on sm80
+// and later.
+template <typename T>
+struct AlignedGemmConfiguration
+    : public CommonGemmConfiguration<T, cutlass::arch::Sm80, 8> {
+  using OpClass = cutlass::arch::OpClassTensorOp;
+  using ThreadblockShape = cutlass::gemm::GemmShape<128, 256, 32>;
+  using WarpShape = cutlass::gemm::GemmShape<64, 64, 32>;
+  using InstructionShape = cutlass::gemm::GemmShape<16, 8, 16>;
+  static const int kAlignmentAB = 8;
+  static const int kStages = 4;
 };
 
 // Get direct access to kernel.
@@ -297,10 +318,20 @@ void dispatch_cutlass_arch(cu::Device& device, F&& f) {
   }
 }
 
-auto* get_grouped_mm_funcion(Dtype dtype, int N, cu::Device& device) {
+auto* get_grouped_mm_funcion(
+    Dtype dtype,
+    int N,
+    bool aligned,
+    cu::Device& device) {
   auto* fun = grouped_gemm_v2<GemmConfiguration<float, cutlass::arch::Sm75>>;
   dispatch_float_types(dtype, "grouped_gemm_v2", [&](auto type_tag) {
     using DataType = cutlass_type_t<MLX_GET_TYPE(type_tag)>;
+    if constexpr (sizeof(DataType) == 2) {
+      if (aligned && device.compute_capability_major() >= 8) {
+        fun = grouped_gemm_v2<AlignedGemmConfiguration<DataType>>;
+        return;
+      }
+    }
     dispatch_cutlass_arch(device, [&](auto arch_tag) {
       using Arch = MLX_GET_TYPE(arch_tag);
       dispatch_bool(N % 8 == 0, [&](auto is_out_aligned) {
@@ -313,6 +344,10 @@ auto* get_grouped_mm_funcion(Dtype dtype, int N, cu::Device& device) {
     });
   });
   return fun;
+}
+
+inline bool is_16_byte_aligned(const array& x) {
+  return reinterpret_cast<uintptr_t>(gpu_ptr<void>(x)) % 16 == 0;
 }
 
 } // namespace
@@ -395,7 +430,11 @@ void cutlass_grouped_gemm_unaligned(
   encoder.set_input_array(b);
   encoder.set_input_array(gemm_args);
   encoder.set_output_array(out);
-  auto* fun = get_grouped_mm_funcion(a.dtype(), N, encoder.device());
+  // Use 128-bit loads when the rows of all groups are 16-byte aligned.
+  bool aligned = !a_transposed && K % 8 == 0 && N % 8 == 0 && lda % 8 == 0 &&
+      ldb % 8 == 0 && is_16_byte_aligned(a) && is_16_byte_aligned(b) &&
+      is_16_byte_aligned(out);
+  auto* fun = get_grouped_mm_funcion(a.dtype(), N, aligned, encoder.device());
   fun(a_transposed,
       b_transposed,
       group_count,
@@ -476,7 +515,12 @@ void cutlass_segmented_mm(
   encoder.set_input_array(b);
   encoder.set_input_array(gemm_args);
   encoder.set_output_array(out);
-  auto* fun = get_grouped_mm_funcion(a.dtype(), N, encoder.device());
+  // Use 128-bit loads when all segments start at aligned rows of a and b. This
+  // needs a column-major a and a row-major b.
+  bool aligned = a_transposed && !b_transposed && M % 8 == 0 && N % 8 == 0 &&
+      lda % 8 == 0 && ldb % 8 == 0 && is_16_byte_aligned(a) &&
+      is_16_byte_aligned(b) && is_16_byte_aligned(out);
+  auto* fun = get_grouped_mm_funcion(a.dtype(), N, aligned, encoder.device());
   fun(a_transposed,
       b_transposed,
       num_segments,
