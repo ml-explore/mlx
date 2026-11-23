@@ -47,6 +47,20 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(out[0].item(), 4.0 * 1.0 + 2.0 * 3.0)
         self.assertEqual(out[1].item(), 4.0 * 1.0 + 6.0 * 3.0)
 
+    def test_signbit_jvp_vjp(self):
+        dtypes = [mx.float16, mx.bfloat16, mx.float32]
+        if mx.default_device() == mx.cpu:
+            dtypes.append(mx.float64)
+        for dtype in dtypes:
+            with self.subTest(dtype=dtype):
+                x = mx.array([-2.0, -0.0, 0.0, 3.0], dtype=dtype)
+                weights = mx.array([1.0, -2.0, 3.0, -4.0], dtype=dtype)
+                _, (tangent,) = mx.jvp(mx.signbit, [x], [weights])
+                _, (cotangent,) = mx.vjp(mx.signbit, [x], [weights])
+                for derivative in (tangent, cotangent):
+                    self.assertEqual(derivative.dtype, dtype)
+                    self.assertTrue(mx.array_equal(derivative, mx.zeros_like(x)))
+
     def test_logcumsumexp_jvp(self):
         x = mx.array([0.0, 0.0, 0.0])
         t = mx.array([1.0, 1.0, 1.0])

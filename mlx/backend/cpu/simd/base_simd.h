@@ -58,6 +58,15 @@ void store(T* dst, Simd<T, N> x) {
 }
 
 template <typename T>
+Simd<bool, 1> signbit(Simd<T, 1> in) {
+  if constexpr (std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>) {
+    return std::signbit(static_cast<float>(in.value));
+  } else {
+    return std::signbit(in.value);
+  }
+}
+
+template <typename T>
 Simd<T, 1> rint(Simd<T, 1> in) {
   if constexpr (is_complex<T>) {
     return Simd<T, 1>{

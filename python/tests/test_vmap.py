@@ -66,6 +66,20 @@ class TestVmap(mlx_tests.MLXTestCase):
                 y = mx.vmap(op, in_axes=1, out_axes=1)(x)
                 self.assertTrue(mx.array_equal(y, op(x), equal_nan=True))
 
+    def test_signbit(self):
+        x = mx.array([[-2.0, -0.0, 0.0], [1.0, -3.0, 4.0]])
+        expected = mx.array([[True, True, False], [False, True, False]])
+
+        for in_axis in (0, 1):
+            for out_axis in (0, 1):
+                with self.subTest(in_axis=in_axis, out_axis=out_axis):
+                    result = mx.vmap(mx.signbit, in_axes=in_axis, out_axes=out_axis)(x)
+                    reference = mx.moveaxis(expected, in_axis, out_axis)
+
+                    self.assertEqual(result.dtype, mx.bool_)
+                    self.assertEqual(result.shape, reference.shape)
+                    self.assertTrue(mx.array_equal(result, reference))
+
     def test_binary(self):
         ops = [
             "add",

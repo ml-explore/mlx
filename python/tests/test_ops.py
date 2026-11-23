@@ -1202,6 +1202,88 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = c / np.abs(c)
         self.assertTrue(np.allclose(result, expected))
 
+    def test_signbit(self):
+        formats = [
+            (mx.float16, np.uint16, 0x7C00),
+            (mx.bfloat16, np.uint16, 0x7F80),
+            (mx.float32, np.uint32, 0x7F800000),
+            (mx.float64, np.uint64, 0x7FF0000000000000),
+        ]
+        for dtype, uint_dtype, inf in formats:
+            if dtype == mx.float64 and mx.default_device() == mx.gpu:
+                continue
+            sign = 1 << (np.dtype(uint_dtype).itemsize * 8 - 1)
+            # Both signs of zero, subnormal, largest finite value, infinity and NaN.
+            bits = np.array(
+                [
+                    0,
+                    sign,
+                    1,
+                    sign | 1,
+                    inf - 1,
+                    (inf - 1) | sign,
+                    inf,
+                    inf | sign,
+                    inf + 1,
+                    (inf + 1) | sign,
+                ],
+                dtype=uint_dtype,
+            )
+            # Metal changes work per thread at 65536 elements.
+            for size in (0, 1, 17, 65535, 65536, 65537):
+                with self.subTest(dtype=dtype, size=size):
+                    sample = np.resize(bits, size)
+                    out = mx.signbit(mx.array(sample).view(dtype))
+                    self.assertEqual(out.dtype, mx.bool_)
+                    self.assertEqual(out.shape, (size,))
+                    np.testing.assert_array_equal(np.array(out), (sample & sign) != 0)
+
+            x = mx.array(bits.reshape(2, 5)).view(dtype)
+            expected = (bits.reshape(2, 5) & sign) != 0
+            for layout, a, want in [
+                ("transposed", x.T, expected.T),
+                ("strided", x[:, ::2], expected[:, ::2]),
+                ("reversed", x[::-1, ::-1], expected[::-1, ::-1]),
+                (
+                    "broadcast",
+                    mx.broadcast_to(x[0], (3, 5)),
+                    np.broadcast_to(expected[0], (3, 5)),
+                ),
+            ]:
+                with self.subTest(dtype=dtype, layout=layout):
+                    np.testing.assert_array_equal(np.array(mx.signbit(a)), want)
+
+        self.assertTrue(mx.signbit(-0.0).item())
+        self.assertFalse(mx.signbit(0.0).item())
+        with self.assertRaisesRegex(ValueError, "complex"):
+            mx.signbit(mx.array(1, dtype=mx.complex64))
+
+    def test_signbit_integer_bool(self):
+        for dtype in (mx.int8, mx.int16, mx.int32, mx.int64):
+            with self.subTest(dtype=dtype):
+                info = mx.iinfo(dtype)
+                x = mx.array([info.min, -1, 0, 1, info.max], dtype=dtype)
+                out = mx.signbit(x)
+                self.assertEqual(out.dtype, mx.bool_)
+                self.assertEqual(out.tolist(), [True, True, False, False, False])
+        for dtype in (mx.uint8, mx.uint16, mx.uint32, mx.uint64):
+            with self.subTest(dtype=dtype):
+                values = np.array([0, 1, mx.iinfo(dtype).max], dtype=np.uint64)
+                out = mx.signbit(mx.array(values).astype(dtype))
+                self.assertEqual(out.dtype, mx.bool_)
+                self.assertEqual(out.tolist(), [False, False, False])
+        out = mx.signbit(mx.array([False, True]))
+        self.assertEqual(out.dtype, mx.bool_)
+        self.assertEqual(out.tolist(), [False, False])
+
+    def test_signbit_16bit_patterns(self):
+        bits = np.arange(65536, dtype=np.uint16)
+        expected = (bits & 0x8000) != 0
+        for dtype in (mx.float16, mx.bfloat16):
+            with self.subTest(dtype=dtype):
+                x = mx.array(bits).view(dtype)
+                np.testing.assert_array_equal(np.array(mx.signbit(x)), expected)
+
     def test_logical_not(self):
         a = mx.array([-1.0, 1.0, 0.0, 1.0, -2.0, 3.0])
         result = mx.logical_not(a)

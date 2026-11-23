@@ -967,6 +967,9 @@ MLX_API array operator-(const array& a);
 /** The sign of the elements in an array. */
 MLX_API array sign(const array& a, StreamOrDevice s = {});
 
+/** Test whether the sign bit is set for each element of a non-complex array. */
+MLX_API array signbit(const array& a, StreamOrDevice s = {});
+
 /** Logical not of an array */
 MLX_API array logical_not(const array& a, StreamOrDevice s = {});
 

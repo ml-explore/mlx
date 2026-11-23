@@ -34,11 +34,12 @@ bool is_unary(const Primitive& p) {
       typeid(p) == typeid(Log1p) || typeid(p) == typeid(LogicalNot) ||
       typeid(p) == typeid(Negative) || typeid(p) == typeid(Round) ||
       typeid(p) == typeid(Sigmoid) || typeid(p) == typeid(Sign) ||
-      typeid(p) == typeid(Sin) || typeid(p) == typeid(Sinh) ||
-      typeid(p) == typeid(Square) || typeid(p) == typeid(Sqrt) ||
-      typeid(p) == typeid(Tan) || typeid(p) == typeid(Tanh) ||
-      typeid(p) == typeid(Expm1) || typeid(p) == typeid(Real) ||
-      typeid(p) == typeid(Imag) || typeid(p) == typeid(BitwiseInvert));
+      typeid(p) == typeid(SignBit) || typeid(p) == typeid(Sin) ||
+      typeid(p) == typeid(Sinh) || typeid(p) == typeid(Square) ||
+      typeid(p) == typeid(Sqrt) || typeid(p) == typeid(Tan) ||
+      typeid(p) == typeid(Tanh) || typeid(p) == typeid(Expm1) ||
+      typeid(p) == typeid(Real) || typeid(p) == typeid(Imag) ||
+      typeid(p) == typeid(BitwiseInvert));
 }
 
 bool is_binary(const Primitive& p) {

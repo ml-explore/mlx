@@ -277,6 +277,13 @@ struct Sign {
   }
 };
 
+struct SignBit {
+  template <typename T>
+  __device__ bool operator()(T x) {
+    return cuda::std::signbit(x);
+  }
+};
+
 struct Sin {
   template <typename T>
   __device__ T operator()(T x) {
