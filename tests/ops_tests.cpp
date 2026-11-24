@@ -137,6 +137,21 @@ TEST_CASE("test reshape") {
   eval(y);
   CHECK(!y.flags().row_contiguous);
   CHECK(y.flags().col_contiguous);
+
+  // Dense data with no contiguity flags becomes contiguous after reshape
+  x = arange(32, float32);
+  eval(x);
+  auto dense = array({1, 1, 20}, float32, nullptr, {});
+  dense.copy_shared_buffer(x, {32, 32, 1}, {false, false, false}, 32);
+  dense.set_status(array::Status::available);
+  y = reshape(dense, {4, 5});
+  eval(y);
+  CHECK(y.flags().contiguous);
+  CHECK(y.flags().row_contiguous);
+  CHECK_EQ(y.data_size(), 20);
+  CHECK(
+      array_equal(transpose(y), transpose(reshape(arange(20, float32), {4, 5})))
+          .item<bool>());
 }
 
 TEST_CASE("test flatten") {
@@ -4546,6 +4561,19 @@ TEST_CASE("test view") {
   in = array({1, 2, 3, 4}, int64);
   auto out = view(in, int32);
   CHECK(array_equal(out, array({1, 0, 2, 0, 3, 0, 4, 0})).item<bool>());
+
+  // Dense data with no contiguity flags becomes contiguous after a view
+  auto x = arange(8, int64);
+  eval(x);
+  in = array({2, 4}, int64, nullptr, {});
+  in.copy_shared_buffer(x, {4, 1}, {false, false, false}, 8);
+  in.set_status(array::Status::available);
+  out = view(in, int32);
+  eval(out);
+  CHECK(out.flags().contiguous);
+  CHECK(out.flags().row_contiguous);
+  CHECK(array_equal(transpose(out), transpose(view(reshape(x, {2, 4}), int32)))
+            .item<bool>());
 }
 
 TEST_CASE("test roll") {
