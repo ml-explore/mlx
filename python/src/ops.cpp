@@ -315,13 +315,14 @@ void init_ops(nb::module_& m) {
 
         Negative zero and NaNs with a set sign bit return ``True``.
         Unsigned integers and booleans return ``False``.
-        The ``float64`` dtype is only supported on the CPU.
 
         Args:
-            a (array): Input array with a non-complex dtype.
+            a (array): Input array or scalar with a non-complex dtype.
 
         Returns:
-            array: A boolean array with the same shape as ``a``.
+            array: A boolean array with the same shape as ``a``,
+            containing ``True`` where the sign bit is set and ``False``
+            otherwise.
       )pbdoc");
   m.def(
       "positive",
