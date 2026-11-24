@@ -953,6 +953,15 @@ class TestOps(mlx_tests.MLXTestCase):
             b = getattr(np, op)(data)
             self.assertEqual(a.item(), b)
 
+        # A 0-d input keeps no axes
+        x = mx.array(3.0)
+        for op in ["argmin", "argmax"]:
+            for kd in [True, False]:
+                a = getattr(mx, op)(x, keepdims=kd)
+                b = getattr(np, op)(np.array(3.0), keepdims=kd)
+                self.assertEqual(a.shape, b.shape)
+                self.assertEqual(a.item(), b)
+
     def test_broadcast(self):
         a_npy = np.reshape(np.arange(200), (10, 20))
         a_mlx = mx.array(a_npy)
