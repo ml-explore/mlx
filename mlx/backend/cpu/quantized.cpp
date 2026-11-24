@@ -1,5 +1,7 @@
 // Copyright © 2023-2026 Apple Inc.
 
+#include <cstring>
+
 #include "mlx/backend/common/quantized.h"
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/cpu/copy.h"
@@ -15,6 +17,9 @@ namespace mlx::core {
 
 namespace {
 
+constexpr float F8E4M3_MAX = 448.0f;
+constexpr float F4E2M1_MAX = 6.0f;
+
 array ensure_row_contiguous(
     const array& arr,
     cpu::CommandEncoder& encoder,
@@ -28,7 +33,7 @@ array ensure_row_contiguous(
   }
 };
 
-// Row accumulator for the non-transposed affine kernel, taken from the
+// Row accumulator for the non-transposed kernels, taken from the
 // allocator so it is served by the buffer cache. Empty when transposed.
 array qmm_accumulator(
     const array& out,
@@ -481,7 +486,9 @@ void fp_qmm(
     const uint8_t* scales,
     int M,
     int N,
-    int K) {
+    int K,
+    float* acc,
+    float inv_scale_enc) {
   constexpr int pack_factor = get_pack_factor(bits, 8);
   constexpr int packs_in_group = group_size / pack_factor;
 
@@ -489,28 +496,28 @@ void fp_qmm(
     const uint8_t* w_local = (const uint8_t*)w;
     const uint8_t* scales_local = scales;
 
-    std::fill(result, result + N, 0);
+    std::fill(acc, acc + N, 0.0f);
 
     for (int k = 0; k < K; k++) {
-      T* result_local = result;
-      T xi = *x++;
+      float* result_local = acc;
+      float xi = *x++;
 
       for (int n = 0; n < N; n += group_size) {
-        T scale = dequantize_scale<T, group_size>(*scales_local++);
+        float scale = dequantize_scale<float, group_size>(*scales_local++) *
+            inv_scale_enc;
         for (int ng = 0; ng < packs_in_group; ng++) {
           if constexpr (bits == 4) {
-            (*result_local++) +=
-                xi * scale * static_cast<T>(FP4_LUT[w_local[0] & 0xf]);
-            (*result_local++) +=
-                xi * scale * static_cast<T>(FP4_LUT[(w_local[0] >> 4) & 0xf]);
+            (*result_local++) += xi * scale * FP4_LUT[w_local[0] & 0xf];
+            (*result_local++) += xi * scale * FP4_LUT[(w_local[0] >> 4) & 0xf];
           } else {
             (*result_local++) +=
-                xi * scale * static_cast<T>(detail::FromFP8{}(w_local[0]));
+                xi * scale * static_cast<float>(detail::FromFP8{}(w_local[0]));
           }
           w_local++;
         }
       }
     }
+    std::copy(acc, acc + N, result);
     result += N;
   }
 }
@@ -523,7 +530,8 @@ void fp_qmm_t(
     const uint8_t* scales,
     int M,
     int N,
-    int K) {
+    int K,
+    float inv_scale_enc = 1.0f) {
   constexpr int pack_factor = get_pack_factor(bits, 8);
   constexpr int packs_in_group = group_size / pack_factor;
 
@@ -533,25 +541,26 @@ void fp_qmm_t(
 
     for (int n = 0; n < N; n++) {
       const T* x_local = x;
-      T sum = 0;
+      float sum = 0.0f;
       for (int k = 0; k < K; k += group_size) {
-        T scale = dequantize_scale<T, group_size>(*scales_local++);
+        float scale = dequantize_scale<float, group_size>(*scales_local++) *
+            inv_scale_enc;
 
-        T gsum = 0;
+        float gsum = 0.0f;
         for (int kw = 0; kw < packs_in_group; kw++) {
           if constexpr (bits == 4) {
-            gsum += (*x_local++) * static_cast<T>(FP4_LUT[w_local[0] & 0xf]);
-            gsum +=
-                (*x_local++) * static_cast<T>(FP4_LUT[(w_local[0] >> 4) & 0xf]);
+            gsum += static_cast<float>(*x_local++) * FP4_LUT[w_local[0] & 0xf];
+            gsum += static_cast<float>(*x_local++) *
+                FP4_LUT[(w_local[0] >> 4) & 0xf];
           } else {
-            gsum +=
-                (*x_local++) * static_cast<T>(detail::FromFP8{}(w_local[0]));
+            gsum += static_cast<float>(*x_local++) *
+                static_cast<float>(detail::FromFP8{}(w_local[0]));
           }
           w_local++;
         }
         sum += scale * gsum;
       }
-      *result = sum;
+      *result = static_cast<T>(sum);
       result++;
     }
 
@@ -589,7 +598,8 @@ void fp_qmm_t_simd(
     const uint8_t* scales,
     int M,
     int N,
-    int K) {
+    int K,
+    float inv_scale_enc = 1.0f) {
   constexpr int pack_factor = get_pack_factor(bits, 32);
   constexpr int packs_in_group = group_size / pack_factor;
   constexpr int S = simd::max_size<T>;
@@ -605,7 +615,8 @@ void fp_qmm_t_simd(
       simd::Simd<float, S> acc(0);
       auto x_local = x;
       for (int k = 0; k < K; k += group_size) {
-        T scale = dequantize_scale<T, group_size>(*scales_local++);
+        T scale =
+            dequantize_scale<T, group_size>(*scales_local++) * inv_scale_enc;
 
         simd::Simd<float, S> g_acc(0);
         for (int kw = 0; kw < packs_in_group; kw += packs_per_simd) {
@@ -635,16 +646,21 @@ void fp_qmm_dispatch_transpose(
     int M,
     int N,
     int K,
-    bool transposed_w) {
+    bool transposed_w,
+    float* acc,
+    float inv_scale_enc = 1.0f) {
   if (transposed_w) {
     // the simd size must be a multiple of the number of elements per word
     if constexpr (simd::max_size<T> % 8 == 0) {
-      fp_qmm_t_simd<T, group_size, bits>(result, x, w, scales, M, N, K);
+      fp_qmm_t_simd<T, group_size, bits>(
+          result, x, w, scales, M, N, K, inv_scale_enc);
     } else {
-      fp_qmm_t<T, group_size, bits>(result, x, w, scales, M, N, K);
+      fp_qmm_t<T, group_size, bits>(
+          result, x, w, scales, M, N, K, inv_scale_enc);
     }
   } else {
-    fp_qmm<T, group_size, bits>(result, x, w, scales, M, N, K);
+    fp_qmm<T, group_size, bits>(
+        result, x, w, scales, M, N, K, acc, inv_scale_enc);
   }
 }
 
@@ -654,7 +670,9 @@ void fp_qmm_dispatch_mode(
     const array& x,
     const array& w,
     const array& scales,
-    bool transposed_w) {
+    bool transposed_w,
+    array& acc,
+    float inv_scale_enc) {
   int K = x.shape(-1);
   int M = x.ndim() > 1 ? x.shape(-2) : 1;
   int N = out.shape(-1);
@@ -675,7 +693,9 @@ void fp_qmm_dispatch_mode(
         M,
         N,
         K,
-        transposed_w);
+        transposed_w,
+        acc.data<float>(),
+        inv_scale_enc);
   }
 }
 
@@ -687,13 +707,18 @@ void fp_qmm_dispatch_typed(
     const array& scales,
     int group_size,
     int bits,
-    bool transposed_w) {
+    bool transposed_w,
+    array& acc,
+    float inv_scale_enc) {
   if (bits == 8) {
-    fp_qmm_dispatch_mode<T, 32, 8>(out, x, w, scales, transposed_w);
+    fp_qmm_dispatch_mode<T, 32, 8>(
+        out, x, w, scales, transposed_w, acc, inv_scale_enc);
   } else if (group_size == 32) {
-    fp_qmm_dispatch_mode<T, 32, 4>(out, x, w, scales, transposed_w);
+    fp_qmm_dispatch_mode<T, 32, 4>(
+        out, x, w, scales, transposed_w, acc, inv_scale_enc);
   } else {
-    fp_qmm_dispatch_mode<T, 16, 4>(out, x, w, scales, transposed_w);
+    fp_qmm_dispatch_mode<T, 16, 4>(
+        out, x, w, scales, transposed_w, acc, inv_scale_enc);
   }
 }
 
@@ -704,19 +729,45 @@ void fp_qmm_dispatch(
     const array& scales,
     int group_size,
     int bits,
-    bool transposed_w) {
+    bool transposed_w,
+    array& acc,
+    float inv_scale_enc = 1.0f) {
   switch (x.dtype()) {
     case bfloat16:
       fp_qmm_dispatch_typed<bfloat16_t>(
-          out, x, w, scales, group_size, bits, transposed_w);
+          out,
+          x,
+          w,
+          scales,
+          group_size,
+          bits,
+          transposed_w,
+          acc,
+          inv_scale_enc);
       break;
     case float16:
       fp_qmm_dispatch_typed<float16_t>(
-          out, x, w, scales, group_size, bits, transposed_w);
+          out,
+          x,
+          w,
+          scales,
+          group_size,
+          bits,
+          transposed_w,
+          acc,
+          inv_scale_enc);
       break;
     case float32:
       fp_qmm_dispatch_typed<float>(
-          out, x, w, scales, group_size, bits, transposed_w);
+          out,
+          x,
+          w,
+          scales,
+          group_size,
+          bits,
+          transposed_w,
+          acc,
+          inv_scale_enc);
       break;
     default:
       throw std::invalid_argument(
@@ -843,7 +894,8 @@ void fp_bs_qmm_dispatch_mode(
     const array& scales,
     const array& lhs_indices,
     const array& rhs_indices,
-    bool transposed_w) {
+    bool transposed_w,
+    array& acc) {
   int K = x.shape(-1);
   int M = x.shape(-2);
   int N = out.shape(-1);
@@ -872,7 +924,8 @@ void fp_bs_qmm_dispatch_mode(
         M,
         N,
         K,
-        transposed_w);
+        transposed_w,
+        acc.data<float>());
   }
 }
 
@@ -886,16 +939,17 @@ void fp_bs_qmm_dispatch_typed(
     const array& rhs_indices,
     int group_size,
     int bits,
-    bool transposed_w) {
+    bool transposed_w,
+    array& acc) {
   if (bits == 8) {
     fp_bs_qmm_dispatch_mode<T, 32, 8>(
-        out, x, w, scales, lhs_indices, rhs_indices, transposed_w);
+        out, x, w, scales, lhs_indices, rhs_indices, transposed_w, acc);
   } else if (group_size == 32) {
     fp_bs_qmm_dispatch_mode<T, 32, 4>(
-        out, x, w, scales, lhs_indices, rhs_indices, transposed_w);
+        out, x, w, scales, lhs_indices, rhs_indices, transposed_w, acc);
   } else {
     fp_bs_qmm_dispatch_mode<T, 16, 4>(
-        out, x, w, scales, lhs_indices, rhs_indices, transposed_w);
+        out, x, w, scales, lhs_indices, rhs_indices, transposed_w, acc);
   }
 }
 
@@ -908,7 +962,8 @@ void fp_bs_qmm_dispatch(
     const array& rhs_indices,
     int group_size,
     int bits,
-    bool transposed_w) {
+    bool transposed_w,
+    array& acc) {
   switch (x.dtype()) {
     case float32:
       fp_bs_qmm_dispatch_typed<float>(
@@ -920,7 +975,8 @@ void fp_bs_qmm_dispatch(
           rhs_indices,
           group_size,
           bits,
-          transposed_w);
+          transposed_w,
+          acc);
       break;
     case float16:
       fp_bs_qmm_dispatch_typed<float16_t>(
@@ -932,7 +988,8 @@ void fp_bs_qmm_dispatch(
           rhs_indices,
           group_size,
           bits,
-          transposed_w);
+          transposed_w,
+          acc);
       break;
     case bfloat16:
       fp_bs_qmm_dispatch_typed<bfloat16_t>(
@@ -944,7 +1001,8 @@ void fp_bs_qmm_dispatch(
           rhs_indices,
           group_size,
           bits,
-          transposed_w);
+          transposed_w,
+          acc);
       break;
     default:
       throw std::invalid_argument(
@@ -965,6 +1023,16 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto scales = ensure_row_contiguous(scales_pre, encoder, stream());
 
   out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+  if (x.size() == 0) {
+    encoder.set_output_array(out);
+    encoder.dispatch([out_ptr = out.data<void>(), nbytes = out.nbytes()]() {
+      std::memset(out_ptr, 0, nbytes);
+    });
+    return;
+  }
 
   encoder.set_input_array(x);
   encoder.set_input_array(w);
@@ -987,14 +1055,16 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
           out, x, w, scales, biases, group_size_, bits_, transpose_, acc);
     });
   } else {
+    auto acc = qmm_accumulator(out, transpose_, encoder);
     encoder.dispatch([out = array::unsafe_weak_copy(out),
                       x = array::unsafe_weak_copy(x),
                       w = array::unsafe_weak_copy(w),
                       scales = array::unsafe_weak_copy(scales),
+                      acc = array::unsafe_weak_copy(acc),
                       group_size_ = group_size_,
                       bits_ = bits_,
                       transpose_ = transpose_]() mutable {
-      fp_qmm_dispatch(out, x, w, scales, group_size_, bits_, transpose_);
+      fp_qmm_dispatch(out, x, w, scales, group_size_, bits_, transpose_, acc);
     });
   }
 }
@@ -1026,6 +1096,16 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto scales = ensure_row_contiguous_last_dims(scales_pre);
 
   out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+  if (x.size() == 0) {
+    encoder.set_output_array(out);
+    encoder.dispatch([out_ptr = out.data<void>(), nbytes = out.nbytes()]() {
+      std::memset(out_ptr, 0, nbytes);
+    });
+    return;
+  }
 
   encoder.set_input_array(x);
   encoder.set_input_array(w);
@@ -1062,12 +1142,14 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
           acc);
     });
   } else {
+    auto acc = qmm_accumulator(out, transpose_, encoder);
     encoder.dispatch([out = array::unsafe_weak_copy(out),
                       x = array::unsafe_weak_copy(x),
                       w = array::unsafe_weak_copy(w),
                       scales = array::unsafe_weak_copy(scales),
                       lhs_indices = array::unsafe_weak_copy(lhs_indices),
                       rhs_indices = array::unsafe_weak_copy(rhs_indices),
+                      acc = array::unsafe_weak_copy(acc),
                       group_size_ = group_size_,
                       bits_ = bits_,
                       transpose_ = transpose_]() mutable {
@@ -1080,7 +1162,8 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
           rhs_indices,
           group_size_,
           bits_,
-          transpose_);
+          transpose_,
+          acc);
     });
   }
 }
@@ -1144,7 +1227,8 @@ void fp_quantize_dequantize(
     array& out_arr,
     int bits,
     int group_size,
-    size_t w_size) {
+    size_t w_size,
+    float scale_enc = 1.0f) {
   auto w = w_arr.data<T>();
   auto out = out_arr.data<T>();
 
@@ -1154,24 +1238,26 @@ void fp_quantize_dequantize(
     size_t idx = i * group_size;
     float scale = -std::numeric_limits<float>::infinity();
     for (int j = 0; j < group_size; ++j) {
-      scale = std::max(scale, std::abs(w[idx + j]));
+      scale = std::max(scale, std::abs(static_cast<float>(w[idx + j])));
     }
-    scale /= bits == 4 ? 6.0f : 448.0f;
+    scale /= bits == 4 ? F4E2M1_MAX : F8E4M3_MAX;
+    scale *= scale_enc;
     if (group_size == 16) {
       scale = dequantize_scale<float, 16>(detail::ToFP8()(scale));
     } else {
       scale = dequantize_scale<float, 32>(to_fp8_e8m0_round_up(scale));
     }
 
+    float scale_enc_b = (scale == 0.0f) ? 0.0f : (scale_enc / scale);
     for (int j = 0; j < group_size; ++j) {
-      float w_el = scale == 0 ? 0.0f : w[idx + j] / scale;
+      float w_el = static_cast<float>(w[idx + j]) * scale_enc_b;
       float output;
       if (bits == 8) {
         output = detail::FromFP8()(detail::ToFP8()(w_el));
       } else {
         output = FP4_LUT[to_fp4_e2m1(w_el)];
       }
-      out[idx + j] = static_cast<T>(scale * output);
+      out[idx + j] = static_cast<T>((scale / scale_enc) * output);
     }
   }
 }
@@ -1180,13 +1266,17 @@ void dispatch_quantize_dequantize(
     const array& w,
     array& out,
     int bits,
-    int group_size) {
+    int group_size,
+    float scale_enc = 1.0f) {
   if (w.dtype() == float16) {
-    fp_quantize_dequantize<float16_t>(w, out, bits, group_size, w.size());
+    fp_quantize_dequantize<float16_t>(
+        w, out, bits, group_size, w.size(), scale_enc);
   } else if (w.dtype() == bfloat16) {
-    fp_quantize_dequantize<bfloat16_t>(w, out, bits, group_size, w.size());
+    fp_quantize_dequantize<bfloat16_t>(
+        w, out, bits, group_size, w.size(), scale_enc);
   } else if (w.dtype() == float32) {
-    fp_quantize_dequantize<float>(w, out, bits, group_size, w.size());
+    fp_quantize_dequantize<float>(
+        w, out, bits, group_size, w.size(), scale_enc);
   } else {
     throw std::runtime_error(
         "[quantize_dequantize] Only supports floating point inputs");
@@ -1356,9 +1446,15 @@ void fast::ConvertFP8::eval_cpu(
         case bfloat16:
           unary_op<bfloat16_t, uint8_t>(in, out, detail::ToFP8());
           break;
-        default:
+        case float32:
           unary_op<float, uint8_t>(in, out, detail::ToFP8());
           break;
+        case float64:
+          unary_op<double, uint8_t>(in, out, detail::ToFP8());
+          break;
+        default:
+          throw std::runtime_error(
+              "[fast::ConvertFP8::eval_cpu] Unsupported input type.");
       }
     } else {
       switch (out.dtype()) {
@@ -1368,52 +1464,85 @@ void fast::ConvertFP8::eval_cpu(
         case bfloat16:
           unary_op<uint8_t, bfloat16_t>(in, out, detail::FromFP8());
           break;
-        default:
+        case float32:
           unary_op<uint8_t, float>(in, out, detail::FromFP8());
           break;
+        case float64:
+          unary_op<uint8_t, double>(in, out, detail::FromFP8());
+          break;
+        default:
+          throw std::runtime_error(
+              "[fast::ConvertFP8::eval_cpu] Unsupported output type.");
       }
     }
   });
 }
 
 void QQMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
+  bool w_quantized = (inputs[1].dtype() == uint32);
+  if (!w_quantized) {
+    throw std::runtime_error("[QQMatmul] Weights must be quantized.");
+  }
+
   auto& encoder = cpu::get_command_encoder(stream());
 
-  bool w_quantized = (inputs[1].dtype() == uint32);
-  if (w_quantized && inputs[0].shape(-2) == 1) {
-    bool donate_x = inputs[0].is_donatable();
-    auto x = ensure_row_contiguous(inputs[0], encoder, stream());
-    auto w = ensure_row_contiguous(inputs[1], encoder, stream());
-    auto scales = ensure_row_contiguous(inputs[2], encoder, stream());
-
-    out.set_data(allocator::malloc(out.nbytes()));
-
-    // If x is a copy it should be donatable
-    donate_x |= x.is_donatable();
-    auto xhat = donate_x
-        ? x
-        : array(allocator::malloc(x.nbytes()), x.shape(), x.dtype());
-    if (!donate_x) {
-      encoder.add_temporary(xhat);
-    }
-    encoder.set_input_array(x);
-    encoder.set_input_array(w);
-    encoder.set_input_array(scales);
-    encoder.set_output_array(out);
-    encoder.dispatch([out = array::unsafe_weak_copy(out),
-                      x = array::unsafe_weak_copy(x),
-                      xhat = array::unsafe_weak_copy(xhat),
-                      w = array::unsafe_weak_copy(w),
-                      scales = array::unsafe_weak_copy(scales),
-                      group_size_ = group_size_,
-                      bits_ = bits_]() mutable {
-      dispatch_quantize_dequantize(x, xhat, bits_, group_size_);
-      fp_qmm_dispatch(out, xhat, w, scales, group_size_, bits_, true);
-    });
-    return;
-  } else {
-    throw std::runtime_error("[QQMatmul] NYI for the general case");
+  bool donate_x = inputs[0].is_donatable();
+  auto x = ensure_row_contiguous(inputs[0], encoder, stream());
+  auto w = ensure_row_contiguous(inputs[1], encoder, stream());
+  auto scales = ensure_row_contiguous(inputs[2], encoder, stream());
+  bool has_global_scales =
+      (mode_ == QuantizationMode::Nvfp4 && inputs.size() == 5);
+  std::optional<array> global_scale_x;
+  std::optional<array> global_scale_w;
+  if (has_global_scales) {
+    global_scale_x = ensure_row_contiguous(inputs[3], encoder, stream());
+    global_scale_w = ensure_row_contiguous(inputs[4], encoder, stream());
   }
+
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  // If x is a copy it should be donatable
+  donate_x |= x.is_donatable();
+  auto xhat =
+      donate_x ? x : array(allocator::malloc(x.nbytes()), x.shape(), x.dtype());
+  if (!donate_x) {
+    encoder.add_temporary(xhat);
+  }
+  encoder.set_input_array(x);
+  encoder.set_input_array(w);
+  encoder.set_input_array(scales);
+  if (has_global_scales) {
+    encoder.set_input_array(*global_scale_x);
+    encoder.set_input_array(*global_scale_w);
+  }
+  encoder.set_output_array(out);
+  auto acc = qmm_accumulator(out, true, encoder);
+  encoder.dispatch([out = array::unsafe_weak_copy(out),
+                    x = array::unsafe_weak_copy(x),
+                    xhat = array::unsafe_weak_copy(xhat),
+                    w = array::unsafe_weak_copy(w),
+                    scales = array::unsafe_weak_copy(scales),
+                    acc = array::unsafe_weak_copy(acc),
+                    global_scale_x = global_scale_x
+                        ? array::unsafe_weak_copy(*global_scale_x)
+                        : array({}, float32, nullptr, {}),
+                    global_scale_w = global_scale_w
+                        ? array::unsafe_weak_copy(*global_scale_w)
+                        : array({}, float32, nullptr, {}),
+                    has_global_scales,
+                    group_size = group_size_,
+                    bits = bits_]() mutable {
+    float scale_enc_x = 1.0f;
+    float inv_scale_enc_w = 1.0f;
+    if (has_global_scales) {
+      scale_enc_x = (F8E4M3_MAX * F4E2M1_MAX) / *global_scale_x.data<float>();
+      inv_scale_enc_w =
+          *global_scale_w.data<float>() / (F8E4M3_MAX * F4E2M1_MAX);
+    }
+    dispatch_quantize_dequantize(x, xhat, bits, group_size, scale_enc_x);
+    fp_qmm_dispatch(
+        out, xhat, w, scales, group_size, bits, true, acc, inv_scale_enc_w);
+  });
 }
 
 void GatherQQMM::eval_cpu(const std::vector<array>& inputs, array& out) {

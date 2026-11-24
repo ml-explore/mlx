@@ -344,11 +344,13 @@ class ScaledDotProductAttentionVJP : public Custom {
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float scale,
       bool do_causal,
-      bool has_sinks)
+      bool has_sinks,
+      int window_size)
       : Custom(stream, std::move(fallback)),
         scale_(scale),
         do_causal_(do_causal),
-        has_sinks_(has_sinks) {}
+        has_sinks_(has_sinks),
+        window_size_(window_size) {}
 
   static bool use_fallback(const array& q, Stream s);
 
@@ -363,13 +365,15 @@ class ScaledDotProductAttentionVJP : public Custom {
   DEFINE_NAME(ScaledDotProductAttentionVJP);
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
-    return std::make_tuple(nullptr, scale_, do_causal_, has_sinks_);
+    return std::make_tuple(
+        nullptr, scale_, do_causal_, has_sinks_, window_size_);
   }
 
  private:
   float scale_;
   bool do_causal_;
   bool has_sinks_;
+  int window_size_;
 };
 
 class ConvertFP8 : public Primitive {

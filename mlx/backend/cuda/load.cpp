@@ -33,6 +33,9 @@ void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto size = out.size();
   auto nbytes = size * out.itemsize();
   out.set_data(cu::malloc_async(nbytes, encoder));
+  if (nbytes == 0) {
+    return;
+  }
   auto out_ptr = malloc(nbytes);
   reader_->read(static_cast<char*>(out_ptr), nbytes, offset_);
   if (swap_endianness_) {

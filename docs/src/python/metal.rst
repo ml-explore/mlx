@@ -7,6 +7,7 @@ Metal
   :toctree: _autosummary
 
   is_available
+  is_nax_available
   device_info
   start_capture
   stop_capture

@@ -120,6 +120,9 @@ void inverse_impl(
       inv,
       a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
       stream);
+  if (a.size() == 0) {
+    return;
+  }
 
   const int N = a.shape(-1);
   const size_t num_matrices = a.size() / (N * N);

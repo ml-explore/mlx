@@ -194,6 +194,12 @@ class TestDeviceInfo(mlx_tests.MLXTestCase):
         else:
             self.assertEqual(arch_list, [])
 
+    def test_metal_is_nax_available(self):
+        nax = mx.metal.is_nax_available()
+        self.assertIsInstance(nax, bool)
+        if not mx.metal.is_available():
+            self.assertFalse(nax)
+
     def test_device_info_default(self):
         info = mx.device_info()
         self.assertIsInstance(info, dict)

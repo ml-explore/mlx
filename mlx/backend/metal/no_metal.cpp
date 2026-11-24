@@ -12,6 +12,10 @@ bool is_available() {
   return false;
 }
 
+bool is_nax_available() {
+  return false;
+}
+
 void start_capture(std::string) {}
 void stop_capture() {}
 

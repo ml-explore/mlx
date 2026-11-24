@@ -258,17 +258,30 @@ void init_cudnn_conv_cache() {
   conv_cache();
 }
 
+void clear_cudnn_conv_cache() {
+  conv_cache().clear();
+}
+
 void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
   nvtx3::scoped_range r("Convolution::eval_gpu");
-  if (out_.size() == 0) {
-    return;
-  }
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
+  if (out_.size() == 0) {
+    out_.set_data(cu::malloc_async(0, encoder));
+    return;
+  }
 
   assert(inputs.size() == 2);
   array in = inputs[0];
   array wt = inputs[1];
+
+  // Return 0s if either input is empty
+  if (in.size() == 0 || wt.size() == 0) {
+    array zero(0, out_.dtype());
+    fill_gpu(zero, out_, s);
+    encoder.add_temporary(std::move(zero));
+    return;
+  }
   array out = out_;
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
   Dtype dtype = out.dtype();

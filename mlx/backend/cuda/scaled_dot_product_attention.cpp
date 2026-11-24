@@ -4,6 +4,7 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/lru_cache.h"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/gpu/slicing.h"
 #include "mlx/fast_primitives.h"
 
 #include <nvtx3/nvtx3.hpp>
@@ -96,6 +97,9 @@ bool use_cudnn_for_decoding(
   auto is_slice = [](const array& kv) {
     // Get pre-sliced sequence length from strides, and check if the buffer
     // belongs to a contiguous kv cache.
+    if (kv.strides(2) == 0) {
+      return false;
+    }
     int64_t T_kv = kv.strides(1) / kv.strides(2);
     if (kv.size() / kv.shape(2) * T_kv != kv.buffer_size() / kv.itemsize()) {
       return false;
@@ -121,6 +125,17 @@ array unslice_kv(const array& kv) {
   return copy;
 }
 
+// Get the last n keys or values, i.e. kv[..., -n:, :]
+array slice_last_kv(const array& kv, int n, Stream s) {
+  Shape start(kv.ndim(), 0);
+  start[2] = kv.shape(2) - n;
+  Shape shape = kv.shape();
+  shape[2] = n;
+  array out(std::move(shape), kv.dtype(), nullptr, {});
+  slice_gpu(kv, out, start, Shape(kv.ndim(), 1), s);
+  return out;
+}
+
 constexpr int QKV_NDIM = 4;
 
 struct SDPACacheKey {
@@ -133,6 +148,7 @@ struct SDPACacheKey {
   std::array<int64_t, QKV_NDIM> k_strides;
   std::array<int64_t, QKV_NDIM> v_strides;
   bool do_causal;
+  int window_size;
   std::array<int, QKV_NDIM> mask_shape;
   std::array<int64_t, QKV_NDIM> mask_strides;
   bool has_sinks;
@@ -145,6 +161,7 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
     const array& k,
     const array& v,
     bool do_causal,
+    int window_size,
     const std::optional<array>& mask_arr,
     const std::optional<array>& sinks,
     bool decoding = false,
@@ -159,6 +176,7 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
   cache_key.pod.k_strides = vector_key<QKV_NDIM>(k.strides());
   cache_key.pod.v_strides = vector_key<QKV_NDIM>(v.strides());
   cache_key.pod.do_causal = do_causal;
+  cache_key.pod.window_size = window_size;
   cache_key.pod.has_sinks = sinks.has_value();
   cache_key.pod.output_logsumexp = output_logsumexp;
   if (mask_arr) {
@@ -205,12 +223,30 @@ enum UIDS {
   D_O,
 };
 
+// Keep the keys less than window_size away from the query. If T_q == T_kv we
+// align to the top left (the same mask) since cuDNN <= 9.9 on Hopper needs it.
+template <typename Attributes>
+void set_window(
+    Attributes& options,
+    const array& q,
+    const array& k,
+    bool do_causal,
+    int window_size) {
+  options
+      .set_diagonal_alignment(
+          q.shape(2) == k.shape(2) ? fe::DiagonalAlignment_t::TOP_LEFT
+                                   : fe::DiagonalAlignment_t::BOTTOM_RIGHT)
+      .set_diagonal_band_left_bound(window_size)
+      .set_diagonal_band_right_bound(do_causal ? 0 : window_size - 1);
+}
+
 DnnGraph build_sdpa_graph(
     cudnnHandle_t handle,
     const array& q,
     const array& k,
     const array& v,
     bool do_causal,
+    int window_size,
     const std::optional<array>& mask_arr,
     const std::optional<array>& sinks,
     const std::optional<array>& seq_len_q,
@@ -228,7 +264,9 @@ DnnGraph build_sdpa_graph(
                      .set_name("sdpa_cudnn")
                      .set_attn_scale(graph.scalar("Scale", SCALE, float32))
                      .set_generate_stats(output_logsumexp);
-  if (do_causal) {
+  if (window_size > 0) {
+    set_window(options, q, k, do_causal, window_size);
+  } else if (do_causal) {
     options.set_causal_mask_bottom_right(do_causal);
   }
   if (mask_arr) {
@@ -262,6 +300,7 @@ DnnGraph build_sdpa_backward_graph(
     const array& k,
     const array& v,
     bool do_causal,
+    int window_size,
     const std::optional<array>& mask_arr,
     const std::optional<array>& sinks,
     const array& o,
@@ -282,7 +321,9 @@ DnnGraph build_sdpa_backward_graph(
   auto options = fe::graph::SDPA_backward_attributes()
                      .set_name("sdpa_backward_cudnn")
                      .set_attn_scale(graph.scalar("Scale", SCALE, float32));
-  if (do_causal) {
+  if (window_size > 0) {
+    set_window(options, q, k, do_causal, window_size);
+  } else if (do_causal) {
     // For pretraining, set_causal_mask (top-left mask) is ~1.8x faster than
     // the bottom-right mask for a ~4B model (it depends on the model size: for
     // bigger models the difference is smaller since the FFNs take more FLOPs)
@@ -319,12 +360,18 @@ void init_cudnn_sdpa_cache() {
   sdpa_backward_cache();
 }
 
+void clear_cudnn_sdpa_cache() {
+  sdpa_cache().clear();
+  sdpa_backward_cache().clear();
+}
+
 bool supports_sdpa_cudnn(
     const array& q,
     const array& k,
     const array& v,
     bool has_arr_mask,
     bool do_causal,
+    int window_size,
     Stream s) {
   bool enabled = config::get("MLX_CUDA_USE_CUDNN_SDPA", 1);
 
@@ -341,6 +388,22 @@ bool supports_sdpa_cudnn(
   // cuDNN does not support bottom right mask when T_q > T_kv.
   if (do_causal && (q.shape(2) > k.shape(2))) {
     return false;
+  }
+
+  if (window_size > 0) {
+    // Older cuDNN does not support sinks (before 9.13) and gives wrong
+    // gradients when T_kv % 128 != 0 (before 9.15.1).
+    if (cudnnGetVersion() < 91501) {
+      return false;
+    }
+    // cuDNN does not support a window with an array mask, or when T_q > T_kv.
+    if (has_arr_mask || q.shape(2) > k.shape(2)) {
+      return false;
+    }
+    // The vector kernel reads only the keys in the window.
+    if (q.shape(2) == 1) {
+      return false;
+    }
   }
 
   // D_qk and D_v must be a multiple of 8 with maximum value 128.
@@ -361,6 +424,7 @@ void sdpa_cudnn(
     array& o,
     std::optional<array>& stats,
     bool do_causal,
+    int window_size,
     const std::optional<array>& mask_arr,
     const std::optional<array>& sinks,
     bool output_logsumexp,
@@ -409,7 +473,16 @@ void sdpa_cudnn(
 
   // Search cache.
   auto cache_key = build_sdpa_cache_key(
-      encoder, q, k, v, do_causal, mask_arr, sinks, decoding, output_logsumexp);
+      encoder,
+      q,
+      k,
+      v,
+      do_causal,
+      window_size,
+      mask_arr,
+      sinks,
+      decoding,
+      output_logsumexp);
   auto it = sdpa_cache().find(cache_key);
   if (it == sdpa_cache().end()) {
     auto graph = build_sdpa_graph(
@@ -418,6 +491,7 @@ void sdpa_cudnn(
         k,
         v,
         do_causal,
+        window_size,
         mask_arr,
         sinks,
         seq_len_q,
@@ -460,6 +534,7 @@ void sdpa_backward_cudnn(
     const array& o,
     const array& stats,
     bool do_causal,
+    int window_size,
     const std::optional<array>& mask_arr,
     const std::optional<array>& sinks,
     const array& d_o,
@@ -491,8 +566,8 @@ void sdpa_backward_cudnn(
   }
 
   // Search cache.
-  auto cache_key =
-      build_sdpa_cache_key(encoder, q, k, v, do_causal, mask_arr, sinks);
+  auto cache_key = build_sdpa_cache_key(
+      encoder, q, k, v, do_causal, window_size, mask_arr, sinks);
   auto it = sdpa_backward_cache().find(cache_key);
   if (it == sdpa_backward_cache().end()) {
     auto graph = build_sdpa_backward_graph(
@@ -501,6 +576,7 @@ void sdpa_backward_cudnn(
         k,
         v,
         do_causal,
+        window_size,
         mask_arr,
         sinks,
         o,
@@ -555,6 +631,11 @@ namespace fast {
 
 namespace {
 
+// Remove the window when it keeps all the keys.
+int clip_window(const array& q, const array& k, int window_size) {
+  return window_size < std::max(q.shape(2), k.shape(2)) ? window_size : -1;
+}
+
 std::tuple<bool, std::string> has_fused_kernel(
     const array& q,
     const array& k,
@@ -567,15 +648,13 @@ std::tuple<bool, std::string> has_fused_kernel(
   if (s.device != Device::gpu) {
     return {false, "the fused kernels require a GPU stream."};
   }
-  if (window_size > 0) {
-    return {false, "window attention support for CUDA is NYI"};
-  }
-  if (output_logsumexp && window_size > 0) {
-    return {false, "window support for backward attention is NYI"};
-  }
-
-  if (!supports_sdpa_cudnn(q, k, v, has_arr_mask, do_causal, s) &&
-      !supports_sdpa_vector(q, k, v, has_arr_mask, output_logsumexp)) {
+  window_size = clip_window(q, k, window_size);
+  // The vector kernel supports a window only for one query.
+  bool vector_ok =
+      supports_sdpa_vector(q, k, v, has_arr_mask, output_logsumexp) &&
+      (window_size <= 0 || q.shape(2) == 1);
+  if (!supports_sdpa_cudnn(q, k, v, has_arr_mask, do_causal, window_size, s) &&
+      !vector_ok) {
     std::ostringstream msg;
     msg << "neither the cuDNN attention nor the vector attention kernel "
         << "supports this configuration; got query shape " << q.shape()
@@ -627,6 +706,14 @@ void ScaledDotProductAttention::eval_gpu(
 
   auto& s = stream();
 
+  if (outputs[0].size() == 0) {
+    auto& encoder = cu::get_command_encoder(s);
+    for (auto& out : outputs) {
+      out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    }
+    return;
+  }
+
   array q = prepare_sdpa_input(inputs[0], s);
   array k = prepare_sdpa_input(inputs[1], s);
   array v = prepare_sdpa_input(inputs[2], s);
@@ -646,8 +733,9 @@ void ScaledDotProductAttention::eval_gpu(
   if (output_logsumexp_) {
     stats = outputs[1];
   }
+  int window_size = clip_window(q, k, window_size_);
 
-  if (supports_sdpa_cudnn(q, k, v, has_arr_mask, do_causal_, s)) {
+  if (supports_sdpa_cudnn(q, k, v, has_arr_mask, do_causal_, window_size, s)) {
     if (sinks) {
       sinks = prepare_sdpa_sinks(*sinks, s);
     }
@@ -659,11 +747,17 @@ void ScaledDotProductAttention::eval_gpu(
         out,
         stats,
         do_causal_,
+        window_size,
         mask_arr,
         sinks,
         output_logsumexp_,
         s);
   } else {
+    // With one query, the window keeps the last window_size keys.
+    if (window_size > 0) {
+      k = slice_last_kv(k, window_size, s);
+      v = slice_last_kv(v, window_size, s);
+    }
     sdpa_vector(q, k, v, scale_, out, do_causal_, sinks, s);
   }
 }
@@ -684,6 +778,16 @@ void ScaledDotProductAttentionVJP::eval_gpu(
 
   auto& s = stream();
 
+  // Return 0s if q or k is empty
+  if (inputs[0].size() == 0 || inputs[1].size() == 0) {
+    array zero(0, outputs[0].dtype());
+    for (auto& out : outputs) {
+      fill_gpu(zero, out, s);
+    }
+    cu::get_command_encoder(s).add_temporary(std::move(zero));
+    return;
+  }
+
   assert(inputs.size() >= 6);
   int primals_size = inputs.size() - 3;
   bool has_arr_mask = primals_size > 3 + has_sinks_;
@@ -701,7 +805,7 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   }
   std::optional<array> sinks;
   if (has_sinks_) {
-    sinks = prepare_sdpa_sinks(inputs.back(), s);
+    sinks = prepare_sdpa_sinks(inputs[primals_size - 1], s);
   }
 
   assert(outputs.size() == 3);
@@ -717,6 +821,7 @@ void ScaledDotProductAttentionVJP::eval_gpu(
       o,
       stats,
       do_causal_,
+      clip_window(q, k, window_size_),
       mask_arr,
       sinks,
       d_o,

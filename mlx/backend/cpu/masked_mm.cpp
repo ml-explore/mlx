@@ -114,6 +114,9 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
         "[BlockMaskedMM::eval] Currently only supports float32.");
   }
   out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
 
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];

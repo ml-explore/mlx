@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstring>
 #include <numeric>
 #include <sstream>
 #include <type_traits>
@@ -254,11 +255,14 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
   // keys has shape (N1, ..., NK, 2)
   // out has shape (N1, ..., NK, M1, M2, ...)
   auto& keys = inputs[0];
-  size_t num_keys = keys.size() / 2;
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
 
+  size_t num_keys = keys.size() / 2;
   size_t elems_per_key = out.size() / num_keys;
   size_t bytes_per_key = out.itemsize() * elems_per_key;
-  out.set_data(allocator::malloc(out.nbytes()));
 
   auto kptr = inputs[0].data<uint32_t>();
   auto cptr = out.data<char>();
@@ -271,9 +275,12 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
                     num_keys,
                     kshape = keys.shape(),
                     kstrides = keys.strides()]() mutable {
+    auto store = [](char* cptr, size_t loc, uint32_t v) {
+      std::memcpy(cptr + sizeof(v) * loc, &v, sizeof(v));
+    };
     auto copy_remaining = [&](char* cptr, size_t loc, uint32_t v) {
       if (4 * loc + 4 <= bytes_per_key) {
-        reinterpret_cast<uint32_t*>(cptr)[loc] = v;
+        store(cptr, loc, v);
       } else {
         std::copy(
             reinterpret_cast<char*>(&v),
@@ -286,7 +293,6 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
     auto half_size = out_skip / 2;
     bool even = out_skip % 2 == 0;
     for (int i = 0; i < num_keys; ++i, cptr += bytes_per_key) {
-      auto ptr = reinterpret_cast<uint32_t*>(cptr);
       // Get ith key
       auto kidx = 2 * i;
       auto k1_elem = elem_to_loc(kidx, kshape, kstrides);
@@ -295,12 +301,13 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
 
       std::pair<uintptr_t, uintptr_t> count{0, half_size + !even};
       for (; count.first + 1 < half_size; count.first++, count.second++) {
-        std::tie(ptr[count.first], ptr[count.second]) =
-            random::threefry2x32_hash(key, count);
+        auto [first, second] = random::threefry2x32_hash(key, count);
+        store(cptr, count.first, first);
+        store(cptr, count.second, second);
       }
       if (count.first < half_size) {
         auto rb = random::threefry2x32_hash(key, count);
-        ptr[count.first++] = rb.first;
+        store(cptr, count.first++, rb.first);
         copy_remaining(cptr, count.second, rb.second);
       }
       if (!even) {
@@ -399,15 +406,19 @@ void View::eval_cpu(const std::vector<array>& inputs, array& out) {
       strides.back() = 1;
     }
     auto flags = in.flags();
+    auto data_size = in.data_size() * ibytes / obytes;
     if (ibytes != obytes) {
       // Last axis size can change contiguity
       auto [_, row_contiguous, col_contiguous] =
           check_contiguity(out.shape(), strides);
       flags.row_contiguous = row_contiguous;
       flags.col_contiguous = col_contiguous;
+      if (row_contiguous || col_contiguous) {
+        flags.contiguous = true;
+        data_size = out.size();
+      }
     }
-    out.copy_shared_buffer(
-        in, strides, flags, in.data_size() * ibytes / obytes);
+    out.copy_shared_buffer(in, strides, flags, data_size);
   } else {
     auto tmp = array(
         in.shape(), in.dtype() == bool_ ? uint8 : in.dtype(), nullptr, {});

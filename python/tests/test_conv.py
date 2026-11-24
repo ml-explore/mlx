@@ -600,6 +600,16 @@ class TestConv(mlx_tests.MLXTestCase):
                 N, C, OC, idim, kdim, stride, padding, dilation=(2, 2, 2), dtype=dtype
             )
 
+    def test_conv_3D_output_reshape_transpose(self):
+        # A dense output with no contiguity flags must stay correct after a
+        # reshape and transpose.
+        x = mx.random.normal((2, 12, 15, 18, 2))
+        w = mx.random.normal((240, 4, 5, 6, 2))
+        y = mx.conv_general(x, w, stride=(4, 5, 6))
+        out = y.reshape(-1, 240).T.reshape(-1)
+        expected = np.array(y).reshape(-1, 240).T.reshape(-1)
+        self.assertTrue(np.array_equal(out, expected))
+
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_3D_grad(self):
         def run_conv3D_grad(

@@ -63,6 +63,9 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
   auto& s = stream();
   auto& d = metal::device(s.device);
   std::string op_name;
@@ -137,14 +140,14 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   // keys has shape (N1, ..., NK, 2)
   // out has shape (N1, ..., NK, M1, M2, ...)
   auto& keys = inputs[0];
-  size_t num_keys = keys.size() / 2;
-
-  size_t elems_per_key = out.size() / num_keys;
-  size_t bytes_per_key = out.itemsize() * elems_per_key;
   out.set_data(allocator::malloc(out.nbytes()));
   if (out.size() == 0) {
     return;
   }
+
+  size_t num_keys = keys.size() / 2;
+  size_t elems_per_key = out.size() / num_keys;
+  size_t bytes_per_key = out.itemsize() * elems_per_key;
 
   size_t out_per_key = (bytes_per_key + 4 - 1) / 4;
   size_t half_size = out_per_key / 2;

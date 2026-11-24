@@ -253,7 +253,7 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
         _, (dq, dr) = mx.jvp(fun, [mx.array(7.0)], [mx.array(1.0)])
         self.assertEqual(dq.item(), 0.0)
-        self.assertEqual(dr.item(), 0.0)
+        self.assertEqual(dr.item(), -1.0)
 
         # slice_update with dynamic start indices and a subset of traced
         # inputs (issue #3634)
@@ -278,6 +278,58 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
         _, (j,) = mx.jvp(fun, [src, upd], [mx.ones(4), mx.full(2, 2.0)])
         self.assertEqual(j.tolist(), [1.0, 2.0, 2.0, 1.0])
+
+    def test_divmod_grads(self):
+        x = mx.array([5.5, -3.25, 7.0, -7.5, 0.5])
+        y = mx.array([2.0, 1.5, -2.5, -2.0, 4.0])
+        q, _ = mx.divmod(x, y)
+        self.assertTrue(mx.array_equal(q, mx.floor_divide(x, y)))
+
+        def rem(x, y):
+            return mx.divmod(x, y)[1]
+
+        def quo(x, y):
+            return mx.divmod(x, y)[0]
+
+        wq = mx.array([1.0, -2.0, 3.0, 0.5, 4.0])
+        wr = mx.array([0.5, 2.0, -1.0, 3.0, 1.5])
+
+        # vjp
+        gx, gy = mx.vjp(lambda x, y: mx.divmod(x, y), [x, y], [wq, wr])[1]
+        self.assertTrue(mx.allclose(gx, wr))
+        self.assertTrue(mx.allclose(gy, -q * wr))
+
+        gx, gy = mx.vjp(lambda x, y: mx.divmod(x, y), [x, y], [wq, mx.zeros_like(wr)])[
+            1
+        ]
+        self.assertTrue(mx.array_equal(gx, mx.zeros_like(x)))
+        self.assertTrue(mx.array_equal(gy, mx.zeros_like(y)))
+
+        # Same gradients as remainder
+        gx, gy = mx.grad(lambda x, y: rem(x, y).sum(), argnums=(0, 1))(x, y)
+        ex, ey = mx.grad(lambda x, y: mx.remainder(x, y).sum(), argnums=(0, 1))(x, y)
+        self.assertTrue(mx.allclose(gx, ex))
+        self.assertTrue(mx.allclose(gy, ey))
+        self.assertTrue(mx.allclose(gx, mx.ones_like(x)))
+        gx, gy = mx.grad(lambda x, y: quo(x, y).sum(), argnums=(0, 1))(x, y)
+        self.assertTrue(mx.array_equal(gx, mx.zeros_like(x)))
+        self.assertTrue(mx.array_equal(gy, mx.zeros_like(y)))
+
+        # jvp
+        tx = mx.array([1.0, 2.0, -1.0, 0.5, 3.0])
+        ty = mx.array([0.5, -1.0, 2.0, 1.0, -0.5])
+
+        _, (dq, dr) = mx.jvp(lambda x, y: mx.divmod(x, y), [x, y], [tx, ty])
+        self.assertTrue(mx.array_equal(dq, mx.zeros_like(x)))
+        self.assertTrue(mx.allclose(dr, tx - q * ty))
+
+        _, (dq, dr) = mx.jvp(lambda x: mx.divmod(x, y), [x], [tx])
+        self.assertTrue(mx.array_equal(dq, mx.zeros_like(x)))
+        self.assertTrue(mx.allclose(dr, tx))
+
+        _, (dq, dr) = mx.jvp(lambda y: mx.divmod(x, y), [y], [ty])
+        self.assertTrue(mx.array_equal(dq, mx.zeros_like(x)))
+        self.assertTrue(mx.allclose(dr, -q * ty))
 
     def test_grad(self):
         def fun(x):
@@ -1451,6 +1503,51 @@ class TestAutograd(mlx_tests.MLXTestCase):
                 gc.collect()
             mem_post = mx.get_active_memory()
             self.assertEqual(mem_pre, mem_post)
+
+    def test_checkpoint_recurrence_memory(self):
+        # Chunked recurrence with gradients for the per-step inputs (#4837)
+        H, D, C = 4, 128, 32
+
+        def step(s, q, k, v):
+            ys = []
+            for t in range(q.shape[0]):
+                s = s * 0.95
+                delta = v[t] - (s * k[t][:, None, :]).sum(-1)
+                s = s + delta[:, :, None] * k[t][:, None, :]
+                ys.append((s * q[t][:, None, :]).sum(-1))
+            return s, mx.stack(ys)
+
+        def loss(x0, chunks):
+            s, total = x0, mx.array(0.0)
+            for q, k, v in chunks:
+                s, y = mx.checkpoint(step)(s, q, k, v)
+                total = total + y.sum()
+            return total
+
+        def peak_memory(num_chunks):
+            mx.random.seed(0)
+            chunks = [
+                (
+                    mx.random.normal((C, H, D)),
+                    0.05 * mx.random.normal((C, H, D)),
+                    mx.random.normal((C, H, D)),
+                )
+                for _ in range(num_chunks)
+            ]
+            x0 = mx.zeros((H, D, D))
+            mx.eval(chunks, x0)
+            mx.synchronize()
+            gc.collect()
+            mx.reset_peak_memory()
+            base = mx.get_active_memory()
+            out = mx.value_and_grad(loss, argnums=(0, 1))(x0, chunks)
+            mx.eval(out)
+            return mx.get_peak_memory() - base
+
+        # Without bounded recomputation, about one state per step stays alive
+        state_size = H * D * D * 4
+        growth = peak_memory(16) - peak_memory(4)
+        self.assertLess(growth / (12 * C * state_size), 0.25)
 
     def test_grad_with_copies(self):
         a = mx.array(2.0)

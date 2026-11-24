@@ -1,5 +1,9 @@
 // Copyright © 2026 Apple Inc.
 
+#include <unistd.h>
+#include <algorithm>
+#include <cstdlib>
+#include <memory>
 #include <vector>
 
 #include "doctest/doctest.h"
@@ -292,5 +296,41 @@ TEST_CASE("test the wired limit is used up to its boundary") {
   CHECK_EQ(residency().wired_size(), baseline);
 
   allocator::allocator().free(second);
+  CHECK_EQ(residency().wired_size(), baseline);
+}
+
+TEST_CASE("test a user buffer is not wired") {
+  if (!residency().enabled()) {
+    return;
+  }
+  LimitGuard guard(0, 0);
+  set_wired_limit(256 * MB);
+  const size_t baseline = residency().wired_size();
+
+  // Page-aligned, so Metal can wrap it without a copy.
+  const size_t page = static_cast<size_t>(getpagesize());
+  constexpr int size = 4 * MB / sizeof(float);
+  std::unique_ptr<float, decltype(&std::free)> data(
+      static_cast<float*>(std::aligned_alloc(page, size * sizeof(float))),
+      &std::free);
+  REQUIRE(data != nullptr);
+  std::fill_n(data.get(), size, 1.0f);
+  {
+    auto a = array(data.get(), Shape{size}, float32, [](void*) {});
+    REQUIRE_EQ(a.data<float>(), data.get());
+    CHECK_EQ(residency().wired_size(), baseline);
+
+    // Raising the limit wires MLX's own allocations, but not this buffer.
+    auto own = allocator::allocator().malloc(4 * MB);
+    set_wired_limit(512 * MB);
+    CHECK_EQ(residency().wired_size(), baseline + 4 * MB);
+
+    auto b = sum(a);
+    eval(b);
+    CHECK_EQ(b.item<float>(), static_cast<float>(size));
+    synchronize();
+    allocator::allocator().free(own);
+  }
+  // Releasing the buffer must not touch the residency accounting.
   CHECK_EQ(residency().wired_size(), baseline);
 }

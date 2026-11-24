@@ -1577,6 +1577,11 @@ std::vector<array> Convolution::vjp(
     }
     // Grads for weight
     else if (a == 1) {
+      if (in.shape(0) == 0) {
+        grads.push_back(zeros_like(wt, stream()));
+        continue;
+      }
+
       bool no_dilation = true;
 
       for (int i = 0; i < input_dilation_.size(); i++) {
@@ -1819,6 +1824,11 @@ std::vector<array> CustomTransforms::vjp(
     vjps.push_back(all_vjps[arg]);
   }
 
+  // Finish all requested vjps before any of them can start an earlier
+  // checkpoint.
+  if (synchronize_vjps_ && vjps.size() > 1) {
+    return depends(vjps, vjps);
+  }
   return vjps;
 }
 
@@ -1886,10 +1896,16 @@ std::vector<array> DivMod::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
-    const std::vector<array>&) {
+    const std::vector<array>& outputs) {
+  // The quotient is floored so it has zero gradient
   std::vector<array> vjps;
   for (auto arg : argnums) {
-    vjps.push_back(zeros_like(primals[arg], stream()));
+    if (arg == 0) {
+      vjps.push_back(cotangents[1]);
+    } else {
+      vjps.push_back(
+          negative(multiply(outputs[0], cotangents[1], stream()), stream()));
+    }
   }
   return vjps;
 }
@@ -1898,16 +1914,25 @@ std::vector<array> DivMod::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  // One tangent per output; inputs are pre-broadcast and pre-promoted
-  auto zero = zeros_like(primals[0], stream());
-  return {zero, zero};
+  auto jvp_fun = [&](int i) {
+    if (argnums[i] == 0) {
+      return tangents[i];
+    }
+    auto x_over_y = floor(divide(primals[0], primals[1], stream()), stream());
+    return negative(multiply(x_over_y, tangents[i], stream()), stream());
+  };
+  auto rem = jvp_fun(0);
+  if (argnums.size() > 1) {
+    rem = add(rem, jvp_fun(1), stream());
+  }
+  return {zeros_like(primals[0], stream()), rem};
 }
 
 std::pair<std::vector<array>, std::vector<int>> DivMod::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {divmod(a, b, stream()), {to_ax}};
+  return {divmod(a, b, stream()), {to_ax, to_ax}};
 }
 
 std::vector<array> Divide::jvp(
@@ -4686,8 +4711,10 @@ std::vector<array> Scatter::vjp(
               gather(cotangents[0], indices, axes_, slice_sizes, stream());
           auto gathered_result =
               gather(result, indices, axes_, slice_sizes, stream());
-          vjps.push_back(
-              multiply(gathered_cotan, gathered_result == updates, stream()));
+          vjps.push_back(multiply(
+              gathered_cotan,
+              equal(gathered_result, updates, stream()),
+              stream()));
           break;
         }
         default: {

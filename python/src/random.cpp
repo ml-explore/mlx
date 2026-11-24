@@ -5,8 +5,6 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include <chrono>
-
 #include "mlx/ops.h"
 #include "mlx/random.h"
 #include "python/src/random.h"
@@ -42,14 +40,8 @@ class PyKeySequence {
 
   nb::list& state() {
     if (!state_) {
-      static auto time_seed = []() {
-        auto now = std::chrono::system_clock::now();
-        return std::chrono::duration_cast<std::chrono::milliseconds>(
-                   now.time_since_epoch())
-            .count();
-      }();
       state_ = nb::list();
-      state_->append(mx::random::key(time_seed));
+      state_->append(mx::random::key(mx::random::KeySequence::default_seed()));
     }
     return *state_;
   }
