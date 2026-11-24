@@ -1759,6 +1759,15 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(mx.zeros(4).at[idx[::-1]].add(upd).tolist(), expected)
         self.assertEqual(mx.zeros(4).at[idx].add(upd[::-1]).tolist(), expected)
 
+    def test_array_at_add_rows_half(self):
+        idx = mx.array([0, 2, 2, 5, -1, 0])
+        for dtype, atol in ((mx.float16, 1e-2), (mx.bfloat16, 1e-1)):
+            a = mx.random.normal((8, 64)).astype(dtype)
+            upd = mx.random.normal((6, 64)).astype(dtype)
+            out = a.at[idx].add(upd)
+            expected = a.astype(mx.float32).at[idx].add(upd.astype(mx.float32))
+            self.assertTrue(mx.allclose(out.astype(mx.float32), expected, atol=atol))
+
     @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_array_at_complex_add_gpu(self):
         n = 4096

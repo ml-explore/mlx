@@ -18,6 +18,7 @@
 #include <nvrtc.h>
 #include <nvtx3/nvtx3.hpp>
 
+#include <algorithm>
 #include <cassert>
 #include <numeric>
 
@@ -61,6 +62,74 @@ void append_indices_arg(
 // through the strides (views) or a smaller span (broadcast arrays).
 inline bool exceeds_int32(const array& a) {
   return a.size() > INT32_MAX || a.data_size() > INT32_MAX;
+}
+
+inline bool is_aligned(const array& x, int bytes) {
+  return reinterpret_cast<uintptr_t>(gpu_ptr<void>(x)) % bytes == 0;
+}
+
+// Add full rows of half or bfloat16 updates along axis 0. Return false if the
+// inputs can not use this kernel.
+bool scatter_add_rows(
+    const array& upd,
+    const array& indices,
+    array& out,
+    cu::CommandEncoder& encoder) {
+  int idx_ndim = indices.ndim();
+  if ((out.dtype() != float16 && out.dtype() != bfloat16) ||
+      upd.shape(idx_ndim) != 1 ||
+      !std::equal(
+          upd.shape().begin() + idx_ndim + 1,
+          upd.shape().end(),
+          out.shape().begin() + 1)) {
+    return false;
+  }
+  int64_t num_rows = indices.size();
+  int64_t row_bytes = upd.nbytes() / num_rows;
+  if (row_bytes % 4 != 0 || !indices.flags().row_contiguous ||
+      !upd.flags().row_contiguous || !out.flags().row_contiguous ||
+      !is_aligned(upd, 4) || !is_aligned(out, 4)) {
+    return false;
+  }
+  int64_t row_size = row_bytes / 4;
+
+  // Use 256 threads, with a power of 2 of them on each row.
+  int threads_per_row = 1;
+  while (threads_per_row < row_size && threads_per_row < 256) {
+    threads_per_row *= 2;
+  }
+  int rows_per_block = 256 / threads_per_row;
+  dim3 num_blocks(cuda::ceil_div(num_rows, rows_per_block));
+  dim3 block_dims(threads_per_row, rows_per_block);
+
+  std::string module_name = fmt::format(
+      "scatter_add_rows_{}_{}",
+      dtype_to_string(out.dtype()),
+      dtype_to_string(indices.dtype()));
+  std::string kernel_name = fmt::format(
+      "mlx::core::cu::scatter_add_rows<{}, {}>",
+      dtype_to_cuda_type(out.dtype()),
+      dtype_to_cuda_type(indices.dtype()));
+  cu::JitModule& mod = cu::get_jit_module(encoder.device(), module_name, [&]() {
+    return std::make_tuple(
+        false, jit_source_scatter, std::vector<std::string>{kernel_name});
+  });
+
+  cu::KernelArgs args;
+  args.append(upd);
+  args.append(out);
+  args.append(indices);
+  args.append<int64_t>(num_rows);
+  args.append<int32_t>(out.shape(0));
+  args.append<int64_t>(row_size);
+
+  encoder.set_input_array(upd);
+  encoder.set_input_array(indices);
+  encoder.set_output_array(out);
+  auto kernel = mod.get_kernel(kernel_name);
+  encoder.add_kernel_node_raw(
+      kernel, num_blocks, block_dims, {}, 0, args.args());
+  return true;
 }
 
 } // namespace
@@ -175,6 +244,14 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   Dtype idx_dtype = nidx > 0 ? inputs[1].dtype() : int32;
   int32_t idx_ndim = nidx > 0 ? inputs[1].ndim() : 0;
 
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  if (reduce_type_ == Scatter::Sum && nidx == 1 && axes_[0] == 0 &&
+      scatter_add_rows(upd, inputs[1], out, encoder)) {
+    return;
+  }
+
   bool large_out = out.size() > INT32_MAX;
   bool large_idx = false;
   for (int i = 1; i <= nidx; ++i) {
@@ -196,9 +273,6 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       dtype_to_string(idx_dtype),
       op,
       nidx);
-
-  auto& s = stream();
-  auto& encoder = cu::get_command_encoder(s);
 
   cu::JitModule& mod = cu::get_jit_module(encoder.device(), module_name, [&]() {
     std::vector<std::string> kernel_names;
