@@ -306,14 +306,22 @@ template <typename T, typename IdxT>
     device T* out [[buffer(2)]],
     constant const IdxT strides[3],
     constant const int& kernel_size,
+    constant const int& in_size,
+    constant const int& padding,
     uint3 tid [[thread_position_in_grid]],
     uint3 grid_dim [[threads_per_grid]]) {
   out += (tid.z * static_cast<IdxT>(grid_dim.y) + tid.y) * grid_dim.x + tid.x;
-  in += tid.z * strides[0] + tid.y * strides[1] + tid.x * strides[2];
+
+  // Skip the taps that fall in the padding
+  int start = static_cast<int>(tid.y) - padding;
+  int k_begin = max(0, -start);
+  int k_end = min(kernel_size, in_size - start);
+  in += tid.z * strides[0] + (start + k_begin) * strides[1] +
+      tid.x * strides[2];
   w += tid.x * kernel_size;
 
   float acc = 0.0;
-  for (int i = 0; i < kernel_size; ++i) {
+  for (int i = k_begin; i < k_end; ++i) {
     acc += static_cast<float>(in[0]) * w[i];
     in += strides[1];
   }

@@ -1465,7 +1465,7 @@ class TestConv(mlx_tests.MLXTestCase):
                             flip=flip,
                         )
 
-            # conv1d depthwise with padding also uses the 2D depthwise kernel
+            # conv1d depthwise with a stride also uses the 2D depthwise kernel
             for C, k, stride in ((24, 3, 1), (40, 5, 2)):
                 x = mx.random.normal((2, 64, C)).astype(dtype)
                 w = (0.2 * mx.random.normal((C, k, 1))).astype(dtype)
@@ -1679,16 +1679,17 @@ class TestConv(mlx_tests.MLXTestCase):
     def test_grouped_depthwise_conv_padding_bounds(self):
         x = mx.random.normal((1, 16, 64))
         w = mx.random.normal((64, 3, 1))
-        y = mx.conv1d(x, w, padding=1, groups=64)
+        y = mx.conv1d(x, w, stride=2, padding=1, groups=64)
         mx.eval(y)
-        self.assertEqual(tuple(y.shape), (1, 16, 64))
+        self.assertEqual(tuple(y.shape), (1, 8, 64))
 
-    def test_conv1d_depthwise_end_padding(self):
+    def test_conv1d_depthwise_padding(self):
         # Compare with the same conv on an input that is padded first
         mx.random.seed(0)
-        for C, k, (lo, hi) in product((1, 8), (2, 3), ((0, 1), (0, 2), (1, 2))):
-            with self.subTest(C=C, k=k, padding=(lo, hi)):
-                x = mx.random.normal((2, 8, C))
+        paddings = ((0, 1), (0, 2), (1, 2), (2, 0), (3, 3))
+        for L, C, k, (lo, hi) in product((2, 8), (1, 8), (2, 3), paddings):
+            with self.subTest(L=L, C=C, k=k, padding=(lo, hi)):
+                x = mx.random.normal((2, L, C))
                 w = mx.random.normal((C, k, 1))
                 out = mx.conv_general(x, w, padding=([lo], [hi]), groups=C)
                 x_pad = mx.pad(x, [(0, 0), (lo, hi), (0, 0)])
