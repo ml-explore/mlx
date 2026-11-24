@@ -614,7 +614,11 @@ void fft_op(
   }
 
   // TODO: allow donation here
-  if (!inplace) {
+  if (inplace) {
+    // Reuse the buffer with this step's layout.
+    out.copy_shared_buffer(
+        out, out_strides, in_contiguous.flags(), out_data_size);
+  } else {
     out.set_data(
         allocator::malloc(out.nbytes()),
         out_data_size,
@@ -830,6 +834,15 @@ void fft_op(
   fft_op(in, out, axis, inverse, real, FourStepParams(), inplace, s);
 }
 
+// The n == 1 and multi upload Bluestein paths replace the buffer of out.
+bool fft_supports_inplace(int n) {
+  if (n == 1) {
+    return false;
+  }
+  auto plan = plan_fft(n);
+  return !plan.four_step || plan.bluestein_n == -1;
+}
+
 void nd_fft_op(
     const array& in,
     array& out,
@@ -855,23 +868,31 @@ void nd_fft_op(
 
   // Perform ND FFT on GPU as a series of 1D FFTs
   auto temp_shape = inverse ? in.shape() : out.shape();
-  // One temporary per step: kernels of earlier steps still read them.
   std::vector<array> temp_arrs;
-  for (size_t i = 1; i < filtered_axes.size(); i++) {
+  temp_arrs.emplace_back(temp_shape, complex64, nullptr, std::vector<array>{});
+  if (filtered_axes.size() > 2) {
     temp_arrs.emplace_back(
         temp_shape, complex64, nullptr, std::vector<array>{});
   }
   for (int i = filtered_axes.size() - 1; i >= 0; i--) {
     int reverse_index = filtered_axes.size() - i - 1;
+    // Reuse the two temporaries once both exist.
+    bool inplace = reverse_index >= 2 && i != 0;
     // Opposite order for fft vs ifft
     int index = inverse ? reverse_index : i;
     size_t axis = filtered_axes[index];
     // Mirror np.fft.(i)rfftn and perform a real transform
     // only on the final axis.
     bool step_real = (real && index == filtered_axes.size() - 1);
-    const array& in_arr = i == filtered_axes.size() - 1 ? in : temp_arrs[i];
-    array& out_arr = i == 0 ? out : temp_arrs[i - 1];
-    fft_op(in_arr, out_arr, axis, inverse, step_real, /*inplace=*/false, s);
+    const array& in_arr = i == filtered_axes.size() - 1 ? in : temp_arrs[i % 2];
+    array& out_arr = i == 0 ? out : temp_arrs[1 - i % 2];
+    if (inplace && !fft_supports_inplace(in_arr.shape(axis))) {
+      // Earlier kernels still read the old buffer.
+      metal::get_command_encoder(s).add_temporary(out_arr);
+      out_arr = array(temp_shape, complex64, nullptr, {});
+      inplace = false;
+    }
+    fft_op(in_arr, out_arr, axis, inverse, step_real, inplace, s);
   }
 
   metal::get_command_encoder(s).add_temporaries(std::move(temp_arrs));
