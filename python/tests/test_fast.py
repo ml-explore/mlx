@@ -491,6 +491,49 @@ class TestFast(mlx_tests.MLXTestCase):
 
     def test_rms_norm_grad(self):
         eps = 1e-5
+        tolerances = {mx.float32: 1e-5, mx.float16: 1e-2, mx.bfloat16: 8e-2}
+        cases = [
+            ((8, 100, 32), 1),
+            ((8, 100, 256), 1),
+            ((8192, 1024), 1),
+            ((16384, 512), 1),
+            ((3, 1025), 1),
+            ((3, 1024), 2),
+            ((2, 2, 8192), 1),
+        ]
+
+        def check_vjp(fast, ref, primals, cotangent, tol):
+            out, grads = mx.vjp(fast, primals, [cotangent])
+            ref_out, ref_grads = mx.vjp(ref, primals, [cotangent])
+            for name, a, b in zip(("y", "dx", "dw"), out + grads, ref_out + ref_grads):
+                atol = tol * mx.abs(b).mean().item() if name == "dw" else tol
+                with self.subTest(output=name):
+                    self.assertEqualArray(a, b, atol=atol, rtol=tol)
+
+        for dtype, tol in tolerances.items():
+            for shape, w_stride in cases:
+                with self.subTest(dtype=dtype, shape=shape, w_stride=w_stride):
+                    D = shape[-1]
+                    x = mx.random.uniform(shape=shape).astype(dtype)
+                    w = mx.random.uniform(shape=(D * w_stride,)).astype(dtype)
+                    w = w[::w_stride]
+                    g = mx.random.uniform(shape=shape).astype(dtype)
+                    ones = mx.ones((D,), dtype)
+                    mx.eval(x, w, g, ones)
+                    check_vjp(
+                        lambda x, w: mx.fast.rms_norm(x, w, eps),
+                        lambda x, w: rms_norm(x, w, eps),
+                        [x, w],
+                        g,
+                        tol,
+                    )
+                    check_vjp(
+                        lambda x: mx.fast.rms_norm(x, None, eps),
+                        lambda x: rms_norm(x, ones, eps),
+                        [x],
+                        g,
+                        tol,
+                    )
 
         def f1(x, w, y):
             return (rms_norm(x, w, eps) * y).sum()
@@ -498,35 +541,10 @@ class TestFast(mlx_tests.MLXTestCase):
         def f2(x, w, y):
             return (mx.fast.rms_norm(x, w, eps) * y).sum()
 
-        def f3(x, y):
-            return (rms_norm(x, mx.ones((x.shape[-1],)), eps) * y).sum()
-
-        def f4(x, y):
-            return (mx.fast.rms_norm(x, None, eps) * y).sum()
-
-        for D in [32, 256]:
-            x = mx.random.uniform(shape=(8, 100, D))
-            w = mx.random.uniform(shape=(D,))
-            y = mx.random.uniform(shape=(8, 100, D))
-            gx1, gw1 = mx.grad(f1, argnums=(0, 1))(x, w, y)
-            gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
-            self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
-            self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
-            gx1 = mx.grad(f3, argnums=(0,))(x, y)
-            gx2 = mx.grad(f4, argnums=(0,))(x, y)
-            self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
-
         D = 8192
         x = mx.random.uniform(shape=(2, 2, D))
         w = mx.random.uniform(shape=(D,))
         y = mx.random.uniform(shape=(2, 2, D))
-        gx1, gw1 = mx.grad(f1, argnums=(0, 1))(x, w, y)
-        gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
-        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
-        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
-        gx1 = mx.grad(f3, argnums=(0,))(x, y)
-        gx2 = mx.grad(f4, argnums=(0,))(x, y)
-        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
 
         def gf(f):
             def inner(x, w, y):
@@ -539,50 +557,6 @@ class TestFast(mlx_tests.MLXTestCase):
         gx2, gw2 = mx.grad(gf(f2), argnums=(0, 1))(x, w, y)
         self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
-
-    def test_rms_norm_vjp_shared_scratch(self):
-        for dtype, tolerance in (
-            (mx.float32, 1e-4),
-            (mx.float16, 1e-2),
-            (mx.bfloat16, 8e-2),
-        ):
-            # Multiple rows per CUDA block exercise reduction scratch reuse.
-            for rows, width, w_stride in (
-                (1, 1024, 1),
-                (2048, 1024, 1),
-                (2048, 512, 1),
-                (3, 1025, 1),
-                (3, 4096, 1),
-                (3, 1024, 2),
-            ):
-                with self.subTest(
-                    dtype=dtype, rows=rows, width=width, w_stride=w_stride
-                ):
-                    x = (mx.arange(rows * width).reshape(rows, width) % 31).astype(
-                        dtype
-                    ) / 8
-                    w = (mx.arange(width * w_stride) % 5).astype(dtype) / 16 + 0.75
-                    w = w[::w_stride]
-                    g = (mx.arange(rows * width).reshape(rows, width) % 13).astype(
-                        dtype
-                    ) / 16
-                    mx.eval(x, w, g)
-                    actual, actual_grads = mx.vjp(
-                        lambda x, w: mx.fast.rms_norm(x, w, 1e-5), [x, w], [g]
-                    )
-                    expected, expected_grads = mx.vjp(
-                        lambda x, w: rms_norm(x, w, 1e-5), [x, w], [g]
-                    )
-                    mx.eval(actual, actual_grads, expected, expected_grads)
-                    for name, result, reference in zip(
-                        ("y", "dx", "dw"),
-                        actual + actual_grads,
-                        expected + expected_grads,
-                    ):
-                        with self.subTest(output=name):
-                            self.assertEqualArray(
-                                result, reference, atol=tolerance, rtol=tolerance
-                            )
 
     def test_cross_entropy(self):
         def cross_entropy_ref(logits, targets):
@@ -777,8 +751,38 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(rx - rx_fast).max(), 1e-4)
 
     def test_layer_norm_grad(self):
-        D = 32
         eps = 1e-5
+        tolerances = {mx.float32: 5e-5, mx.float16: 1e-2, mx.bfloat16: 8e-2}
+        shapes = [(8, 100, 32), (3, 128), (3, 1024), (3, 4096), (8, 100, 8192)]
+        for dtype, tol in tolerances.items():
+            for shape in shapes:
+                with self.subTest(dtype=dtype, shape=shape):
+                    D = shape[-1]
+                    x = mx.random.uniform(shape=shape).astype(dtype)
+                    w = mx.random.uniform(shape=(D,)).astype(dtype)
+                    b = mx.random.uniform(shape=(D,)).astype(dtype)
+                    g = mx.random.uniform(shape=shape).astype(dtype)
+                    mx.eval(x, w, b, g)
+                    out, grads = mx.vjp(
+                        lambda x, w, b: mx.fast.layer_norm(x, w, b, eps),
+                        [x, w, b],
+                        [g],
+                    )
+                    ref_out, ref_grads = mx.vjp(
+                        lambda x, w, b: layer_norm(x, w, b, eps),
+                        [x, w, b],
+                        [g],
+                    )
+                    for name, a, r in zip(
+                        ("y", "dx", "dw", "db"), out + grads, ref_out + ref_grads
+                    ):
+                        atol = (
+                            tol * mx.abs(r).mean().item()
+                            if name in ("dw", "db")
+                            else tol
+                        )
+                        with self.subTest(output=name):
+                            self.assertEqualArray(a, r, atol=atol, rtol=tol)
 
         def f1(x, w, b, y):
             return (layer_norm(x, w, b, eps) * y).sum()
@@ -786,28 +790,11 @@ class TestFast(mlx_tests.MLXTestCase):
         def f2(x, w, b, y):
             return (mx.fast.layer_norm(x, w, b, eps) * y).sum()
 
-        x = mx.random.uniform(shape=(8, 100, D))
-        w = mx.random.uniform(shape=(D,))
-        b = mx.random.uniform(shape=(D,))
-        y = mx.random.uniform(shape=(8, 100, D))
-
-        gx1, gw1, gb1 = mx.grad(f1, argnums=(0, 1, 2))(x, w, b, y)
-        gx2, gw2, gb2 = mx.grad(f2, argnums=(0, 1, 2))(x, w, b, y)
-        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
-        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
-        self.assertLess(mx.abs(gb1 - gb2).max() / mx.abs(gb1).mean(), 1e-5)
-
         D = 8192
         x = mx.random.uniform(shape=(8, 100, D))
         w = mx.random.uniform(shape=(D,))
         b = mx.random.uniform(shape=(D,))
         y = mx.random.uniform(shape=(8, 100, D))
-
-        gx1, gw1, gb1 = mx.grad(f1, argnums=(0, 1, 2))(x, w, b, y)
-        gx2, gw2, gb2 = mx.grad(f2, argnums=(0, 1, 2))(x, w, b, y)
-        self.assertLess(mx.abs(gx1 - gx2).max(), 5e-5)
-        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 5e-5)
-        self.assertLess(mx.abs(gb1 - gb2).max() / mx.abs(gb1).mean(), 5e-5)
 
         def gf(f):
             def inner(x, w, b, y):
@@ -822,40 +809,6 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 5e-5)
         self.assertLess(mx.abs(gb1).max(), 1e-9)
         self.assertLess(mx.abs(gb2).max(), 1e-9)
-
-    def test_layer_norm_vjp_shared_scratch(self):
-        for dtype, tolerance in (
-            (mx.float32, 1e-4),
-            (mx.float16, 1e-2),
-            (mx.bfloat16, 8e-2),
-        ):
-            for width in (32, 128, 1024, 4096):
-                with self.subTest(dtype=dtype, width=width):
-                    x = (mx.arange(3 * width).reshape(3, width) % 31).astype(dtype) / 8
-                    w = (mx.arange(width) % 5).astype(dtype) / 16 + 0.75
-                    b = (mx.arange(width) % 3).astype(dtype) / 8
-                    g = (mx.arange(3 * width).reshape(3, width) % 13).astype(dtype) / 16
-                    mx.eval(x, w, b, g)
-                    actual, actual_grads = mx.vjp(
-                        lambda x, w, b: mx.fast.layer_norm(x, w, b, 1e-5),
-                        [x, w, b],
-                        [g],
-                    )
-                    expected, expected_grads = mx.vjp(
-                        lambda x, w, b: layer_norm(x, w, b, 1e-5),
-                        [x, w, b],
-                        [g],
-                    )
-                    mx.eval(actual, actual_grads, expected, expected_grads)
-                    for name, result, reference in zip(
-                        ("y", "dx", "dw", "db"),
-                        actual + actual_grads,
-                        expected + expected_grads,
-                    ):
-                        with self.subTest(output=name):
-                            self.assertEqualArray(
-                                result, reference, atol=tolerance, rtol=tolerance
-                            )
 
     def test_layer_norm_grad_no_bias(self):
         # Second-order gradient through layer_norm with weight but no bias.
