@@ -927,6 +927,16 @@ auto norm_without_rstd(const std::vector<array>& inputs) {
   return std::vector<array>{norm_with_rstd(inputs)[0]};
 }
 
+// Two pairs of siblings: each pair can merge, but after both merges each
+// kernel reads an output of the other (cycle between kerenls is not allowed)
+auto crossing_siblings(const std::vector<array>& inputs) {
+  auto x = exp(inputs[0]);
+  auto y = exp(inputs[1]);
+  auto p = sin(inputs[1]);
+  auto m = cos(inputs[0]);
+  return std::vector<array>{x, y, x * p, y * m, cumsum(p, 0), cumsum(m, 0)};
+}
+
 // 30 siblings that all read x
 auto many_siblings(const std::vector<array>& inputs) {
   std::vector<array> outs;
@@ -1031,6 +1041,25 @@ TEST_CASE("test compile horizontal fusion checks") {
       }
     }
     check_close({out}, norm_without_rstd({x}));
+  }
+
+  // Merges that are correct one by one must not make two kernels that read
+  // the outputs of each other
+  {
+    auto s = array({0.1f, 0.2f, 0.3f});
+    auto t = array({-0.4f, 0.5f, 0.6f});
+    auto outs = compile(crossing_siblings)({s, t});
+    auto reads = [](const array& a, const array& b) {
+      for (auto& in : a.inputs()) {
+        if (in.has_primitive() && &in.primitive() == &b.primitive()) {
+          return true;
+        }
+      }
+      return false;
+    };
+    // outs[2] is x * p and outs[3] is y * m
+    CHECK_FALSE((reads(outs[2], outs[3]) && reads(outs[3], outs[2])));
+    check_close(outs, crossing_siblings({s, t}));
   }
 
   // A kernel has at most 24 inputs and outputs, so 30 siblings need more

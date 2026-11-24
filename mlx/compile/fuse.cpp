@@ -408,28 +408,18 @@ bool merge_vertical(
 }
 
 // True if a path through arrays outside of groups `g1` and `g2` connects them.
-// The two groups cannot be one kernel then.
+// The two groups cannot be one kernel then. A kernel reads all its inputs
+// before it writes its outputs, so a path to an array of another group
+// continues from all arrays of that group.
 bool is_connected(
     int g1,
     int g2,
     const Groups& groups,
-    const std::unordered_map<uintptr_t, int>& position,
     const ParentsMap& parents_map) {
   auto in_groups = [&](const array& a) {
     int g = groups.find(a);
     return g == g1 || g == g2;
   };
-
-  // Readers come after their inputs in the tape, so stop the search after the
-  // last array of the two groups
-  int last = 0;
-  for (int g : {g1, g2}) {
-    for (auto& a : groups.members[g]) {
-      if (auto it = position.find(a.id()); it != position.end()) {
-        last = std::max(last, it->second);
-      }
-    }
-  }
 
   // Start from the readers outside of the two groups
   std::vector<array> stack;
@@ -446,6 +436,7 @@ bool is_connected(
   }
 
   std::unordered_set<uintptr_t> visited;
+  std::unordered_set<int> visited_groups;
   while (!stack.empty()) {
     auto a = std::move(stack.back());
     stack.pop_back();
@@ -455,9 +446,10 @@ bool is_connected(
     if (!visited.insert(a.id()).second) {
       continue;
     }
-    if (auto it = position.find(a.id());
-        it != position.end() && it->second > last) {
-      continue;
+    if (int g = groups.find(a); g >= 0 && visited_groups.insert(g).second) {
+      for (auto& m : groups.members[g]) {
+        stack.push_back(m);
+      }
     }
     if (auto it = parents_map.find(a.id()); it != parents_map.end()) {
       for (auto& [p, idx] : it->second) {
@@ -508,7 +500,6 @@ std::map<std::pair<int, int>, size_t> score_pairs(
 bool merge_horizontal(
     Groups& groups,
     const std::vector<array>& tape,
-    const std::unordered_map<uintptr_t, int>& position,
     ParentsMap& parents_map,
     const std::unordered_map<uintptr_t, array>& output_map) {
   // Given a tape and groups of array for fusion, for every pair of groups
@@ -581,7 +572,7 @@ bool merge_horizontal(
         distance(g1, g2) > max_fuse_distance() ||
         !has_outputs(g1, groups, parents_map, output_map) ||
         !has_outputs(g2, groups, parents_map, output_map) ||
-        is_connected(g1, g2, groups, position, parents_map)) {
+        is_connected(g1, g2, groups, parents_map)) {
       continue;
     }
     int size = groups.members[g1].size();
@@ -639,7 +630,7 @@ void compile_fuse(
   // Merge groups until no rule changes them. A merge can make a new merge
   // possible, so repeat the rules.
   while (merge_vertical(groups, tape, parents_map, output_map) ||
-         merge_horizontal(groups, tape, position, parents_map, output_map)) {
+         merge_horizontal(groups, tape, parents_map, output_map)) {
   }
 
   // Replace each group of more than one array with a Compiled primitive
