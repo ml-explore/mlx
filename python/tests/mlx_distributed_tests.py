@@ -94,6 +94,25 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
                 z = x.min(0)
                 self.assertTrue(mx.all(y == z))
 
+    def test_all_reduce_nan(self):
+        # all_max / all_min must propagate NaN to match mx.max / mx.min.
+        g = mx.distributed.init()
+        dtypes = [mx.float32, mx.float16, mx.bfloat16]
+        for dt in dtypes:
+            # Every rank builds the same full input so the reference reduction
+            # is identical everywhere. Rank 0's row holds a NaN in one slot.
+            x = mx.ones((g.size(), 4))
+            x[0, 1] = mx.array(float("nan"))
+            x = x.astype(dt)
+
+            y = mx.distributed.all_max(x[g.rank()], group=g)
+            z = x.max(0)
+            self.assertTrue(mx.array_equal(y, z, equal_nan=True))
+
+            y = mx.distributed.all_min(x[g.rank()], group=g)
+            z = x.min(0)
+            self.assertTrue(mx.array_equal(y, z, equal_nan=True))
+
     def test_donation(self):
         x = mx.random.normal((1024,))
         mx.eval(x)
