@@ -93,13 +93,16 @@ bool scatter_add_rows(
   }
   int64_t row_size = row_bytes / 4;
 
-  // Use 256 threads, with a power of 2 of them on each row.
+  // Use 256 threads, with a power of 2 of them on each row. Split a wide row
+  // over more blocks, so that each thread adds about 8 pairs.
   int threads_per_row = 1;
   while (threads_per_row < row_size && threads_per_row < 256) {
     threads_per_row *= 2;
   }
   int rows_per_block = 256 / threads_per_row;
-  dim3 num_blocks(cuda::ceil_div(num_rows, rows_per_block));
+  int64_t blocks_per_row =
+      std::min<int64_t>(cuda::ceil_div(row_size, 256 * 8), 65535);
+  dim3 num_blocks(cuda::ceil_div(num_rows, rows_per_block), blocks_per_row);
   dim3 block_dims(threads_per_row, rows_per_block);
 
   std::string module_name = fmt::format(

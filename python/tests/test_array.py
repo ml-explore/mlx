@@ -1762,11 +1762,28 @@ class TestArray(mlx_tests.MLXTestCase):
     def test_array_at_add_rows_half(self):
         idx = mx.array([0, 2, 2, 5, -1, 0])
         for dtype, atol in ((mx.float16, 1e-2), (mx.bfloat16, 1e-1)):
-            a = mx.random.normal((8, 64)).astype(dtype)
-            upd = mx.random.normal((6, 64)).astype(dtype)
-            out = a.at[idx].add(upd)
-            expected = a.astype(mx.float32).at[idx].add(upd.astype(mx.float32))
-            self.assertTrue(mx.allclose(out.astype(mx.float32), expected, atol=atol))
+            # Rows of part of a block, of several loop steps, of odd width, and
+            # updates that are offset by one element or reversed.
+            upds = [mx.random.normal((6, w)).astype(dtype) for w in (64, 66, 1026, 7)]
+            flat = mx.random.normal((6 * 64 + 1,)).astype(dtype)
+            upds += [flat[1:].reshape(6, 64), upds[0][::-1]]
+            for upd in upds:
+                a = mx.random.normal((8, upd.shape[1])).astype(dtype)
+                out = a.at[idx].add(upd).astype(mx.float32)
+                expected = a.astype(mx.float32).at[idx].add(upd.astype(mx.float32))
+                self.assertTrue(mx.allclose(out, expected, atol=atol))
+
+            # Many blocks add to the same rows (2-D uint32 indices), and a wide
+            # row is split over blocks. The sums of ones are exact.
+            ones_idx = mx.array([0, 3] * 128, mx.uint32).reshape(16, 16)
+            out = mx.zeros((4, 130), dtype)
+            out = out.at[ones_idx].add(mx.ones((16, 16, 130), dtype))
+            expected = mx.array([[128], [0], [0], [128]], dtype)
+            self.assertTrue(mx.array_equal(out, mx.broadcast_to(expected, out.shape)))
+            out = mx.zeros((2, 64, 1024), dtype)
+            out = out.at[mx.array([1, 1, 1, 1])].add(mx.ones((4, 64, 1024), dtype))
+            expected = mx.array([0, 4], dtype).reshape(2, 1, 1)
+            self.assertTrue(mx.array_equal(out, mx.broadcast_to(expected, out.shape)))
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_array_at_complex_add_gpu(self):

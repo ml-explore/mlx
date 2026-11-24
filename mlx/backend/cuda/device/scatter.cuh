@@ -66,7 +66,8 @@ __global__ void scatter(
 }
 
 // Add rows of half or bfloat16 values, with atomic adds of 2 values. Each block
-// does blockDim.y rows, and consecutive threads add consecutive pairs.
+// does blockDim.y rows, and consecutive threads add consecutive pairs. A wide
+// row is split over gridDim.y blocks.
 template <typename T, typename IdxT>
 __global__ void scatter_add_rows(
     const T* upd,
@@ -84,7 +85,10 @@ __global__ void scatter_add_rows(
   int64_t idx = absolute_index(indices[row], out_rows);
   auto* u = reinterpret_cast<const T2*>(upd) + row * row_size;
   auto* o = reinterpret_cast<T2*>(out) + idx * row_size;
-  for (int64_t i = threadIdx.x; i < row_size; i += blockDim.x) {
+  int64_t stride = static_cast<int64_t>(gridDim.y) * blockDim.x;
+  for (int64_t i = static_cast<int64_t>(blockIdx.y) * blockDim.x + threadIdx.x;
+       i < row_size;
+       i += stride) {
 #if __CUDA_ARCH__ >= 800
     atomicAdd(o + i, u[i]);
 #else
