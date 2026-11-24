@@ -614,16 +614,16 @@ void fft_op(
   }
 
   // TODO: allow donation here
-  if (inplace) {
-    // Reuse the buffer with this step's layout.
-    out.copy_shared_buffer(
-        out, out_strides, in_contiguous.flags(), out_data_size);
-  } else {
+  if (!inplace) {
     out.set_data(
         allocator::malloc(out.nbytes()),
         out_data_size,
         out_strides,
         in_contiguous.flags());
+  } else {
+    // Reuse the buffer with this step's layout.
+    out.copy_shared_buffer(
+        out, out_strides, in_contiguous.flags(), out_data_size);
   }
 
   auto radices = supported_radices();
