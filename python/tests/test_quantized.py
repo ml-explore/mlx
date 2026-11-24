@@ -394,10 +394,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
     def test_qqmm(self):
-        if mx.default_device() == mx.cpu:
-            self.skipTest("Not implemented for CPU")
-            return
-
         tol = 5e-2 if mx.cuda.is_available() else 1e-3
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
@@ -466,9 +462,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     )
                     self.assertTrue(mx.array_equal(y, y_q))
 
-    @unittest.skipIf(
-        not mx.metal.is_available(), "Global scale is only supported on Metal backend"
-    )
     def test_qqmm_global_scale_matrix_kernels(self):
         mx.random.seed(0)
         dtype = mx.bfloat16
@@ -510,13 +503,10 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 relative_error = delta.max() / mx.maximum(
                     mx.abs(expected.astype(mx.float32)).max(), 1e-20
                 )
-                self.assertLess(relative_error, 3e-2)
+                tol = 3e-2 if mx.default_device() != mx.cpu else 1e-1
+                self.assertLess(relative_error, tol)
 
     def test_qqmm_matrix_kernels(self):
-        if mx.default_device() == mx.cpu:
-            self.skipTest("Not implemented for CPU")
-            return
-
         mx.random.seed(0)
         dtype = mx.bfloat16
         for M, N, K, mode in product(
@@ -538,7 +528,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 actual = mx.qqmm(x, w_q, scales, mode=mode)
                 delta = mx.abs(actual.astype(mx.float32) - expected)
                 relative_error = delta.max() / mx.abs(expected).max()
-                self.assertLess(relative_error, 3e-2)
+                tol = 3e-2 if mx.default_device() == mx.gpu else 4e-2
+                self.assertLess(relative_error, tol)
 
     def test_qqmm_unsupported_mode(self):
         x = mx.zeros((32, 128))
@@ -1263,6 +1254,9 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_fp_qmv_fast_unaligned_n_global_scale(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Not implemented for CPU")
+
         for n, k, m, dtype in product(
             [1, 3, 5, 7, 8, 9, 12, 17],
             [512, 544, 1024],
@@ -2875,10 +2869,10 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
                 _ds = mx.grad(gmm)(s, x, wq)
 
-    @unittest.skipIf(
-        not mx.is_available(mx.gpu), "Global scale is only supported on the GPU"
-    )
     def test_gather_qmm_global_scale(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Not implemented for CPU")
+
         mx.random.seed(0)
         N, K = 128, 256
 

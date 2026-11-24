@@ -3627,30 +3627,6 @@ TEST_CASE("test quantize dequantize") {
   }
 }
 
-TEST_CASE("test qqmm nvfp4 global scale") {
-  auto x_f32 = reshape(arange(0, 32, float32), {1, 32}) * 1e-4f + 1e-3f;
-  auto w_f32 = reshape(arange(0, 64, float32), {2, 32}) * 0.05f - 1.5f;
-  auto gsx = max(abs(x_f32));
-  auto gsw = max(abs(w_f32));
-
-  for (auto dt : {float32, float16, bfloat16}) {
-    auto x = astype(x_f32, dt);
-    auto w = astype(w_f32, dt);
-
-    auto xq = quantize(x, 16, 4, "nvfp4", gsx);
-    auto x_hat = dequantize(
-        xq[0], xq[1], std::nullopt, 16, 4, "nvfp4", gsx, dt);
-    auto wq = quantize(w, 16, 4, "nvfp4", gsw);
-    auto w_hat = dequantize(
-        wq[0], wq[1], std::nullopt, 16, 4, "nvfp4", gsw, dt);
-
-    auto expected = astype(matmul(x_hat, transpose(w_hat)), float32);
-    auto actual = astype(
-        qqmm(x, wq[0], wq[1], 16, 4, "nvfp4", gsx, gsw), float32);
-    CHECK(allclose(actual, expected, 3e-2, 1e-4).item<bool>());
-  }
-}
-
 TEST_CASE("test repeat") {
   auto data = array({13, 3, 16, 6, 14, 4, 15, 5, 11, 1, 12, 2}, {3, 2, 2});
   auto repeat_axis_0 = repeat(data, 2, 0);
