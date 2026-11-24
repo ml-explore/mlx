@@ -33,6 +33,12 @@ void init_metal(nb::module_& m) {
       R"pbdoc(
       Check if the Metal back-end is available.
       )pbdoc");
+  metal.def(
+      "is_nax_available",
+      &mx::metal::is_nax_available,
+      R"pbdoc(
+      Check if MLX kernels can use the GPU neural accelerators (NAX).
+      )pbdoc");
   metal.def("get_active_memory", []() {
     DEPRECATE("mx.metal.get_active_memory", "mx.get_active_memory");
     return mx::get_active_memory();
