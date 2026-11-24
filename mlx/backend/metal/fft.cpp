@@ -855,25 +855,23 @@ void nd_fft_op(
 
   // Perform ND FFT on GPU as a series of 1D FFTs
   auto temp_shape = inverse ? in.shape() : out.shape();
+  // One temporary per step: kernels of earlier steps still read them.
   std::vector<array> temp_arrs;
-  temp_arrs.emplace_back(temp_shape, complex64, nullptr, std::vector<array>{});
-  if (filtered_axes.size() > 2) {
+  for (size_t i = 1; i < filtered_axes.size(); i++) {
     temp_arrs.emplace_back(
         temp_shape, complex64, nullptr, std::vector<array>{});
   }
   for (int i = filtered_axes.size() - 1; i >= 0; i--) {
     int reverse_index = filtered_axes.size() - i - 1;
-    // For 5D and above, we don't want to reallocate our two temporary arrays
-    bool inplace = reverse_index >= 3 && i != 0;
     // Opposite order for fft vs ifft
     int index = inverse ? reverse_index : i;
     size_t axis = filtered_axes[index];
     // Mirror np.fft.(i)rfftn and perform a real transform
     // only on the final axis.
     bool step_real = (real && index == filtered_axes.size() - 1);
-    const array& in_arr = i == filtered_axes.size() - 1 ? in : temp_arrs[i % 2];
-    array& out_arr = i == 0 ? out : temp_arrs[1 - i % 2];
-    fft_op(in_arr, out_arr, axis, inverse, step_real, inplace, s);
+    const array& in_arr = i == filtered_axes.size() - 1 ? in : temp_arrs[i];
+    array& out_arr = i == 0 ? out : temp_arrs[i - 1];
+    fft_op(in_arr, out_arr, axis, inverse, step_real, /*inplace=*/false, s);
   }
 
   metal::get_command_encoder(s).add_temporaries(std::move(temp_arrs));
