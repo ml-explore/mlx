@@ -713,9 +713,11 @@ class FullyShardedModule(Module):
     again and recomputes the forward pass of the module. A checkpoint of the
     wrapped module (for example with :func:`mlx.nn.utils.checkpoint`) does
     not free them, because the full parameters are inputs of the checkpoint.
-    As with any gradient checkpoint, random operations (for example in
-    :class:`mlx.nn.Dropout`) draw new values when the backward pass
-    recomputes them.
+    The MLX checkpoint does not keep the random state: when the backward pass
+    recomputes the forward pass, random operations (for example in
+    :class:`mlx.nn.Dropout`) draw new values. The gradients then use these new
+    values (for example a different dropout mask), not the values of the
+    forward pass, and can change.
 
     Every parameter is sharded along axis 0, so each parameter's size along
     that axis must be divisible by the size of ``group``.
