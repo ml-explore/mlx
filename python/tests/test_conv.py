@@ -1683,6 +1683,39 @@ class TestConv(mlx_tests.MLXTestCase):
         mx.eval(y)
         self.assertEqual(tuple(y.shape), (1, 16, 64))
 
+    def test_conv1d_depthwise_end_padding(self):
+        # Compare with the same conv on an input that is padded first
+        mx.random.seed(0)
+        for C, k, (lo, hi) in product((1, 8), (2, 3), ((0, 1), (0, 2), (1, 2))):
+            with self.subTest(C=C, k=k, padding=(lo, hi)):
+                x = mx.random.normal((2, 8, C))
+                w = mx.random.normal((C, k, 1))
+                out = mx.conv_general(x, w, padding=([lo], [hi]), groups=C)
+                x_pad = mx.pad(x, [(0, 0), (lo, hi), (0, 0)])
+                expected = mx.conv_general(x_pad, w, groups=C)
+                self.assertTrue(mx.allclose(out, expected, atol=1e-4))
+
+        # The input grad of this flipped conv has only end padding
+        for C, k in product((1, 8), (2, 3)):
+            with self.subTest(C=C, k=k, flip=True):
+                x = mx.random.normal((2, 8, C))
+                w = mx.random.normal((C, k, 1))
+                cotan = mx.random.normal((2, 8, C))
+
+                def f(a, b):
+                    return mx.conv_general(
+                        a, b, padding=([k - 1], [0]), flip=True, groups=C
+                    )
+
+                def f_ref(a, b):
+                    a = mx.pad(a, [(0, 0), (k - 1, 0), (0, 0)])
+                    return mx.conv_general(a, b, flip=True, groups=C)
+
+                _, grads = mx.vjp(f, [x, w], [cotan])
+                _, expected = mx.vjp(f_ref, [x, w], [cotan])
+                for g, e in zip(grads, expected):
+                    self.assertTrue(mx.allclose(g, e, atol=1e-4))
+
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_conv2d_large_output_channels(self):
         x = mx.random.normal((1, 33, 33, 5))

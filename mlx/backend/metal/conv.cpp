@@ -1541,6 +1541,7 @@ void conv_1D_gpu(
     const array& wt_pre,
     array& out,
     const std::vector<int>& padding,
+    const std::vector<int>& padding_hi,
     const std::vector<int>& wt_strides,
     const std::vector<int>& wt_dilation,
     const std::vector<int>& in_dilation,
@@ -1555,9 +1556,10 @@ void conv_1D_gpu(
   bool is_idil_one = in_dilation[0] == 1;
   int C = in.shape(2);
   int O = wt.shape(0);
-  // Fast path for fully separable 1D convolution
+  // Fast path for fully separable 1D convolution. The kernel does not check
+  // bounds, so it cannot pad at either end.
   if (is_idil_one && (groups == C) && groups == O && wt_strides[0] == 1 &&
-      wt_dilation[0] == 1 && padding[0] == 0 && !flip) {
+      wt_dilation[0] == 1 && padding[0] == 0 && padding_hi[0] == 0 && !flip) {
     depthwise_conv_1D_gpu(s, d, in, wt, out);
     return;
   }
@@ -1806,6 +1808,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
         wt,
         out,
         padding_lo_,
+        padding_hi_,
         kernel_strides_,
         kernel_dilation_,
         input_dilation_,
