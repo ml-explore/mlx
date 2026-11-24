@@ -126,14 +126,16 @@ TEST_CASE("test segmented_mm float16 and bfloat16") {
     CHECK(allclose(actual, expected, 1e-2, 1e-2).item<bool>());
 
     // Transposed a
-    auto a_t = transpose(astype(reshape(arange(0, 12 * 4, float32), {12, 4}) * 0.1f, dt));
+    auto a_t = transpose(
+        astype(reshape(arange(0, 12 * 4, float32), {12, 4}) * 0.1f, dt));
     auto a_t_ref = astype(a_t, float32);
     expected = astype(segmented_mm(a_t_ref, b_ref, segments), float32);
     actual = astype(segmented_mm(a_t, b, segments), float32);
     CHECK(allclose(actual, expected, 1e-2, 1e-2).item<bool>());
 
     // Transposed b
-    auto b_t = transpose(astype(reshape(arange(0, 6 * 12, float32), {6, 12}) * 0.1f, dt));
+    auto b_t = transpose(
+        astype(reshape(arange(0, 6 * 12, float32), {6, 12}) * 0.1f, dt));
     auto b_t_ref = astype(b_t, float32);
     expected = astype(segmented_mm(a_ref, b_t_ref, segments), float32);
     actual = astype(segmented_mm(a, b_t, segments), float32);
