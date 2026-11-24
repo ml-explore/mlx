@@ -93,6 +93,21 @@ void synchronize(Stream s) {
 }
 
 void clear_streams() {
+  auto sync = [](auto& encoders) {
+    for (auto& item : encoders) {
+      item.second.synchronize();
+    }
+  };
+  sync(cu::get_command_encoders());
+  if (is_main_thread()) {
+    sync(cu::get_global_command_encoders());
+  }
+
+  // Graph caches reference the cuDNN handle. Destroy both before thread exit.
+  clear_cudnn_conv_cache();
+  clear_cudnn_sdpa_cache();
+  clear_cudnn_handles_cache();
+
   cu::get_command_encoders().clear();
   if (is_main_thread()) {
     cu::get_global_command_encoders().clear();
