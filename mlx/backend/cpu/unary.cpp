@@ -197,18 +197,7 @@ void Sign::eval_cpu(const std::vector<array>& inputs, array& out) {
 
 void SignBit::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  set_unary_output_data(in, out);
-  auto& encoder = cpu::get_command_encoder(stream());
-  encoder.set_input_array(in);
-  encoder.set_output_array(out);
-  encoder.dispatch([in = array::unsafe_weak_copy(in),
-                    out = array::unsafe_weak_copy(out)]() mutable {
-    dispatch_float_types(in.dtype(), "[signbit]", [&](auto type_tag) {
-      using T = MLX_GET_TYPE(type_tag);
-      unary_op<T, bool>(in, out, detail::SignBit());
-    });
-  });
+  unary_real_to_bool(inputs[0], out, detail::SignBit(), stream());
 }
 
 void Sin::eval_cpu(const std::vector<array>& inputs, array& out) {
