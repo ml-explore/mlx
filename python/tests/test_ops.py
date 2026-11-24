@@ -953,6 +953,15 @@ class TestOps(mlx_tests.MLXTestCase):
             b = getattr(np, op)(data)
             self.assertEqual(a.item(), b)
 
+        # A 0-d input keeps no axes
+        x = mx.array(3.0)
+        for op in ["argmin", "argmax"]:
+            for kd in [True, False]:
+                a = getattr(mx, op)(x, keepdims=kd)
+                b = getattr(np, op)(np.array(3.0), keepdims=kd)
+                self.assertEqual(a.shape, b.shape)
+                self.assertEqual(a.item(), b)
+
     def test_broadcast(self):
         a_npy = np.reshape(np.arange(200), (10, 20))
         a_mlx = mx.array(a_npy)
@@ -2980,6 +2989,20 @@ class TestOps(mlx_tests.MLXTestCase):
                         msg=f"{op} reverse={reverse} inclusive={inclusive} "
                         f"arr={arr}\ngot={got}\nexp={expected}",
                     )
+                    for dtype in (mx.float16, mx.bfloat16):
+                        got = getattr(mx, op)(
+                            a_mx.astype(dtype), reverse=reverse, inclusive=inclusive
+                        )
+                        self.assertEqual(got.dtype, dtype)
+                        self.assertTrue(
+                            np.array_equal(
+                                np.array(got.astype(mx.float32)),
+                                expected,
+                                equal_nan=True,
+                            ),
+                            msg=f"{op} {dtype} reverse={reverse} "
+                            f"inclusive={inclusive} arr={arr}",
+                        )
 
     def test_diff(self):
         a = mx.array([1, 2, 4, 7, 0])

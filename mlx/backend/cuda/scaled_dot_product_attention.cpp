@@ -360,6 +360,11 @@ void init_cudnn_sdpa_cache() {
   sdpa_backward_cache();
 }
 
+void clear_cudnn_sdpa_cache() {
+  sdpa_cache().clear();
+  sdpa_backward_cache().clear();
+}
+
 bool supports_sdpa_cudnn(
     const array& q,
     const array& k,
