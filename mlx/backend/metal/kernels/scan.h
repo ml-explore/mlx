@@ -199,8 +199,8 @@ template <typename T, typename U, int N_READS, bool reverse>
 inline void load_safe(
     U values[N_READS],
     const device T* input,
-    int start,
-    int total,
+    size_t start,
+    size_t total,
     U init) {
   if (reverse) {
     for (int i = 0; i < N_READS; i++) {
@@ -228,7 +228,8 @@ inline void write_unsafe(U values[N_READS], device U* out) {
 }
 
 template <typename U, int N_READS, bool reverse>
-inline void write_safe(U values[N_READS], device U* out, int start, int total) {
+inline void
+write_safe(U values[N_READS], device U* out, size_t start, size_t total) {
   if (reverse) {
     for (int i = 0; i < N_READS; i++) {
       if (start + N_READS - i - 1 < total) {
