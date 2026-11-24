@@ -352,37 +352,33 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                         )
             mx.clear_cache()
 
-    def test_gated_delta_state_at(self):
-        def split(q, k, v, g, b, h0, mask, c):
-            def mask_t(lo, hi):
-                return None if mask is None else mask[:, lo:hi]
-
-            y0, hc = mx.fast.gated_delta_update(
-                q[:, :c],
-                k[:, :c],
-                v[:, :c],
-                g[:, :c],
-                b[:, :c],
-                initial_state=h0,
-                mask=mask_t(0, c),
-            )
-            y1, hf = mx.fast.gated_delta_update(
-                q[:, c:],
-                k[:, c:],
-                v[:, c:],
-                g[:, c:],
-                b[:, c:],
-                initial_state=hc,
-                mask=mask_t(c, None),
-            )
-            return mx.concatenate([y0, y1], axis=1), hf, hc
+    @unittest.skipIf(mx.cuda.is_available(), "not implemented on CUDA")
+    def test_gated_delta_states(self):
+        # Reference: one call per time step on the sequential kernel, which is
+        # the kernel that stores intermediate states.
+        def per_step(q, k, v, g, b, h0, mask):
+            ys, hs = [], []
+            h = h0
+            for t in range(q.shape[1]):
+                y, h = mx.fast.gated_delta_update(
+                    q[:, t : t + 1],
+                    k[:, t : t + 1],
+                    v[:, t : t + 1],
+                    g[:, t : t + 1],
+                    b[:, t : t + 1],
+                    initial_state=h,
+                    mask=None if mask is None else mask[:, t : t + 1],
+                )
+                ys.append(y)
+                hs.append(h)
+            return mx.concatenate(ys, axis=1), mx.stack(hs)
 
         B, Dk, Dv = 2, 128, 128
         # (8, 32) has no kernel and uses the fallback.
-        heads = [(16, 32), (32, 32), (16, 16), (8, 32)]
+        heads = [(16, 32), (32, 32), (16, 16), (24, 24), (16, 48), (16, 64), (8, 32)]
         dtypes = [mx.float32, mx.bfloat16, mx.float16]
         for (Hk, Hv), dtype, T, vectorized_g in product(
-            heads, dtypes, range(2, 13), (False, True)
+            heads, dtypes, (1, 2, 3, 5, 8, 9, 12), (False, True)
         ):
             mx.random.seed(T)
             q = mx.random.normal(shape=(B, T, Hk, Dk)).astype(dtype)
@@ -393,29 +389,45 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
             g = mx.sigmoid(mx.random.normal(shape=g_shape))
             b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
             h0 = mx.random.normal((B, Hv, Dv, Dk))
-            masks = [None, mx.random.bernoulli(0.7, shape=(B, T))]
-            for c, mask in product(range(1, T), masks):
-                with self.subTest(
+            for mask in (None, mx.random.bernoulli(0.7, shape=(B, T))):
+                y_ref, h_ref = per_step(q, k, v, g, b, h0, mask)
+                sub = dict(
                     Hk=Hk,
                     Hv=Hv,
                     dtype=dtype,
                     T=T,
-                    c=c,
                     vectorized_g=vectorized_g,
                     masked=mask is not None,
-                ):
-                    out = mx.fast.gated_delta_update(
-                        q, k, v, g, b, initial_state=h0, mask=mask, state_at=c
+                )
+                with self.subTest(intermediate_states=True, **sub):
+                    y, h = mx.fast.gated_delta_update(
+                        q,
+                        k,
+                        v,
+                        g,
+                        b,
+                        initial_state=h0,
+                        mask=mask,
+                        intermediate_states=True,
                     )
-                    ref = split(q, k, v, g, b, h0, mask, c)
-                    self.assertEqual(len(out), 3)
-                    for x, r in zip(out, ref):
-                        self.assertEqual(x.dtype, r.dtype)
-                        self.assertTrue(mx.array_equal(x, r))
+                    self.assertEqual(h.shape, (T, B, Hv, Dv, Dk))
+                    self.assertEqual(y.dtype, y_ref.dtype)
+                    self.assertTrue(mx.array_equal(y, y_ref))
+                    self.assertTrue(mx.array_equal(h, h_ref))
+                for c in sorted({c for c in (1, T // 2, T - 1) if 0 < c < T}):
+                    with self.subTest(state_at=c, **sub):
+                        y, h = mx.fast.gated_delta_update(
+                            q, k, v, g, b, initial_state=h0, mask=mask, state_at=c
+                        )
+                        self.assertEqual(h.shape, (2, B, Hv, Dv, Dk))
+                        self.assertTrue(mx.array_equal(y, y_ref))
+                        self.assertTrue(
+                            mx.array_equal(h, h_ref[mx.array([c - 1, T - 1])])
+                        )
 
-        # A forced chunk size must also match the split.
+        # A forced chunk size does not change the states path.
         if mx.metal.is_available():
-            T, c = 6, 4
+            T = 12
             q = mx.random.normal(shape=(1, T, 16, Dk))
             k = mx.random.normal(shape=(1, T, 16, Dk))
             k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
@@ -423,30 +435,62 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
             g = mx.sigmoid(mx.random.normal(shape=(1, T, 32)))
             b = mx.sigmoid(mx.random.normal(shape=(1, T, 32)))
             h0 = mx.random.normal((1, 32, Dv, Dk))
+            y_ref, h_ref = per_step(q, k, v, g, b, h0, None)
             with mx.config.scoped_update(MLX_GATED_DELTA_CHUNK=8):
-                out = mx.fast.gated_delta_update(
-                    q, k, v, g, b, initial_state=h0, state_at=c
+                y, h = mx.fast.gated_delta_update(
+                    q, k, v, g, b, initial_state=h0, intermediate_states=True
                 )
-                ref = split(q, k, v, g, b, h0, None, c)
-                mx.eval(out, ref)
-            for x, r in zip(out, ref):
-                self.assertTrue(mx.array_equal(x, r))
+                y2, h2 = mx.fast.gated_delta_update(
+                    q, k, v, g, b, initial_state=h0, state_at=5
+                )
+                mx.eval(y, h, y2, h2)
+            self.assertTrue(mx.array_equal(y, y_ref))
+            self.assertTrue(mx.array_equal(h, h_ref))
+            self.assertTrue(mx.array_equal(y2, y_ref))
+            self.assertTrue(mx.array_equal(h2, h_ref[mx.array([4, T - 1])]))
 
-        # No initial state is the same as a zero initial state.
-        for T, c, mask in [(6, 4, None), (6, 4, mx.ones((1, 6), dtype=mx.bool_))]:
+        # No initial state is the same as a zero initial state, and the last
+        # stored state is the final state of a plain call.
+        for T, mask in [(6, None), (6, mx.ones((1, 6), dtype=mx.bool_))]:
             q = mx.random.normal(shape=(1, T, 16, Dk))
             k = mx.random.normal(shape=(1, T, 16, Dk))
             k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
             v = mx.random.normal(shape=(1, T, 32, Dv))
             g = mx.sigmoid(mx.random.normal(shape=(1, T, 32)))
             b = mx.sigmoid(mx.random.normal(shape=(1, T, 32)))
-            out = mx.fast.gated_delta_update(q, k, v, g, b, mask=mask, state_at=c)
-            ref = split(q, k, v, g, b, mx.zeros((1, 32, Dv, Dk)), mask, c)
-            self.assertEqual(len(out), 3)
-            for x, r in zip(out, ref):
-                self.assertTrue(mx.array_equal(x, r))
+            _, h_ref = per_step(q, k, v, g, b, mx.zeros((1, 32, Dv, Dk)), mask)
+            _, h = mx.fast.gated_delta_update(
+                q, k, v, g, b, mask=mask, intermediate_states=True
+            )
+            self.assertTrue(mx.array_equal(h, h_ref))
+            _, h = mx.fast.gated_delta_update(q, k, v, g, b, mask=mask, state_at=4)
+            self.assertTrue(mx.array_equal(h, h_ref[mx.array([3, 5])]))
+            with mx.config.scoped_update(MLX_GATED_DELTA_CHUNK=1):
+                _, hf = mx.fast.gated_delta_update(q, k, v, g, b, mask=mask)
+                mx.eval(hf)
+            self.assertTrue(mx.array_equal(h[1], hf))
 
-    def test_gated_delta_state_at_errors(self):
+        # No time steps.
+        q = mx.zeros((1, 0, 16, Dk))
+        v = mx.zeros((1, 0, 32, Dv))
+        g = mx.ones((1, 0, 32))
+        y, h = mx.fast.gated_delta_update(q, q, v, g, g, intermediate_states=True)
+        self.assertEqual(y.shape, (1, 0, 32, Dv))
+        self.assertEqual(h.shape, (0, 1, 32, Dv, Dk))
+
+        # No batch rows.
+        q = mx.zeros((0, 4, 16, Dk))
+        v = mx.zeros((0, 4, 32, Dv))
+        g = mx.ones((0, 4, 32))
+        for kw, shape in (
+            (dict(state_at=2), (2, 0, 32, Dv, Dk)),
+            (dict(intermediate_states=True), (4, 0, 32, Dv, Dk)),
+        ):
+            y, h = mx.fast.gated_delta_update(q, q, v, g, g, **kw)
+            mx.eval(y, h)
+            self.assertEqual(h.shape, shape)
+
+    def test_gated_delta_states_errors(self):
         T = 4
         q = mx.zeros((1, T, 16, 128))
         v = mx.zeros((1, T, 32, 128))
@@ -455,10 +499,18 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
         for c in (-1, 0, T, T + 1):
             with self.assertRaises(ValueError):
                 mx.fast.gated_delta_update(q, q, v, g, b, state_at=c)
+        with self.assertRaises(ValueError):
+            mx.fast.gated_delta_update(
+                q, q, v, g, b, state_at=1, intermediate_states=True
+            )
+        if mx.cuda.is_available():
+            with self.assertRaises(ValueError):
+                mx.fast.gated_delta_update(q, q, v, g, b, intermediate_states=True)
 
-    def test_gated_delta_state_at_vjp(self):
+    @unittest.skipIf(mx.cuda.is_available(), "not implemented on CUDA")
+    def test_gated_delta_states_vjp(self):
         B, Hk, Hv, Dk, Dv = 1, 16, 32, 128, 128
-        for T, c in ((4, 1), (4, 3), (12, 5)):
+        for T, c in ((4, 1), (4, 3), (12, 5), (12, None)):
             mx.random.seed(0)
             q = mx.random.normal(shape=(B, T, Hk, Dk))
             k = mx.random.normal(shape=(B, T, Hk, Dk))
@@ -468,33 +520,41 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
             b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
             h0 = mx.random.normal((B, Hv, Dv, Dk))
             primals = [q, k, v, g, b, h0]
+            S = T if c is None else 2
             cotans = [
                 mx.random.normal(shape=(B, T, Hv, Dv)) * 1e-2,
-                mx.random.normal(shape=(B, Hv, Dv, Dk)) * 1e-2,
-                mx.random.normal(shape=(B, Hv, Dv, Dk)) * 1e-2,
+                mx.random.normal(shape=(S, B, Hv, Dv, Dk)) * 1e-2,
             ]
+            steps = list(range(T)) if c is None else [c - 1, T - 1]
 
             def fused(q, k, v, g, b, h0):
+                if c is None:
+                    return mx.fast.gated_delta_update(
+                        q, k, v, g, b, initial_state=h0, intermediate_states=True
+                    )
                 return mx.fast.gated_delta_update(
                     q, k, v, g, b, initial_state=h0, state_at=c
                 )
 
-            def split(q, k, v, g, b, h0):
-                y0, hc = mx.fast.gated_delta_update(
-                    q[:, :c], k[:, :c], v[:, :c], g[:, :c], b[:, :c], initial_state=h0
-                )
-                y1, hf = mx.fast.gated_delta_update(
-                    q[:, c:], k[:, c:], v[:, c:], g[:, c:], b[:, c:], initial_state=hc
-                )
-                return mx.concatenate([y0, y1], axis=1), hf, hc
+            def per_step(q, k, v, g, b, h0):
+                ys, hs = [], []
+                h = h0
+                for t in range(T):
+                    y, h = mx.fast.gated_delta_update(
+                        q[:, t : t + 1],
+                        k[:, t : t + 1],
+                        v[:, t : t + 1],
+                        g[:, t : t + 1],
+                        b[:, t : t + 1],
+                        initial_state=h,
+                    )
+                    ys.append(y)
+                    hs.append(h)
+                return mx.concatenate(ys, axis=1), mx.stack([hs[i] for i in steps])
 
-            # (4, 1) and (4, 3) store the state in the same kernel pass, whose
-            # vjp is the fallback. (12, 5) takes the split path, where each of
-            # the two calls uses the fused vjp. All compare to the fallback
-            # vjp of the split.
             _, vjp_out = mx.vjp(fused, primals, cotans)
             with mx.config.scoped_update(MLX_GATED_DELTA_VJP_FALLBACK=1):
-                _, vjp_ref = mx.vjp(split, primals, cotans)
+                _, vjp_ref = mx.vjp(per_step, primals, cotans)
                 mx.eval(vjp_ref)
             for i, (x, r) in enumerate(zip(vjp_out, vjp_ref)):
                 with self.subTest(T=T, c=c, grad=i):

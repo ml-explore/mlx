@@ -196,11 +196,8 @@ bool GatedDeltaUpdate::use_fallback(
   return Hv % Hk;
 }
 
-bool GatedDeltaUpdate::supports_state_at(
-    Dtype dtype,
-    bool vectorized_g,
-    int T,
-    Stream s) {
+bool GatedDeltaUpdate::supports_state_steps(Stream s) {
+  // Not implemented yet.
   return false;
 }
 

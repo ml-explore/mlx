@@ -5,7 +5,7 @@
 
 constant bool save_state [[function_constant(200)]];
 constant bool vectorized_g [[function_constant(201)]];
-constant bool store_state_at [[function_constant(202)]];
+constant bool store_steps [[function_constant(202)]];
 
 #define AT(TILE, IDX) TILE.thread_elements()[IDX]
 #define SUB(TILE0, TILE1, TILE2)                \
@@ -279,12 +279,15 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
     const device float* g [[buffer(4)]], // [B, T, Hv]
     const device float* beta [[buffer(5)]], // [B, T, Hv]
     device InT* y [[buffer(6)]], // [B, T, Hv, Dv]
-    device float* state_out [[buffer(7)]], // [B, Hv, Dv, Dk]
+    // [B, Hv, Dv, Dk], or [S, B, Hv, Dv, Dk] with store_steps
+    device float* state_out [[buffer(7)]],
     constant int& T [[buffer(8)]],
     device float* state_cache [[buffer(9), function_constant(save_state)]],
-    device float* state_at_out
-    [[buffer(10), function_constant(store_state_at)]], // [B, Hv, Dv, Dk]
-    constant int& state_at [[buffer(11), function_constant(store_state_at)]],
+    // 0 < step < T stores the states after `step` and after T time steps
+    // (S = 2); step == T stores the state after every time step (S = T).
+    constant int& step [[buffer(10), function_constant(store_steps)]],
+    constant size_t& state_stride
+    [[buffer(11), function_constant(store_steps)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
     uint thread_index_in_simdgroup [[thread_index_in_simdgroup]]) {
@@ -357,11 +360,10 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
     if (thread_index_in_simdgroup == 0) {
       y[dv_idx] = static_cast<InT>(out);
     }
-    // Exit state of step state_at - 1, same layout as state_out.
-    if (store_state_at && t == state_at - 1) {
-      auto c_state = state_at_out + (n * Dv + dv_idx) * Dk;
+    if (store_steps && (step == T || t == step - 1)) {
+      auto s_out = o_state + (step == T ? t : 0) * state_stride;
       for (int i = 0; i < n_per_t; ++i) {
-        c_state[n_per_t * dk_idx + i] = state[i];
+        s_out[n_per_t * dk_idx + i] = state[i];
       }
     }
     // Increment data pointers to next time step
@@ -371,6 +373,12 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int Ckpt>
     y += Hv * Dv;
     g_ += vectorized_g ? (Hv * Dk) : Hv;
     beta_ += Hv;
+  }
+  if (store_steps) {
+    if (step == T) {
+      return; // the last step already stored the final state
+    }
+    o_state += state_stride;
   }
   for (int i = 0; i < n_per_t; ++i) {
     auto s_idx = n_per_t * dk_idx + i;

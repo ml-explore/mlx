@@ -64,11 +64,7 @@ bool fast::GatedDeltaUpdate::use_fallback(
   return true;
 }
 
-bool fast::GatedDeltaUpdate::supports_state_at(
-    Dtype dtype,
-    bool vectorized_g,
-    int T,
-    Stream s) {
+bool fast::GatedDeltaUpdate::supports_state_steps(Stream s) {
   return false;
 }
 

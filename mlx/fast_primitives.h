@@ -410,15 +410,14 @@ class GatedDeltaUpdate : public Custom {
   GatedDeltaUpdate(
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
-      std::optional<int> state_at = std::nullopt)
-      : Custom(stream, std::move(fallback)), state_at_(state_at) {}
+      int state_step = 0)
+      : Custom(stream, std::move(fallback)), state_step_(state_step) {}
 
   static bool
   use_fallback(int Hk, int Dk, int Hv, int Dv, bool has_mask, Stream s);
 
-  // True if the kernel can store the state_at state in the same pass.
-  static bool
-  supports_state_at(Dtype dtype, bool vectorized_g, int T, Stream s);
+  // True if the GPU kernel can return intermediate states.
+  static bool supports_state_steps(Stream s);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -442,7 +441,9 @@ class GatedDeltaUpdate : public Custom {
 
  private:
   bool is_training_;
-  std::optional<int> state_at_;
+  // 0: final state only. 0 < step < T: states after `step` and T time steps.
+  // T: states after every time step.
+  int state_step_;
 };
 
 class GatedDeltaUpdateVJP : public Custom {
