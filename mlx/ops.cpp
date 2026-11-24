@@ -2683,7 +2683,7 @@ std::tuple<array, array> minmax(
 
 array argmin(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {
   auto result = argmin(flatten(a, s), 0, true, s);
-  if (keepdims) {
+  if (keepdims && a.ndim() > 0) {
     std::vector<int> axes(a.ndim() - 1);
     std::iota(axes.begin(), axes.end(), 0);
     result = expand_dims(result, axes, s);
@@ -2720,7 +2720,7 @@ array argmin(
 
 array argmax(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {
   auto result = argmax(flatten(a, s), 0, true, s);
-  if (keepdims) {
+  if (keepdims && a.ndim() > 0) {
     std::vector<int> axes(a.ndim() - 1);
     std::iota(axes.begin(), axes.end(), 0);
     result = expand_dims(result, axes, s);
