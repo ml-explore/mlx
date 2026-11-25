@@ -377,8 +377,12 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
         # (8, 32) has no kernel and uses the fallback.
         heads = [(16, 32), (32, 32), (16, 16), (24, 24), (16, 48), (16, 64), (8, 32)]
         dtypes = [mx.float32, mx.bfloat16, mx.float16]
+        lengths = (1, 2, 3, 5, 8, 9, 12)
+        if not mx.metal.is_available():
+            # Without Metal every case runs the same per-step fallback.
+            heads, dtypes, lengths = [(16, 32)], [mx.float32], (1, 3, 9)
         for (Hk, Hv), dtype, T, vectorized_g in product(
-            heads, dtypes, (1, 2, 3, 5, 8, 9, 12), (False, True)
+            heads, dtypes, lengths, (False, True)
         ):
             mx.random.seed(T)
             q = mx.random.normal(shape=(B, T, Hk, Dk)).astype(dtype)
