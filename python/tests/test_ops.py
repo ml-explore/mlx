@@ -4877,6 +4877,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.broadcast_shapes((2, 3)), (2, 3))
 
         # Empty shapes
+        self.assertEqual(mx.broadcast_shapes(), ())
         self.assertEqual(mx.broadcast_shapes((), ()), ())
         self.assertEqual(mx.broadcast_shapes((), (1,)), (1,))
         self.assertEqual(mx.broadcast_shapes((1,), ()), (1,))
@@ -4892,9 +4893,6 @@ class TestOps(mlx_tests.MLXTestCase):
 
         with self.assertRaises(ValueError):
             mx.broadcast_shapes((2, 3, 4), (2, 5, 4))
-
-        with self.assertRaises(ValueError):
-            mx.broadcast_shapes()
 
     def test_sort_transposed(self):
         # The sorted axis can keep the smallest or largest stride while the
