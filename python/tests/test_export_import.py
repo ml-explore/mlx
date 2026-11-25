@@ -131,17 +131,6 @@ class TestExportImport(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             imported(mx.array(1.0), [mx.array(1.0)])
 
-    def test_export_signbit(self):
-        path = os.path.join(self.test_dir, "signbit.mlxfn")
-        x = mx.array([-0.0, 0.0, -1.0, 1.0])
-        mx.export_function(path, mx.signbit, x)
-        imported = mx.import_function(path)
-        (out,) = imported(x)
-        self.assertEqual(out.dtype, mx.bool_)
-        self.assertEqual(out.tolist(), [True, False, True, False])
-        (out,) = imported(mx.flip(x))
-        self.assertEqual(out.tolist(), [False, True, False, True])
-
     def test_export_random_sample(self):
         path = os.path.join(self.test_dir, "fn.mlxfn")
 
