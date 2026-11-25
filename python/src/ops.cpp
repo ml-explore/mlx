@@ -309,7 +309,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def signbit(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def signbit(a: array | bool | int | float, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Test whether the sign bit is set for each element.
 
@@ -317,7 +317,7 @@ void init_ops(nb::module_& m) {
         Unsigned integers and booleans return ``False``.
 
         Args:
-            a (array): Input array or scalar with a non-complex dtype.
+            a (array or bool or int or float): Input array or scalar with a non-complex dtype.
 
         Returns:
             array: A boolean array with the same shape as ``a``,

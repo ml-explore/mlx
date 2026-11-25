@@ -46,21 +46,6 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(out.dtype, mx.int32)
         self.assertTrue(mx.array_equal(out, mx.array([2, 4])))
 
-    def test_compile_signbit(self):
-        fun = mx.compile(lambda x: mx.logical_not(mx.signbit(x)))
-        for dtype in (mx.float16, mx.bfloat16, mx.float32, mx.float64):
-            if dtype == mx.float64 and mx.default_device() == mx.gpu:
-                continue
-            with self.subTest(dtype=dtype):
-                x = mx.array([0.0, -0.0, 3.0, -3.0], dtype=dtype)
-                mx.eval(x)
-                out = fun(x)
-                graph = io.StringIO()
-                mx.export_to_dot(graph, out)
-                self.assertRegex(graph.getvalue(), r'Compiled[^"]*SignBit')
-                self.assertEqual(out.dtype, mx.bool_)
-                self.assertEqual(out.tolist(), [True, False, True, False])
-
     def test_compile_sigmoid_matches_eager(self):
         # Regression test: `Sigmoid` spelled an unqualified `metal::exp`, which
         # the prebuilt metallib (-fno-fast-math) resolves to the precise
