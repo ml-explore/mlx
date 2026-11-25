@@ -1,6 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <fmt/format.h>
+#include <algorithm>
 #include <sstream>
+#include <unordered_set>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/utils.h"
@@ -203,14 +205,35 @@ inline void build_kernel(
   }
 
   // Actually write the computation
+  std::unordered_set<uintptr_t> uniform_ids;
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    if (is_constant(i) || is_scalar(inputs[i])) {
+      uniform_ids.insert(inputs[i].id());
+    }
+  }
   for (auto& x : tape) {
+    bool is_uniform =
+        std::all_of(x.inputs().begin(), x.inputs().end(), [&](const array& in) {
+          return uniform_ids.count(in.id()) > 0;
+        });
+    if (is_uniform) {
+      uniform_ids.insert(x.id());
+    }
     os += fmt::format(
         "  {0} tmp_{1} = ", get_type_string(x.dtype()), namer.get_name(x));
     if (is_static_cast(x.primitive())) {
-      os += fmt::format(
-          "cast_to<{0}>(tmp_{1});\n",
-          get_type_string(x.dtype()),
-          namer.get_name(x.inputs()[0]));
+      if (is_uniform && x.dtype() == bfloat16 &&
+          x.inputs()[0].dtype() == float32) {
+        // Work around a Metal compiler bug that lowers uniform float -> bfloat
+        // casts as float -> half.
+        os += fmt::format(
+            "float_to_bfloat16(tmp_{0});\n", namer.get_name(x.inputs()[0]));
+      } else {
+        os += fmt::format(
+            "cast_to<{0}>(tmp_{1});\n",
+            get_type_string(x.dtype()),
+            namer.get_name(x.inputs()[0]));
+      }
     } else {
       os += x.primitive().name();
       os += "()(";

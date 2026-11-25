@@ -14,3 +14,15 @@ inline uint16_t bfloat16_to_uint16(const bfloat16_t x) {
 inline bfloat16_t uint16_to_bfloat16(const uint16_t x) {
   return as_type<bfloat16_t>(x);
 }
+
+inline bfloat16_t float_to_bfloat16(const float val) {
+  uint32_t u = as_type<uint32_t>(val);
+  if ((u & 0x7fffffffu) > 0x7f800000u) {
+    return as_type<bfloat16_t>(uint16_t(0x7fc0u));
+  }
+  if ((u & 0x7f800000u) == 0u) {
+    return as_type<bfloat16_t>(uint16_t((u >> 16) & 0x8000u));
+  }
+  u += 0x7fffu + ((u >> 16) & 1u);
+  return as_type<bfloat16_t>(uint16_t(u >> 16));
+}

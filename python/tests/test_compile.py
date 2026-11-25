@@ -1738,6 +1738,86 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(a, mx.array([2.0, 4.0, 6.0])))
         self.assertTrue(mx.array_equal(b, mx.array([1.0, 2.0, 3.0])))
 
+    def test_compile_uniform_float_to_bfloat16(self):
+        def scalar_dual(x):
+            y = x + 0.0
+            return y, y.astype(mx.bfloat16)
+
+        compiled_dual = mx.compile(scalar_dual)
+        for val in (
+            0.01,
+            0.5,
+            1.0,
+            2.0,
+            100.0,
+            -0.0,
+            1e-40,
+            -1e-40,
+            float.fromhex("0x1.008p+0"),
+            float.fromhex("0x1.018p+0"),
+            3.4028235e38,
+            float("inf"),
+            float("-inf"),
+        ):
+            x = mx.array(val, dtype=mx.float32)
+            ef, eb = scalar_dual(x)
+            cf, cb = compiled_dual(x)
+            mx.eval(ef, eb, cf, cb)
+            self.assertEqual(cf.item(), ef.item())
+            self.assertTrue(
+                mx.array_equal(
+                    cb.reshape(-1).view(mx.uint16), eb.reshape(-1).view(mx.uint16)
+                )
+            )
+
+        nan_x = mx.array(float("nan"), dtype=mx.float32)
+        _, cb_nan = compiled_dual(nan_x)
+        self.assertTrue(math.isnan(cb_nan.item()))
+
+        def scalar_and_vec(s, v):
+            return (v + s).astype(mx.bfloat16) + s.astype(mx.bfloat16)
+
+        compiled_vec = mx.compile(scalar_and_vec)
+        s = mx.array(1.0, dtype=mx.float32)
+        for n in (4, 100_000):
+            v = mx.zeros((n,), dtype=mx.float32)
+            expected = scalar_and_vec(s, v)
+            actual = compiled_vec(s, v)
+            self.assertTrue(mx.array_equal(actual, expected))
+
+        import mlx.nn as nn
+        import mlx.optimizers as optim
+
+        def run_steps(compiled):
+            mx.random.seed(0)
+            model = nn.Linear(16, 4)
+            model.set_dtype(mx.bfloat16)
+            optimizer = optim.AdamW(learning_rate=optim.linear_schedule(1e-2, 0.0, 40))
+            state = [model.state, optimizer.state, mx.random.state]
+            loss_and_grad = nn.value_and_grad(
+                model,
+                lambda m, x, y: nn.losses.cross_entropy(
+                    m(x).astype(mx.float32), y, reduction="mean"
+                ),
+            )
+
+            def step():
+                x = mx.random.normal((8, 16)).astype(mx.bfloat16)
+                y = mx.random.randint(0, 4, (8,))
+                _, grads = loss_and_grad(model, x, y)
+                optimizer.update(model, grads)
+
+            if compiled:
+                step = mx.compile(step, inputs=state, outputs=state)
+            for _ in range(3):
+                step()
+                mx.eval(state)
+            return model.weight
+
+        w_eager = run_steps(False)
+        w_compiled = run_steps(True)
+        self.assertTrue(mx.allclose(w_compiled, w_eager, rtol=1e-2, atol=1e-2))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
