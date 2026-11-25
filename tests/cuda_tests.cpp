@@ -9,8 +9,10 @@
 
 #include <cuda_runtime.h>
 
+#include <cmath>
 #include <cstdint>
 #include <limits>
+#include <vector>
 
 using namespace mlx::core;
 

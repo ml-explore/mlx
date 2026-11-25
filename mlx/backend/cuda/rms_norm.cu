@@ -41,7 +41,9 @@ struct BlockBroadcastReduce {
       block.sync();
       x = warp.thread_rank() < warp.meta_group_size() ? temp[warp.thread_rank()]
                                                       : init_value;
-      return cg::reduce(warp, x, op);
+      x = cg::reduce(warp, x, op);
+      block.sync();
+      return x;
     } else {
       return x;
     }
