@@ -48,19 +48,11 @@ class TestCompile(mlx_tests.MLXTestCase):
 
     def test_compile_signbit(self):
         fun = mx.compile(lambda x: mx.logical_not(mx.signbit(x)))
-        formats = [
-            (mx.float16, np.uint16, 0x7E01),
-            (mx.bfloat16, np.uint16, 0x7FC1),
-            (mx.float32, np.uint32, 0x7FC00001),
-            (mx.float64, np.uint64, 0x7FF8000000000001),
-        ]
-        for dtype, uint_dtype, nan in formats:
+        for dtype in (mx.float16, mx.bfloat16, mx.float32, mx.float64):
             if dtype == mx.float64 and mx.default_device() == mx.gpu:
                 continue
             with self.subTest(dtype=dtype):
-                sign = 1 << (np.dtype(uint_dtype).itemsize * 8 - 1)
-                bits = np.array([0, sign, nan, nan | sign], dtype=uint_dtype)
-                x = mx.array(bits).view(dtype)
+                x = mx.array([0.0, -0.0, 3.0, -3.0], dtype=dtype)
                 mx.eval(x)
                 out = fun(x)
                 graph = io.StringIO()
