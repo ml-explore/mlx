@@ -422,6 +422,13 @@ TEST_CASE("test op vjps") {
     CHECK_EQ(out.second.item<float>(), 0.0f);
   }
 
+  // Test signbit
+  {
+    auto out =
+        vjp([](array in) { return signbit(in); }, array(-5.0f), array(10.0f));
+    CHECK_EQ(out.second.item<float>(), 0.0f);
+  }
+
   // Test negate
   {
     auto out = vjp([](array in) { return -in; }, array(1.0), array(2.0));
@@ -1149,6 +1156,7 @@ TEST_CASE("test jvp from vjp") {
     CHECK(compute_derivs(mlx::core::negative));
     CHECK(compute_derivs(mlx::core::sigmoid));
     CHECK(compute_derivs(mlx::core::sign));
+    CHECK(compute_derivs(mlx::core::signbit));
     CHECK(compute_derivs(mlx::core::sin));
     CHECK(compute_derivs(mlx::core::square));
     CHECK(compute_derivs(mlx::core::sqrt));
