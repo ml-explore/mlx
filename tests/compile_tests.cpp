@@ -7,7 +7,9 @@
 
 #include <cmath>
 #include <limits>
+#include <unordered_set>
 
+#include "mlx/config.h"
 #include "mlx/mlx.h"
 #include "mlx/primitives.h"
 
@@ -874,4 +876,204 @@ TEST_CASE("test compile throwing first trace does not poison cache") {
   auto out = cfun({});
   REQUIRE_EQ(out.size(), 1);
   CHECK_EQ(out[0].item<float>(), 3.0f);
+}
+
+// Horizontal fusion tests
+// Three siblings that read x and y
+auto siblings_with_shared_input(const std::vector<array>& inputs) {
+  auto x = inputs[0];
+  auto y = inputs[1];
+  return std::vector<array>{exp(x) + y, sin(x) * y, cos(x) - y};
+}
+
+// The backward of silu: y and dx both read x and compute sigmoid(x)
+auto silu_backward(const std::vector<array>& inputs) {
+  auto silu = [](const std::vector<array>& in) {
+    return std::vector<array>{in[0] * sigmoid(in[0])};
+  };
+  auto [y, dx] = vjp(silu, {inputs[0]}, {inputs[1]});
+  return std::vector<array>{y[0], dx[0]};
+}
+
+// tanh(x) and x + z both read x, and a path through cumsum, which is not
+// fusable, connects them
+auto siblings_with_a_path(const std::vector<array>& inputs) {
+  auto x = inputs[0];
+  return std::vector<array>{x + cumsum(tanh(x), -1)};
+}
+
+// Two siblings read sigmoid(a). One output goes to a matmul, the other is
+// returned, so they are at different levels
+auto siblings_at_two_levels(const std::vector<array>& inputs) {
+  auto s = sigmoid(inputs[0]);
+  return std::vector<array>{
+      matmul(exp(s * inputs[1]), inputs[3]), log(s * inputs[2])};
+}
+
+// The same graph at a different address, so that compile traces it again
+auto siblings_at_two_levels_again(const std::vector<array>& inputs) {
+  return siblings_at_two_levels(inputs);
+}
+
+// RMSNorm that also returns rstd, which has the shape [N, 1]
+auto norm_with_rstd(const std::vector<array>& inputs) {
+  auto x = inputs[0];
+  auto rstd = rsqrt(mean(x * x, -1, true) + 1e-5f);
+  return std::vector<array>{x * rstd, rstd};
+}
+
+// RMSNorm that returns only the result
+auto norm_without_rstd(const std::vector<array>& inputs) {
+  return std::vector<array>{norm_with_rstd(inputs)[0]};
+}
+
+// Two pairs of siblings: each pair can merge, but after both merges each
+// kernel reads an output of the other (cycle between kerenls is not allowed)
+auto crossing_siblings(const std::vector<array>& inputs) {
+  auto x = exp(inputs[0]);
+  auto y = exp(inputs[1]);
+  auto p = sin(inputs[1]);
+  auto m = cos(inputs[0]);
+  return std::vector<array>{x, y, x * p, y * m, cumsum(p, 0), cumsum(m, 0)};
+}
+
+// 30 siblings that all read x
+auto many_siblings(const std::vector<array>& inputs) {
+  std::vector<array> outs;
+  for (int i = 0; i < 30; ++i) {
+    outs.push_back(sin(inputs[0] + static_cast<float>(i)));
+  }
+  return outs;
+}
+
+// Compare the compiled outputs with the outputs of the function
+void check_close(
+    const std::vector<array>& outs,
+    const std::vector<array>& expected) {
+  REQUIRE_EQ(outs.size(), expected.size());
+  for (int i = 0; i < outs.size(); ++i) {
+    CHECK(allclose(outs[i], expected[i], 1e-5, 1e-5).item<bool>());
+  }
+}
+
+TEST_CASE("test compile horizontal fusion") {
+  // Siblings that read the same inputs become one Compiled primitive, which
+  // reads x and y once
+  auto x = array({1.0f, 2.0f, 3.0f});
+  auto y = array({0.5f, -1.0f, 2.0f});
+  auto outs = compile(siblings_with_shared_input)({x, y});
+  auto& p = outs[0].primitive();
+  CHECK_EQ(typeid(p), typeid(Compiled));
+  CHECK_EQ(&outs[1].primitive(), &p);
+  CHECK_EQ(&outs[2].primitive(), &p);
+  CHECK_EQ(outs[0].inputs().size(), 2);
+  check_close(outs, siblings_with_shared_input({x, y}));
+}
+
+TEST_CASE("test compile horizontal fusion with a shared producer") {
+  // After y and dx merge, sigmoid(x) joins them, so no input of the kernel
+  // is computed: they are x, dy and a constant
+  auto x = array({-1.0f, 0.5f, 2.0f});
+  auto dy = array({1.0f, -2.0f, 0.5f});
+  auto outs = compile(silu_backward)({x, dy});
+  auto& p = outs[0].primitive();
+  CHECK_EQ(typeid(p), typeid(Compiled));
+  CHECK_EQ(&outs[1].primitive(), &p);
+  for (auto& in : outs[0].inputs()) {
+    CHECK_FALSE(in.has_primitive());
+  }
+  check_close(outs, silu_backward({x, dy}));
+}
+
+TEST_CASE("test compile horizontal fusion checks") {
+  // The checks that stop a merge: a path between the groups, different
+  // levels, different output shapes and the limit on arrays in one kernel
+  // A path through cumsum connects tanh(x) and x + z, so one kernel would
+  // need its own output. The large distance lets only is_connected stop it.
+  {
+    auto x = reshape(arange(8.0f), {2, 4}) / 8.0f;
+    auto scoped = config::scoped_update({{"MLX_MAX_FUSE_DISTANCE", 100}});
+    auto out = compile(siblings_with_a_path)({x})[0];
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(Add));
+    check_close({out}, siblings_with_a_path({x}));
+  }
+
+  // Siblings at different levels merge only if MLX_MAX_FUSE_DISTANCE allows
+  // it
+  {
+    auto a = full({2, 4}, 0.5f);
+    auto b = full({2, 4}, 0.2f);
+    auto c = full({2, 4}, 0.7f);
+    auto w = full({4, 3}, 0.3f);
+    auto expected = siblings_at_two_levels({a, b, c, w});
+
+    auto outs = compile(siblings_at_two_levels)({a, b, c, w});
+    auto& p = outs[1].primitive();
+    CHECK_EQ(typeid(p), typeid(Compiled));
+    CHECK(outs[1].siblings().empty());
+    check_close(outs, expected);
+
+    {
+      auto scoped = config::scoped_update({{"MLX_MAX_FUSE_DISTANCE", 1}});
+      outs = compile(siblings_at_two_levels_again)({a, b, c, w});
+    }
+    REQUIRE_EQ(outs[1].siblings().size(), 1);
+    CHECK_EQ(outs[1].inputs().size(), 3);
+    check_close(outs, expected);
+  }
+
+  // One kernel has one output shape: if rstd is returned, its group and the
+  // group of x * rstd stay two kernels
+  {
+    auto x = reshape(arange(8.0f), {2, 4});
+    auto outs = compile(norm_with_rstd)({x});
+    CHECK_NE(&outs[0].primitive(), &outs[1].primitive());
+    check_close(outs, norm_with_rstd({x}));
+
+    auto out = compile(norm_without_rstd)({x})[0];
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(Compiled));
+    for (auto& in : out.inputs()) {
+      if (in.has_primitive()) {
+        auto& q = in.primitive();
+        CHECK_NE(typeid(q), typeid(Compiled));
+      }
+    }
+    check_close({out}, norm_without_rstd({x}));
+  }
+
+  // Merges that are correct one by one must not make two kernels that read
+  // the outputs of each other
+  {
+    auto s = array({0.1f, 0.2f, 0.3f});
+    auto t = array({-0.4f, 0.5f, 0.6f});
+    auto outs = compile(crossing_siblings)({s, t});
+    auto reads = [](const array& a, const array& b) {
+      for (auto& in : a.inputs()) {
+        if (in.has_primitive() && &in.primitive() == &b.primitive()) {
+          return true;
+        }
+      }
+      return false;
+    };
+    // outs[2] is x * p and outs[3] is y * m
+    CHECK_FALSE((reads(outs[2], outs[3]) && reads(outs[3], outs[2])));
+    check_close(outs, crossing_siblings({s, t}));
+  }
+
+  // A kernel has at most 24 inputs and outputs, so 30 siblings need more
+  // than one kernel
+  {
+    auto x = array({1.0f, 2.0f, 3.0f});
+    auto outs = compile(many_siblings)({x});
+    std::unordered_set<const Primitive*> kernels;
+    for (auto& o : outs) {
+      kernels.insert(&o.primitive());
+      CHECK_LE(o.inputs().size() + o.siblings().size() + 1, 24);
+    }
+    CHECK_GT(kernels.size(), 1);
+    CHECK_LT(kernels.size(), 30);
+    check_close(outs, many_siblings({x}));
+  }
 }

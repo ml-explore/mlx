@@ -1738,6 +1738,92 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(a, mx.array([2.0, 4.0, 6.0])))
         self.assertTrue(mx.array_equal(b, mx.array([1.0, 2.0, 3.0])))
 
+    def test_compile_fuse_siblings(self):
+        # Graphs where sibling groups merge, and graphs where they must not.
+        # tests/compile_tests.cpp checks which kernels are made.
+        def shared_input(x, y, w):
+            return mx.exp(x) + y, mx.sin(x) * y, mx.cos(x) - y
+
+        def shared_producer(x, y, w):
+            out, (dx,) = mx.vjp(lambda x: x * mx.sigmoid(x), [x], [y])
+            return out[0], dx
+
+        def with_a_path(x, y, w):
+            return x + mx.cumsum(mx.tanh(x), axis=-1)
+
+        def two_levels(x, y, w):
+            s = mx.sigmoid(x)
+            return mx.exp(s * y) @ w, mx.log(s * y + 1)
+
+        def norm_with_rstd(x, y, w):
+            r = mx.rsqrt(mx.mean(x * x, axis=-1, keepdims=True) + 1e-5)
+            return x * r, r
+
+        def many_siblings(x, y, w):
+            return [mx.sin(x + i) for i in range(30)]
+
+        def crossing_siblings(x, y, w):
+            # Each pair can merge, but not both: the two kernels would read the
+            # outputs of each other
+            a, b = mx.exp(x), mx.exp(y)
+            p, m = mx.sin(y), mx.cos(x)
+            return a, b, a * p, b * m, mx.cumsum(p, axis=-1), mx.cumsum(m, axis=-1)
+
+        x = mx.random.uniform(shape=(4, 8))
+        y = mx.random.uniform(shape=(4, 8))
+        w = 0.1 * mx.random.normal((8, 8))
+        funs = [
+            shared_input,
+            shared_producer,
+            with_a_path,
+            two_levels,
+            norm_with_rstd,
+            many_siblings,
+            crossing_siblings,
+        ]
+        for fun in funs:
+            for distance in [0, 100]:
+                with self.subTest(fun=fun.__name__, distance=distance):
+                    with mx.config.scoped_update(MLX_MAX_FUSE_DISTANCE=distance):
+                        out = mx.compile(lambda *args: fun(*args))(x, y, w)
+                    out = out if isinstance(out, (list, tuple)) else [out]
+                    expected = fun(x, y, w)
+                    expected = (
+                        expected if isinstance(expected, (list, tuple)) else [expected]
+                    )
+                    for a, b in zip(out, expected):
+                        self.assertTrue(mx.allclose(a, b, atol=1e-5))
+
+    def test_compile_fuse_siblings_shapeless(self):
+        # Merged siblings give correct outputs when the input shape changes
+        def fun(x, y):
+            return mx.exp(x) + y, mx.sin(x) * y
+
+        cfun = mx.compile(fun, shapeless=True)
+        for shape in [(4,), (3, 5)]:
+            x = mx.random.uniform(shape=shape)
+            y = mx.random.uniform(shape=shape)
+            for a, b in zip(cfun(x, y), fun(x, y)):
+                self.assertEqual(a.shape, shape)
+                self.assertTrue(mx.allclose(a, b))
+
+    def test_compile_fuse_siblings_grad(self):
+        # Gradients through merged siblings: the backward of a gated MLP has a
+        # group for each branch
+        def loss(wg, wu, x):
+            g = x @ wg
+            return (g * mx.sigmoid(g) * (x @ wu)).sum()
+
+        wg = mx.random.normal((8, 16))
+        wu = mx.random.normal((8, 16))
+        x = mx.random.normal((4, 8))
+        mx.eval(wg, wu, x)
+        grad_fn = mx.grad(loss, argnums=(0, 1))
+        expected = grad_fn(wg, wu, x)
+        out = mx.compile(grad_fn)(wg, wu, x)
+        for a, b in zip(out, expected):
+            self.assertTrue(mx.allclose(a, b, atol=1e-5))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

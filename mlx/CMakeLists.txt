@@ -2,7 +2,6 @@ target_sources(
   mlx
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/array.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/compile.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/config.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/dtype.cpp
@@ -95,6 +94,7 @@ else()
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/distributed)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/compile)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/io)
 
 if(MLX_BUILD_METAL)

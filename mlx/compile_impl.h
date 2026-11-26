@@ -3,6 +3,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <unordered_set>
 
 #include "mlx/api.h"
 #include "mlx/array.h"
@@ -73,5 +74,28 @@ std::vector<array> compile_replace(
     bool shapeless);
 
 void compile_validate_shapeless(const std::vector<array>& tape);
+
+// Kinds of primitives. Fusion uses them to decide what can be in a kernel.
+bool is_unary(const Primitive& p);
+bool is_binary(const Primitive& p);
+bool is_ternary(const Primitive& p);
+bool is_broadcast(const Primitive& p);
+bool is_noop(const Primitive& p);
+bool is_fusable(const Primitive& p);
+
+// Helpers to edit the graph with the tape and the parents map
+void merge_one(array& dst, array& src, ParentsMap& parents_map);
+void merge(array& dst, array& src, ParentsMap& parents_map);
+array split_one(
+    const array& x,
+    ParentsMap& parents_map,
+    const std::unordered_set<uintptr_t>& divider);
+
+// Fuse arrays into Compiled primitives
+void compile_fuse(
+    std::vector<array>& tape,
+    ParentsMap& parents_map,
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs);
 
 } // namespace mlx::core::detail
