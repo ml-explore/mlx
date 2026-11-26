@@ -336,6 +336,27 @@ class TestFFT(mlx_tests.MLXTestCase):
                             s=sizes,
                         )
 
+    def test_fftn_many_axes(self):
+        # Each step of a 4+ axis transform needs its own temporary.
+        for shape in [(8, 6, 10, 12), (4, 6, 8, 5, 6), (3, 4, 5, 4, 3, 4)]:
+            r = np.random.randn(*shape).astype(np.float32)
+            c = r + 1j * np.random.randn(*shape).astype(np.float32)
+            for op in ["fftn", "ifftn", "rfftn", "irfftn"]:
+                with self.subTest(shape=shape, op=op):
+                    x = r if op == "rfftn" else c
+                    kwargs = {"axes": tuple(range(len(shape)))}
+                    if op == "irfftn":
+                        x = np.fft.rfftn(r)
+                        kwargs["s"] = shape
+                    self.check_mx_np(
+                        getattr(mx.fft, op),
+                        getattr(np.fft, op),
+                        x,
+                        atol=1e-4,
+                        rtol=1e-5,
+                        **kwargs,
+                    )
+
     def test_fft_into_ifft(self):
         n_fft = 8193
         mx.random.seed(0)
