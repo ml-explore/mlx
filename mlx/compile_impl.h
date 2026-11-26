@@ -81,7 +81,6 @@ bool is_binary(const Primitive& p);
 bool is_ternary(const Primitive& p);
 bool is_broadcast(const Primitive& p);
 bool is_noop(const Primitive& p);
-bool is_reduction(const Primitive& p);
 bool is_fusable(const Primitive& p);
 
 // Helpers to edit the graph with the tape and the parents map

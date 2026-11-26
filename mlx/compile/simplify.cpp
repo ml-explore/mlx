@@ -48,7 +48,7 @@ void merge(array& dst, array& src, ParentsMap& parents_map) {
   }
 }
 
-static inline uint64_t splitmix64(uint64_t x) noexcept {
+inline uint64_t splitmix64(uint64_t x) noexcept {
   x += 0x9e3779b97f4a7c15ull;
   x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
   x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
