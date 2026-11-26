@@ -558,8 +558,8 @@ class TestSchedulers(mlx_tests.MLXTestCase):
 
         # Test with large gradients that require clipping
         large_grads = {
-            "first": [mx.array([10, 20]), mx.array([10])],
-            "second": mx.array([30]),
+            "first": [mx.array([10.0, 20.0]), mx.array([10.0])],
+            "second": mx.array([30.0]),
         }
         max_norm = 1.0  # A small max_norm that should trigger clipping
         clipped_grads, total_norm = opt.clip_grad_norm(large_grads, max_norm)

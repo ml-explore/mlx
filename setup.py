@@ -339,7 +339,7 @@ if __name__ == "__main__":
             # * .github/actions/build-wheel/action.yml
             # * mlx/backend/cuda/CMakeLists.txt
             install_requires += [
-                f"nvidia-cudnn-cu{toolkit}==9.*",
+                f"nvidia-cudnn-cu{toolkit}>=9.18",
             ]
             if platform.system() == "Linux":
                 install_requires += [
