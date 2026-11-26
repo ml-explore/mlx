@@ -750,6 +750,30 @@ class TestFast(mlx_tests.MLXTestCase):
         rx = layer_norm(x, None, None, eps)
         self.assertLess(mx.abs(rx - rx_fast).max(), 1e-4)
 
+    def test_norms_layouts(self):
+        # Transposed inputs, strided weights, missing parameters, and half
+        # precision.
+        eps = 1e-5
+        D = 1024
+        x = mx.random.normal(shape=(16, 33, D))
+        w = mx.random.normal(shape=(2 * D,))[::2]
+        b = mx.random.normal(shape=(D,))
+        for dtype, tol in [(mx.float32, 1e-5), (mx.bfloat16, 1e-1)]:
+            for inp in [x, x.transpose(1, 0, 2)]:
+                inp = inp.astype(dtype)
+                wd, bd = w.astype(dtype), b.astype(dtype)
+                for ww in [None, wd]:
+                    ones = mx.ones((D,), dtype=dtype)
+                    rx = rms_norm(inp, ww if ww is not None else ones, eps)
+                    rx_fast = mx.fast.rms_norm(inp, ww, eps)
+                    self.assertEqual(rx_fast.dtype, dtype)
+                    self.assertLess(mx.abs(rx - rx_fast).max().item(), tol)
+                    for bb in [None, bd]:
+                        rx = layer_norm(inp, ww, bb, eps)
+                        rx_fast = mx.fast.layer_norm(inp, ww, bb, eps)
+                        self.assertEqual(rx_fast.dtype, dtype)
+                        self.assertLess(mx.abs(rx - rx_fast).max().item(), tol)
+
     def test_layer_norm_grad(self):
         eps = 1e-5
         tolerances = {mx.float32: 5e-5, mx.float16: 1e-2, mx.bfloat16: 8e-2}

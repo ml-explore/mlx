@@ -48,9 +48,7 @@ class RMSNorm : public Custom {
   static bool use_fallback(Stream stream);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
-    throw std::runtime_error("NYI");
-  }
+      override;
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
@@ -169,9 +167,7 @@ class LayerNorm : public Custom {
   static bool use_fallback(Stream s);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
-    throw std::runtime_error("NYI");
-  }
+      override;
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 

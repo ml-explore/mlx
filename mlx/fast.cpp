@@ -110,7 +110,9 @@ array rms_norm(
   auto passed_weight =
       (has_weight) ? astype(*weight, out_type, s) : array(1, out_type);
 
-  if (!RMSNorm::use_fallback(s)) {
+  // The CPU backend has fused kernels for the forward pass (see
+  // backend/cpu/normalization.cpp). Its VJP uses the fallback.
+  if (s.device == Device::cpu || !RMSNorm::use_fallback(s)) {
     return array(
         x.shape(),
         out_type,
@@ -125,6 +127,9 @@ std::vector<array> RMSNorm::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>& outputs) {
+  if (stream().device == Device::cpu) {
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
   assert(primals.size() == 2);
   assert(outputs.size() == 1);
   assert(cotangents.size() == 1);
@@ -371,7 +376,9 @@ array layer_norm(
   auto passed_bias =
       (has_bias) ? astype(*bias, out_type, s) : array(0, out_type);
 
-  if (!LayerNorm::use_fallback(s)) {
+  // The CPU backend has fused kernels for the forward pass (see
+  // backend/cpu/normalization.cpp). Its VJP uses the fallback.
+  if (s.device == Device::cpu || !LayerNorm::use_fallback(s)) {
     return array(
         x.shape(),
         out_type,
@@ -386,6 +393,9 @@ std::vector<array> LayerNorm::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>& outputs) {
+  if (stream().device == Device::cpu) {
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
   assert(primals.size() == 3);
   assert(outputs.size() == 1);
   assert(cotangents.size() == 1);
