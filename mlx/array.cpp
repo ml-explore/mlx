@@ -1,6 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
+#include <algorithm>
 #include <functional>
-#include <unordered_map>
 
 #include "mlx/array.h"
 #include "mlx/ops.h"
@@ -270,65 +270,88 @@ array::ArrayDesc::ArrayDesc(
 }
 
 array::ArrayDesc::~ArrayDesc() {
-  // When an array description is destroyed it will delete a bunch of arrays
-  // that may also destroy their corresponding descriptions and so on and so
-  // forth.
-  //
-  // This calls recursively the destructor and can result in stack overflow, we
-  // instead put them in a vector and destroy them one at a time resulting in a
-  // max stack depth of 2.
+  // Walk the graph instead of recursing, which can overflow the stack. The way
+  // back up is kept in the slot the walk went down through.
   if (inputs.empty()) {
     return;
   }
 
-  std::vector<std::shared_ptr<ArrayDesc>> for_deletion;
-
-  auto append_deletable_inputs = [&for_deletion](ArrayDesc& ad) {
-    std::unordered_map<std::uintptr_t, array> input_map;
-    for (array& a : ad.inputs) {
-      if (a.array_desc_) {
-        input_map.insert({a.id(), a});
-        for (auto& s : a.siblings()) {
-          input_map.insert({s.id(), s});
-        }
-      }
+  // Same rule as release(): only this slot and the siblings refer to a.
+  auto is_last_reference = [](const array& a) {
+    if (!a.array_desc_) {
+      return false;
     }
-    ad.inputs.clear();
-    for (auto& [_, a] : input_map) {
-      bool is_deletable =
-          (a.array_desc_.use_count() <= a.siblings().size() + 1);
-      // An array with siblings is deletable only if all of its siblings
-      // are deletable
-      for (auto& s : a.siblings()) {
-        if (!is_deletable) {
-          break;
-        }
-        int is_input = (input_map.find(s.id()) != input_map.end());
-        is_deletable &=
-            s.array_desc_.use_count() <= a.siblings().size() + is_input;
-      }
-      if (is_deletable) {
-        for_deletion.push_back(std::move(a.array_desc_));
-      }
+    auto n = a.siblings().size();
+    return std::cmp_equal(a.array_desc_.use_count() - 1, n) &&
+        std::ranges::all_of(a.siblings(), [n](const array& s) {
+             return std::cmp_equal(s.array_desc_.use_count(), n);
+           });
+  };
+
+  // Break the sibling cycle so that d holds the only reference to each.
+  auto take_siblings = [](ArrayDesc& d) {
+    std::ranges::for_each(d.siblings, [](array& s) {
+      std::ranges::for_each(
+          s.array_desc_->siblings, [](array& ss) { ss.array_desc_ = nullptr; });
+      s.array_desc_->siblings.clear();
+    });
+  };
+
+  // Inputs first, then the siblings of a taken array.
+  auto slot = [](ArrayDesc& d) -> array& {
+    return d.inputs.empty() ? d.siblings.back() : d.inputs.back();
+  };
+  auto pop_slot = [](ArrayDesc& d) {
+    if (d.inputs.empty()) {
+      d.siblings.pop_back();
+    } else {
+      d.inputs.pop_back();
     }
   };
 
-  append_deletable_inputs(*this);
-
-  while (!for_deletion.empty()) {
-    // top is going to be deleted at the end of the block *after* the arrays
-    // with inputs have been moved into the vector
-    auto top = std::move(for_deletion.back());
-    for_deletion.pop_back();
-    append_deletable_inputs(*top);
-
-    // Clear out possible siblings to break circular references
-    for (auto& s : top->siblings) {
-      // Set to null here to avoid descending into top-level
-      // array destructor for siblings
-      s.array_desc_ = nullptr;
+  // current points to this without owning it.
+  auto current = std::shared_ptr<ArrayDesc>(std::shared_ptr<ArrayDesc>{}, this);
+  std::shared_ptr<ArrayDesc> parent;
+  while (true) {
+    auto& node = *current;
+    bool at_top = current.get() == this;
+    if (!node.inputs.empty() || (!at_top && !node.siblings.empty())) {
+      auto& next = slot(node);
+      bool is_sibling = node.inputs.empty();
+      if (!is_sibling && !is_last_reference(next)) {
+        node.inputs.pop_back();
+        continue;
+      }
+      auto& desc = *next.array_desc_;
+      if (desc.inputs.empty() && desc.siblings.empty()) {
+        pop_slot(node);
+        continue;
+      }
+      if (!is_sibling) {
+        take_siblings(desc);
+      }
+      // Nothing is left in node after this slot, so free it now.
+      bool is_last_slot = is_sibling
+          ? node.siblings.size() == 1
+          : node.inputs.size() == 1 && node.siblings.empty();
+      if (!at_top && is_last_slot) {
+        auto down = std::move(next.array_desc_);
+        pop_slot(node);
+        current = std::move(down);
+        continue;
+      }
+      auto down = std::exchange(next.array_desc_, std::move(parent));
+      parent = std::exchange(current, std::move(down));
+      continue;
     }
-    top->siblings.clear();
+    if (at_top) {
+      break;
+    }
+    // node is empty: go back up and destroy it.
+    auto& up = *parent;
+    auto done = std::move(current);
+    current = std::exchange(parent, std::move(slot(up).array_desc_));
+    pop_slot(up);
   }
 }
 
