@@ -71,6 +71,7 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
         scores = mx.concatenate([sinks, scores], axis=-1)
 
     scores = mx.softmax(scores, axis=-1, precise=True)
+    scores = mx.nan_to_num(scores)
     if sinks is not None:
         scores = scores[..., 1:]
 
@@ -129,6 +130,7 @@ def mlx_primitives_sdpa(q, k, v, scale, mask=None):
         else:
             p += mask
     scores = mx.softmax(p.astype(mx.float32), axis=-1).astype(p.dtype)
+    scores = mx.nan_to_num(scores)
     return scores @ v
 
 
@@ -1828,6 +1830,25 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             mx.fast.scaled_dot_product_attention(
                 q, q, q, scale=1.0, window_size=2, force_fused=True
             )
+
+    def test_sdpa_all_masked_row(self):
+        for dt in (mx.float32, mx.float16, mx.bfloat16):
+            q = mx.ones((1, 4, 1, 64), dtype=dt)
+            k = mx.ones((1, 4, 8, 64), dtype=dt)
+            v = mx.ones((1, 4, 8, 64), dtype=dt)
+
+            # Additive -inf mask
+            mask = mx.full((1, 1, 1, 8), float("-inf"), dtype=dt)
+            out = mx.fast.scaled_dot_product_attention(q, k, v, scale=0.125, mask=mask)
+            expected = mx.zeros((1, 4, 1, 64), dtype=dt)
+            self.assertTrue(mx.allclose(out, expected))
+
+            # Boolean False mask
+            bool_mask = mx.zeros((1, 1, 1, 8), dtype=mx.bool_)
+            out_bool = mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=0.125, mask=bool_mask
+            )
+            self.assertTrue(mx.allclose(out_bool, expected))
 
 
 if __name__ == "__main__":

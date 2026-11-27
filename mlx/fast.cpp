@@ -911,6 +911,7 @@ array scaled_dot_product_attention(
       scores = concatenate({broadcast_to(sinks, bsx_shape, s), scores}, -1, s);
     }
     scores = softmax(scores, std::vector<int>{-1}, true, s);
+    scores = nan_to_num(scores, 0.0f, std::nullopt, std::nullopt, s);
     if (has_sinks) {
       // Slice off scores
       auto start = Shape(scores.ndim(), 0);
