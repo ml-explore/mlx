@@ -6191,9 +6191,9 @@ void init_ops(nb::module_& m) {
   m.def(
       "broadcast_shapes",
       [](const nb::args& shapes) {
-        if (shapes.size() == 0)
-          throw std::invalid_argument(
-              "[broadcast_shapes] Must provide at least one shape.");
+        if (shapes.size() == 0) {
+          return nb::tuple();
+        }
 
         mx::Shape result = nb::cast<mx::Shape>(shapes[0]);
         for (size_t i = 1; i < shapes.size(); ++i) {

@@ -242,8 +242,6 @@ array_api_tests/test_data_type_functions.py::test_can_cast
 ## Other failures
 ### MLX result_type() does not accept Python scalar values alongside dtypes
 array_api_tests/test_data_type_functions.py::TestResultType::test_with_scalars
-### MLX broadcast_shapes() requires at least one shape
-array_api_tests/test_data_type_functions.py::TestBroadcastShapes::test_empty
 
 
 # test_searching_functions.py
