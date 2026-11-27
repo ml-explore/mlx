@@ -21,6 +21,9 @@ int main(int argc, char** argv) {
     set_default_device(Device::gpu);
   }
 
+  // Use regular fp32 precision for tests
+  config::update("MLX_ENABLE_TF32", 0);
+
   context.applyCommandLine(argc, argv);
   int exit_code = context.run();
   clear_streams();
