@@ -65,6 +65,39 @@ __global__ void scatter(
   Op{}(out + out_idx, upd[upd_loc]);
 }
 
+// Add rows of half or bfloat16 values, with atomic adds of 2 values. Each block
+// does blockDim.y rows, and consecutive threads add consecutive pairs. A wide
+// row is split over gridDim.y blocks.
+template <typename T, typename IdxT>
+__global__ void scatter_add_rows(
+    const T* upd,
+    T* out,
+    const IdxT* indices,
+    int64_t num_rows,
+    int32_t out_rows,
+    int64_t row_size) {
+  using T2 = cuda::std::
+      conditional_t<cuda::std::is_same_v<T, __half>, __half2, __nv_bfloat162>;
+  int64_t row = static_cast<int64_t>(blockIdx.x) * blockDim.y + threadIdx.y;
+  if (row >= num_rows) {
+    return;
+  }
+  int64_t idx = absolute_index(indices[row], out_rows);
+  auto* u = reinterpret_cast<const T2*>(upd) + row * row_size;
+  auto* o = reinterpret_cast<T2*>(out) + idx * row_size;
+  int64_t stride = static_cast<int64_t>(gridDim.y) * blockDim.x;
+  for (int64_t i = static_cast<int64_t>(blockIdx.y) * blockDim.x + threadIdx.x;
+       i < row_size;
+       i += stride) {
+#if __CUDA_ARCH__ >= 800
+    atomicAdd(o + i, u[i]);
+#else
+    atomic_add(&o[i].x, u[i].x);
+    atomic_add(&o[i].y, u[i].y);
+#endif
+  }
+}
+
 template <typename T, bool SrcContiguous, bool DstContiguous, typename IdxT>
 __global__ void masked_scatter(
     const T* dst,
