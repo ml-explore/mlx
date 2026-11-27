@@ -85,7 +85,8 @@ MLX_API void set_printoptions(PrintOptions options);
 
 MLX_API PrintFormatter& get_global_formatter();
 
-/** Return whether current thread is the first one that called this function. */
+/** Check for the process main thread on Apple platforms and Linux.
+ * Elsewhere, compare with the thread ID from the first call. */
 bool is_main_thread();
 
 /** Holds information about floating-point types. */
@@ -103,6 +104,7 @@ struct MLX_API finfo {
 struct MLX_API iinfo {
   explicit iinfo(Dtype dtype);
   Dtype dtype;
+  int bits;
   int64_t min;
   uint64_t max;
 };

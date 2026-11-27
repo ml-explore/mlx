@@ -4,8 +4,9 @@ Run the same command after building the PR parent and head revisions:
 
     python benchmarks/python/sdpa_vector_bench.py
 
-The default shapes select the generic ``sdpa_vector_2pass_1`` kernel changed
-by this PR. Use ``--shape QH,KVH,CTX,D`` to benchmark additional shapes.
+The default shapes select the generic ``sdpa_vector_2pass_1`` kernel. Use
+``--shape QH,KVH,CTX,D`` to benchmark additional shapes and ``--dtype`` to
+select the dtypes (default: float16, bfloat16 and float32).
 """
 
 import argparse
@@ -26,7 +27,14 @@ DEFAULT_SHAPES = (
     (16, 4, 32768, 128),
     # GQA=8 selects the generic 2-pass kernel below context 8192.
     (32, 4, 4096, 128),
+    # Head dim 512 at GQA=8, where a large K/V tile spills registers.
+    (32, 4, 4096, 512),
+    (32, 4, 16384, 512),
+    (32, 4, 60000, 512),
+    (16, 2, 60000, 512),
 )
+
+DEFAULT_DTYPES = ("float16", "bfloat16", "float32")
 
 
 def parse_shape(value):
@@ -106,14 +114,14 @@ def measure(q, k, v, scale, chain, warmup, iterations, rounds):
     )
 
 
-def benchmark_shape(shape, args, architecture):
+def benchmark_shape(shape, dtype, args, architecture):
     q_heads, kv_heads, context, head_dim = shape
     scale = 1.0 / math.sqrt(head_dim)
 
     mx.random.seed(args.seed)
-    q = mx.random.normal((1, q_heads, 1, head_dim)).astype(mx.float16)
-    k = mx.random.normal((1, kv_heads, context, head_dim)).astype(mx.float16)
-    v = mx.random.normal((1, kv_heads, context, head_dim)).astype(mx.float16)
+    q = mx.random.normal((1, q_heads, 1, head_dim)).astype(dtype)
+    k = mx.random.normal((1, kv_heads, context, head_dim)).astype(dtype)
+    v = mx.random.normal((1, kv_heads, context, head_dim)).astype(dtype)
     mx.eval(q, k, v)
 
     actual = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
@@ -137,7 +145,7 @@ def benchmark_shape(shape, args, architecture):
     # Logical traffic of the generic kernel: every query head streams one K
     # and one V head. This is intentionally called logical bandwidth because
     # shared KV heads can be served from cache on GQA shapes.
-    itemsize = 2
+    itemsize = dtype.size
     logical_bytes = q_heads * context * head_dim * itemsize * 2
     logical_gbps = logical_bytes / median / 1e9
 
@@ -167,6 +175,12 @@ def main():
         metavar="QH,KVH,CTX,D",
         help="shape to benchmark; may be repeated",
     )
+    parser.add_argument(
+        "--dtype",
+        action="append",
+        choices=DEFAULT_DTYPES,
+        help="dtype to benchmark; may be repeated",
+    )
     parser.add_argument("--chain", type=int, default=8)
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--iterations", type=int, default=30)
@@ -175,6 +189,7 @@ def main():
     args = parser.parse_args()
 
     shapes = args.shape or DEFAULT_SHAPES
+    dtypes = args.dtype or DEFAULT_DTYPES
     device_info = mx.device_info(mx.gpu)
     architecture = device_info.get("architecture", "")
     print(
@@ -183,26 +198,29 @@ def main():
     )
     print(
         f"chain={args.chain} warmup={args.warmup} "
-        f"iterations={args.iterations} rounds={args.rounds}"
+        f"iterations={args.iterations} rounds={args.rounds} "
+        f"dtypes={','.join(dtypes)}"
     )
     print(
-        f"{'QH':>3} {'KVH':>3} {'GQA':>3} {'CTX':>6} {'D':>3} "
+        f"{'dtype':>8} {'QH':>3} {'KVH':>3} {'GQA':>3} {'CTX':>6} {'D':>3} "
         f"{'path':>15} {'best us':>9} {'median us [range]':>27} "
         f"{'logical GB/s':>12} {'rel L-inf':>9}"
     )
-    for shape in shapes:
-        result = benchmark_shape(shape, args, architecture)
-        q_heads, kv_heads, context, head_dim = shape
-        print(
-            f"{q_heads:>3} {kv_heads:>3} {result['gqa']:>3} "
-            f"{context:>6} {head_dim:>3} {result['path']:>15} "
-            f"{result['best_us']:>9.1f} "
-            f"{result['median_us']:>9.1f} "
-            f"[{result['median_low_us']:>6.1f},"
-            f"{result['median_high_us']:>6.1f}] "
-            f"{result['logical_gbps']:>12.1f} "
-            f"{result['relative_linf_error']:>9.2e}"
-        )
+    for dtype_name in dtypes:
+        dtype = getattr(mx, dtype_name)
+        for shape in shapes:
+            result = benchmark_shape(shape, dtype, args, architecture)
+            q_heads, kv_heads, context, head_dim = shape
+            print(
+                f"{dtype_name:>8} {q_heads:>3} {kv_heads:>3} {result['gqa']:>3} "
+                f"{context:>6} {head_dim:>3} {result['path']:>15} "
+                f"{result['best_us']:>9.1f} "
+                f"{result['median_us']:>9.1f} "
+                f"[{result['median_low_us']:>6.1f},"
+                f"{result['median_high_us']:>6.1f}] "
+                f"{result['logical_gbps']:>12.1f} "
+                f"{result['relative_linf_error']:>9.2e}"
+            )
 
 
 if __name__ == "__main__":

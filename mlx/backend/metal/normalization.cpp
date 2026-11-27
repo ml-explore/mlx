@@ -21,6 +21,11 @@ void RMSNorm::eval_gpu(
   auto& d = metal::device(s.device);
   auto& out = outputs[0];
 
+  if (out.size() == 0) {
+    out.set_data(allocator::malloc(0));
+    return;
+  }
+
   // Make sure that the last dimension is contiguous
   auto set_output = [&s, &out](const array& x) {
     bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
@@ -95,6 +100,16 @@ void RMSNormVJP::eval_gpu(
   auto& s = stream();
   auto& d = metal::device(s.device);
   auto& compute_encoder = metal::get_command_encoder(s);
+
+  // Return 0s if the input is empty
+  if (inputs[0].size() == 0) {
+    array zero(0, outputs[0].dtype());
+    for (auto& out : outputs) {
+      fill_gpu(zero, out, s);
+    }
+    compute_encoder.add_temporary(std::move(zero));
+    return;
+  }
 
   // Ensure row contiguity. We could relax this step by checking that the array
   // is contiguous (no broadcasts or holes) and that the input strides are the
@@ -224,6 +239,11 @@ void LayerNorm::eval_gpu(
   auto& d = metal::device(s.device);
   auto& out = outputs[0];
 
+  if (out.size() == 0) {
+    out.set_data(allocator::malloc(0));
+    return;
+  }
+
   // Make sure that the last dimension is contiguous
   auto set_output = [&s, &out](const array& x) {
     bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
@@ -309,6 +329,16 @@ void LayerNormVJP::eval_gpu(
   auto& s = stream();
   auto& d = metal::device(s.device);
   auto& compute_encoder = metal::get_command_encoder(s);
+
+  // Return 0s if the input is empty
+  if (inputs[0].size() == 0) {
+    array zero(0, outputs[0].dtype());
+    for (auto& out : outputs) {
+      fill_gpu(zero, out, s);
+    }
+    compute_encoder.add_temporary(std::move(zero));
+    return;
+  }
 
   // Ensure row contiguity. We could relax this step by checking that the array
   // is contiguous (no broadcasts or holes) and that the input strides are the

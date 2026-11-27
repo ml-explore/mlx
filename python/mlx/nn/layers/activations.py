@@ -184,7 +184,12 @@ def gelu_approx(x):
         x^3\right)\right)\right)
 
     """
-    return 0.5 * x * (1 + mx.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * x**3)))
+    # The clip does not change the output (tanh is +-1 for |x| >= 10). Taking the
+    # tanh gradient through t keeps float16 gradients free of inf * 0.
+    t = mx.clip(x, -10, 10)
+    u = 1 + mx.tanh(math.sqrt(2 / math.pi) * (t + 0.044715 * t**3))
+    v = mx.stop_gradient(u)
+    return 0.5 * x * v + 0.5 * t * (u - v)
 
 
 @partial(mx.compile, shapeless=True)

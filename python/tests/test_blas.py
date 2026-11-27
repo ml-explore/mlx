@@ -1,6 +1,9 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
+import os
+import unittest
+from itertools import product
 
 import mlx.core as mx
 import mlx_tests
@@ -329,6 +332,7 @@ class TestBlas(mlx_tests.MLXTestCase):
                     (2, 2),
                     (32, 32),
                     (64, 64),
+                    (300, 40),
                     (2048, 2048),
                 ):
                     for mi in (-1, 0, 1):
@@ -369,6 +373,8 @@ class TestBlas(mlx_tests.MLXTestCase):
                     ((32, 1, 128), (128, 64)),
                     ((1, 128), (32, 128, 64)),
                     ((1, 8, 4, 1, 128), (1, 8, 1, 128, 6)),
+                    ((3, 1, 300), (3, 300, 40)),
+                    ((2, 1, 1, 300), (1, 3, 300, 40)),
                 ):
                     self.__gemv_test(
                         shape_mat, shape_vec, mat_first=False, np_dtype=np_dtype
@@ -869,6 +875,21 @@ class TestBlas(mlx_tests.MLXTestCase):
                 self.assertListEqual(list(d_npy.shape), list(d_mlx.shape))
                 self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-5))
 
+            # Matmul with vector and a long K, on a local generator to keep
+            # the global numpy state for later tests
+            rng = np.random.default_rng(0)
+            for k, n, batch in ((512, 128, (4,)), (8192, 2048, ())):
+                a_npy = rng.normal(0.0, 1.0 / 128, (k,)).astype(np.float32)
+                b_npy = rng.normal(0.0, 1.0 / 128, batch + (k, n)).astype(np.float32)
+
+                for c_shape in ((1,), (n,), batch + (n,)):
+                    c_npy = np.ones(c_shape).astype(np.float32)
+                    d_npy = alpha * (a_npy @ b_npy) + beta * c_npy
+                    d_mlx = mx.addmm(
+                        mx.array(c_npy), mx.array(a_npy), mx.array(b_npy), alpha, beta
+                    )
+                    self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-5))
+
             # Matmul with vector
             a_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
             b_npy = np.random.normal(0.0, 1.0 / 128, (16,)).astype(np.float32)
@@ -1012,6 +1033,19 @@ class TestBlas(mlx_tests.MLXTestCase):
                         out = mx.addmm(c, a, b_mx, 0.5, 2.0).astype(mx.float32)
                         ref_c = 0.5 * ref + 2.0 * c_r
                         self.assertTrue(np.allclose(out, ref_c, 1e-2, 0.125 * scale))
+
+    def test_matmul_large_output(self):
+        if not mx.cuda.is_available() or mx.default_device() == mx.cpu:
+            self.skipTest("CUDA only")
+
+        # M * N = 2**32 does not fit in int32
+        a = mx.ones((16384, 64), mx.float16)
+        b = mx.ones((64, 262144), mx.float16)
+        c = mx.ones((262144,), mx.float16)
+        out = a @ b
+        self.assertEqual(out[-1, -1].item(), 64.0)
+        out = mx.addmm(c, a, b, 1.0, 2.0)
+        self.assertEqual(out[-1, -1].item(), 66.0)
 
     def test_addmm_grad(self):
         def make_ref_addmm(alpha, beta):
@@ -1736,6 +1770,61 @@ class TestBlas(mlx_tests.MLXTestCase):
         s = mx.reshape(s, (2, 2, 4, 2))
         c = mx.segmented_mm(a, a.T, s)
         self.assertEqual(c.shape, (2, 2, 4, 10, 10))
+
+    @unittest.skipIf("CI" in os.environ, "No device that supports grouped_mm in CI")
+    def test_grouped_mm(self):
+        def token_offsets(sizes):
+            offsets = [sum(sizes[:g]) for g in range(len(sizes))]
+            return mx.array(offsets, mx.int32).reshape(len(sizes), 1, 1)
+
+        def grouped_mm_ref(a, b, sizes):
+            c = []
+            lo = 0
+            for g, size in enumerate(sizes):
+                if size > 0:
+                    c.append(a[lo : lo + size] @ b[g])
+                lo += size
+            return mx.concatenate(c, axis=0)
+
+        K, N = 64, 32
+        allocations = [
+            [16, 16, 16, 16],
+            [5, 11, 1, 47],
+            [5, 11, 1, 47, 15],
+            [0, 7, 9, 0],
+            [0, 0, 0, 24],
+            [64],
+        ]
+        # in cudnn's grouped matmul tf32 can't be disabled.
+        # So we only test float16 and bfloat16 for now.
+        dtypes = [(mx.float16, 1e-3), (mx.bfloat16, 1e-2)]
+
+        for allocation, b_transposed, a_transposed, (dtype, tol) in product(
+            allocations, (True, False), (True, False), dtypes
+        ):
+            with self.subTest(
+                sizes=allocation,
+                b_transposed=b_transposed,
+                a_transposed=a_transposed,
+                dtype=dtype,
+            ):
+                E = len(allocation)
+                T = sum(allocation)
+                a_shape = (K, T) if a_transposed else (T, K)
+                b_shape = (E, N, K) if b_transposed else (E, K, N)
+                a = mx.random.normal(a_shape, dtype=dtype)
+                b = mx.random.normal(b_shape, dtype=dtype)
+                if a_transposed:
+                    a = a.swapaxes(-1, -2)
+                if b_transposed:
+                    b = b.swapaxes(-1, -2)
+                offsets = token_offsets(allocation)
+
+                c1 = grouped_mm_ref(a, b, allocation)
+                c2 = mx.grouped_mm(a, b, token_offsets=offsets)
+                self.assertEqual(c2.shape, (T, N))
+                self.assertEqual(c2.dtype, dtype)
+                self.assertTrue(mx.allclose(c1, c2, rtol=tol, atol=tol))
 
     def test_gemv_gemm_same_precision(self):
         mx.random.seed(0)

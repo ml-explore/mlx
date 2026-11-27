@@ -28,6 +28,12 @@ General
    on supported hardware. The default is ``1``. Set it to ``0`` to keep these
    operations in full ``float32`` precision. See :doc:`precision`.
 
+.. envvar:: MLX_ENABLE_INT8_QMM
+
+   Allow :func:`mlx.core.quantized_matmul` to quantize the input to 8-bit
+   integers on supported hardware. The default is ``1``. Set it to ``0`` to
+   keep the input precision. See :doc:`precision`.
+
 Distributed
 -----------
 
@@ -113,6 +119,13 @@ Metal
 
    Enable the faster Metal CPU/GPU synchronization path. The default is ``0``.
    This requires Metal 3.2 or later (macOS 15 or later, or iOS 18 or later).
+
+.. envvar:: MLX_METAL_RUNTIME_COMPILE
+
+   Allow building Metal libraries from source at runtime. The default is
+   ``1``. Set it to ``0`` to throw instead when a kernel needs a library that
+   has not been loaded yet. Libraries loaded earlier, including ones loaded by
+   name from a ``.metallib``, are still used.
 
 .. envvar:: MLX_CONV_WINOGRAD
 

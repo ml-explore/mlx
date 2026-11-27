@@ -553,6 +553,16 @@ class GatherMM : public UnaryPrimitive {
   bool right_sorted_;
 };
 
+class GroupedMM : public UnaryPrimitive {
+ public:
+  explicit GroupedMM(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_NAME(GroupedMM)
+};
+
 class SegmentedMM : public UnaryPrimitive {
  public:
   explicit SegmentedMM(Stream stream) : UnaryPrimitive(stream) {}
@@ -847,9 +857,11 @@ class CustomTransforms : public Primitive {
           const std::vector<int>&)> jvp,
       std::function<std::pair<std::vector<array>, std::vector<int>>(
           const std::vector<array>&,
-          const std::vector<int>&)> vmap)
+          const std::vector<int>&)> vmap,
+      bool synchronize_vjps = false)
       : Primitive(stream),
         num_outputs_(num_outputs),
+        synchronize_vjps_(synchronize_vjps),
         vjp_fun_(std::move(vjp)),
         jvp_fun_(std::move(jvp)),
         vmap_fun_(std::move(vmap)) {}
@@ -867,6 +879,7 @@ class CustomTransforms : public Primitive {
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 
   int num_outputs_;
+  bool synchronize_vjps_;
 
   std::function<std::vector<array>(
       const std::vector<array>&,

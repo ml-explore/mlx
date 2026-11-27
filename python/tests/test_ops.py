@@ -69,6 +69,21 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.full([3, 2], mx.array([2.0, 3.0]))
         self.assertEqual(x.tolist(), [[2, 3], [2, 3], [2, 3]])
 
+        x = mx.full((2,), mx.array(0.5), dtype=mx.bfloat16)
+        self.assertEqual(x.dtype, mx.bfloat16)
+        self.assertEqual(x.tolist(), [0.5, 0.5])
+
+        x = mx.full((2,), mx.array(3), dtype=mx.float32)
+        self.assertEqual(x.dtype, mx.float32)
+        self.assertEqual(x.tolist(), [3.0, 3.0])
+
+        x = mx.full((2,), 3.5, dtype=mx.int32)
+        self.assertEqual(x.dtype, mx.int32)
+        self.assertEqual(x.tolist(), [3, 3])
+
+        x = mx.full((2,), mx.array(0.5, dtype=mx.float16))
+        self.assertEqual(x.dtype, mx.float16)
+
         x = mx.zeros(2)
         self.assertEqual(x.shape, (2,))
         self.assertEqual(x.tolist(), [0.0, 0.0])
@@ -937,6 +952,15 @@ class TestOps(mlx_tests.MLXTestCase):
             a = getattr(mx, op)(x)
             b = getattr(np, op)(data)
             self.assertEqual(a.item(), b)
+
+        # A 0-d input keeps no axes
+        x = mx.array(3.0)
+        for op in ["argmin", "argmax"]:
+            for kd in [True, False]:
+                a = getattr(mx, op)(x, keepdims=kd)
+                b = getattr(np, op)(np.array(3.0), keepdims=kd)
+                self.assertEqual(a.shape, b.shape)
+                self.assertEqual(a.item(), b)
 
     def test_broadcast(self):
         a_npy = np.reshape(np.arange(200), (10, 20))
@@ -2902,6 +2926,22 @@ class TestOps(mlx_tests.MLXTestCase):
         a = mx.array(a_np)[::2]
         self.assertTrue(np.array_equal(mx.cumsum(a), np.cumsum(a_np[::2])))
 
+    def test_exclusive_scan_in_place(self):
+        # Non-contiguous inputs are scanned in place, over more than one block.
+        for shape, axis in (((2, 10000), 1), ((34, 16), 0)):
+            for dtype in (np.float32, np.int64):
+                a_np = np.random.randint(-5, 6, shape).astype(dtype)
+                a = mx.array(a_np)[:, ::2]
+                a_np = a_np[:, ::2]
+                for reverse in (False, True):
+                    with self.subTest(shape=shape, dtype=dtype, reverse=reverse):
+                        out = mx.cumsum(a, axis=axis, reverse=reverse, inclusive=False)
+                        x = np.flip(a_np, axis) if reverse else a_np
+                        expected = np.cumsum(x, axis) - x
+                        if reverse:
+                            expected = np.flip(expected, axis)
+                        self.assertTrue(np.array_equal(out, expected))
+
     def test_scans_complex_exclusive(self):
         a = mx.array([-3 + 1j, -1 + 2j, -4 + 0j, 0 + 5j, 2 - 1j])
         for op in ("cummax", "cummin", "logcumsumexp"):
@@ -2965,6 +3005,20 @@ class TestOps(mlx_tests.MLXTestCase):
                         msg=f"{op} reverse={reverse} inclusive={inclusive} "
                         f"arr={arr}\ngot={got}\nexp={expected}",
                     )
+                    for dtype in (mx.float16, mx.bfloat16):
+                        got = getattr(mx, op)(
+                            a_mx.astype(dtype), reverse=reverse, inclusive=inclusive
+                        )
+                        self.assertEqual(got.dtype, dtype)
+                        self.assertTrue(
+                            np.array_equal(
+                                np.array(got.astype(mx.float32)),
+                                expected,
+                                equal_nan=True,
+                            ),
+                            msg=f"{op} {dtype} reverse={reverse} "
+                            f"inclusive={inclusive} arr={arr}",
+                        )
 
     def test_diff(self):
         a = mx.array([1, 2, 4, 7, 0])
@@ -4896,6 +4950,18 @@ class TestOps(mlx_tests.MLXTestCase):
             sorted_x = mx.take(x, mx.argsort(x))
             self.assertTrue(mx.array_equal(sorted_x, expected, equal_nan=True))
 
+    def test_sort_bool(self):
+        np.random.seed(0)
+        # Small sizes use the single block sort, large sizes the multi-block sort
+        for size in [10, 5000, 50000]:
+            with self.subTest(size=size):
+                a_np = np.random.uniform(size=size) < 0.5
+                a_mx = mx.array(a_np)
+                self.assertTrue(np.array_equal(mx.sort(a_mx), np.sort(a_np)))
+                self.assertEqual(mx.sort(a_mx).dtype, mx.bool_)
+                idx = mx.argsort(a_mx)
+                self.assertTrue(np.array_equal(mx.take(a_mx, idx), np.sort(a_np)))
+
     def test_to_from_fp8(self):
         vals = mx.array(
             [448, 256, 192, 128, 96, 64, 48, 32, 24, 16, 12, 8, 6, 4, 3, 2, 0.015625]
@@ -4932,6 +4998,39 @@ class TestOps(mlx_tests.MLXTestCase):
                     mx.array([0x7E, 0xFE, 0x7E, 0xFE], dtype=mx.uint8),
                 )
             )
+
+    def test_to_from_fp8_float64(self):
+        # float64 is only supported on the CPU.
+        with mx.stream(mx.cpu):
+            vals = [448, 256, 192, 128, 96, 64, 48, 32, 24, 16, 12, 8, 6, 4, 3, 2]
+            vals += [0.015625, 0.001953125]
+            x64 = mx.array(vals, dtype=mx.float64)
+            x32 = mx.array(vals, dtype=mx.float32)
+            self.assertTrue(mx.array_equal(mx.to_fp8(x64), mx.to_fp8(x32)))
+            self.assertTrue(mx.array_equal(mx.to_fp8(-x64), mx.to_fp8(-x32)))
+
+            codes = mx.array(list(range(256)), dtype=mx.uint8)
+            d64 = mx.from_fp8(codes, dtype=mx.float64)
+            d32 = mx.from_fp8(codes, dtype=mx.float32)
+            self.assertEqual(d64.dtype, mx.float64)
+            self.assertTrue(mx.array_equal(d64, d32.astype(mx.float64), equal_nan=True))
+
+            # 1.0625 is the midpoint between 1.0 (0x38) and 1.125 (0x39).
+            # Rounding to float32 first would move 1.0625 + eps onto the tie,
+            # which then rounds to even (0x38) instead of up.
+            eps = 2.0**-30
+            x = mx.array(
+                [1.0625 - eps, 1.0625, 1.0625 + eps, -(1.0625 + eps)],
+                dtype=mx.float64,
+            )
+            self.assertEqual(mx.to_fp8(x).tolist(), [0x38, 0x38, 0x39, 0xB9])
+
+            # Saturation and NaN behave as for the other float types.
+            special = mx.array(
+                [float("inf"), -float("inf"), 1e300, float("nan")], dtype=mx.float64
+            )
+            self.assertEqual(mx.to_fp8(special).tolist()[:3], [0x7E, 0xFE, 0x7E])
+            self.assertIn(mx.to_fp8(special)[3].item(), [0x7F, 0xFF])
 
     def test_zeros_ones_empty_like_dtype(self):
         x = mx.array([1, 2, 3], dtype=mx.int32)

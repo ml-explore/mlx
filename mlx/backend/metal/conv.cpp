@@ -810,8 +810,14 @@ void pad_and_slice_conv_3D_gpu(
   implicit_gemm_conv_3D_gpu(s, d, in, wt, intermediate, new_params);
 
   // Slice out
+  auto [_, row_contiguous, col_contiguous] =
+      check_contiguity(out.shape(), intermediate.strides());
+  bool contiguous = row_contiguous || col_contiguous;
   out.copy_shared_buffer(
-      intermediate, intermediate.strides(), {0}, intermediate.data_size());
+      intermediate,
+      intermediate.strides(),
+      {contiguous, row_contiguous, col_contiguous},
+      contiguous ? out.size() : intermediate.data_size());
 }
 
 void conv_2D_gpu(
@@ -1493,8 +1499,11 @@ void depthwise_conv_1D_gpu(
     metal::Device& d,
     const array& in,
     const array& wt,
-    array& out) {
-  bool large = in.size() > INT32_MAX || in.data_size() > INT32_MAX;
+    array& out,
+    int padding,
+    bool flip) {
+  bool large = in.size() > INT32_MAX || in.data_size() > INT32_MAX ||
+      out.size() > INT32_MAX;
   std::string base_name;
   base_name.reserve(32);
   concatenate(
@@ -1508,6 +1517,7 @@ void depthwise_conv_1D_gpu(
   compute_encoder.set_compute_pipeline_state(kernel);
 
   auto B = in.shape(0);
+  auto L = in.shape(1);
   auto Tout = out.shape(1);
   auto D = in.shape(2);
   auto K = wt.shape(1);
@@ -1528,6 +1538,9 @@ void depthwise_conv_1D_gpu(
   }
 
   compute_encoder.set_bytes(K, 4);
+  compute_encoder.set_bytes(L, 5);
+  compute_encoder.set_bytes(padding, 6);
+  compute_encoder.set_bytes(flip, 7);
   auto group_dims = get_block_dims(D, Tout, B);
   MTL::Size grid_dims = MTL::Size(D, Tout, B);
 
@@ -1555,10 +1568,13 @@ void conv_1D_gpu(
   bool is_idil_one = in_dilation[0] == 1;
   int C = in.shape(2);
   int O = wt.shape(0);
-  // Fast path for fully separable 1D convolution
+  // Fast path for fully separable 1D convolution. A kernel longer than the
+  // output (e.g. a batch-1 weight gradient) is faster with the grouped GEMM.
+  int K = wt.shape(1);
   if (is_idil_one && (groups == C) && groups == O && wt_strides[0] == 1 &&
-      wt_dilation[0] == 1 && padding[0] == 0 && !flip) {
-    depthwise_conv_1D_gpu(s, d, in, wt, out);
+      wt_dilation[0] == 1 &&
+      ((padding[0] == 0 && !flip) || K <= out.shape(1))) {
+    depthwise_conv_1D_gpu(s, d, in, wt, out, padding[0], flip);
     return;
   }
 
@@ -1751,6 +1767,19 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Some shortcuts for brevity
   const array& in = inputs[0];
   const array& wt = inputs[1];
+
+  if (out.size() == 0) {
+    out.set_data(allocator::malloc(0));
+    return;
+  }
+
+  // Return 0s if either input is empty
+  if (in.size() == 0 || wt.size() == 0) {
+    array zero = array(0, out.dtype());
+    fill_gpu(zero, out, s);
+    metal::get_command_encoder(s).add_temporary(std::move(zero));
+    return;
+  }
 
   // 3D conv
   if (out.ndim() == 5) {

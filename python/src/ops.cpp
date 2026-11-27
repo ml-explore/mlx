@@ -257,7 +257,7 @@ void init_ops(nb::module_& m) {
 
         Args:
             a (array): Input array.
-            axes (int or tuple(int)): The index of the inserted dimensions.
+            axis (int or tuple(int)): The index of the inserted dimensions.
 
         Returns:
             array: The array with inserted dimensions.
@@ -271,12 +271,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def abs(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def abs(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise absolute value.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The absolute value of ``a``.
@@ -290,12 +290,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def sign(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def sign(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise sign.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The sign of ``a``.
@@ -782,12 +782,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def square(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def square(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise square.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The square of ``a``.
@@ -801,12 +801,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def sqrt(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def sqrt(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise square root.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The square root of ``a``.
@@ -820,12 +820,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def rsqrt(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def rsqrt(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise reciprocal and square root.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: One over the square root of ``a``.
@@ -839,12 +839,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def reciprocal(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def reciprocal(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise reciprocal.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The reciprocal of ``a``.
@@ -858,12 +858,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def logical_not(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def logical_not(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise logical not.
 
         Args:
-            a (array): Input array or scalar.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The boolean array containing the logical not of ``a``.
@@ -878,13 +878,13 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def logical_and(a: array, b: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def logical_and(a: scalar | array, b: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise logical and.
 
         Args:
-            a (array): First input array or scalar.
-            b (array): Second input array or scalar.
+            a (array or scalar): First input array or scalar.
+            b (array or scalar): Second input array or scalar.
 
         Returns:
             array: The boolean array containing the logical and of ``a`` and ``b``.
@@ -900,13 +900,13 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def logical_or(a: array, b: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def logical_or(a: scalar | array, b: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise logical or.
 
         Args:
-            a (array): First input array or scalar.
-            b (array): Second input array or scalar.
+            a (array or scalar): First input array or scalar.
+            b (array or scalar): Second input array or scalar.
 
         Returns:
             array: The boolean array containing the logical or of ``a`` and ``b``.
@@ -970,12 +970,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def exp(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def exp(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise exponential.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The exponential of ``a``.
@@ -1051,12 +1051,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def sin(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def sin(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise sine.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The sine of ``a``.
@@ -1070,12 +1070,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cos(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def cos(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise cosine.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The cosine of ``a``.
@@ -1089,12 +1089,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def tan(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def tan(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise tangent.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The tangent of ``a``.
@@ -1108,12 +1108,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arcsin(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def arcsin(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise inverse sine.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The inverse sine of ``a``.
@@ -1127,12 +1127,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arccos(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def arccos(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise inverse cosine.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The inverse cosine of ``a``.
@@ -1146,12 +1146,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arctan(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def arctan(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise inverse tangent.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The inverse tangent of ``a``.
@@ -1189,12 +1189,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def sinh(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def sinh(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise hyperbolic sine.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The hyperbolic sine of ``a``.
@@ -1208,12 +1208,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cosh(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def cosh(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise hyperbolic cosine.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The hyperbolic cosine of ``a``.
@@ -1227,12 +1227,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def tanh(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def tanh(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise hyperbolic tangent.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The hyperbolic tangent of ``a``.
@@ -1341,12 +1341,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def log(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def log(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise natural logarithm.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The natural logarithm of ``a``.
@@ -1360,12 +1360,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def log2(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def log2(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise base-2 logarithm.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The base-2 logarithm of ``a``.
@@ -1379,12 +1379,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def log10(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def log10(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise base-10 logarithm.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The base-10 logarithm of ``a``.
@@ -1398,12 +1398,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def log1p(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def log1p(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise natural log of one plus the array.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The natural logarithm of one plus ``a``.
@@ -1514,7 +1514,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arange(start : int | float, stop : None | int | float, step : None | int | float, dtype: Dtype | None = None, *, stream: StreamOrDevice = None) -> array"),
+          "def arange(start : int | float, stop : None | int | float, step : None | int | float = None, dtype: Dtype | None = None, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Generates ranges of numbers.
 
@@ -1843,7 +1843,9 @@ void init_ops(nb::module_& m) {
          const ScalarOrArray& vals,
          std::optional<mx::Dtype> dtype,
          mx::StreamOrDevice s) {
-        return mx::full(to_shape(shape), to_array(vals, dtype), s);
+        auto array_vals = to_array(vals, dtype);
+        auto t = dtype.value_or(array_vals.dtype());
+        return mx::full(to_shape(shape), array_vals, t, s);
       },
       "shape"_a,
       "vals"_a,
@@ -2401,12 +2403,13 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def isnan(a: array, *, stream: StreamOrDevice = None) -> array"),
+      nb::sig(
+          "def isnan(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are NaN.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The boolean array indicating which elements are NaN.
@@ -2419,12 +2422,13 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def isinf(a: array, *, stream: StreamOrDevice = None) -> array"),
+      nb::sig(
+          "def isinf(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are +/- inifnity.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The boolean array indicating which elements are +/- infinity.
@@ -2438,14 +2442,14 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def isfinite(a: array, *, stream: StreamOrDevice = None) -> array"),
+          "def isfinite(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are finite.
 
         An element is finite if it is not infinite or NaN.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The boolean array indicating which elements are finite.
@@ -2459,12 +2463,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def isposinf(a: array, *, stream: StreamOrDevice = None) -> array"),
+          "def isposinf(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are positive infinity.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
             stream (StreamOrDevice): Optional stream or device.
 
         Returns:
@@ -2479,12 +2483,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def isneginf(a: array, *, stream: StreamOrDevice = None) -> array"),
+          "def isneginf(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are negative infinity.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
             stream (StreamOrDevice): Optional stream or device.
 
         Returns:
@@ -2640,7 +2644,7 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def count_nonzero(a: array, /, *, axis: None | int | Sequence[int] = None, keepdims: bool = False, stream: StreamOrDevice = None) -> array"),
+          "def count_nonzero(a: array, /, axis: None | int | Sequence[int] = None, *, keepdims: bool = False, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Count the number of non-zero elements along the given axis.
 
@@ -2921,7 +2925,7 @@ void init_ops(nb::module_& m) {
       "correction"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def var(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, stream: StreamOrDevice = None) -> array"),
+          "def var(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, correction: int | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Compute the variance(s) over the given axes.
 
@@ -2934,6 +2938,8 @@ void init_ops(nb::module_& m) {
               singleton dimensions, defaults to `False`.
             ddof (int, optional): The divisor to compute the variance
               is ``N - ddof``, defaults to 0.
+            correction (int, optional): If set, overrides ``ddof``.
+              Default: ``None``.
 
         Returns:
             array: The output array of variances.
@@ -2957,7 +2963,7 @@ void init_ops(nb::module_& m) {
       "correction"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def std(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, stream: StreamOrDevice = None) -> array"),
+          "def std(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, correction: int | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Compute the standard deviation(s) over the given axes.
 
@@ -2970,6 +2976,8 @@ void init_ops(nb::module_& m) {
               singleton dimensions, defaults to `False`.
             ddof (int, optional): The divisor to compute the variance
               is ``N - ddof``, defaults to 0.
+            correction (int, optional): If set, overrides ``ddof``.
+              Default: ``None``.
 
         Returns:
             array: The output array of standard deviations.
@@ -3776,7 +3784,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def astype(a: array, dtype: Dtype, /, *, stream: StreamOrDevice = None) -> array"),
+          "def astype(a: array, /, dtype: Dtype, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Cast the array to a specified type.
 
@@ -3965,13 +3973,14 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def conj(a: array, *, stream: StreamOrDevice = None) -> array"),
+      nb::sig(
+          "def conj(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return the elementwise complex conjugate of the input.
         Alias for `mx.conjugate`.
 
         Args:
-          a (array): Input array
+          a (array or scalar): Input array or scalar
 
         Returns:
           array: The output array.
@@ -3985,13 +3994,13 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def conjugate(a: array, *, stream: StreamOrDevice = None) -> array"),
+          "def conjugate(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return the elementwise complex conjugate of the input.
         Alias for `mx.conj`.
 
         Args:
-          a (array): Input array
+          a (array or scalar): Input array or scalar
 
         Returns:
           array: The output array.
@@ -4672,7 +4681,7 @@ void init_ops(nb::module_& m) {
       "arrays"_a,
       "metadata"_a = nb::none(),
       nb::sig(
-          "def save_gguf(file: file | str | pathlib.Path, arrays: dict[str, array], metadata: dict[str, array | str | list[str]])"),
+          "def save_gguf(file: file | str | pathlib.Path, arrays: dict[str, array], metadata: dict[str, array | str | list[str]] | None = None)"),
       R"pbdoc(
         Save array(s) to a binary file in ``.gguf`` format.
 
@@ -4684,9 +4693,10 @@ void init_ops(nb::module_& m) {
             file (file, str, pathlib.Path): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to
               be saved.
-            metadata (dict(str, Union[array, str, list(str)])): The dictionary
+            metadata (dict(str, Union[array, str, list(str)]), optional): The dictionary
                of metadata to be saved. The values can be a scalar or 1D
                obj:`array`, a :obj:`str`, or a :obj:`list` of :obj:`str`.
+               Defaults to ``None``.
       )pbdoc");
   m.def(
       "where",
@@ -4762,7 +4772,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def round(a: array, /, decimals: int = 0, *, stream: StreamOrDevice = None) -> array"),
+          "def round(a: scalar | array, /, decimals: int = 0, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Round to the given number of decimals.
 
@@ -4774,7 +4784,7 @@ void init_ops(nb::module_& m) {
           x = round(x * s) / s
 
         Args:
-          a (array): Input array
+          a (array or scalar): Input array or scalar
           decimals (int): Number of decimal places to round to. (default: 0)
 
         Returns:
@@ -5069,7 +5079,7 @@ void init_ops(nb::module_& m) {
               ``x`` and ``w``. See supported values and defaults in the
               :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
             mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
-              Supported modes are ``nvfp4`` and ``mxfp8``. See the
+              Supported modes are ``nvfp4``, ``mxfp4`` and ``mxfp8``. See the
               :ref:`table of quantization modes <quantize-modes>` for details.
             global_scale_x (array, optional): The per-input float32 scale used for x
                 with ``"nvfp4"`` quantization. Default: ``None``.
@@ -5080,7 +5090,6 @@ void init_ops(nb::module_& m) {
 
         Returns:
             array: The result of the multiplication of quantized ``x`` with quantized ``w``.
-            needed).
       )pbdoc");
   m.def(
       "segmented_mm",
@@ -5103,6 +5112,28 @@ void init_ops(nb::module_& m) {
 
         Returns:
           array: The result per segment of shape ``MxN``.
+      )pbdoc");
+  m.def(
+      "grouped_mm",
+      &mx::grouped_mm,
+      nb::arg(),
+      nb::arg(),
+      "token_offsets"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def grouped_mm(a: array, b: array, /, *, token_offsets: array, stream: StreamOrDevice = None) -> array"),
+      R"pbdoc(
+        Perform a matrix multiplication but segment the inner dimension and
+        save the result for each segment separately.
+
+        Args:
+          a (array): Input array of shape ``MxK``.
+          b (array): Input array of shape ``ExKxN``.
+          token_offsets (array): The offsets into the inner dimension for each segment.
+
+        Returns:
+          array: The result of shape ``MxN``.
       )pbdoc");
   m.def(
       "tensordot",
@@ -5171,7 +5202,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def vecdot(a: array, b: array, /, *, axis: int = -1, stream: StreamOrDevice = None) -> array"),
+          "def vecdot(a: array, b: array, /, axis: int = -1, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Compute the vector dot product of two arrays along an axis.
 
@@ -6004,7 +6035,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def roll(a: array, shift: int | tuple[int], axis: None | int | tuple[int] = None, /, *, stream: StreamOrDevice = None) -> array"),
+          "def roll(a: array, /, shift: int | tuple[int], axis: None | int | tuple[int] = None, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Roll array elements along a given axis.
 
@@ -6032,12 +6063,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def real(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def real(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Returns the real part of a complex array.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The real part of ``a``.
@@ -6051,12 +6082,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def imag(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def imag(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Returns the imaginary part of a complex array.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The imaginary part of ``a``.
@@ -6268,7 +6299,7 @@ void init_ops(nb::module_& m) {
         If ``w`` is expected to receive gradients, it must be provided in
         non-quantized form.
 
-        If ``x`` and `w`` are not quantized, their data types must be ``float32``,
+        If ``x`` and ``w`` are not quantized, their data types must be ``float32``,
         ``float16``, or ``bfloat16``.
         If ``w`` is quantized, it must be packed in unsigned integers.
         ``global_scale_x`` and ``global_scale_w`` are only used for ``nvfp4`` quantization.
@@ -6285,15 +6316,14 @@ void init_ops(nb::module_& m) {
           ``x`` and ``w``. See supported values and defaults in the
           :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
         mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
-          Supported modes are ``nvfp4`` and ``mxfp8``. See the
+          Supported modes are ``nvfp4``, ``mxfp4`` and ``mxfp8``. See the
           :ref:`table of quantization modes <quantize-modes>` for details.
-        global_scale (array, optional): The per-input float32 scale used for x
+        global_scale_x (array, optional): The per-input float32 scale used for x
             with ``"nvfp4"`` quantization. Default: ``None``.
         global_scale_w (array, optional): The per-input float32 scale used for w
             with ``"nvfp4"`` quantization. Default: ``None``.
       Returns:
         array: The result of the multiplication of quantized ``x`` with quantized ``w``.
-        needed).
   )pbdoc");
   m.def(
       "from_fp8",

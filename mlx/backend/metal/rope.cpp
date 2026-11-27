@@ -18,6 +18,11 @@ void RoPE::eval_gpu(
   auto& in = inputs[0];
   auto& out = outputs[0];
 
+  if (in.size() == 0) {
+    out.set_data(allocator::malloc(0));
+    return;
+  }
+
   auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
 

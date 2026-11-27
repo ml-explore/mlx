@@ -108,3 +108,42 @@ TEST_CASE("test matmul") {
   out = matmul(transpose(a, {0, 2, 1}), transpose(b, {0, 2, 1}));
   CHECK(array_equal(out, full({2, 4, 4}, 2.0f)).item<bool>());
 }
+
+TEST_CASE("test segmented_mm float16 and bfloat16") {
+  auto a_f32 = reshape(arange(0, 4 * 12, float32), {4, 12}) * 0.1f;
+  auto b_f32 = reshape(arange(0, 12 * 6, float32), {12, 6}) * 0.1f;
+  auto segments = array({0u, 3u, 3u, 8u, 8u, 12u}, {3, 2}, uint32);
+
+  for (auto dt : {float16, bfloat16}) {
+    auto a = astype(a_f32, dt);
+    auto b = astype(b_f32, dt);
+    auto a_ref = astype(a, float32);
+    auto b_ref = astype(b, float32);
+
+    // Non-transposed
+    auto expected = astype(segmented_mm(a_ref, b_ref, segments), float32);
+    auto actual = astype(segmented_mm(a, b, segments), float32);
+    CHECK(allclose(actual, expected, 1e-2, 1e-2).item<bool>());
+
+    // Transposed a
+    auto a_t = transpose(
+        astype(reshape(arange(0, 12 * 4, float32), {12, 4}) * 0.1f, dt));
+    auto a_t_ref = astype(a_t, float32);
+    expected = astype(segmented_mm(a_t_ref, b_ref, segments), float32);
+    actual = astype(segmented_mm(a_t, b, segments), float32);
+    CHECK(allclose(actual, expected, 1e-2, 1e-2).item<bool>());
+
+    // Transposed b
+    auto b_t = transpose(
+        astype(reshape(arange(0, 6 * 12, float32), {6, 12}) * 0.1f, dt));
+    auto b_t_ref = astype(b_t, float32);
+    expected = astype(segmented_mm(a_ref, b_t_ref, segments), float32);
+    actual = astype(segmented_mm(a, b_t, segments), float32);
+    CHECK(allclose(actual, expected, 1e-2, 1e-2).item<bool>());
+
+    // Both transposed
+    expected = astype(segmented_mm(a_t_ref, b_t_ref, segments), float32);
+    actual = astype(segmented_mm(a_t, b_t, segments), float32);
+    CHECK(allclose(actual, expected, 1e-2, 1e-2).item<bool>());
+  }
+}

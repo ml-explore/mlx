@@ -3,6 +3,7 @@
 #include <future>
 #include <thread>
 
+#include "mlx/allocator.h"
 #include "mlx/backend/cpu/eval.h"
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/compile_impl.h"
@@ -10,6 +11,8 @@
 #include "mlx/utils.h"
 
 namespace mlx::core {
+
+static constexpr int MAX_ACTIVE_TASKS = 10;
 
 void synchronize(Stream s) {
   if (s.device == mlx::core::Device::cpu) {
@@ -90,6 +93,27 @@ struct StreamThread {
     cond.notify_one();
   }
 };
+
+void Scheduler::wait_for_capacity(const std::set<Stream>& open_streams) {
+  int n = n_active_tasks_.load();
+  if (n <= MAX_ACTIVE_TASKS && !(n > 0 && allocator::over_memory_limit())) {
+    return;
+  }
+  // Commit any open streams
+  for (auto& s : open_streams) {
+    if (s.device == Device::gpu) {
+      gpu::finalize(s);
+    }
+  }
+  // Wait for one task to finish, repeat while memory is above the limit
+  do {
+    int n_old = n = n_active_tasks_.load();
+    while (n_old > 1 && n >= n_old) {
+      n_active_tasks_.wait(n);
+      n = n_active_tasks_.load();
+    }
+  } while (n > 0 && allocator::over_memory_limit());
+}
 
 Scheduler::Scheduler() {
   is_main_thread();

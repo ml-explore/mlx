@@ -426,28 +426,12 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
     def test_sdpa_full_head_dim_512_nax(self):
         if mx.default_device() != mx.gpu:
             self.skipTest("requires GPU")
+        if not mx.metal.is_nax_available():
+            self.skipTest("D512 full attention requires NAX")
 
         D = 512
         scale = D**-0.5
         mx.random.seed(0)
-
-        q_probe = mx.random.normal(shape=(1, 2, 9, D)).astype(mx.bfloat16)
-        k_probe = mx.random.normal(shape=(1, 1, 31, D)).astype(mx.bfloat16)
-        v_probe = mx.random.normal(shape=(1, 1, 31, D)).astype(mx.bfloat16)
-        try:
-            mx.eval(
-                mx.fast.scaled_dot_product_attention(
-                    q_probe,
-                    k_probe,
-                    v_probe,
-                    scale=scale,
-                    force_fused=True,
-                )
-            )
-        except ValueError as e:
-            if "plus head dim 512 on NAX GPUs" not in str(e):
-                raise
-            self.skipTest("D512 full attention requires NAX")
 
         cases = [
             # Multiple query tiles with GQA.
@@ -1327,6 +1311,63 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 test_grad(loss_slow, loss_fast, [q, k, v])
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_grad_large_scores(self):
+        # The fused backward rebuilds P = exp(scale * S - lse) from the scores
+        # S = Q @ K.T and the float32 lse of the forward. If S is rounded to
+        # half precision, large scores put the rounding error into the exponent
+        # (and float16 S overflows), and the gradients blow up.
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        mx.random.seed(0)
+        B, H, Hk, qL, kL, D = 2, 4, 2, 200, 232, 64
+        scale = D**-0.5
+
+        def rel_err(x, expected):
+            x = x.astype(mx.float32)
+            return (mx.linalg.norm(x - expected) / mx.linalg.norm(expected)).item()
+
+        for dtype, mask in product((mx.bfloat16, mx.float16), (None, "causal")):
+            q = 32 * mx.random.normal((B, H, qL, D))
+            k = 32 * mx.random.normal((B, Hk, kL, D))
+            # One key per kv head equal to a query, so the largest |q.k| is
+            # about 6.5e4: past the float16 max, while scale * q.k still fits.
+            k[:, :, 0] = q[:, :: H // Hk, -1]
+            v = mx.random.normal((B, Hk, kL, D))
+            cotan = mx.random.normal((B, H, qL, D))
+            q, k, v, cotan = (x.astype(dtype) for x in (q, k, v, cotan))
+
+            def fast(q, k, v):
+                return mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask=mask, force_fused=True
+                )
+
+            def ref(q, k, v):
+                return mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+
+            # The fused backward, with small tiles so it runs several ragged
+            # tiles per axis.
+            with mx.config.scoped_update(
+                MLX_SDPA_VJP_FALLBACK=0, MLX_SDPA_VJP_BQ=64, MLX_SDPA_VJP_BK=48
+            ):
+                _, grads = mx.vjp(fast, [q, k, v], [cotan])
+                mx.eval(grads)
+
+            # The same values in float32
+            primals = [x.astype(mx.float32) for x in (q, k, v)]
+            _, expected = mx.vjp(ref, primals, [cotan.astype(mx.float32)])
+
+            # dq and dk carry the half precision rounding of dS and dP; dv only
+            # that of P.
+            if dtype == mx.bfloat16:
+                tols = (0.3, 0.3, 1e-2)
+            else:
+                tols = (5e-2, 5e-2, 2e-3)
+            for name, g, e, tol in zip(("dq", "dk", "dv"), grads, expected, tols):
+                with self.subTest(dtype=dtype, mask=mask, grad=name):
+                    self.assertTrue(mx.all(mx.isfinite(g)).item())
+                    self.assertLess(rel_err(g, e), tol)
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
     def test_sdpa_force_fused_metal(self):
         if mx.default_device() != mx.gpu:
             self.skipTest("requires GPU")
@@ -1594,6 +1635,184 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     ref = mx.where(valid, ref, 0)
                     out = mx.where(valid, out, 0)
                 self.assertTrue(mx.allclose(ref, out, atol=1e-5, rtol=1e-5))
+
+    @unittest.skipIf(not mx.cuda.is_available(), "CUDA kernel path only")
+    def test_sdpa_window_cuda(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+
+        # The cuDNN attention requires compute capability 8.0 or later.
+        has_cudnn = mx.device_info()["compute_capability_major"] >= 8
+        D = 128
+        scale = D**-0.5
+
+        def make_qkv(qL, kL, dtype=mx.float16):
+            q = mx.random.normal((1, 8, qL, D), dtype)
+            k = mx.random.normal((1, 2, kL, D), dtype)
+            v = mx.random.normal((1, 2, kL, D), dtype)
+            return q, k, v
+
+        def ref_attn(q, k, v, mask, sinks=None):
+            # GPU float32 GEMM may use TF32; keep the reference exact.
+            with mx.stream(mx.cpu):
+                return mlx_ref_attn(
+                    q.astype(mx.float32),
+                    k.astype(mx.float32),
+                    v.astype(mx.float32),
+                    scale=scale,
+                    mask=mask,
+                    sinks=None if sinks is None else sinks.astype(mx.float32),
+                )
+
+        for qL, kL, window, causal, dtype in product(
+            (1, 3, 128, 256),
+            (256, 2048),
+            (1, 64, 1000),
+            (False, True),
+            (mx.float16, mx.bfloat16),
+        ):
+            # With a window, the vector kernel takes only one query.
+            if qL > 1 and not has_cudnn:
+                continue
+            with self.subTest(qL=qL, kL=kL, window=window, causal=causal, dtype=dtype):
+                q, k, v = make_qkv(qL, kL, dtype)
+                mask = make_window_mask(qL, kL, window)
+                if causal:
+                    mask = mask & make_causal_mask(qL, kL)
+                ref = ref_attn(q, k, v, mask)
+                out = mx.fast.scaled_dot_product_attention(
+                    q,
+                    k,
+                    v,
+                    scale=scale,
+                    window_size=window,
+                    mask="causal" if causal else None,
+                    force_fused=True,
+                )
+                tol = 1e-3 if dtype == mx.float16 else 1e-2
+                self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
+        # Decoding from a fixed-size cache, with a window shorter and longer
+        # than the keys.
+        for window in (64, 1000):
+            with self.subTest(cache_window=window):
+                q, k, v = make_qkv(1, 512)
+                k = k[..., :300, :]
+                v = v[..., :300, :]
+                ref = ref_attn(q, k, v, make_window_mask(1, 300, window))
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, window_size=window, force_fused=True
+                )
+                self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
+
+        # The backward needs the cuDNN attention.
+        if not has_cudnn:
+            return
+        for kL, causal, sinks, dtype in product(
+            (128, 256), (False, True), (False, True), (mx.float16, mx.bfloat16)
+        ):
+            with self.subTest(
+                grad_kL=kL, grad_causal=causal, grad_sinks=sinks, grad_dtype=dtype
+            ):
+                q, k, v = make_qkv(128, kL, dtype)
+                s = mx.random.normal((8,), dtype) if sinks else None
+                cotan = mx.random.normal(q.shape, dtype)
+                mask = make_window_mask(128, kL, 32)
+                if causal:
+                    mask = mask & make_causal_mask(128, kL)
+
+                def sdpa_ref(q, k, v):
+                    return ref_attn(q, k, v, mask, s)
+
+                def sdpa_fused(q, k, v):
+                    return mx.fast.scaled_dot_product_attention(
+                        q,
+                        k,
+                        v,
+                        scale=scale,
+                        window_size=32,
+                        mask="causal" if causal else None,
+                        sinks=s,
+                        force_fused=True,
+                    )
+
+                _, ref = mx.vjp(sdpa_ref, [q, k, v], [cotan])
+                _, out = mx.vjp(sdpa_fused, [q, k, v], [cotan])
+                tol = 1e-2 if dtype == mx.float16 else 5e-2
+                for r, o in zip(ref, out):
+                    self.assertTrue(mx.allclose(r, o, atol=tol, rtol=tol))
+
+    def test_sdpa_grad_sinks_and_nested(self):
+        D = 64
+        scale = D**-0.5
+        q = mx.random.normal((1, 4, 128, D), mx.float16)
+        k = mx.random.normal((1, 2, 128, D), mx.float16)
+        v = mx.random.normal((1, 2, 128, D), mx.float16)
+        sinks = mx.random.normal((4,), mx.float16)
+
+        def ref_attn(q, k, v, sinks, window):
+            mask = make_causal_mask(128, 128)
+            if window > 0:
+                mask = mask & make_window_mask(128, 128, window)
+            if sinks is not None:
+                sinks = sinks.astype(mx.float32)
+            with mx.stream(mx.cpu):
+                return mlx_ref_attn(
+                    q.astype(mx.float32),
+                    k.astype(mx.float32),
+                    v.astype(mx.float32),
+                    scale=scale,
+                    mask=mask,
+                    sinks=sinks,
+                )
+
+        def fast_attn(q, k, v, sinks, window):
+            return mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale, window_size=window, mask="causal", sinks=sinks
+            )
+
+        for window in (-1, 32):
+            # Gradients of the sinks
+            with self.subTest(sinks_window=window):
+                cotan = mx.random.normal(q.shape, mx.float16)
+                _, ref = mx.vjp(
+                    lambda *x: ref_attn(*x, window), [q, k, v, sinks], [cotan]
+                )
+                _, out = mx.vjp(
+                    lambda *x: fast_attn(*x, window), [q, k, v, sinks], [cotan]
+                )
+                for r, o in zip(ref, out):
+                    self.assertTrue(mx.allclose(r, o, atol=1e-2, rtol=1e-2))
+
+            # Gradients of gradients
+            with self.subTest(nested_window=window):
+
+                def nested(attn):
+                    def loss(q):
+                        out = attn(q, k, v, None, window).astype(mx.float32)
+                        return (out**2).sum()
+
+                    grad = mx.grad(loss)
+                    return mx.grad(lambda q: grad(q).astype(mx.float32).sum())(q)
+
+                ref = nested(ref_attn)
+                out = nested(fast_attn)
+                self.assertTrue(mx.allclose(ref, out, atol=5e-2, rtol=5e-2))
+
+    def test_sdpa_vector_broadcast_kv(self):
+        D = 64
+        q = mx.random.normal((1, 8, 1, D), mx.float16)
+        k = mx.broadcast_to(mx.random.normal((1, 2, 1, D), mx.float16), (1, 2, 256, D))
+        v = mx.broadcast_to(mx.random.normal((1, 2, 1, D), mx.float16), (1, 2, 256, D))
+        mx.eval(q, k, v)
+        for window in (-1, 32):
+            with self.subTest(window=window):
+                mask = make_window_mask(1, 256, window) if window > 0 else None
+                ref = mlx_ref_attn(q, k, v, scale=D**-0.5, mask=mask)
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=D**-0.5, window_size=window
+                )
+                self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
 
     def test_sdpa_window_size_errors(self):
         q = mx.random.normal((1, 2, 4, 32))

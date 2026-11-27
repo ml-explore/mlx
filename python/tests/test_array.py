@@ -176,6 +176,7 @@ class TestDtypes(mlx_tests.MLXTestCase):
             float(np.finfo(np.float32).smallest_normal),
         )
         self.assertEqual(mx.finfo(mx.float32).dtype, mx.float32)
+        self.assertEqual(mx.finfo(mx.array(1.0, dtype=mx.float16)).dtype, mx.float16)
 
         self.assertEqual(mx.finfo(mx.float16).min, np.finfo(np.float16).min)
         self.assertEqual(mx.finfo(mx.float16).max, np.finfo(np.float16).max)
@@ -208,6 +209,10 @@ class TestDtypes(mlx_tests.MLXTestCase):
         self.assertEqual(mx.iinfo(mx.uint32).min, np.iinfo(np.uint32).min)
         self.assertEqual(mx.iinfo(mx.uint32).max, np.iinfo(np.uint32).max)
         self.assertEqual(mx.iinfo(mx.int8).dtype, mx.int8)
+
+        for t in [mx.int8, mx.uint16, mx.int32, mx.uint64]:
+            self.assertEqual(mx.iinfo(t).bits, t.size * 8)
+        self.assertEqual(mx.iinfo(mx.array(1, dtype=mx.int16)).dtype, mx.int16)
 
     def test_result_type(self):
         self.assertEqual(mx.result_type(mx.int8, mx.int16), mx.int16)

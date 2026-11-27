@@ -135,6 +135,9 @@ void CrossEntropy::eval_gpu(
     std::vector<array>& outputs) {
   nvtx3::scoped_range r("CrossEntropy::eval_gpu");
   assert(inputs.size() == 2); // logits and target
+  if (inputs[0].size() == 0) {
+    throw std::invalid_argument("[cross_entropy] Received empty array.");
+  }
   auto& s = stream();
   auto& out = outputs[0];
   auto& encoder = cu::get_command_encoder(s);
@@ -179,6 +182,9 @@ void CrossEntropyVJP::eval_gpu(
     std::vector<array>& outputs) {
   nvtx3::scoped_range r("CrossEntropyVJP::eval_gpu");
   assert(inputs.size() == 4); // logits, target, loss, cotangent
+  if (inputs[0].size() == 0) {
+    throw std::invalid_argument("[cross_entropy] Received empty array.");
+  }
   auto& s = stream();
   auto& out = outputs[0];
   auto& encoder = cu::get_command_encoder(s);
