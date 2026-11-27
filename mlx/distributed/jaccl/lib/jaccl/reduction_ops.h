@@ -123,12 +123,8 @@ native_bf16_max(const void* input, void* output, size_t N) {
   auto in = reinterpret_cast<const __bf16*>(input);
   auto out = reinterpret_cast<__bf16*>(output);
   for (size_t i = 0; i < N; i++) {
-    if (__builtin_isnan(static_cast<float>(out[i])) ||
-        __builtin_isnan(static_cast<float>(in[i]))) {
-      out[i] = static_cast<__bf16>(std::numeric_limits<float>::quiet_NaN());
-    } else {
-      out[i] = (out[i] > in[i]) ? out[i] : in[i];
-    }
+    out[i] = static_cast<__bf16>(
+        nan_max(static_cast<float>(out[i]), static_cast<float>(in[i])));
   }
 }
 
@@ -137,12 +133,8 @@ native_bf16_min(const void* input, void* output, size_t N) {
   auto in = reinterpret_cast<const __bf16*>(input);
   auto out = reinterpret_cast<__bf16*>(output);
   for (size_t i = 0; i < N; i++) {
-    if (__builtin_isnan(static_cast<float>(out[i])) ||
-        __builtin_isnan(static_cast<float>(in[i]))) {
-      out[i] = static_cast<__bf16>(std::numeric_limits<float>::quiet_NaN());
-    } else {
-      out[i] = (out[i] < in[i]) ? out[i] : in[i];
-    }
+    out[i] = static_cast<__bf16>(
+        nan_min(static_cast<float>(out[i]), static_cast<float>(in[i])));
   }
 }
 
@@ -162,12 +154,8 @@ native_bf16_max(const void* a, const void* b, void* output, size_t N) {
   auto pb = reinterpret_cast<const __bf16* __restrict>(b);
   auto out = reinterpret_cast<__bf16* __restrict>(output);
   for (size_t i = 0; i < N; i++) {
-    if (__builtin_isnan(static_cast<float>(pa[i])) ||
-        __builtin_isnan(static_cast<float>(pb[i]))) {
-      out[i] = static_cast<__bf16>(std::numeric_limits<float>::quiet_NaN());
-    } else {
-      out[i] = (pa[i] > pb[i]) ? pa[i] : pb[i];
-    }
+    out[i] = static_cast<__bf16>(
+        nan_max(static_cast<float>(pa[i]), static_cast<float>(pb[i])));
   }
 }
 
@@ -177,12 +165,8 @@ native_bf16_min(const void* a, const void* b, void* output, size_t N) {
   auto pb = reinterpret_cast<const __bf16* __restrict>(b);
   auto out = reinterpret_cast<__bf16* __restrict>(output);
   for (size_t i = 0; i < N; i++) {
-    if (__builtin_isnan(static_cast<float>(pa[i])) ||
-        __builtin_isnan(static_cast<float>(pb[i]))) {
-      out[i] = static_cast<__bf16>(std::numeric_limits<float>::quiet_NaN());
-    } else {
-      out[i] = (pa[i] < pb[i]) ? pa[i] : pb[i];
-    }
+    out[i] = static_cast<__bf16>(
+        nan_min(static_cast<float>(pa[i]), static_cast<float>(pb[i])));
   }
 }
 
