@@ -781,165 +781,6 @@ void qmv_mma(
       MTL::Size(N / bn, 1, 1), MTL::Size(32, wk, 1));
 }
 
-// Quantizes the groups of x to signed 8 bits for qmm_int_nax. Returns the
-// values and, for each group, the scale and the sum of the dequantized values.
-// The rows are padded to a multiple of row_align.
-std::pair<array, array> quantize_rows_int8(
-    const array& x,
-    int group_size,
-    int bits,
-    int M,
-    int K,
-    int row_align,
-    metal::Device& d,
-    const Stream& s) {
-  auto& compute_encoder = metal::get_command_encoder(s);
-  int rows = ceildiv(M, row_align) * row_align;
-  array x_q({rows, K}, int8, nullptr, {});
-  x_q.set_data(allocator::malloc(x_q.nbytes()));
-  array x_s({rows, 2, K / group_size}, float32, nullptr, {});
-  x_s.set_data(allocator::malloc(x_s.nbytes()));
-  compute_encoder.add_temporaries({x_q, x_s});
-
-  std::string type_string = get_type_string(x.dtype());
-  std::string kname;
-  concatenate(
-      kname,
-      "affine_quantize_rows_",
-      type_string,
-      "_gs_",
-      group_size,
-      "_b_",
-      bits);
-  auto kernel = get_qmm_nax_kernel_wrapped(
-      d, kname, "quantize_rows", "affine", type_string, group_size, bits);
-  compute_encoder.set_compute_pipeline_state(kernel);
-  compute_encoder.set_input_array(x, 0);
-  compute_encoder.set_output_array(x_q, 1);
-  compute_encoder.set_output_array(x_s, 2);
-  compute_encoder.set_bytes(K, 3);
-  // Padded rows are read but their outputs are not stored, so they stay unset
-  int tx = (K / 8 + 31) / 32 * 32;
-  compute_encoder.dispatch_threads(
-      MTL::Size(tx, M, 1), MTL::Size(std::min(tx, 256), 1, 1));
-  return {x_q, x_s};
-}
-
-// qmm_int_nax needs about 1.5 output tiles per GPU core (the K split fills the
-// rest), and groups of 64 or more values. Otherwise the fp routes are as fast
-// or faster.
-bool use_qmm_int_nax(
-    const array& x,
-    int M,
-    int N,
-    int K,
-    int group_size,
-    int bits) {
-  if (!config::get("MLX_ENABLE_INT8_QMM", 1) || !metal::is_nax_available() ||
-      (bits != 4 && bits != 6 && bits != 8) || (group_size < 64) ||
-      (x.dtype() != float16 && x.dtype() != bfloat16) || (K % 64 != 0) ||
-      (N % 64 != 0) || (x.offset() % 16 != 0)) {
-    return false;
-  }
-  int cores = metal::gpu_core_count();
-  int tiles = (N / 64) * ceildiv(M, 64);
-  return (M >= 32) && (2 * tiles >= 3 * (cores > 0 ? cores : 16));
-}
-
-// K partitions for qmm_int_nax. Its threadgroups finish faster than the fp
-// ones, so it splits only up to about 4 threadgroups per GPU core.
-int qmm_int_nax_k_partitions(int M, int N, int K, int group_size) {
-  int tiles = (N / 64) * ceildiv(M, 64);
-  int k_align = std::max(64, group_size);
-  int cores = metal::gpu_core_count();
-  int max_tgs = cores > 0 ? 4 * cores : 64;
-  int split_k = 1;
-  while ((split_k < 8) && (tiles * split_k * 2 <= max_tgs) &&
-         (K % (split_k * 2 * k_align) == 0) && (K / (split_k * 2) >= 256)) {
-    split_k *= 2;
-  }
-  return split_k;
-}
-
-// x times transposed affine weights with 8-bit integer MMAs. x is quantized
-// to signed 8 bits first.
-void qmm_int_nax(
-    const array& x,
-    const array& w,
-    const array& scales,
-    const array& biases,
-    array& out,
-    int group_size,
-    int bits,
-    int M,
-    int N,
-    int K,
-    metal::Device& d,
-    const Stream& s) {
-  constexpr int bm = 64;
-  int split_k = qmm_int_nax_k_partitions(M, N, K, group_size);
-  auto [x_q, x_s] = quantize_rows_int8(x, group_size, bits, M, K, bm, d, s);
-
-  auto& compute_encoder = metal::get_command_encoder(s);
-  std::string type_string = get_type_string(x.dtype());
-  std::string kname;
-  concatenate(
-      kname,
-      split_k > 1 ? "affine_qmm_t_int_nax_splitk_" : "affine_qmm_t_int_nax_",
-      type_string,
-      "_gs_",
-      group_size,
-      "_b_",
-      bits);
-  auto kernel = get_qmm_nax_kernel_wrapped(
-      d,
-      kname,
-      split_k > 1 ? "qmm_t_int_nax_splitk" : "qmm_t_int_nax",
-      "affine",
-      type_string,
-      group_size,
-      bits);
-  compute_encoder.set_compute_pipeline_state(kernel);
-  compute_encoder.set_input_array(w, 0);
-  compute_encoder.set_input_array(scales, 1);
-  compute_encoder.set_input_array(biases, 2);
-  compute_encoder.set_input_array(x_q, 3);
-  compute_encoder.set_input_array(x_s, 4);
-  compute_encoder.set_bytes(K, 6);
-  compute_encoder.set_bytes(N, 7);
-  compute_encoder.set_bytes(M, 8);
-  MTL::Size group_dims(128, 1, 1);
-  if (split_k == 1) {
-    compute_encoder.set_output_array(out, 5);
-    compute_encoder.dispatch_threadgroups(
-        MTL::Size(N / 64, ceildiv(M, bm), 1), group_dims);
-    return;
-  }
-
-  int k_partition_size = K / split_k;
-  int split_k_partition_stride = M * N;
-  array intermediate({split_k, M, N}, float32, nullptr, {});
-  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
-  compute_encoder.add_temporary(intermediate);
-  compute_encoder.set_output_array(intermediate, 5);
-  compute_encoder.set_bytes(k_partition_size, 9);
-  compute_encoder.set_bytes(split_k_partition_stride, 10);
-  compute_encoder.dispatch_threadgroups(
-      MTL::Size(N / 64, ceildiv(M, bm), split_k), group_dims);
-
-  auto accum_kname = "steel_gemm_splitk_accum_" + type_to_name(out) + "_" +
-      type_to_name(intermediate);
-  auto accum_kernel = get_steel_gemm_splitk_accum_kernel(
-      d, accum_kname, intermediate, out, false);
-  compute_encoder.set_compute_pipeline_state(accum_kernel);
-  compute_encoder.set_input_array(intermediate, 0);
-  compute_encoder.set_output_array(out, 1);
-  compute_encoder.set_bytes(split_k, 2);
-  compute_encoder.set_bytes(split_k_partition_stride, 3);
-  compute_encoder.set_bytes(N, 4);
-  compute_encoder.dispatch_threads(MTL::Size(N, M, 1), get_block_dims(N, M, 1));
-}
-
 void qvm_splitk(
     array x,
     const array& w,
@@ -1245,6 +1086,165 @@ void qmm_nax(
 
   compute_encoder.dispatch_threadgroups(
       MTL::Size(ceildiv(N, bn), ceildiv(M, bm), B), group_dims);
+}
+
+// qmm_int_nax needs about 1.5 output tiles per GPU core (the K split fills the
+// rest), and groups of 64 or more values. Otherwise the fp routes are as fast
+// or faster.
+bool use_qmm_int_nax(
+    const array& x,
+    int M,
+    int N,
+    int K,
+    int group_size,
+    int bits) {
+  if (!config::get("MLX_ENABLE_INT8_QMM", 1) || !metal::is_nax_available() ||
+      (bits != 4 && bits != 6 && bits != 8) || (group_size < 64) ||
+      (x.dtype() != float16 && x.dtype() != bfloat16) || (K % 64 != 0) ||
+      (N % 64 != 0) || (x.offset() % 16 != 0)) {
+    return false;
+  }
+  int cores = metal::gpu_core_count();
+  int tiles = (N / 64) * ceildiv(M, 64);
+  return (M >= 32) && (2 * tiles >= 3 * (cores > 0 ? cores : 16));
+}
+
+// Quantizes the groups of x to signed 8 bits for qmm_int_nax. Returns the
+// values and, for each group, the scale and the sum of the dequantized values.
+// The rows are padded to a multiple of row_align.
+std::pair<array, array> quantize_rows_int8(
+    const array& x,
+    int group_size,
+    int bits,
+    int M,
+    int K,
+    int row_align,
+    metal::Device& d,
+    const Stream& s) {
+  auto& compute_encoder = metal::get_command_encoder(s);
+  int rows = ceildiv(M, row_align) * row_align;
+  array x_q({rows, K}, int8, nullptr, {});
+  x_q.set_data(allocator::malloc(x_q.nbytes()));
+  array x_s({rows, 2, K / group_size}, float32, nullptr, {});
+  x_s.set_data(allocator::malloc(x_s.nbytes()));
+  compute_encoder.add_temporaries({x_q, x_s});
+
+  std::string type_string = get_type_string(x.dtype());
+  std::string kname;
+  concatenate(
+      kname,
+      "affine_quantize_rows_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits);
+  auto kernel = get_qmm_nax_kernel_wrapped(
+      d, kname, "quantize_rows", "affine", type_string, group_size, bits);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(x, 0);
+  compute_encoder.set_output_array(x_q, 1);
+  compute_encoder.set_output_array(x_s, 2);
+  compute_encoder.set_bytes(K, 3);
+  // Padded rows are read but their outputs are not stored, so they stay unset
+  int tx = (K / 8 + 31) / 32 * 32;
+  compute_encoder.dispatch_threads(
+      MTL::Size(tx, M, 1), MTL::Size(std::min(tx, 256), 1, 1));
+  return {x_q, x_s};
+}
+
+// K partitions for qmm_int_nax. Its threadgroups finish faster than the fp
+// ones, so it splits only up to about 4 threadgroups per GPU core.
+int qmm_int_nax_k_partitions(int M, int N, int K, int group_size) {
+  int tiles = (N / 64) * ceildiv(M, 64);
+  int k_align = std::max(64, group_size);
+  int cores = metal::gpu_core_count();
+  int max_tgs = cores > 0 ? 4 * cores : 64;
+  int split_k = 1;
+  while ((split_k < 8) && (tiles * split_k * 2 <= max_tgs) &&
+         (K % (split_k * 2 * k_align) == 0) && (K / (split_k * 2) >= 256)) {
+    split_k *= 2;
+  }
+  return split_k;
+}
+
+// x times transposed affine weights with 8-bit integer MMAs. x is quantized
+// to signed 8 bits first.
+void qmm_int_nax(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  constexpr int bm = 64;
+  int split_k = qmm_int_nax_k_partitions(M, N, K, group_size);
+  auto [x_q, x_s] = quantize_rows_int8(x, group_size, bits, M, K, bm, d, s);
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+  std::string type_string = get_type_string(x.dtype());
+  std::string kname;
+  concatenate(
+      kname,
+      split_k > 1 ? "affine_qmm_t_int_nax_splitk_" : "affine_qmm_t_int_nax_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits);
+  auto kernel = get_qmm_nax_kernel_wrapped(
+      d,
+      kname,
+      split_k > 1 ? "qmm_t_int_nax_splitk" : "qmm_t_int_nax",
+      "affine",
+      type_string,
+      group_size,
+      bits);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
+  compute_encoder.set_input_array(biases, 2);
+  compute_encoder.set_input_array(x_q, 3);
+  compute_encoder.set_input_array(x_s, 4);
+  compute_encoder.set_bytes(K, 6);
+  compute_encoder.set_bytes(N, 7);
+  compute_encoder.set_bytes(M, 8);
+  MTL::Size group_dims(128, 1, 1);
+  if (split_k == 1) {
+    compute_encoder.set_output_array(out, 5);
+    compute_encoder.dispatch_threadgroups(
+        MTL::Size(N / 64, ceildiv(M, bm), 1), group_dims);
+    return;
+  }
+
+  int k_partition_size = K / split_k;
+  int split_k_partition_stride = M * N;
+  array intermediate({split_k, M, N}, float32, nullptr, {});
+  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
+  compute_encoder.add_temporary(intermediate);
+  compute_encoder.set_output_array(intermediate, 5);
+  compute_encoder.set_bytes(k_partition_size, 9);
+  compute_encoder.set_bytes(split_k_partition_stride, 10);
+  compute_encoder.dispatch_threadgroups(
+      MTL::Size(N / 64, ceildiv(M, bm), split_k), group_dims);
+
+  auto accum_kname = "steel_gemm_splitk_accum_" + type_to_name(out) + "_" +
+      type_to_name(intermediate);
+  auto accum_kernel = get_steel_gemm_splitk_accum_kernel(
+      d, accum_kname, intermediate, out, false);
+  compute_encoder.set_compute_pipeline_state(accum_kernel);
+  compute_encoder.set_input_array(intermediate, 0);
+  compute_encoder.set_output_array(out, 1);
+  compute_encoder.set_bytes(split_k, 2);
+  compute_encoder.set_bytes(split_k_partition_stride, 3);
+  compute_encoder.set_bytes(N, 4);
+  compute_encoder.dispatch_threads(MTL::Size(N, M, 1), get_block_dims(N, M, 1));
 }
 
 void gather_qmm_nax(
