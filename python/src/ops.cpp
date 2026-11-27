@@ -271,12 +271,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def abs(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def abs(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise absolute value.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The absolute value of ``a``.
@@ -290,12 +290,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def sign(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def sign(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise sign.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The sign of ``a``.
@@ -782,12 +782,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def square(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def square(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise square.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The square of ``a``.
@@ -801,12 +801,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def sqrt(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def sqrt(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise square root.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The square root of ``a``.
@@ -820,12 +820,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def rsqrt(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def rsqrt(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise reciprocal and square root.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: One over the square root of ``a``.
@@ -839,12 +839,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def reciprocal(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def reciprocal(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise reciprocal.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The reciprocal of ``a``.
@@ -858,12 +858,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def logical_not(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def logical_not(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise logical not.
 
         Args:
-            a (array): Input array or scalar.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The boolean array containing the logical not of ``a``.
@@ -878,13 +878,13 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def logical_and(a: array, b: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def logical_and(a: scalar | array, b: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise logical and.
 
         Args:
-            a (array): First input array or scalar.
-            b (array): Second input array or scalar.
+            a (array or scalar): First input array or scalar.
+            b (array or scalar): Second input array or scalar.
 
         Returns:
             array: The boolean array containing the logical and of ``a`` and ``b``.
@@ -900,13 +900,13 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def logical_or(a: array, b: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def logical_or(a: scalar | array, b: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise logical or.
 
         Args:
-            a (array): First input array or scalar.
-            b (array): Second input array or scalar.
+            a (array or scalar): First input array or scalar.
+            b (array or scalar): Second input array or scalar.
 
         Returns:
             array: The boolean array containing the logical or of ``a`` and ``b``.
@@ -970,12 +970,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def exp(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def exp(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise exponential.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The exponential of ``a``.
@@ -1051,12 +1051,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def sin(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def sin(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise sine.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The sine of ``a``.
@@ -1070,12 +1070,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cos(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def cos(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise cosine.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The cosine of ``a``.
@@ -1089,12 +1089,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def tan(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def tan(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise tangent.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The tangent of ``a``.
@@ -1108,12 +1108,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arcsin(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def arcsin(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise inverse sine.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The inverse sine of ``a``.
@@ -1127,12 +1127,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arccos(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def arccos(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise inverse cosine.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The inverse cosine of ``a``.
@@ -1146,12 +1146,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arctan(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def arctan(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise inverse tangent.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The inverse tangent of ``a``.
@@ -1189,12 +1189,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def sinh(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def sinh(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise hyperbolic sine.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The hyperbolic sine of ``a``.
@@ -1208,12 +1208,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cosh(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def cosh(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise hyperbolic cosine.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The hyperbolic cosine of ``a``.
@@ -1227,12 +1227,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def tanh(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def tanh(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise hyperbolic tangent.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The hyperbolic tangent of ``a``.
@@ -1341,12 +1341,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def log(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def log(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise natural logarithm.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The natural logarithm of ``a``.
@@ -1360,12 +1360,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def log2(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def log2(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise base-2 logarithm.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The base-2 logarithm of ``a``.
@@ -1379,12 +1379,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def log10(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def log10(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise base-10 logarithm.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The base-10 logarithm of ``a``.
@@ -1398,12 +1398,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def log1p(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def log1p(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Element-wise natural log of one plus the array.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The natural logarithm of one plus ``a``.
@@ -2403,12 +2403,13 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def isnan(a: array, *, stream: StreamOrDevice = None) -> array"),
+      nb::sig(
+          "def isnan(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are NaN.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The boolean array indicating which elements are NaN.
@@ -2421,12 +2422,13 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def isinf(a: array, *, stream: StreamOrDevice = None) -> array"),
+      nb::sig(
+          "def isinf(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are +/- inifnity.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The boolean array indicating which elements are +/- infinity.
@@ -2440,14 +2442,14 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def isfinite(a: array, *, stream: StreamOrDevice = None) -> array"),
+          "def isfinite(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are finite.
 
         An element is finite if it is not infinite or NaN.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The boolean array indicating which elements are finite.
@@ -2461,12 +2463,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def isposinf(a: array, *, stream: StreamOrDevice = None) -> array"),
+          "def isposinf(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are positive infinity.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
             stream (StreamOrDevice): Optional stream or device.
 
         Returns:
@@ -2481,12 +2483,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def isneginf(a: array, *, stream: StreamOrDevice = None) -> array"),
+          "def isneginf(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return a boolean array indicating which elements are negative infinity.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
             stream (StreamOrDevice): Optional stream or device.
 
         Returns:
@@ -3971,13 +3973,14 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def conj(a: array, *, stream: StreamOrDevice = None) -> array"),
+      nb::sig(
+          "def conj(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return the elementwise complex conjugate of the input.
         Alias for `mx.conjugate`.
 
         Args:
-          a (array): Input array
+          a (array or scalar): Input array or scalar
 
         Returns:
           array: The output array.
@@ -3991,13 +3994,13 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def conjugate(a: array, *, stream: StreamOrDevice = None) -> array"),
+          "def conjugate(a: scalar | array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Return the elementwise complex conjugate of the input.
         Alias for `mx.conj`.
 
         Args:
-          a (array): Input array
+          a (array or scalar): Input array or scalar
 
         Returns:
           array: The output array.
@@ -4769,7 +4772,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def round(a: array, /, decimals: int = 0, *, stream: StreamOrDevice = None) -> array"),
+          "def round(a: scalar | array, /, decimals: int = 0, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Round to the given number of decimals.
 
@@ -4781,7 +4784,7 @@ void init_ops(nb::module_& m) {
           x = round(x * s) / s
 
         Args:
-          a (array): Input array
+          a (array or scalar): Input array or scalar
           decimals (int): Number of decimal places to round to. (default: 0)
 
         Returns:
@@ -6060,12 +6063,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def real(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def real(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Returns the real part of a complex array.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The real part of ``a``.
@@ -6079,12 +6082,12 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def imag(a: array, /, *, stream: StreamOrDevice = None) -> array"),
+          "def imag(a: scalar | array, /, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Returns the imaginary part of a complex array.
 
         Args:
-            a (array): Input array.
+            a (array or scalar): Input array or scalar.
 
         Returns:
             array: The imaginary part of ``a``.
