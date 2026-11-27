@@ -185,6 +185,7 @@ template <
 
   threadgroup T Q_smem[q_tgp_mem_s];
   threadgroup T KV_smem[tgp_mem_s];
+  threadgroup uint32_t tg_mask_any[WM];
 
   threadgroup T* Qs = Q_smem;
   threadgroup T* Ks = KV_smem;
@@ -324,17 +325,107 @@ template <
   }
 
   if (has_sinks) {
-    STEEL_PRAGMA_UNROLL
-    for (short i = 0; i < kRowsPT; ++i) {
-      max_score[i] = M_LOG2E_F * static_cast<AccumType>(sinks[tidl.y]);
-      sum_score[i] = 1;
+    const AccumType sink_score =
+        M_LOG2E_F * static_cast<AccumType>(sinks[tidl.y]);
+    if (!has_mask || !(sink_score < Limits<AccumType>::finite_min)) {
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < kRowsPT; ++i) {
+        max_score[i] = sink_score;
+        sum_score[i] = 1;
+      }
     }
   }
 
+  using stile_t = decltype(Stile);
+  constexpr bool is_bool_mask = is_same_v<MaskType, bool>;
+  constexpr bool cache_add_mask = !is_bool_mask && (sizeof(MaskType) <= 2);
+  using raw_mfrag_t =
+      typename BaseMMAFrag<MaskType, kFragSize, kFragSize>::frag_type;
+  constexpr int kMaskEPF = stile_t::MMAFrag_t::kElemsPerFrag;
+  static_assert(
+      !is_bool_mask || stile_t::kTileCols * kMaskEPF <= 32,
+      "Bool mask bitmask requires kTileCols * kElemsPerFrag <= 32");
+
   // Loop over KV seq length
   for (int kb = kb_start; kb < kb_lim; kb++) {
+    raw_mfrag_t cached_mfrags[cache_add_mask ? stile_t::kTileCols : 1];
+    uint32_t bool_mask_bits = 0;
+    bool mask_partial = true;
+    if (has_mask) {
+      using MMAFrag_mask_t = BaseMMAFrag<MaskType, kFragSize, kFragSize>;
+      using bits_t =
+          metal::conditional_t<sizeof(MaskType) == 2, uint16_t, uint32_t>;
+
+      bits_t any_bits = 0;
+      bits_t nonzero_bits = 0;
+      const int row_pos = tid.x * BQ + tm + sm;
+      const bool row_in_bounds = row_pos < params->qL;
+
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < stile_t::kTileCols; j++) {
+        const int col_pos = kb * BK + sn + (j * stile_t::kFragCols);
+        raw_mfrag_t mfrag;
+        MMAFrag_mask_t::load_safe(
+            mfrag,
+            mask,
+            int64_t(mask_params->M_strides[2]),
+            Int<1>{},
+            params->qL,
+            params->kL,
+            row_pos,
+            col_pos);
+        if constexpr (cache_add_mask) {
+          cached_mfrags[j] = mfrag;
+        }
+        STEEL_PRAGMA_UNROLL
+        for (short jj = 0; jj < kMaskEPF; jj++) {
+          if constexpr (is_bool_mask) {
+            bool_mask_bits |= (uint32_t(mfrag[jj]) << (j * kMaskEPF + jj));
+          } else if (row_in_bounds && (col_pos + jj) < params->kL) {
+            const bits_t neginf_bits = as_type<bits_t>(MaskType(-INFINITY));
+            const bits_t sign_mask =
+                (sizeof(MaskType) == 2) ? bits_t(0x7FFFu) : bits_t(0x7FFFFFFFu);
+            const bits_t b = as_type<bits_t>(mfrag[jj]);
+            any_bits |= (b ^ neginf_bits);
+            if constexpr (!cache_add_mask) {
+              nonzero_bits |= (b & sign_mask);
+            }
+          }
+        }
+      }
+      bool rg_any;
+      if constexpr (is_bool_mask) {
+        constexpr uint32_t all_bits = (stile_t::kTileCols * kMaskEPF == 32)
+            ? ~0u
+            : ((1u << (stile_t::kTileCols * kMaskEPF)) - 1u);
+        rg_any = simd_any(bool_mask_bits != 0u);
+        mask_partial = simd_any(bool_mask_bits != all_bits);
+      } else {
+        rg_any = simd_any(any_bits != 0);
+        if constexpr (!cache_add_mask) {
+          mask_partial = simd_any(nonzero_bits != 0);
+        }
+      }
+      if (simd_lane_id == 0 && d_half == 0) {
+        tg_mask_any[row_group] = rg_any ? 1u : 0u;
+      }
+    }
+
     // Load K block and apply scale
     threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (has_mask) {
+      bool any_tile = false;
+      STEEL_PRAGMA_UNROLL
+      for (short w = 0; w < WM; w++) {
+        any_tile = any_tile || (tg_mask_any[w] != 0u);
+      }
+      if (!any_tile) {
+        loader_k.next();
+        loader_v.next();
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        continue;
+      }
+    }
     if (!align_K && kb == (params->NK_aligned)) {
       loader_k.load_safe(short2(BD, params->kL_rem));
     } else {
@@ -404,7 +495,8 @@ template <
     if (!align_K && kb == (params->NK_aligned)) {
       using stile_t = decltype(Stile);
       using selem_t = typename stile_t::elem_type;
-      constexpr auto neg_inf = Limits<selem_t>::finite_min;
+      const auto neg_inf =
+          has_mask ? selem_t(-INFINITY) : Limits<selem_t>::finite_min;
 
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < stile_t::kTileRows; i++) {
@@ -429,7 +521,8 @@ template <
     if (is_causal_masked || is_win_lo_masked || is_win_hi_masked) {
       using stile_t = decltype(Stile);
       using selem_t = typename stile_t::elem_type;
-      constexpr auto neg_inf = Limits<selem_t>::finite_min;
+      const auto neg_inf =
+          has_mask ? selem_t(-INFINITY) : Limits<selem_t>::finite_min;
 
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < stile_t::kTileRows; i++) {
@@ -455,26 +548,39 @@ template <
     }
 
     // Other masking as needed
-    if (has_mask) {
-      using stile_t = decltype(Stile);
+    if (has_mask && mask_partial) {
       using selem_t = typename stile_t::elem_type;
-      constexpr auto neg_inf = Limits<selem_t>::finite_min;
+      constexpr auto neg_inf = selem_t(-INFINITY);
 
-      constexpr bool is_bool = is_same_v<MaskType, bool>;
-      using melem_t = typename metal::conditional_t<is_bool, bool, selem_t>;
+      if constexpr (is_bool_mask) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < stile_t::kTileCols; j++) {
+          STEEL_PRAGMA_UNROLL
+          for (short jj = 0; jj < kMaskEPF; jj++) {
+            Stile.frag_at(0, j)[jj] =
+                ((bool_mask_bits >> (j * kMaskEPF + jj)) & 1u)
+                ? Stile.frag_at(0, j)[jj]
+                : neg_inf;
+          }
+        }
+      } else if constexpr (cache_add_mask) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < stile_t::kTileCols; j++) {
+          STEEL_PRAGMA_UNROLL
+          for (short jj = 0; jj < kMaskEPF; jj++) {
+            Stile.frag_at(0, j)[jj] +=
+                M_LOG2E_F * selem_t(cached_mfrags[j][jj]);
+          }
+        }
+      } else {
+        using MMAFrag_mask_t = BaseMMAFrag<selem_t, kFragSize, kFragSize>;
+        using frag_t = typename MMAFrag_mask_t::frag_type;
 
-      using MMAFrag_mask_t = BaseMMAFrag<melem_t, kFragSize, kFragSize>;
-      using frag_t = typename MMAFrag_mask_t::frag_type;
-
-      STEEL_PRAGMA_UNROLL
-      for (short i = 0; i < stile_t::kTileRows; i++) {
-        const int row_pos = tid.x * BQ + tm + sm + (i * stile_t::kFragRows);
+        const int row_pos = tid.x * BQ + tm + sm;
         STEEL_PRAGMA_UNROLL
         for (short j = 0; j < stile_t::kTileCols; j++) {
           const int col_pos = kb * BK + sn + (j * stile_t::kFragCols);
-
           frag_t mfrag;
-
           MMAFrag_mask_t::load_safe(
               mfrag,
               mask,
@@ -484,15 +590,9 @@ template <
               params->kL,
               row_pos,
               col_pos);
-
           STEEL_PRAGMA_UNROLL
-          for (short jj = 0; jj < stile_t::MMAFrag_t::kElemsPerFrag; jj++) {
-            if constexpr (is_bool) {
-              Stile.frag_at(i, j)[jj] =
-                  mfrag[jj] ? Stile.frag_at(i, j)[jj] : neg_inf;
-            } else {
-              Stile.frag_at(i, j)[jj] += M_LOG2E_F * selem_t(mfrag[jj]);
-            }
+          for (short jj = 0; jj < kMaskEPF; jj++) {
+            Stile.frag_at(0, j)[jj] += M_LOG2E_F * selem_t(mfrag[jj]);
           }
         }
       }
@@ -586,19 +686,29 @@ template <
   }
 
   // Normalize output
-  Otile.template row_bin_op<DivOp>(sum_score);
+  if (has_mask) {
+    AccumType safe_sum[kRowsPT];
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      safe_sum[i] = (sum_score[i] == 0) ? AccumType(1) : sum_score[i];
+    }
+    Otile.template row_bin_op<DivOp>(safe_sum);
+  } else {
+    Otile.template row_bin_op<DivOp>(sum_score);
+  }
   threadgroup_barrier(mem_flags::mem_none);
 
   // Store the logsumexp for the backward pass
   if (save_lse && sn == 0) {
-    using stile_t = decltype(Stile);
     const bool is_last_q = int(tid.x) == (params->NQ_aligned);
 
     STEEL_PRAGMA_UNROLL
     for (short i = 0; i < kRowsPT; ++i) {
       const short r = tm + sm + i * stile_t::kFragRows;
       if (align_Q || !is_last_q || r < params->qL_rem) {
-        lse[r] = M_LN2_F * (max_score[i] + metal::log2(sum_score[i]));
+        lse[r] = (has_mask && sum_score[i] == 0)
+            ? -INFINITY
+            : (M_LN2_F * (max_score[i] + metal::log2(sum_score[i])));
       }
     }
   }

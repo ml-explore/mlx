@@ -73,6 +73,197 @@ struct DivOp {
   }
 };
 
+template <typename MaskType, int TK, bool cache_add_mask>
+struct NAXMaskProbeResult {
+  using mtile_t = NAXTile<MaskType, 1, TK>;
+  using raw_mfrag_t = typename mtile_t::frag_type;
+  raw_mfrag_t cached[cache_add_mask ? TK : 1];
+  uint32_t bool_bits;
+  bool any;
+  bool partial;
+};
+
+template <typename MaskType, int TK, bool cache_add_mask, bool track_partial>
+METAL_FUNC NAXMaskProbeResult<MaskType, TK, cache_add_mask> probe_nax_mask_tile(
+    const device MaskType* mask,
+    const constant AttnParams* params,
+    const constant AttnMaskParams* mask_params,
+    int base_row,
+    int base_col,
+    short sm,
+    short sn) {
+  constexpr short kU = 16;
+  constexpr int BK = TK * kU;
+  constexpr bool is_bool_mask = is_same_v<MaskType, bool>;
+  using result_t = NAXMaskProbeResult<MaskType, TK, cache_add_mask>;
+  using mtile_t = typename result_t::mtile_t;
+  using raw_mfrag_t = typename result_t::raw_mfrag_t;
+  constexpr int kEPF = mtile_t::kElemsPerFrag;
+  static_assert(
+      !is_bool_mask || TK * kEPF <= 32,
+      "Bool mask bitmask requires TK * kElemsPerFrag <= 32");
+
+  result_t res;
+  res.bool_bits = 0;
+  using bits_t =
+      metal::conditional_t<sizeof(MaskType) == 2, uint16_t, uint32_t>;
+  bits_t any_bits = 0;
+  bits_t nonzero_bits = 0;
+
+  if (base_row + kU <= params->qL && base_col + BK <= params->kL) {
+    STEEL_PRAGMA_UNROLL
+    for (short ik = 0; ik < TK; ik++) {
+      raw_mfrag_t mfrag;
+      mtile_t::NAXFrag_t::load(
+          mfrag,
+          mask,
+          int64_t(mask_params->M_strides[2]),
+          Int<1>{},
+          base_row,
+          base_col + ik * kU);
+      if constexpr (cache_add_mask) {
+        res.cached[ik] = mfrag;
+      }
+      STEEL_PRAGMA_UNROLL
+      for (short jj = 0; jj < kEPF; jj++) {
+        if constexpr (is_bool_mask) {
+          res.bool_bits |= (uint32_t(mfrag[jj]) << (ik * kEPF + jj));
+        } else {
+          const bits_t neginf_bits = as_type<bits_t>(MaskType(-INFINITY));
+          const bits_t sign_mask =
+              (sizeof(MaskType) == 2) ? bits_t(0x7FFFu) : bits_t(0x7FFFFFFFu);
+          const bits_t b = as_type<bits_t>(mfrag[jj]);
+          any_bits |= (b ^ neginf_bits);
+          if constexpr (track_partial) {
+            nonzero_bits |= (b & sign_mask);
+          }
+        }
+      }
+    }
+  } else {
+    STEEL_PRAGMA_UNROLL
+    for (short ik = 0; ik < TK; ik++) {
+      const int col_pos = base_col + ik * kU;
+      raw_mfrag_t mfrag;
+      mtile_t::NAXFrag_t::load_safe(
+          mfrag,
+          mask,
+          int64_t(mask_params->M_strides[2]),
+          Int<1>{},
+          params->qL,
+          params->kL,
+          base_row,
+          col_pos);
+      if constexpr (cache_add_mask) {
+        res.cached[ik] = mfrag;
+      }
+      STEEL_PRAGMA_UNROLL
+      for (short jj = 0; jj < kEPF; jj++) {
+        if constexpr (is_bool_mask) {
+          res.bool_bits |= (uint32_t(mfrag[jj]) << (ik * kEPF + jj));
+        } else {
+          const short r_off =
+              (jj / mtile_t::kFragThrCols) * mtile_t::kFragRowsJump + sm;
+          const short c_off = (jj % mtile_t::kFragThrCols) + sn;
+          if (base_row + r_off < params->qL && col_pos + c_off < params->kL) {
+            const bits_t neginf_bits = as_type<bits_t>(MaskType(-INFINITY));
+            const bits_t sign_mask =
+                (sizeof(MaskType) == 2) ? bits_t(0x7FFFu) : bits_t(0x7FFFFFFFu);
+            const bits_t b = as_type<bits_t>(mfrag[jj]);
+            any_bits |= (b ^ neginf_bits);
+            if constexpr (track_partial) {
+              nonzero_bits |= (b & sign_mask);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if constexpr (is_bool_mask) {
+    res.any = simd_any(res.bool_bits != 0u);
+    if constexpr (track_partial) {
+      constexpr uint32_t all_bits =
+          (TK * kEPF == 32) ? ~0u : ((1u << (TK * kEPF)) - 1u);
+      res.partial = simd_any(res.bool_bits != all_bits);
+    } else {
+      res.partial = true;
+    }
+  } else {
+    res.any = simd_any(any_bits != 0);
+    if constexpr (track_partial) {
+      res.partial = simd_any(nonzero_bits != 0);
+    } else {
+      res.partial = true;
+    }
+  }
+  return res;
+}
+
+template <typename MaskType, typename AccumType, int TK>
+METAL_FUNC void load_and_apply_nax_mask_tile(
+    thread NAXTile<AccumType, 1, TK>& Stile,
+    const device MaskType* mask,
+    const constant AttnParams* params,
+    const constant AttnMaskParams* mask_params,
+    int base_row,
+    int base_col) {
+  constexpr short kU = 16;
+  constexpr int BK = TK * kU;
+  constexpr bool is_bool_mask = is_same_v<MaskType, bool>;
+  constexpr auto neg_inf = AccumType(-INFINITY);
+  using melem_t = typename metal::conditional_t<is_bool_mask, bool, AccumType>;
+  using mtile_t = NAXTile<melem_t, 1, TK>;
+  using mfrag_t = typename mtile_t::frag_type;
+  constexpr int kEPF = mtile_t::kElemsPerFrag;
+
+  if (base_row + kU <= params->qL && base_col + BK <= params->kL) {
+    STEEL_PRAGMA_UNROLL
+    for (short ik = 0; ik < TK; ik++) {
+      mfrag_t mfrag;
+      mtile_t::NAXFrag_t::load(
+          mfrag,
+          mask,
+          int64_t(mask_params->M_strides[2]),
+          Int<1>{},
+          base_row,
+          base_col + ik * kU);
+      thread auto& fg = Stile.frag_at(0, ik);
+      STEEL_PRAGMA_UNROLL
+      for (short jj = 0; jj < kEPF; jj++) {
+        if constexpr (is_bool_mask) {
+          fg[jj] = mfrag[jj] ? fg[jj] : neg_inf;
+        } else {
+          fg[jj] += M_LOG2E_F * AccumType(mfrag[jj]);
+        }
+      }
+    }
+  } else {
+    STEEL_PRAGMA_UNROLL
+    for (short ik = 0; ik < TK; ik++) {
+      mfrag_t mfrag;
+      mtile_t::NAXFrag_t::load_safe(
+          mfrag,
+          mask,
+          int64_t(mask_params->M_strides[2]),
+          Int<1>{},
+          params->qL,
+          params->kL,
+          base_row,
+          base_col + ik * kU);
+      thread auto& fg = Stile.frag_at(0, ik);
+      STEEL_PRAGMA_UNROLL
+      for (short jj = 0; jj < kEPF; jj++) {
+        if constexpr (is_bool_mask) {
+          fg[jj] = mfrag[jj] ? fg[jj] : neg_inf;
+        } else {
+          fg[jj] += M_LOG2E_F * AccumType(mfrag[jj]);
+        }
+      }
+    }
+  }
+}
+
 // clang-format off
 template <
     typename T,
@@ -180,10 +371,14 @@ template <
   }
 
   if (has_sinks) {
-    STEEL_PRAGMA_UNROLL
-    for (short i = 0; i < kRowsPT; ++i) {
-      max_score[i] = M_LOG2E_F * static_cast<AccumType>(sinks[tidl.y]);
-      sum_score[i] = 1;
+    const AccumType sink_score =
+        M_LOG2E_F * static_cast<AccumType>(sinks[tidl.y]);
+    if (!has_mask || !(sink_score < Limits<AccumType>::finite_min)) {
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < kRowsPT; ++i) {
+        max_score[i] = sink_score;
+        sum_score[i] = 1;
+      }
     }
   }
 
@@ -237,9 +432,24 @@ template <
   const short lim_rows_q = params->qL_rem - tm;
   const short lim_rows_k = params->kL_rem;
 
+  constexpr bool is_bool_mask = is_same_v<MaskType, bool>;
+  constexpr bool cache_add_mask = !is_bool_mask && (sizeof(MaskType) <= 2);
+  constexpr bool track_partial = !cache_add_mask;
+
   // Loop over KV seq length
   for (int kb = kb_start; kb < kb_lim; kb++) {
     const int is_last_k = (kb == (params->NK_aligned));
+
+    NAXMaskProbeResult<MaskType, TK, cache_add_mask> mprobe;
+    if (has_mask) {
+      mprobe = probe_nax_mask_tile<MaskType, TK, cache_add_mask, track_partial>(
+          mask, params, mask_params, tid.x * BQ + tm, kb * BK, sm, sn);
+      if (!mprobe.any) {
+        K += BK * int(params->K_strides[2]);
+        V += BK * int(params->V_strides[2]);
+        continue;
+      }
+    }
 
     // Do S = Q @ K.T
     using stile_t = NAXTile<AccumType, TQ, TK>;
@@ -301,7 +511,8 @@ template <
 
     // Mask out length sequence
     if (!align_K && is_last_k) {
-      constexpr auto neg_inf = Limits<AccumType>::finite_min;
+      const auto neg_inf =
+          has_mask ? AccumType(-INFINITY) : Limits<AccumType>::finite_min;
 
       STEEL_PRAGMA_UNROLL
       for (short iq = 0; iq < TQ; iq++) {
@@ -329,7 +540,8 @@ template <
     const bool is_win_hi_masked = has_window && !do_causal && (kb >= kb_win_hi);
 
     if (is_causal_masked || is_win_lo_masked || is_win_hi_masked) {
-      constexpr auto neg_inf = Limits<AccumType>::finite_min;
+      const auto neg_inf =
+          has_mask ? AccumType(-INFINITY) : Limits<AccumType>::finite_min;
 
       const int base_row = tid.x * BQ + params->qL_off + tm;
       const int base_col = kb * BK;
@@ -369,76 +581,32 @@ template <
     }
 
     // Other masking as needed
-    if (has_mask) {
-      constexpr auto neg_inf = Limits<AccumType>::finite_min;
+    if (has_mask && mprobe.partial) {
+      constexpr auto neg_inf = AccumType(-INFINITY);
+      constexpr int kEPF = stile_t::NAXFrag_t::kElemsPerFrag;
 
-      const int base_row = tid.x * BQ + tm;
-      const int base_col = kb * BK;
-
-      constexpr bool is_bool = is_same_v<MaskType, bool>;
-      using melem_t = typename metal::conditional_t<is_bool, bool, AccumType>;
-      using mtile_t = NAXTile<melem_t, TQ, TK>;
-      using mfrag_t = typename mtile_t::frag_type;
-
-      if (base_row + BQ <= params->qL && base_col + BK <= params->kL) {
-        for (short iq = 0; iq < TQ; iq++) {
+      if constexpr (is_bool_mask) {
+        STEEL_PRAGMA_UNROLL
+        for (short ik = 0; ik < TK; ik++) {
+          thread auto& fg = Stile.frag_at(0, ik);
           STEEL_PRAGMA_UNROLL
-          for (short ik = 0; ik < TK; ik++) {
-            const int row_pos = base_row + iq * kU;
-            const int col_pos = base_col + ik * kU;
-
-            mfrag_t mfrag;
-            mtile_t::NAXFrag_t::load(
-                mfrag,
-                mask,
-                int64_t(mask_params->M_strides[2]),
-                Int<1>{},
-                row_pos,
-                col_pos);
-
-            thread auto& fg = Stile.frag_at(iq, ik);
-
-            STEEL_PRAGMA_UNROLL
-            for (short jj = 0; jj < mtile_t::kElemsPerFrag; jj++) {
-              if constexpr (is_bool) {
-                fg[jj] = mfrag[jj] ? fg[jj] : neg_inf;
-              } else {
-                fg[jj] += M_LOG2E_F * AccumType(mfrag[jj]);
-              }
-            }
+          for (short jj = 0; jj < kEPF; jj++) {
+            fg[jj] = ((mprobe.bool_bits >> (ik * kEPF + jj)) & 1u) ? fg[jj]
+                                                                   : neg_inf;
+          }
+        }
+      } else if constexpr (cache_add_mask) {
+        STEEL_PRAGMA_UNROLL
+        for (short ik = 0; ik < TK; ik++) {
+          thread auto& fg = Stile.frag_at(0, ik);
+          STEEL_PRAGMA_UNROLL
+          for (short jj = 0; jj < kEPF; jj++) {
+            fg[jj] += M_LOG2E_F * AccumType(mprobe.cached[ik][jj]);
           }
         }
       } else {
-        STEEL_PRAGMA_UNROLL
-        for (short iq = 0; iq < TQ; iq++) {
-          STEEL_PRAGMA_UNROLL
-          for (short ik = 0; ik < TK; ik++) {
-            const int row_pos = base_row + iq * kU;
-            const int col_pos = base_col + ik * kU;
-
-            mfrag_t mfrag;
-            mtile_t::NAXFrag_t::load_safe(
-                mfrag,
-                mask,
-                int64_t(mask_params->M_strides[2]),
-                Int<1>{},
-                params->qL,
-                params->kL,
-                row_pos,
-                col_pos);
-
-            thread auto& fg = Stile.frag_at(iq, ik);
-
-            STEEL_PRAGMA_UNROLL
-            for (short jj = 0; jj < mtile_t::kElemsPerFrag; jj++) {
-              if constexpr (is_bool) {
-                fg[jj] = mfrag[jj] ? fg[jj] : neg_inf;
-              } else {
-                fg[jj] += M_LOG2E_F * AccumType(mfrag[jj]);
-              }
-            }
-          }
-        }
+        load_and_apply_nax_mask_tile<MaskType, AccumType, TK>(
+            Stile, mask, params, mask_params, tid.x * BQ + tm, kb * BK);
       }
     }
 
@@ -484,7 +652,7 @@ template <
       STEEL_PRAGMA_UNROLL
       for (short id = 0; id < TV; id += 2) {
         if constexpr (BV == 128) {
-          if (id == 4) {
+          if (!has_mask && id == 4) {
             threadgroup_barrier(mem_flags::mem_none);
           }
         }
@@ -528,7 +696,7 @@ template <
   metal::vec<AccumType, kRowsPT> rcp;
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < kRowsPT; ++i) {
-    rcp[i] = 1.f / sum_score[i];
+    rcp[i] = (has_mask && sum_score[i] == 0) ? 0.f : (1.f / sum_score[i]);
   }
 
   Otile.template row_bin_op<MulOp>(rcp);
@@ -538,7 +706,9 @@ template <
     for (short i = 0; i < kRowsPT; ++i) {
       const short r = tm + i * otile_t::kFragRowsJump + sm;
       if (align_Q || !is_last_q || r < params->qL_rem) {
-        lse[r] = max_score[i] * M_LN2_F + metal::log(sum_score[i]);
+        lse[r] = (has_mask && sum_score[i] == 0)
+            ? -INFINITY
+            : (max_score[i] * M_LN2_F + metal::log(sum_score[i]));
       }
     }
   }
@@ -672,10 +842,14 @@ template <
   }
 
   if (has_sinks) {
-    STEEL_PRAGMA_UNROLL
-    for (short i = 0; i < kRowsPT; ++i) {
-      max_score[i] = M_LOG2E_F * static_cast<AccumType>(sinks[tidl.y]);
-      sum_score[i] = 1;
+    const AccumType sink_score =
+        M_LOG2E_F * static_cast<AccumType>(sinks[tidl.y]);
+    if (!has_mask || !(sink_score < Limits<AccumType>::finite_min)) {
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < kRowsPT; ++i) {
+        max_score[i] = sink_score;
+        sum_score[i] = 1;
+      }
     }
   }
 
@@ -751,68 +925,92 @@ template <
   const short sm = simd_coord.y;
   const short sn = simd_coord.x;
 
+  constexpr bool is_bool_mask = is_same_v<MaskType, bool>;
+
   // Loop over KV seq length
   for (int kb = kb_start; kb < kb_lim; kb++) {
     const int is_last_k = (kb == (params->NK_aligned));
+    NAXMaskProbeResult<MaskType, TK, false> mprobe;
+    mprobe.any = true;
+    mprobe.partial = true;
+    mprobe.bool_bits = 0u;
+    if (has_mask) {
+      mprobe = probe_nax_mask_tile<MaskType, TK, false, true>(
+          mask, params, mask_params, tid.x * BQ + tm, kb * BK, sm, sn);
+    }
+    const bool tile_active = !has_mask || mprobe.any;
 
     stile_t Stile;
-    Stile.clear();
-
-    // S = Q @ K.T for this D slice.
-    STEEL_PRAGMA_UNROLL
-    for (short ik = 0; ik < TK; ik += 2) {
-      STEEL_PRAGMA_UNROLL
-      for (short id = 0; id < TDh; id++) {
-        NAXTile<T, 2, 1> Ktile;
-        const int K_load_off = ik * kU * int(params->K_strides[2]) + id * kU;
-
-        if (!align_K && is_last_k) {
-          Ktile.load_rows(
-              K + K_load_off, int(params->K_strides[2]), lim_rows_k - ik * kU);
-        } else {
-          Ktile.load(K + K_load_off, int(params->K_strides[2]));
-        }
-
-        stile_t::NAXFrag_t::mma(
-            Stile.frag_at(0, ik),
-            Stile.frag_at(0, ik + 1),
-            Qtiles[id].frag_at(0, 0),
-            metal::false_type{},
-            Ktile.frag_at(0, 0),
-            Ktile.frag_at(1, 0),
-            metal::true_type{});
-      }
-    }
-
-    // Exchange all partial scores and reduce them in a fixed order.
     threadgroup AccumType* slot = s_xchg[row_group][d_group];
     const short base = short(simd_lane_id) * (TK * kEPF);
-    STEEL_PRAGMA_UNROLL
-    for (short ik = 0; ik < TK; ik++) {
-      thread auto& s = Stile.frag_at(0, ik);
+
+    if (tile_active) {
+      Stile.clear();
+
+      // S = Q @ K.T for this D slice.
       STEEL_PRAGMA_UNROLL
-      for (short i = 0; i < kEPF; i++) {
-        slot[base + ik * kEPF + i] = s[i];
+      for (short ik = 0; ik < TK; ik += 2) {
+        STEEL_PRAGMA_UNROLL
+        for (short id = 0; id < TDh; id++) {
+          NAXTile<T, 2, 1> Ktile;
+          const int K_load_off = ik * kU * int(params->K_strides[2]) + id * kU;
+
+          if (!align_K && is_last_k) {
+            Ktile.load_rows(
+                K + K_load_off,
+                int(params->K_strides[2]),
+                lim_rows_k - ik * kU);
+          } else {
+            Ktile.load(K + K_load_off, int(params->K_strides[2]));
+          }
+
+          stile_t::NAXFrag_t::mma(
+              Stile.frag_at(0, ik),
+              Stile.frag_at(0, ik + 1),
+              Qtiles[id].frag_at(0, 0),
+              metal::false_type{},
+              Ktile.frag_at(0, 0),
+              Ktile.frag_at(1, 0),
+              metal::true_type{});
+        }
       }
-    }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-    STEEL_PRAGMA_UNROLL
-    for (short ik = 0; ik < TK; ik++) {
-      thread auto& s = Stile.frag_at(0, ik);
+
+      // Exchange all partial scores and reduce them in a fixed order.
       STEEL_PRAGMA_UNROLL
-      for (short i = 0; i < kEPF; i++) {
-        s[i] = s_xchg[row_group][0][base + ik * kEPF + i];
-      }
-      STEEL_PRAGMA_UNROLL
-      for (short peer_group = 1; peer_group < WN; peer_group++) {
-        const threadgroup AccumType* peer = s_xchg[row_group][peer_group];
+      for (short ik = 0; ik < TK; ik++) {
+        thread auto& s = Stile.frag_at(0, ik);
         STEEL_PRAGMA_UNROLL
         for (short i = 0; i < kEPF; i++) {
-          s[i] += peer[base + ik * kEPF + i];
+          slot[base + ik * kEPF + i] = s[i];
         }
       }
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (tile_active) {
+      STEEL_PRAGMA_UNROLL
+      for (short ik = 0; ik < TK; ik++) {
+        thread auto& s = Stile.frag_at(0, ik);
+        STEEL_PRAGMA_UNROLL
+        for (short i = 0; i < kEPF; i++) {
+          s[i] = s_xchg[row_group][0][base + ik * kEPF + i];
+        }
+        STEEL_PRAGMA_UNROLL
+        for (short peer_group = 1; peer_group < WN; peer_group++) {
+          const threadgroup AccumType* peer = s_xchg[row_group][peer_group];
+          STEEL_PRAGMA_UNROLL
+          for (short i = 0; i < kEPF; i++) {
+            s[i] += peer[base + ik * kEPF + i];
+          }
+        }
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    if (!tile_active) {
+      K += BK * int(params->K_strides[2]);
+      V += BK * int(params->V_strides[2]);
+      continue;
+    }
 
     // Scale S
     STEEL_PRAGMA_UNROLL
@@ -822,7 +1020,8 @@ template <
 
     // Mask out length sequence
     if (!align_K && is_last_k) {
-      constexpr auto neg_inf = Limits<AccumType>::finite_min;
+      const auto neg_inf =
+          has_mask ? AccumType(-INFINITY) : Limits<AccumType>::finite_min;
 
       STEEL_PRAGMA_UNROLL
       for (short ik = 0; ik < TK; ik++) {
@@ -846,7 +1045,8 @@ template <
     const bool is_win_hi_masked = has_window && !do_causal && (kb >= kb_win_hi);
 
     if (is_causal_masked || is_win_lo_masked || is_win_hi_masked) {
-      constexpr auto neg_inf = Limits<AccumType>::finite_min;
+      const auto neg_inf =
+          has_mask ? AccumType(-INFINITY) : Limits<AccumType>::finite_min;
 
       const int base_row = tid.x * BQ + params->qL_off + tm;
       const int base_col = kb * BK;
@@ -882,71 +1082,22 @@ template <
     }
 
     // Other masking as needed
-    if (has_mask) {
-      constexpr auto neg_inf = Limits<AccumType>::finite_min;
+    if (has_mask && mprobe.partial) {
+      constexpr auto neg_inf = AccumType(-INFINITY);
 
-      const int base_row = tid.x * BQ + tm;
-      const int base_col = kb * BK;
-
-      constexpr bool is_bool = is_same_v<MaskType, bool>;
-      using melem_t = typename metal::conditional_t<is_bool, bool, AccumType>;
-      using mtile_t = NAXTile<melem_t, TQ, TK>;
-      using mfrag_t = typename mtile_t::frag_type;
-
-      if (base_row + kU <= params->qL && base_col + BK <= params->kL) {
+      if constexpr (is_bool_mask) {
         STEEL_PRAGMA_UNROLL
         for (short ik = 0; ik < TK; ik++) {
-          const int row_pos = base_row;
-          const int col_pos = base_col + ik * kU;
-
-          mfrag_t mfrag;
-          mtile_t::NAXFrag_t::load(
-              mfrag,
-              mask,
-              int64_t(mask_params->M_strides[2]),
-              Int<1>{},
-              row_pos,
-              col_pos);
-
           thread auto& fg = Stile.frag_at(0, ik);
-
           STEEL_PRAGMA_UNROLL
-          for (short jj = 0; jj < mtile_t::kElemsPerFrag; jj++) {
-            if constexpr (is_bool) {
-              fg[jj] = mfrag[jj] ? fg[jj] : neg_inf;
-            } else {
-              fg[jj] += M_LOG2E_F * AccumType(mfrag[jj]);
-            }
+          for (short jj = 0; jj < kEPF; jj++) {
+            fg[jj] = ((mprobe.bool_bits >> (ik * kEPF + jj)) & 1u) ? fg[jj]
+                                                                   : neg_inf;
           }
         }
       } else {
-        STEEL_PRAGMA_UNROLL
-        for (short ik = 0; ik < TK; ik++) {
-          const int row_pos = base_row;
-          const int col_pos = base_col + ik * kU;
-
-          mfrag_t mfrag;
-          mtile_t::NAXFrag_t::load_safe(
-              mfrag,
-              mask,
-              int64_t(mask_params->M_strides[2]),
-              Int<1>{},
-              params->qL,
-              params->kL,
-              row_pos,
-              col_pos);
-
-          thread auto& fg = Stile.frag_at(0, ik);
-
-          STEEL_PRAGMA_UNROLL
-          for (short jj = 0; jj < mtile_t::kElemsPerFrag; jj++) {
-            if constexpr (is_bool) {
-              fg[jj] = mfrag[jj] ? fg[jj] : neg_inf;
-            } else {
-              fg[jj] += M_LOG2E_F * AccumType(mfrag[jj]);
-            }
-          }
-        }
+        load_and_apply_nax_mask_tile<MaskType, AccumType, TK>(
+            Stile, mask, params, mask_params, tid.x * BQ + tm, kb * BK);
       }
     }
 
@@ -1016,7 +1167,7 @@ template <
   metal::vec<AccumType, kRowsPT> rcp;
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < kRowsPT; ++i) {
-    rcp[i] = 1.f / sum_score[i];
+    rcp[i] = (has_mask && sum_score[i] == 0) ? 0.f : (1.f / sum_score[i]);
   }
 
   if (save_lse && d_group == 0 && sn == 0) {
@@ -1027,7 +1178,7 @@ template <
     for (short i = 0; i < kRowsPT; ++i) {
       const int row = lse_row_base + i * stile_t::kFragRowsJump + sm;
       if (row < params->qL) {
-        LSE[lse_head_off + row] = (sum_score[i] == 0)
+        LSE[lse_head_off + row] = (has_mask && sum_score[i] == 0)
             ? -INFINITY
             : float(M_LN2_F * (max_score[i] + metal::log2(sum_score[i])));
       }

@@ -1829,6 +1829,354 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 q, q, q, scale=1.0, window_size=2, force_fused=True
             )
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_sparse_mask_skip(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        mx.random.seed(0)
+
+        # Cover NAX (D=64, 128, fp32 TF32=1), NAX dsplit (D=256, 512, fp32
+        # TF32=1), and pre-NAX (D=80/192, D=128 fp32 TF32=0) on aligned and
+        # unaligned block-sparse masks (bool, additive -inf, additive bias).
+        configs = [
+            (1, 8, 2, 64, 128, 64, mx.float16, 1),
+            (1, 8, 2, 65, 129, 128, mx.bfloat16, 1),
+            (1, 8, 2, 65, 129, 128, mx.float32, 1),
+            (2, 8, 2, 128, 256, 256, mx.bfloat16, 1),
+            (1, 8, 2, 65, 193, 256, mx.float16, 1),
+            (1, 8, 2, 65, 129, 256, mx.float32, 1),
+            (1, 8, 2, 65, 129, 80, mx.float16, 1),
+            (1, 8, 2, 65, 129, 192, mx.float16, 1),
+            (1, 8, 2, 65, 129, 128, mx.float32, 0),
+        ]
+        if mx.metal.is_nax_available():
+            configs.append((1, 8, 2, 65, 129, 512, mx.bfloat16, 1))
+
+        for B, qH, kH, qL, kL, D, dtype, tf32 in configs:
+            scale = D**-0.5
+            q = (0.5 * mx.random.normal((B, qH, qL, D))).astype(dtype)
+            k = (0.5 * mx.random.normal((B, kH, kL, D))).astype(dtype)
+            v = (0.5 * mx.random.normal((B, kH, kL, D))).astype(dtype)
+
+            blk = 32
+            nq_b = (qL + blk - 1) // blk
+            nk_b = (kL + blk - 1) // blk
+            bmask = mx.random.uniform(shape=(B, qH, nq_b, nk_b)) < 0.25
+            bmask = mx.concatenate(
+                [mx.ones((B, qH, nq_b, 1), dtype=mx.bool_), bmask[..., 1:]],
+                axis=-1,
+            )
+            bool_mask = mx.repeat(mx.repeat(bmask, blk, axis=2), blk, axis=3)[
+                :, :, :qL, :kL
+            ]
+            add_mask = mx.where(
+                bool_mask,
+                mx.array(0.0, dtype=dtype),
+                mx.array(-math.inf, dtype=dtype),
+            )
+            bias_vals = (0.25 * mx.random.normal((B, qH, qL, kL))).astype(dtype)
+            bias_mask = mx.where(bool_mask, bias_vals, mx.array(-math.inf, dtype=dtype))
+
+            if dtype == mx.float32:
+                tol = 2e-3 if tf32 else 1e-4
+            else:
+                tol = 1e-2 if dtype == mx.bfloat16 else 2e-3
+            with mx.config.scoped_update(MLX_ENABLE_TF32=tf32, MLX_SDPA_PAD_HEAD_DIM=0):
+                for mname, mask in (
+                    ("bool", bool_mask),
+                    ("add_neginf", add_mask),
+                    ("add_bias", bias_mask),
+                ):
+                    with self.subTest(
+                        D=D, dtype=dtype, tf32=tf32, qL=qL, kL=kL, mask=mname
+                    ):
+                        ref = mlx_ref_attn(
+                            q.astype(mx.float32),
+                            k.astype(mx.float32),
+                            v.astype(mx.float32),
+                            scale,
+                            mask=mask if mname == "bool" else mask.astype(mx.float32),
+                        ).astype(dtype)
+                        out = mx.fast.scaled_dot_product_attention(
+                            q, k, v, scale=scale, mask=mask, force_fused=True
+                        )
+                        self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
+        # Non-trivial sliding window combined with a sparse array mask.
+        qL, kL, win = 96, 160, 48
+        win_mask = make_window_mask(qL, kL, win)[None, None, :, :]
+        for D, dtype, tf32 in (
+            (64, mx.float16, 1),
+            (128, mx.float16, 1),
+            (256, mx.float16, 1),
+            (80, mx.float16, 1),
+            (128, mx.float32, 0),
+        ):
+            scale = D**-0.5
+            q = (0.5 * mx.random.normal((1, 4, qL, D))).astype(dtype)
+            k = (0.5 * mx.random.normal((1, 2, kL, D))).astype(dtype)
+            v = (0.5 * mx.random.normal((1, 2, kL, D))).astype(dtype)
+            # Keep every query's aligned diagonal key active inside the window
+            # while leaving distant in-window/out-of-window tiles sparse.
+            sparse_b = mx.zeros((1, 1, qL, kL), dtype=mx.bool_)
+            offset = kL - qL
+            q_idx = mx.arange(qL)[:, None] + offset
+            k_idx = mx.arange(kL)[None, :]
+            sparse_b = ((q_idx == k_idx) | ((k_idx % 64) < 16))[None, None, :, :]
+            add_b = mx.where(
+                sparse_b,
+                mx.array(0.0, dtype=dtype),
+                mx.array(-math.inf, dtype=dtype),
+            )
+            tol = 1e-4 if dtype == mx.float32 else 2e-3
+            with mx.config.scoped_update(MLX_ENABLE_TF32=tf32, MLX_SDPA_PAD_HEAD_DIM=0):
+                for mname, mk in (("bool", sparse_b), ("add_neginf", add_b)):
+                    with self.subTest(window=win, D=D, dtype=dtype, mask=mname):
+                        ref_m = (
+                            (sparse_b & win_mask)
+                            if mname == "bool"
+                            else mx.where(
+                                win_mask,
+                                mk.astype(mx.float32),
+                                mx.array(-math.inf, dtype=mx.float32),
+                            )
+                        )
+                        ref = mlx_ref_attn(
+                            q.astype(mx.float32),
+                            k.astype(mx.float32),
+                            v.astype(mx.float32),
+                            scale,
+                            mask=ref_m,
+                        ).astype(dtype)
+                        out = mx.fast.scaled_dot_product_attention(
+                            q,
+                            k,
+                            v,
+                            scale=scale,
+                            mask=mk,
+                            window_size=win,
+                            force_fused=True,
+                        )
+                        self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_sparse_mask_edges(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        mx.random.seed(1)
+
+        qL, kL = 65, 129
+        for D, dtype, tf32 in (
+            (64, mx.float16, 1),
+            (128, mx.float16, 1),
+            (192, mx.float16, 1),
+            (256, mx.float16, 1),
+            (80, mx.float16, 1),
+            (128, mx.float32, 0),
+        ):
+            scale = D**-0.5
+            q = (0.5 * mx.random.normal((1, 4, qL, D))).astype(dtype)
+            k = (0.5 * mx.random.normal((1, 2, kL, D))).astype(dtype)
+            v = (0.5 * mx.random.normal((1, 2, kL, D))).astype(dtype)
+            tol = 1e-4 if dtype == mx.float32 else 2e-3
+
+            with mx.config.scoped_update(MLX_ENABLE_TF32=tf32, MLX_SDPA_PAD_HEAD_DIM=0):
+                # Single active element at tile edges and final ragged cell.
+                m = mx.zeros((1, 1, qL, kL), dtype=mx.bool_)
+                m[:, :, :, 0] = True
+                m[:, :, 15, 63] = True
+                m[:, :, 16, 64] = True
+                m[:, :, qL - 1, kL - 1] = True
+                # Broadcast mask with zero query stride (M_strides[2] == 0).
+                bcast_m = mx.zeros((1, 1, 1, kL), dtype=mx.bool_)
+                bcast_m[:, :, :, 0] = True
+                bcast_m[:, :, :, kL - 1] = True
+
+                for base_m in (m, bcast_m):
+                    for mk in (
+                        base_m,
+                        mx.where(
+                            base_m,
+                            mx.array(0.0, dtype=dtype),
+                            mx.array(-math.inf, dtype=dtype),
+                        ),
+                    ):
+                        ref = mlx_ref_attn(
+                            q.astype(mx.float32),
+                            k.astype(mx.float32),
+                            v.astype(mx.float32),
+                            scale,
+                            mask=mk if mk.dtype == mx.bool_ else mk.astype(mx.float32),
+                        ).astype(dtype)
+                        out = mx.fast.scaled_dot_product_attention(
+                            q, k, v, scale=scale, mask=mk, force_fused=True
+                        )
+                        self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
+                # NaN in additive mask must propagate rather than be skipped.
+                nan_m = mx.full((1, 1, qL, kL), -math.inf, dtype=dtype)
+                nan_m[:, :, 0, 64] = mx.array(float("nan"), dtype=dtype)
+                out_nan = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask=nan_m, force_fused=True
+                )
+                self.assertTrue(mx.all(mx.isnan(out_nan[:, :, 0, :])).item())
+
+                # Finite minimum value in half additive mask must not be skipped
+                # (a constant finite offset cancels out in softmax).
+                if dtype == mx.float16:
+                    fmin_m = mx.full((1, 1, qL, kL), mx.finfo(dtype).min, dtype=dtype)
+                    out_fmin = mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, mask=fmin_m, force_fused=True
+                    )
+                    ref_fmin = mlx_ref_attn(
+                        q.astype(mx.float32),
+                        k.astype(mx.float32),
+                        v.astype(mx.float32),
+                        scale,
+                    ).astype(dtype)
+                    self.assertTrue(mx.allclose(out_fmin, ref_fmin, atol=tol, rtol=tol))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_sparse_mask_fully_masked_rows(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+        mx.random.seed(2)
+
+        qL, kL = 65, 129
+        for D, dtype, tf32 in (
+            (64, mx.float16, 1),
+            (128, mx.float16, 1),
+            (192, mx.float16, 1),
+            (256, mx.float16, 1),
+            (80, mx.float16, 1),
+            (128, mx.float32, 0),
+        ):
+            scale = D**-0.5
+            q = (0.5 * mx.random.normal((1, 4, qL, D))).astype(dtype)
+            k = (0.5 * mx.random.normal((1, 2, kL, D))).astype(dtype)
+            v = (0.5 * mx.random.normal((1, 2, kL, D))).astype(dtype)
+            sinks = mx.zeros((4,), dtype=dtype)
+            tol = 1e-4 if dtype == mx.float32 else 2e-3
+
+            with mx.config.scoped_update(MLX_ENABLE_TF32=tf32, MLX_SDPA_PAD_HEAD_DIM=0):
+                # Mixed live/dead rows in the same tile (and empty tiles in
+                # sibling SIMD groups, stressing BV == 128 barrier safety).
+                mixed_m = mx.zeros((1, 1, qL, kL), dtype=mx.bool_)
+                mixed_m[:, :, 1, 0] = True
+                mixed_m[:, :, 1, 64] = True
+                mixed_m[:, :, 1, kL - 1] = True
+                for mk in (
+                    mixed_m,
+                    mx.where(
+                        mixed_m,
+                        mx.array(0.0, dtype=dtype),
+                        mx.array(-math.inf, dtype=dtype),
+                    ),
+                ):
+                    for sk in (None, sinks):
+                        out = mx.fast.scaled_dot_product_attention(
+                            q,
+                            k,
+                            v,
+                            scale=scale,
+                            mask=mk,
+                            sinks=sk,
+                            force_fused=True,
+                        )
+                        self.assertTrue(mx.all(out[:, :, 0, :] == 0).item())
+                        self.assertTrue(mx.all(out[:, :, 16:, :] == 0).item())
+                        ref_row1 = mlx_ref_attn(
+                            q[:, :, 1:2, :].astype(mx.float32),
+                            k.astype(mx.float32),
+                            v.astype(mx.float32),
+                            scale,
+                            mask=(
+                                mk[:, :, 1:2, :]
+                                if mk.dtype == mx.bool_
+                                else mk[:, :, 1:2, :].astype(mx.float32)
+                            ),
+                            sinks=sk.astype(mx.float32) if sk is not None else None,
+                        ).astype(dtype)
+                        self.assertTrue(
+                            mx.allclose(out[:, :, 1:2, :], ref_row1, atol=tol, rtol=tol)
+                        )
+
+                # Window + mask equivalence: all-False and ~eye(32) with
+                # window_size=1 both leave zero visible keys and must return 0.
+                q0 = mx.zeros((1, 4, 32, D), dtype=dtype)
+                k0 = mx.zeros((1, 2, 32, D), dtype=dtype)
+                v1 = mx.ones((1, 2, 32, D), dtype=dtype)
+                all_false_32 = mx.zeros((1, 1, 32, 32), dtype=mx.bool_)
+                not_eye_32 = (~mx.eye(32, dtype=mx.bool_))[None, None, :, :]
+                for mk in (all_false_32, not_eye_32):
+                    out_w = mx.fast.scaled_dot_product_attention(
+                        q0,
+                        k0,
+                        v1,
+                        scale=scale,
+                        mask=mk,
+                        window_size=1,
+                        force_fused=True,
+                    )
+                    self.assertTrue(mx.all(out_w == 0).item())
+
+                # -inf sinks must not poison a row masked in an early live tile
+                # and active in a later tile.
+                neginf_sinks = mx.full((4,), -math.inf, dtype=dtype)
+                delayed_m = mx.zeros((1, 1, qL, kL), dtype=mx.bool_)
+                delayed_m[:, :, 1, 0] = True
+                delayed_m[:, :, 0, 64] = True
+                delayed_m[:, :, 0, kL - 1] = True
+                for mk in (
+                    delayed_m,
+                    mx.where(
+                        delayed_m,
+                        mx.array(0.0, dtype=dtype),
+                        mx.array(-math.inf, dtype=dtype),
+                    ),
+                ):
+                    out_ns = mx.fast.scaled_dot_product_attention(
+                        q,
+                        k,
+                        v,
+                        scale=scale,
+                        mask=mk,
+                        sinks=neginf_sinks,
+                        force_fused=True,
+                    )
+                    ref_r0 = mlx_ref_attn(
+                        q[:, :, 0:1, :].astype(mx.float32),
+                        k.astype(mx.float32),
+                        v.astype(mx.float32),
+                        scale,
+                        mask=(
+                            mk[:, :, 0:1, :]
+                            if mk.dtype == mx.bool_
+                            else mk[:, :, 0:1, :].astype(mx.float32)
+                        ),
+                    ).astype(dtype)
+                    self.assertTrue(
+                        mx.allclose(out_ns[:, :, 0:1, :], ref_r0, atol=tol, rtol=tol)
+                    )
+                    self.assertTrue(mx.all(out_ns[:, :, 2:, :] == 0).item())
+
+                # All-masked rows return 0 without NaN (with or without sinks).
+                for all_m in (
+                    mx.zeros((1, 1, qL, kL), dtype=mx.bool_),
+                    mx.full((1, 1, qL, kL), -math.inf, dtype=dtype),
+                ):
+                    for sk in (None, sinks):
+                        out = mx.fast.scaled_dot_product_attention(
+                            q,
+                            k,
+                            v,
+                            scale=scale,
+                            mask=all_m,
+                            sinks=sk,
+                            force_fused=True,
+                        )
+                        self.assertTrue(mx.all(out == 0).item())
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
