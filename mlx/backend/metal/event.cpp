@@ -27,6 +27,32 @@ EventImpl::~EventImpl() {
 
 void EventImpl::wait(uint64_t value) {
   mtl_event_->waitUntilSignaledValue(value, -1); // never times out
+  drop_refs(value);
+}
+
+void EventImpl::drop_refs(uint64_t value) {
+  // The GPU ran all queue commands before the signal, also in earlier command
+  // buffers. Eval relies on the same order.
+  std::shared_ptr<DataRefs> refs;
+  {
+    std::lock_guard lk(refs_mtx_);
+    if (value >= refs_value_) {
+      refs = refs_.lock();
+    }
+  }
+  if (refs) {
+    refs->drop_shared();
+  }
+}
+
+void EventImpl::set_refs(uint64_t value, std::weak_ptr<DataRefs> refs) {
+  std::lock_guard lk(refs_mtx_);
+  if (value > refs_value_) {
+    refs_value_ = value;
+    refs_ = std::move(refs);
+  } else {
+    refs_.reset();
+  }
 }
 
 void EventImpl::signal(uint64_t value) {
@@ -72,8 +98,12 @@ void Event::signal(Stream stream) {
 }
 
 bool Event::is_signaled() const {
-  auto* mtl_event = cast<metal::EventImpl>().mtl_event();
-  return mtl_event->signaledValue() >= value();
+  auto& impl = cast<metal::EventImpl>();
+  if (impl.mtl_event()->signaledValue() < value()) {
+    return false;
+  }
+  impl.drop_refs(value());
+  return true;
 }
 
 std::atomic<Error*>& Event::error() {

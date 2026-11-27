@@ -44,16 +44,14 @@ void eval(array& arr) {
     debug_set_primitive_buffer_label(command_buffer, arr.primitive());
     arr.primitive().eval_gpu(arr.inputs(), outputs);
   }
-  std::unordered_set<std::shared_ptr<array::Data>> buffers;
+  // Keep the inputs and siblings alive, but not an input donated to the output.
   for (auto& in : arr.inputs()) {
-    buffers.insert(in.data_shared_ptr());
+    if (in.data_shared_ptr() != arr.data_shared_ptr()) {
+      encoder.add_ref(in.data_shared_ptr());
+    }
   }
   for (auto& s : arr.siblings()) {
-    buffers.insert(s.data_shared_ptr());
-  }
-  // Remove the output if it was donated to by an input
-  if (auto it = buffers.find(arr.data_shared_ptr()); it != buffers.end()) {
-    buffers.erase(it);
+    encoder.add_ref(s.data_shared_ptr());
   }
 
 #ifndef NDEBUG
@@ -63,12 +61,7 @@ void eval(array& arr) {
   if (encoder.needs_commit()) {
     encoder.end_encoding();
     scheduler::notify_new_task(s);
-    encoder.commit([s, buffers = std::move(buffers)]() {
-      scheduler::notify_task_completion(s);
-    });
-  } else {
-    command_buffer->addCompletedHandler(
-        [buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {});
+    encoder.commit([s]() { scheduler::notify_task_completion(s); });
   }
 }
 
