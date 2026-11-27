@@ -9,7 +9,7 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.linear import Linear
 from mlx.nn.layers.quantized import QuantizedLinear
-from mlx.utils import tree_flatten, tree_map_with_path, tree_unflatten
+from mlx.utils import tree_flatten, tree_map, tree_map_with_path, tree_unflatten
 
 
 @lru_cache
@@ -692,6 +692,12 @@ def _maybe_shard(m, k, v):
     return Module.valid_parameter_filter(m, k, v)
 
 
+def _stop_integer_gradient(x):
+    if isinstance(x, mx.array) and not mx.issubdtype(x.dtype, mx.inexact):
+        return mx.stop_gradient(x)
+    return x
+
+
 class FullyShardedModule(Module):
     """Wrap a module so each member of the group holds only a shard of its
     parameters.
@@ -699,6 +705,19 @@ class FullyShardedModule(Module):
     The full parameters are gathered for the forward pass and the gradients
     are reduce-scattered in the backward pass, so during training
     each member of the group stores and updates only its own shard.
+
+    The backward pass needs the full parameters. By default, each module keeps
+    them from the forward pass until its backward pass. With
+    ``checkpoint=True``, the gather is part of a gradient checkpoint (see
+    :func:`mlx.core.checkpoint`): the backward pass gathers the parameters
+    again and recomputes the forward pass of the module. A checkpoint of the
+    wrapped module (for example with :func:`mlx.nn.utils.checkpoint`) does
+    not free them, because the full parameters are inputs of the checkpoint.
+    The MLX checkpoint does not keep the random state: when the backward pass
+    recomputes the forward pass, random operations (for example in
+    :class:`mlx.nn.Dropout`) draw new values. The gradients then use these new
+    values (for example a different dropout mask), not the values of the
+    forward pass, and can change.
 
     Every parameter is sharded along axis 0, so each parameter's size along
     that axis must be divisible by the size of ``group``.
@@ -712,6 +731,10 @@ class FullyShardedModule(Module):
         compute_dtype (mlx.core.Dtype, optional): If set, the gathered
             parameters are cast to this dtype for the forward pass.
             Default: ``None``.
+        checkpoint (bool, optional): If ``True``, gather the parameters
+            again and recompute the forward pass of the module in the
+            backward pass. The full parameters are then not kept after the
+            forward pass. Default: ``False``.
     """
 
     def __init__(
@@ -719,6 +742,7 @@ class FullyShardedModule(Module):
         module: Module,
         group: Optional[mx.distributed.Group] = None,
         compute_dtype: Optional[mx.Dtype] = None,
+        checkpoint: bool = False,
     ):
         super().__init__()
         group = group or mx.distributed.init()
@@ -738,6 +762,7 @@ class FullyShardedModule(Module):
                 )
 
         super(Module, self).__setattr__("_paths", [k for k, _ in flat])
+        super(Module, self).__setattr__("_checkpoint", checkpoint)
         full_shapes = [a.shape for _, a in flat]
         shard_sizes = [a.size // N for _, a in flat]
 
@@ -749,7 +774,7 @@ class FullyShardedModule(Module):
         )
 
     def _extra_repr(self) -> str:
-        return f"num_sharded_params={len(self._paths)}"
+        return f"num_sharded_params={len(self._paths)}, checkpoint={self._checkpoint}"
 
     def _gathered_call(self, fn, *args, **kwargs):
         shard_tree = self.module.filter_and_map(_maybe_shard)
@@ -761,11 +786,27 @@ class FullyShardedModule(Module):
         finally:
             self.module.update(shard_tree)
 
+    def _checkpointed_call(self, fn, *args, **kwargs):
+        # Gather inside the checkpoint, so that its saved inputs are the shards
+        def inner_fn(params, *args, **kwargs):
+            self.module.update(params)
+            # Integer inputs (for example indices) have no gradient
+            args, kwargs = tree_map(_stop_integer_gradient, (args, kwargs))
+            return self._gathered_call(fn, *args, **kwargs)
+
+        params = self.module.trainable_parameters()
+        return mx.checkpoint(inner_fn)(params, *args, **kwargs)
+
+    def _call(self, fn, *args, **kwargs):
+        if self._checkpoint:
+            return self._checkpointed_call(fn, *args, **kwargs)
+        return self._gathered_call(fn, *args, **kwargs)
+
     def __call__(self, *args, **kwargs):
-        return self._gathered_call(self.module, *args, **kwargs)
+        return self._call(self.module, *args, **kwargs)
 
     def as_linear(self, *args, **kwargs):
-        return self._gathered_call(self.module.as_linear, *args, **kwargs)
+        return self._call(self.module.as_linear, *args, **kwargs)
 
 
 def fully_shard(
@@ -773,6 +814,7 @@ def fully_shard(
     *,
     group: Optional[mx.distributed.Group] = None,
     compute_dtype: Optional[mx.Dtype] = None,
+    checkpoint: bool = False,
 ) -> Module:
     """Wrap ``module`` in a :class:`FullyShardedModule`.
 
@@ -783,6 +825,9 @@ def fully_shard(
         compute_dtype (mlx.core.Dtype, optional): If set, the gathered
             parameters are cast to this dtype for the forward pass.
             Default: ``None``.
+        checkpoint (bool, optional): If ``True``, gather the parameters
+            again and recompute the forward pass of the module in the
+            backward pass. See :class:`FullyShardedModule`. Default: ``False``.
 
     Returns:
         The wrapped :class:`FullyShardedModule`, or ``module`` unchanged.
@@ -793,5 +838,7 @@ def fully_shard(
     if isinstance(module, FullyShardedModule):
         return module
 
-    wrapped = FullyShardedModule(module, group=group, compute_dtype=compute_dtype)
+    wrapped = FullyShardedModule(
+        module, group=group, compute_dtype=compute_dtype, checkpoint=checkpoint
+    )
     return wrapped if wrapped._paths else module
