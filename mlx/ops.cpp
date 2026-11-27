@@ -2354,7 +2354,41 @@ array mean(
   }
   auto dtype = at_least_float(a.dtype());
   auto normalizer = number_of_elements(a, axes, true, dtype, s);
-  return multiply(sum(a, axes, keepdims, s), normalizer, s);
+  if (issubdtype(a.dtype(), inexact) || size_of(a.dtype()) == 8) {
+    return multiply(sum(a, axes, keepdims, s), normalizer, s);
+  }
+
+  // The sum of integers of 32 bits or fewer is accumulated in 32 bits and
+  // wraps around without warning when the total does not fit. Sum in 32 bits
+  // only over axes which cannot overflow, then sum the rest in 64 bits.
+  bool is_unsigned = issubdtype(a.dtype(), unsignedinteger);
+  int bits = 8 * size_of(a.dtype());
+  uint64_t max_value = (a.dtype() == bool_)
+      ? 1
+      : (is_unsigned ? (1ull << bits) - 1 : 1ull << (bits - 1));
+  uint64_t max_count = (is_unsigned ? UINT32_MAX : INT32_MAX) / max_value;
+
+  auto [out_shape, sorted_axes, is_noop] =
+      compute_reduce_shape(axes, a.shape());
+  std::vector<int> narrow_axes;
+  std::vector<int> wide_axes;
+  uint64_t count = 1;
+  for (auto it = sorted_axes.rbegin(); it != sorted_axes.rend(); ++it) {
+    uint64_t n = a.shape(*it);
+    if (wide_axes.empty() && count * n <= max_count) {
+      count *= n;
+      narrow_axes.push_back(*it);
+    } else {
+      wide_axes.push_back(*it);
+    }
+  }
+
+  auto x = sum(a, narrow_axes, true, s);
+  if (!wide_axes.empty()) {
+    x = sum(astype(x, is_unsigned ? uint64 : int64, s), wide_axes, true, s);
+  }
+  auto out = multiply(x, normalizer, s);
+  return keepdims ? out : squeeze(out, sorted_axes, s);
 }
 
 array mean(

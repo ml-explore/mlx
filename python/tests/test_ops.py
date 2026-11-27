@@ -1070,6 +1070,25 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.mean(x, axis=0).tolist(), [2, 3])
         self.assertEqual(mx.mean(x, axis=1).tolist(), [1.5, 3.5])
 
+        # The sum of an integer array must not wrap around
+        x = mx.array([2_000_000_000, 2_000_000_000], dtype=mx.int32)
+        self.assertEqual(mx.mean(x).item(), 2e9)
+        self.assertEqual(mx.mean(-x).item(), -2e9)
+        self.assertEqual(mx.var(x).item(), 0.0)
+        self.assertEqual(mx.std(x).item(), 0.0)
+        x = mx.array([4_000_000_000, 4_000_000_000], dtype=mx.uint32)
+        self.assertEqual(mx.mean(x).item(), 4e9)
+
+        x = mx.full((3, 1 << 24), 200, dtype=mx.uint8)
+        self.assertEqual(mx.mean(x).item(), 200.0)
+        self.assertEqual(mx.mean(x, axis=1).tolist(), [200.0] * 3)
+        self.assertEqual(mx.mean(x, axis=(-1, 0), keepdims=True).shape, (1, 1))
+        self.assertEqual(mx.mean(x.reshape(-1)).item(), 200.0)
+        self.assertEqual(mx.mean(x.reshape(3, 1 << 12, 1 << 12)).item(), 200.0)
+        self.assertEqual(mx.mean(x.astype(mx.int8) - 72).item(), -128.0)
+        self.assertEqual(mx.mean(x.astype(mx.int16) * -160).item(), -32000.0)
+        self.assertEqual(mx.mean(x == 200).item(), 1.0)
+
     def test_median(self):
         x = mx.array([])
         with self.assertRaises(ValueError):
