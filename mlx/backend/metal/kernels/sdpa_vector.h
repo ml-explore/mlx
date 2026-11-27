@@ -210,7 +210,8 @@ template <typename T, int D, int V = D>
   }
 }
 
-template <typename T, int D, int V = D, int TK = 4>
+// Larger TK spills registers for head dim 512 (up to 3.6x slower on M5 Max).
+template <typename T, int D, int V = D, int TK = (D + V > 512 ? 2 : 4)>
 [[kernel]] void sdpa_vector_2pass_1(
     const device T* queries [[buffer(0)]],
     const device T* keys [[buffer(1)]],
