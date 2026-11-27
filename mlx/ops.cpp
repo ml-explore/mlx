@@ -484,34 +484,11 @@ array unflatten(
     throw std::out_of_range(msg.str());
   }
 
-  size_t size = 1;
-  int infer_idx = -1;
-  for (int i = 0; i < shape.size(); ++i) {
-    if (shape[i] == -1) {
-      if (infer_idx >= 0) {
-        throw std::invalid_argument(
-            "[Unflatten] Can only infer one dimension.");
-      }
-      infer_idx = i;
-    } else {
-      size *= shape[i];
-    }
-  }
-  if (infer_idx >= 0) {
-    shape[infer_idx] = safe_cast(a.shape(ax) / size, "unflatten");
-    size *= shape[infer_idx];
-  }
-  if (size != a.shape(ax)) {
-    std::ostringstream msg;
-    msg << "[Unflatten] Cannot unflatten axis " << axis << " with size "
-        << a.shape(ax) << " into shape " << shape << ".";
-    throw std::invalid_argument(msg.str());
-  }
-  if (shape.size() == 1) {
+  auto out_shape = Unflatten::output_shape(a, ax, shape);
+  if (shape.size() == 1 && (shape[0] == -1 || !detail::in_dynamic_tracing())) {
     return a;
   }
 
-  auto out_shape = Unflatten::output_shape(a, ax, shape);
   return array(
       std::move(out_shape),
       a.dtype(),
