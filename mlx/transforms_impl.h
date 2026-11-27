@@ -80,6 +80,23 @@ struct RetainGraph {
   static thread_local int tracing_counter;
 };
 
+// Counter instead of bool for second order derivatives.
+struct InBackward {
+  InBackward() {
+    counter++;
+  }
+  ~InBackward() {
+    counter--;
+  }
+
+  static bool in_backward() {
+    return counter > 0;
+  }
+
+ private:
+  static thread_local int counter;
+};
+
 /** Return true if we are currently performing a function transformation in
  * order to keep the graph when evaluating tracer arrays. */
 inline bool in_tracing() {

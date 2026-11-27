@@ -91,6 +91,9 @@ array split_one(
     ParentsMap& parents_map,
     const std::unordered_set<uintptr_t>& divider);
 
+// Recompute cheap forward values in the backward instead of keeping them
+void compile_recompute(std::vector<array>& tape, ParentsMap& parents_map);
+
 // Fuse arrays into Compiled primitives
 void compile_fuse(
     std::vector<array>& tape,
