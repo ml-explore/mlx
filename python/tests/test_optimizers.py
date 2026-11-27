@@ -514,6 +514,13 @@ class TestSchedulers(mlx_tests.MLXTestCase):
         self.assertEqual(schedule(5).item(), 5)
         self.assertEqual(schedule(7).item(), 5)
 
+    def test_linear_schedule_endpoint(self):
+        end = 2.0**-30
+        schedule = opt.linear_schedule(1.0, end, steps=8)
+
+        rates = schedule(mx.array([0, 4, 8, 9], dtype=mx.uint64))
+        self.assertEqual(rates.tolist(), [1.0, 0.5, end, end])
+
     def test_linear_warmup_with_cosine_decay(self):
         warmup_schedule = opt.schedulers.linear_schedule(0.0, 1e-5, 100)
         cosine_schedule = opt.schedulers.cosine_decay(1e-5, 100)
