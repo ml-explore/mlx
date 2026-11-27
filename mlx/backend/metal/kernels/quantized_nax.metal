@@ -104,6 +104,34 @@
   instantiate_qmv_nax(bfloat16_t, group_size, bits)
 
 ///////////////////////////////////////////////////////////////////////////////
+// affine_quantize_rows, affine_qmm_t_int_nax
+///////////////////////////////////////////////////////////////////////////////
+
+#define instantiate_qmm_int(type, group_size, bits)                        \
+  instantiate_kernel(                                                      \
+      "affine_quantize_rows_" #type "_gs_" #group_size "_b_" #bits,        \
+      affine_quantize_rows,                                                \
+      type,                                                                \
+      group_size,                                                          \
+      bits)                                                                \
+  instantiate_kernel(                                                      \
+      "affine_qmm_t_int_nax_" #type "_gs_" #group_size "_b_" #bits,        \
+      affine_qmm_t_int_nax,                                                \
+      type,                                                                \
+      group_size,                                                          \
+      bits)                                                                \
+  instantiate_kernel(                                                      \
+      "affine_qmm_t_int_nax_splitk_" #type "_gs_" #group_size "_b_" #bits, \
+      affine_qmm_t_int_nax_splitk,                                         \
+      type,                                                                \
+      group_size,                                                          \
+      bits)
+
+#define instantiate_qmm_int_all(group_size, bits) \
+  instantiate_qmm_int(float16_t, group_size, bits)  \
+  instantiate_qmm_int(bfloat16_t, group_size, bits)
+
+///////////////////////////////////////////////////////////////////////////////
 // Instantiation
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -135,4 +163,10 @@
 instantiate_quantized_all_bits(32)
 instantiate_quantized_all_bits(64)
 instantiate_quantized_all_bits(128)
+instantiate_qmm_int_all(64, 4)
+instantiate_qmm_int_all(64, 6)
+instantiate_qmm_int_all(64, 8)
+instantiate_qmm_int_all(128, 4)
+instantiate_qmm_int_all(128, 6)
+instantiate_qmm_int_all(128, 8)
 // clang-format on

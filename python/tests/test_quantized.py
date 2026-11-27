@@ -992,6 +992,68 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 )
                 self.assertLess(rel_err(out, y_ref), tol)
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_qmm_int8(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        mx.random.seed(0)
+
+        # The int8 route quantizes x to signed 8 bits with one scale per group
+        def int8_dequantized(x, group_size):
+            xg = x.astype(mx.float32).reshape(*x.shape[:-1], -1, group_size)
+            amax = mx.abs(xg).max(axis=-1, keepdims=True)
+            inv = mx.where(amax > 0, 127 / amax, 0)
+            return (mx.round(xg * inv) * (amax / 127)).reshape(x.shape)
+
+        for B, M, N, bits, group_size, dtype, transpose in product(
+            [(), (2,)],
+            [8, 64, 256],
+            [128, 4096],
+            [4, 6, 8],
+            [32, 64, 128],
+            [mx.float16, mx.bfloat16],
+            [True, False],
+        ):
+            K = 512
+            with self.subTest(
+                shape=(*B, M, N, K),
+                bits=bits,
+                group_size=group_size,
+                dtype=dtype,
+                transpose=transpose,
+            ):
+                x = mx.random.normal((*B, M, K)).astype(dtype)
+                w = mx.random.normal((N, K) if transpose else (K, N)).astype(dtype)
+                w_q, scales, biases = mx.quantize(w, group_size=group_size, bits=bits)
+                w_hat = mx.dequantize(
+                    w_q,
+                    scales,
+                    biases,
+                    group_size=group_size,
+                    bits=bits,
+                    dtype=mx.float32,
+                )
+                w_hat = w_hat.T if transpose else w_hat
+                # The fp route (no NAX or a small shape) is also in this tolerance
+                if transpose and group_size >= 64:
+                    expected = int8_dequantized(x, group_size) @ w_hat
+                else:
+                    expected = x.astype(mx.float32) @ w_hat
+                with mx.config.scoped_update(MLX_ENABLE_INT8_QMM=1):
+                    actual = mx.quantized_matmul(
+                        x,
+                        w_q,
+                        scales,
+                        biases,
+                        transpose=transpose,
+                        group_size=group_size,
+                        bits=bits,
+                    )
+                    mx.eval(actual)
+                delta = mx.abs(actual.astype(mx.float32) - expected)
+                relative_error = delta.max() / mx.abs(expected).max()
+                self.assertLess(relative_error, 1e-2)
+
     def test_qmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
