@@ -426,6 +426,15 @@ class MLX_API array {
   // Check if the array is a tracer array
   bool is_tracer() const;
 
+  // Mark the array as part of a backward graph (true) or not.
+  void set_backward(bool is_backward) {
+    array_desc_->is_backward = is_backward;
+  }
+  // Check if the array was made while autodiff built a backward graph
+  bool is_backward() const {
+    return array_desc_->is_backward;
+  }
+
   void set_data(allocator::Data data);
 
   void set_data(
@@ -472,6 +481,9 @@ class MLX_API array {
     // Indicates an array is being used in a graph transform
     // and should not be detached from the graph
     bool is_tracer{false};
+
+    // Indicates an array was made while autodiff built a backward graph
+    bool is_backward{false};
 
     // This is a shared pointer so that *different* arrays
     // can share the underlying data buffer.

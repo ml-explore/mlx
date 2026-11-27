@@ -122,12 +122,14 @@ std::pair<std::vector<array>, ParentsMap> compile_dfs(
       auto as = array::make_arrays(
           std::move(shapes), types, arr.primitive_ptr(), std::move(inputs));
       for (int i = 0; i < out.size(); ++i) {
+        as[i].set_backward(out[i].is_backward());
         old_to_new.insert({out[i].id(), as[i]});
       }
       new_tape.push_back(as[arr.sibling_position()]);
     } else {
       auto a = array(
           arr.shape(), arr.dtype(), arr.primitive_ptr(), std::move(inputs));
+      a.set_backward(arr.is_backward());
       old_to_new.insert({arr.id(), a});
       new_tape.push_back(a);
     }
