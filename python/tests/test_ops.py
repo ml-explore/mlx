@@ -3033,15 +3033,6 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(IndexError):
             mx.diff(a, axis=1)
 
-        # prepend and append
-        for kwargs in [
-            {"prepend": 0},
-            {"append": 10},
-            {"prepend": -1, "append": 3},
-        ]:
-            expected = np.diff(np.array(a), **kwargs)
-            self.assertEqual(mx.diff(a, **kwargs).tolist(), expected.tolist())
-
         pre = mx.array([[9], [8]])
         app = mx.array([[1, 2], [3, 4]])
         out = mx.diff(m, axis=1, n=2, prepend=pre, append=app)
@@ -3050,12 +3041,6 @@ class TestOps(mlx_tests.MLXTestCase):
         )
         self.assertEqual(out.tolist(), expected.tolist())
 
-        out = mx.diff(m, axis=0, prepend=mx.zeros((1, 3), dtype=mx.int32))
-        expected = np.diff(np.array(m), axis=0, prepend=0)
-        self.assertEqual(out.tolist(), expected.tolist())
-
-        with self.assertRaises(IndexError):
-            mx.diff(a, axis=1, prepend=0)
         with self.assertRaises(ValueError):
             mx.diff(m, axis=1, prepend=mx.zeros((3, 1)))
 

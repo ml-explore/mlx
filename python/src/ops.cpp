@@ -3948,37 +3948,21 @@ void init_ops(nb::module_& m) {
       [](const mx::array& a,
          int n,
          int axis,
-         const std::optional<ScalarOrArray>& prepend,
-         const std::optional<ScalarOrArray>& append,
+         const std::optional<mx::array>& prepend,
+         const std::optional<mx::array>& append,
          mx::StreamOrDevice s) {
         if (!prepend && !append) {
           return mx::diff(a, n, axis, s);
         }
-        int ndim = static_cast<int>(a.ndim());
-        int ax = axis < 0 ? axis + ndim : axis;
-        if (ax < 0 || ax >= ndim) {
-          throw std::out_of_range(
-              "[diff] Axis is out of bounds for the array.");
-        }
-        // Scalars are broadcast to the shape of `a` with size 1 along `axis`.
-        auto to_part = [&](const ScalarOrArray& v) {
-          auto x = to_arrays(a, v).second;
-          if (x.ndim() == 0) {
-            auto shape = a.shape();
-            shape[ax] = 1;
-            x = mx::broadcast_to(x, shape, s);
-          }
-          return x;
-        };
         std::vector<mx::array> parts;
         if (prepend) {
-          parts.push_back(to_part(prepend.value()));
+          parts.push_back(*prepend);
         }
         parts.push_back(a);
         if (append) {
-          parts.push_back(to_part(append.value()));
+          parts.push_back(*append);
         }
-        return mx::diff(mx::concatenate(parts, ax, s), n, ax, s);
+        return mx::diff(mx::concatenate(parts, axis, s), n, axis, s);
       },
       nb::arg(),
       "n"_a = 1,
@@ -3988,7 +3972,7 @@ void init_ops(nb::module_& m) {
       "append"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def diff(a: array, /, n: int = 1, axis: int = -1, *, prepend: scalar | array | None = None, append: scalar | array | None = None, stream: StreamOrDevice = None) -> array"),
+          "def diff(a: array, /, n: int = 1, axis: int = -1, *, prepend: array | None = None, append: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         The n-th discrete difference along the given axis.
 
@@ -3997,9 +3981,9 @@ void init_ops(nb::module_& m) {
             n (int, optional): The number of times to difference. Default: ``1``.
             axis (int, optional): The axis along which to difference.
               Default: ``-1``.
-            prepend (scalar or array, optional): Values to put before ``a``
+            prepend (array, optional): Values to put before ``a``
               along ``axis`` before the difference. Default: ``None``.
-            append (scalar or array, optional): Values to put after ``a``
+            append (array, optional): Values to put after ``a``
               along ``axis`` before the difference. Default: ``None``.
 
         Returns:
