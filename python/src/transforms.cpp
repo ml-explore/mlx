@@ -9,6 +9,7 @@
 #include <nanobind/stl/vector.h>
 
 #include <algorithm>
+#include <limits>
 #include <numeric>
 #include <sstream>
 #include <unordered_set>
@@ -138,12 +139,50 @@ auto py_value_and_grad(
       });
     };
 
+    // Scalar leaves of differentiated arguments become arrays, so that
+    // tree_fill and tree_unflatten can find them. Only rebuild the tree when
+    // there is a scalar. This keeps in-place updates visible to the caller.
+    auto has_scalar = [](nb::handle tree) {
+      bool found = false;
+      tree_visit(tree, [&found](nb::handle obj) {
+        if (PyBool_Check(obj.ptr()) || nb::isinstance<nb::int_>(obj) ||
+            nb::isinstance<nb::float_>(obj)) {
+          found = true;
+        }
+      });
+      return found;
+    };
+    auto promote_scalars = [](nb::handle obj) -> nb::object {
+      if (PyBool_Check(obj.ptr())) {
+        return nb::cast(mx::array(nb::cast<bool>(obj), mx::bool_));
+      }
+      if (nb::isinstance<nb::int_>(obj)) {
+        auto val = nb::cast<int64_t>(obj);
+        auto dtype = (val > std::numeric_limits<int>::max() ||
+                      val < std::numeric_limits<int>::min())
+            ? mx::int64
+            : mx::int32;
+        return nb::cast(mx::array(val, dtype));
+      }
+      if (nb::isinstance<nb::float_>(obj)) {
+        return nb::cast(mx::array(nb::cast<float>(obj), mx::float32));
+      }
+      return nb::borrow<nb::object>(obj);
+    };
+
+    // nb::args is an immutable tuple, so use a mutable list.
+    nb::list py_args(args);
+
     std::vector<int> counts(1, 0);
     std::vector<int> gradient_indices;
     for (int i = 0, j = 0; i < args.size(); ++i) {
       bool needs_grad = (j < argnums.size() && argnums[j] == i);
       auto pre_size = arrays.size();
-      flatten_with_objects(args[i], /* strict = */ needs_grad);
+      if (needs_grad && has_scalar(py_args[i])) {
+        py_args[i] =
+            tree_map(nb::cast<nb::object>(py_args[i]), promote_scalars);
+      }
+      flatten_with_objects(py_args[i], /* strict = */ needs_grad);
       if (needs_grad) {
         auto old_size = gradient_indices.size();
         auto delta_size = arrays.size() - pre_size;
@@ -160,7 +199,12 @@ auto py_value_and_grad(
       bool needs_grad =
           (argnames.find(nb::cast<std::string>(item.first)) != argnames.end());
       auto pre_size = arrays.size();
-      flatten_with_objects(item.second, /* strict = */ needs_grad);
+      nb::object value = nb::cast<nb::object>(item.second);
+      if (needs_grad && has_scalar(value)) {
+        value = tree_map(value, promote_scalars);
+        kwargs[item.first] = value;
+      }
+      flatten_with_objects(value, /* strict = */ needs_grad);
       if (needs_grad) {
         auto old_size = gradient_indices.size();
         auto delta_size = arrays.size() - pre_size;
@@ -180,13 +224,13 @@ auto py_value_and_grad(
     auto value_and_grads = mx::value_and_grad(
         [&fun,
          &array_objects,
-         &args,
+         &py_args,
          &kwargs,
          &py_value_out,
          &error_msg_tag,
          scalar_func_only](const std::vector<mx::array>& a) {
           nb::list tree;
-          tree.append(args);
+          tree.append(py_args);
           tree.append(kwargs);
           tree_fill(tree, a);
 
@@ -271,11 +315,13 @@ auto py_value_and_grad(
 
     // Collect the gradients for the positional arguments
     if (argnums.size() == 1) {
-      positional_grads = tree_unflatten(args[argnums[0]], gradients, counts[0]);
+      positional_grads =
+          tree_unflatten(py_args[argnums[0]], gradients, counts[0]);
     } else if (argnums.size() > 1) {
       nb::list grads_;
       for (int i = 0; i < argnums.size(); i++) {
-        grads_.append(tree_unflatten(args[argnums[i]], gradients, counts[i]));
+        grads_.append(
+            tree_unflatten(py_args[argnums[i]], gradients, counts[i]));
       }
       positional_grads = nb::tuple(grads_);
     } else {

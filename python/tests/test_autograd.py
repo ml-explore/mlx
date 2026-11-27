@@ -421,8 +421,10 @@ class TestAutograd(mlx_tests.MLXTestCase):
         def fun(p):
             return p["x"] * p["y"]
 
-        with self.assertRaises(ValueError):
-            mx.value_and_grad(fun)({"x": 0.5, "y": mx.array(2.0)})
+        value, dfdx = mx.value_and_grad(fun)({"x": 0.5, "y": mx.array(2.0)})
+        self.assertEqual(value.item(), 1.0)
+        self.assertEqual(dfdx["x"].item(), 2.0)
+        self.assertEqual(dfdx["y"].item(), 0.5)
         with self.assertRaises(ValueError):
             mx.value_and_grad(fun, (0, 1))({"x": mx.array(0.5), "y": mx.array(2.0)})
 
@@ -468,6 +470,39 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
         with self.assertRaises(ValueError):
             _ = fun_grad(mx.ones((2, 2)), mx.ones((2, 2)))
+
+    def test_grad_scalars(self):
+        value, grad = mx.value_and_grad(lambda x: x * x)(2.0)
+        self.assertEqual(value.item(), 4.0)
+        self.assertEqual(grad.item(), 4.0)
+        self.assertEqual(grad.dtype, mx.float32)
+
+        grad = mx.grad(lambda x: mx.sin(x))(0.5)
+        self.assertAlmostEqual(grad.item(), math.cos(0.5), places=6)
+
+        def fun(p):
+            return p["a"] * p["b"]
+
+        value, grad = mx.value_and_grad(fun)({"a": 0.5, "b": 3.0})
+        self.assertEqual(value.item(), 1.5)
+        self.assertEqual(grad["a"].item(), 3.0)
+        self.assertEqual(grad["b"].item(), 0.5)
+
+        def fun(p):
+            return p[0] * p[1]["z"]
+
+        value, grad = mx.value_and_grad(fun)([2.0, {"z": 5.0}])
+        self.assertEqual(value.item(), 10.0)
+        self.assertEqual(grad[0].item(), 5.0)
+        self.assertEqual(grad[1]["z"].item(), 2.0)
+
+        def fun(x, y):
+            return x * y
+
+        value, grad = mx.value_and_grad(fun, argnames="y")(mx.array(2.0), y=3.0)
+        self.assertEqual(value.item(), 6.0)
+        self.assertIsNone(grad[0])
+        self.assertEqual(grad[1]["y"].item(), 2.0)
 
     def test_grad_kwargs(self):
         def fun(x, y):
