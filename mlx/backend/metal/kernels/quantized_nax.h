@@ -759,7 +759,8 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    if (bi >= src_tile_dim.y) {
+    // Do not read columns past the tile, they can be past the buffer end.
+    if (bi >= src_tile_dim.y || bj * pack_factor >= src_tile_dim.x) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
       }
@@ -769,6 +770,12 @@ struct QuantizedBlockLoader {
     T scale = *scales;
     T bias = *biases;
     for (int i = 0; i < n_reads; i++) {
+      if ((bj + i) * pack_factor >= src_tile_dim.x) {
+        for (int j = 0; j < pack_factor; j++) {
+          dst[i * pack_factor + j] = T(0);
+        }
+        continue;
+      }
       dequantize<T, pack_factor, bits>(
           (device uint8_t*)(src + i * bytes_per_pack),
           scale,
@@ -892,7 +899,8 @@ struct QuantizedBlockLoader<
       return;
     }
 
-    if (bi >= src_tile_dim.y) {
+    // Do not read columns past the tile, they can be past the buffer end.
+    if (bi >= src_tile_dim.y || bj * pack_factor >= src_tile_dim.x) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
       }
@@ -902,6 +910,12 @@ struct QuantizedBlockLoader<
     T scale = *scales;
     T bias = *biases;
     for (int i = 0; i < n_reads; i++) {
+      if ((bj + i) * pack_factor >= src_tile_dim.x) {
+        for (int j = 0; j < pack_factor; j++) {
+          dst[i * pack_factor + j] = T(0);
+        }
+        continue;
+      }
       dequantize<T, pack_factor, bits>(
           (device uint8_t*)(src + i * bytes_per_pack),
           scale,
