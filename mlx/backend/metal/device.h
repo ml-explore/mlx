@@ -53,6 +53,13 @@ class MLX_API CommandEncoder {
   void add_temporary(array arr);
   void add_temporaries(std::vector<array> arrays);
 
+  // Count new memory toward the commit limit.
+  void count_allocation_bytes(const array& a) {
+    if (a.data_shared_ptr()) {
+      buffer_sizes_ += a.buffer_size();
+    }
+  }
+
   void dispatch_threadgroups(MTL::Size grid_dims, MTL::Size group_dims);
   void dispatch_threads(MTL::Size grid_dims, MTL::Size group_dims);
   void maybeInsertBarrier();

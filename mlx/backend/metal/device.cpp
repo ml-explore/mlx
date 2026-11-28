@@ -378,9 +378,7 @@ void CommandEncoder::set_input_array(
     const array& a,
     int idx,
     int64_t offset /* = 0 */) {
-  if (all_inputs_.insert(a.buffer().ptr()).second) {
-    buffer_sizes_ += a.data_size();
-  }
+  all_inputs_.insert(a.buffer().ptr());
 #ifndef NDEBUG
   if (a.data_shared_ptr()->is_owned()) {
     registered_data_ptrs_.push_back(a.buffer().raw_ptr());
@@ -423,10 +421,14 @@ void CommandEncoder::register_output_array(const array& a) {
 }
 
 void CommandEncoder::add_temporary(array arr) {
+  count_allocation_bytes(arr);
   temporaries_.push_back(std::move(arr));
 }
 
 void CommandEncoder::add_temporaries(std::vector<array> arrays) {
+  for (auto& a : arrays) {
+    count_allocation_bytes(a);
+  }
   temporaries_.insert(
       temporaries_.end(),
       std::make_move_iterator(arrays.begin()),
