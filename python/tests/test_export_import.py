@@ -287,6 +287,23 @@ class TestExportImport(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             f2(mx.array(10), mx.array([5, 10, 20]))
 
+    def test_export_unflatten_shapeless(self):
+        path = os.path.join(self.test_dir, "unflatten.mlxfn")
+
+        def fun(x):
+            return mx.unflatten(x, 0, (2, -1))
+
+        mx.export_function(path, fun, mx.arange(8), shapeless=True)
+        imported = mx.import_function(path)
+        for n in (8, 12, 4, 0):
+            x = mx.arange(n)
+            actual = imported(x)[0]
+            expected = fun(x)
+            self.assertEqual(actual.shape, expected.shape)
+            self.assertTrue(mx.array_equal(actual, expected))
+        with self.assertRaises(ValueError):
+            imported(mx.arange(3))
+
     def test_export_scatter_gather(self):
         path = os.path.join(self.test_dir, "fn.mlxfn")
 

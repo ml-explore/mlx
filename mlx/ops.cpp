@@ -484,34 +484,11 @@ array unflatten(
     throw std::out_of_range(msg.str());
   }
 
-  size_t size = 1;
-  int infer_idx = -1;
-  for (int i = 0; i < shape.size(); ++i) {
-    if (shape[i] == -1) {
-      if (infer_idx >= 0) {
-        throw std::invalid_argument(
-            "[Unflatten] Can only infer one dimension.");
-      }
-      infer_idx = i;
-    } else {
-      size *= shape[i];
-    }
-  }
-  if (infer_idx >= 0) {
-    shape[infer_idx] = safe_cast(a.shape(ax) / size, "unflatten");
-    size *= shape[infer_idx];
-  }
-  if (size != a.shape(ax)) {
-    std::ostringstream msg;
-    msg << "[Unflatten] Cannot unflatten axis " << axis << " with size "
-        << a.shape(ax) << " into shape " << shape << ".";
-    throw std::invalid_argument(msg.str());
-  }
-  if (shape.size() == 1) {
+  auto out_shape = Unflatten::output_shape(a, ax, shape);
+  if (shape.size() == 1 && (shape[0] == -1 || !detail::in_dynamic_tracing())) {
     return a;
   }
 
-  auto out_shape = Unflatten::output_shape(a, ax, shape);
   return array(
       std::move(out_shape),
       a.dtype(),
@@ -3216,6 +3193,19 @@ array operator-(const array& a) {
 
 array sign(const array& a, StreamOrDevice s /* = {} */) {
   return array(a.shape(), a.dtype(), std::make_shared<Sign>(to_stream(s)), {a});
+}
+
+array signbit(const array& a, StreamOrDevice s /* = {} */) {
+  if (issubdtype(a.dtype(), complexfloating)) {
+    throw std::invalid_argument("[signbit] Not supported for complex types.");
+  }
+  if (a.dtype() == bool_ || issubdtype(a.dtype(), unsignedinteger)) {
+    return full(a.shape(), false, bool_, s);
+  }
+  if (issubdtype(a.dtype(), signedinteger)) {
+    return less(a, array(0, a.dtype()), s);
+  }
+  return array(a.shape(), bool_, std::make_shared<SignBit>(to_stream(s)), {a});
 }
 
 array logical_not(const array& a, StreamOrDevice s /* = {} */) {

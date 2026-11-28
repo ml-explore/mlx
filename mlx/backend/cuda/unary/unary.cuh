@@ -77,6 +77,9 @@ constexpr bool supports_unary_op() {
       std::is_same_v<Op, Sign> || std::is_same_v<Op, Square>) {
     return std::is_same_v<In, Out>;
   }
+  if (std::is_same_v<Op, SignBit>) {
+    return std::is_same_v<Out, bool> && is_floating_v<In>;
+  }
   if (std::is_same_v<Op, ArcCosh> || std::is_same_v<Op, ArcSinh> ||
       std::is_same_v<Op, ArcTanh> || std::is_same_v<Op, Erf> ||
       std::is_same_v<Op, ErfInv> || std::is_same_v<Op, Expm1> ||

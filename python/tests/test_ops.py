@@ -1202,6 +1202,15 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = c / np.abs(c)
         self.assertTrue(np.allclose(result, expected))
 
+    def test_signbit(self):
+        a = mx.array([0.0, -0.0, 1.0, -1.0, np.inf, -np.inf, np.nan, -np.nan])
+        result = mx.signbit(a)
+        self.assertEqual(result.dtype, mx.bool_)
+        self.assertTrue(np.array_equal(result, np.signbit(a)))
+
+        with self.assertRaisesRegex(ValueError, "complex"):
+            mx.signbit(mx.array(1, dtype=mx.complex64))
+
     def test_logical_not(self):
         a = mx.array([-1.0, 1.0, 0.0, 1.0, -2.0, 3.0])
         result = mx.logical_not(a)
@@ -1352,6 +1361,12 @@ class TestOps(mlx_tests.MLXTestCase):
         x = np.array([-10, -1, -0.5, 0, 0.5, 1, 3, 10], dtype=np.float32)
         expected = np.expm1(x.astype(np.float64))
         result = mx.expm1(mx.array(x))
+        np.testing.assert_allclose(result, expected, rtol=2e-7, atol=0)
+
+    def test_exp_argument_reduction(self):
+        x = np.linspace(-87, 87, 10001, dtype=np.float32)
+        expected = np.exp(x.astype(np.float64))
+        result = mx.exp(mx.array(x))
         np.testing.assert_allclose(result, expected, rtol=2e-7, atol=0)
 
     def test_erf(self):
@@ -3032,6 +3047,17 @@ class TestOps(mlx_tests.MLXTestCase):
 
         with self.assertRaises(IndexError):
             mx.diff(a, axis=1)
+
+        pre = mx.array([[9], [8]])
+        app = mx.array([[1, 2], [3, 4]])
+        out = mx.diff(m, axis=1, n=2, prepend=pre, append=app)
+        expected = np.diff(
+            np.array(m), axis=1, n=2, prepend=np.array(pre), append=np.array(app)
+        )
+        self.assertEqual(out.tolist(), expected.tolist())
+
+        with self.assertRaises(ValueError):
+            mx.diff(m, axis=1, prepend=mx.zeros((3, 1)))
 
     def test_squeeze_expand(self):
         a = mx.zeros((2, 1, 2, 1))

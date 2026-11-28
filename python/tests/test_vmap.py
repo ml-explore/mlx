@@ -46,6 +46,7 @@ class TestVmap(mlx_tests.MLXTestCase):
             "rsqrt",
             "sigmoid",
             "sign",
+            "signbit",
             "sin",
             "sqrt",
             "square",
@@ -65,6 +66,12 @@ class TestVmap(mlx_tests.MLXTestCase):
 
                 y = mx.vmap(op, in_axes=1, out_axes=1)(x)
                 self.assertTrue(mx.array_equal(y, op(x), equal_nan=True))
+
+    def test_signbit(self):
+        # `signbit` implementation shortcuts to `less` on integer input.
+        # This tests the normal path with float explicitly.
+        x = mx.array([[-2.0, -0.0, 0.0], [1.0, -3.0, 4.0]])
+        self.assertTrue(mx.array_equal(mx.vmap(mx.signbit)(x), mx.signbit(x)))
 
     def test_binary(self):
         ops = [

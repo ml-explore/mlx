@@ -301,6 +301,30 @@ void init_ops(nb::module_& m) {
             array: The sign of ``a``.
       )pbdoc");
   m.def(
+      "signbit",
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::signbit(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def signbit(a: array | bool | int | float, /, *, stream: StreamOrDevice = None) -> array"),
+      R"pbdoc(
+        Test whether the sign bit is set for each element.
+
+        Negative zero and NaNs with a set sign bit return ``True``.
+        Unsigned integers and booleans return ``False``.
+
+        Args:
+            a (array or bool or int or float): Input array or scalar with a non-complex dtype.
+
+        Returns:
+            array: A boolean array with the same shape as ``a``,
+            containing ``True`` where the sign bit is set and ``False``
+            otherwise.
+      )pbdoc");
+  m.def(
       "positive",
       &mx::positive,
       nb::arg(),
@@ -3945,14 +3969,34 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "diff",
-      &mx::diff,
+      [](const mx::array& a,
+         int n,
+         int axis,
+         const std::optional<mx::array>& prepend,
+         const std::optional<mx::array>& append,
+         mx::StreamOrDevice s) {
+        if (!prepend && !append) {
+          return mx::diff(a, n, axis, s);
+        }
+        std::vector<mx::array> parts;
+        if (prepend) {
+          parts.push_back(*prepend);
+        }
+        parts.push_back(a);
+        if (append) {
+          parts.push_back(*append);
+        }
+        return mx::diff(mx::concatenate(parts, axis, s), n, axis, s);
+      },
       nb::arg(),
       "n"_a = 1,
       "axis"_a = -1,
       nb::kw_only(),
+      "prepend"_a = nb::none(),
+      "append"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def diff(a: array, /, n: int = 1, axis: int = -1, *, stream: StreamOrDevice = None) -> array"),
+          "def diff(a: array, /, n: int = 1, axis: int = -1, *, prepend: array | None = None, append: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         The n-th discrete difference along the given axis.
 
@@ -3961,6 +4005,10 @@ void init_ops(nb::module_& m) {
             n (int, optional): The number of times to difference. Default: ``1``.
             axis (int, optional): The axis along which to difference.
               Default: ``-1``.
+            prepend (array, optional): Values to put before ``a``
+              along ``axis`` before the difference. Default: ``None``.
+            append (array, optional): Values to put after ``a``
+              along ``axis`` before the difference. Default: ``None``.
 
         Returns:
             array: The n-th differences.

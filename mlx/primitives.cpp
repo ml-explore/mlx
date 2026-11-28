@@ -2306,10 +2306,34 @@ bool Unflatten::is_equivalent(const Primitive& other) const {
   return axis_ == a_other.axis_ && shape_ == a_other.shape_;
 }
 
-Shape Unflatten::output_shape(
-    const array& input,
-    int axis,
-    const Shape& shape) {
+Shape Unflatten::output_shape(const array& input, int axis, Shape shape) {
+  size_t size = 1;
+  int infer_idx = -1;
+  for (int i = 0; i < shape.size(); ++i) {
+    if (shape[i] == -1) {
+      if (infer_idx >= 0) {
+        throw std::invalid_argument(
+            "[Unflatten] Can only infer one dimension.");
+      }
+      infer_idx = i;
+    } else {
+      size *= shape[i];
+    }
+  }
+  if (size > 0 && infer_idx >= 0) {
+    shape[infer_idx] = safe_cast(input.shape(axis) / size, "unflatten");
+    size *= shape[infer_idx];
+  } else if (infer_idx >= 0) {
+    throw std::invalid_argument(
+        "[Unflatten] Cannot infer a dimension when the known size is zero.");
+  }
+  if (size != input.shape(axis)) {
+    std::ostringstream msg;
+    msg << "[Unflatten] Cannot unflatten axis " << axis << " with size "
+        << input.shape(axis) << " into shape " << shape << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
   Shape out_shape = input.shape();
   out_shape[axis] = shape[0];
   out_shape.insert(
@@ -5122,6 +5146,33 @@ std::pair<std::vector<array>, std::vector<int>> Sign::vmap(
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
   return {{sign(inputs[0], stream())}, axes};
+}
+
+std::vector<array> SignBit::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return {zeros_like(primals[0], stream())};
+}
+
+std::vector<array> SignBit::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return {zeros_like(tangents[0], stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> SignBit::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {{signbit(inputs[0], stream())}, axes};
 }
 
 std::vector<array> Sin::vjp(

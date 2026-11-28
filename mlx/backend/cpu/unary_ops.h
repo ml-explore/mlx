@@ -101,6 +101,18 @@ struct Sign {
   SINGLE()
 };
 
+struct SignBit {
+  template <typename T>
+  bool operator()(T x) {
+    return simd::signbit(Simd<T, 1>(x)).value;
+  }
+
+  template <typename T, int N>
+  Simd<bool, N> operator()(Simd<T, N> x) {
+    return simd::signbit(x);
+  }
+};
+
 struct Square {
   template <int N, typename T>
   Simd<T, N> operator()(Simd<T, N> x) {

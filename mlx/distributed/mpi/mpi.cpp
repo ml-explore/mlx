@@ -1,8 +1,11 @@
 // Copyright © 2024 Apple Inc.
 
 #include <dlfcn.h>
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
+#include <type_traits>
 
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/distributed/distributed.h"
@@ -68,7 +71,16 @@ void simple_max(
   int N = *len;
 
   while (N-- > 0) {
-    *acc = std::max(*acc, *in);
+    if constexpr (is_floating_point_v<T>) {
+      if (std::isnan(static_cast<float>(*acc)) ||
+          std::isnan(static_cast<float>(*in))) {
+        *acc = static_cast<T>(std::numeric_limits<float>::quiet_NaN());
+      } else {
+        *acc = std::max(*acc, *in);
+      }
+    } else {
+      *acc = std::max(*acc, *in);
+    }
     acc++;
     in++;
   }
@@ -88,7 +100,16 @@ void simple_min(
   int N = *len;
 
   while (N-- > 0) {
-    *acc = std::min(*acc, *in);
+    if constexpr (is_floating_point_v<T>) {
+      if (std::isnan(static_cast<float>(*acc)) ||
+          std::isnan(static_cast<float>(*in))) {
+        *acc = static_cast<T>(std::numeric_limits<float>::quiet_NaN());
+      } else {
+        *acc = std::min(*acc, *in);
+      }
+    } else {
+      *acc = std::min(*acc, *in);
+    }
     acc++;
     in++;
   }

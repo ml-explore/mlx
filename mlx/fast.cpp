@@ -843,6 +843,7 @@ array scaled_dot_product_attention(
       v = expand_dims(v, 2, s);
     }
     auto scores = matmul(q, swapaxes(k, -1, -2, s), s);
+    std::optional<array> has_visible_key;
     if (has_arr_mask || do_causal || window_size > 0) {
       // Mask must be broadcast-compatible with [B, n_q_heads, L_q, L_kv]
       auto make_or_fetch_mask = [&]() {
@@ -893,6 +894,9 @@ array scaled_dot_product_attention(
         }
       }
       if (mask.dtype() == bool_) {
+        if (!has_sinks) {
+          has_visible_key = any(mask, -1, true, s);
+        }
         scores = where(
             mask, scores, array(finfo(scores.dtype()).min, scores.dtype()), s);
       } else {
@@ -912,6 +916,10 @@ array scaled_dot_product_attention(
     }
     scores = softmax(scores, std::vector<int>{-1}, true, s);
     scores = nan_to_num(scores, 0.0f, std::nullopt, std::nullopt, s);
+    if (has_visible_key) {
+      // Make sure scores are zero when all keys are masked out.
+      scores = where(*has_visible_key, scores, array(0, scores.dtype()), s);
+    }
     if (has_sinks) {
       // Slice off scores
       auto start = Shape(scores.ndim(), 0);

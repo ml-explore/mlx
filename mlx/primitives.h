@@ -2071,6 +2071,20 @@ class Sign : public UnaryPrimitive {
   DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
+class SignBit : public UnaryPrimitive {
+ public:
+  explicit SignBit(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_NAME(SignBit)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+};
+
 class Sin : public UnaryPrimitive {
  public:
   explicit Sin(Stream stream) : UnaryPrimitive(stream) {}
@@ -2453,7 +2467,7 @@ class Unflatten : public UnaryPrimitive {
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   bool is_equivalent(const Primitive& other) const override;
 
-  static Shape output_shape(const array& input, int axis, const Shape& shape);
+  static Shape output_shape(const array& input, int axis, Shape shape);
   auto state() const {
     return std::make_pair(axis_, shape_);
   }

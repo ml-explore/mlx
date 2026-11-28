@@ -435,6 +435,7 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(Select),
       SERIALIZE_PRIMITIVE(Sigmoid),
       SERIALIZE_PRIMITIVE(Sign),
+      SERIALIZE_PRIMITIVE(SignBit),
       SERIALIZE_PRIMITIVE(Sin),
       SERIALIZE_PRIMITIVE(Sinh),
       SERIALIZE_PRIMITIVE(Slice),
