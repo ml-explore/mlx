@@ -40,8 +40,15 @@ bool use_nax_split(const array& q) {
       (env::enable_tf32() || q.dtype() != float32);
 }
 
+// The most rows the vector kernels take for queries of up to 8 tokens, the
+// tokens times the heads sharing a KV head. Before M3 their cost grows with the
+// rows past 8 while the split kernel's stays flat.
+int max_vector_rows(Stream s) {
+  return metal::device(s.device).get_architecture_gen() < 15 ? 8 : 32;
+}
+
 // Queries of up to 8 tokens whose heads sharing a KV head stack to more than
-// the vector kernels' 32 rows.
+// the vector kernels' rows.
 bool use_split(
     const array& q,
     const array& k,
@@ -59,9 +66,10 @@ bool use_split(
   const bool supported_head_dim = v.shape(-1) == D &&
       (D == 64 || D == 72 || D == 80 || D == 96 || D == 128 || D == 192 ||
        D == 256);
-  return supported_head_dim && q.shape(2) <= 8 && rows > 32 && rows <= 128 &&
-      (use_nax_split(q) || k.shape(1) > 1) && k.shape(2) >= 128 &&
-      !has_arr_mask && !has_sinks && window_size <= 0 && !output_logsumexp;
+  return supported_head_dim && q.shape(2) <= 8 && rows > max_vector_rows(s) &&
+      rows <= 128 && (use_nax_split(q) || k.shape(1) > 1) &&
+      k.shape(2) >= 128 && !has_arr_mask && !has_sinks && window_size <= 0 &&
+      !output_logsumexp;
 }
 
 void sdpa_blocked_softmax(const Stream& s, metal::Device& d, array& scores) {
