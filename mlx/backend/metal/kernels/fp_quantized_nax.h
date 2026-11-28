@@ -158,7 +158,8 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    if (bi >= src_tile_dim.y) {
+    // Do not read columns past the tile, they can be past the buffer end.
+    if (bi >= src_tile_dim.y || bj * pack_factor >= src_tile_dim.x) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
       }
@@ -167,6 +168,12 @@ struct QuantizedBlockLoader {
 
     int k = 0;
     for (int i = 0; i < n_steps_per_read; i++) {
+      if ((bj + k) * pack_factor >= src_tile_dim.x) {
+        for (int j = k * pack_factor; j < n_reads * pack_factor; j++) {
+          dst[j] = T(0);
+        }
+        return;
+      }
       float scale =
           float(dequantize_scale<T, group_size>(scales[i])) * inv_scale_enc;
       for (int j = 0; j < n_reads_per_scale; j++) {

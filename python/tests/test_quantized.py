@@ -2783,6 +2783,46 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     tol = 1e-3 if on_gpu else 1.5e-5
                     self.assertLess((y_sorted - y_unsorted).abs().max(), tol)
 
+    def test_gather_qmm_sorted_unaligned_k_stays_in_bounds(self):
+        # The weights are views of E + 1 experts. The last one has NaN scales,
+        # so a read past K of the last row gives NaN.
+        E, N, L = 8, 64, 32
+        key = mx.random.key(0)
+        k1, k2, k3 = mx.random.split(key, 3)
+        dtype = mx.bfloat16 if mx.default_device() == mx.gpu else mx.float32
+        indices = mx.sort((mx.random.uniform(shape=(L,), key=k1) * E).astype(mx.uint32))
+        for mode, group_size in (
+            ("affine", 32),
+            ("mxfp4", 32),
+            ("mxfp8", 32),
+            ("nvfp4", 16),
+        ):
+            for K in (32, 96, 160):
+                with self.subTest(mode=mode, K=K):
+                    w = mx.random.normal((E + 1, N, K), key=k2) / K**0.5
+                    wq, scales, *rest = mx.quantize(
+                        w.astype(dtype), group_size=group_size, mode=mode
+                    )
+                    if scales.dtype == mx.uint8:
+                        poison = mx.full(scales[E:].shape, 255, mx.uint8)
+                    else:
+                        poison = mx.full(scales[E:].shape, float("nan"), dtype)
+                    scales = mx.concatenate([scales[:E], poison])
+                    biases = rest[0][:E] if mode == "affine" else None
+                    x = (mx.random.normal((L, 1, K), key=k3) / K**0.5).astype(dtype)
+                    y = mx.gather_qmm(
+                        x,
+                        wq[:E],
+                        scales[:E],
+                        biases,
+                        rhs_indices=indices,
+                        transpose=True,
+                        group_size=group_size,
+                        mode=mode,
+                        sorted_indices=True,
+                    )
+                    self.assertFalse(mx.isnan(y).any().item())
+
     @unittest.skipIf(not mx.cuda.is_available(), "CUDA kernel path only")
     def test_gather_qmm_sorted_rhs_cuda(self):
         # Sorted rows with a shared LHS take the sorted-RHS matrix kernel. Row
