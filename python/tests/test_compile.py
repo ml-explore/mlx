@@ -4,6 +4,7 @@ import gc
 import inspect
 import io
 import math
+import queue
 import threading
 from functools import partial, wraps
 from io import StringIO
@@ -168,6 +169,52 @@ class TestCompile(mlx_tests.MLXTestCase):
         if errors:
             raise errors[0]
         self.assertEqual(len(traces), 2)
+
+    def test_compile_release_after_calls_from_several_threads(self):
+        # Regression test: releasing a compiled function must erase its cache
+        # entries on all threads that called it, not only the last one.
+        scale = [1.0]
+
+        def fun(x):
+            return x * scale[0]
+
+        jobs = queue.Queue()
+        results = queue.Queue()
+
+        # Keep the worker alive. A thread deletes its cache when it exits.
+        def worker():
+            while (job := jobs.get()) is not None:
+                try:
+                    results.put(job())
+                except Exception as e:
+                    results.put(e)
+            mx.clear_streams()
+
+        def on_worker(job):
+            jobs.put(job)
+            return results.get(timeout=10)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        # Cache entries match on the default stream, so make the worker's first.
+        x = mx.array(1.0)
+        on_worker(lambda: (x + 1).item())
+
+        fn = mx.compile(fun)
+        self.assertEqual(on_worker(lambda: fn(x).item()), 1.0)
+        self.assertEqual(fn(x).item(), 1.0)
+        del fn
+        gc.collect()
+
+        # Same function, so same id, but a new value to trace.
+        scale[0] = 2.0
+        fn = mx.compile(fun)
+        self.assertEqual(on_worker(lambda: fn(x).item()), 2.0)
+        self.assertEqual(fn(x).item(), 2.0)
+
+        jobs.put(None)
+        thread.join()
 
     def test_compile_grad(self):
         def loss_fn(x):
