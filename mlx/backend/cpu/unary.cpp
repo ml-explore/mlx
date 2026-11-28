@@ -197,7 +197,8 @@ void Sign::eval_cpu(const std::vector<array>& inputs, array& out) {
 
 void SignBit::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
-  unary_real_to_bool(inputs[0], out, detail::SignBit(), stream());
+  const auto& in = inputs[0];
+  unary_real_to_bool(in, out, detail::SignBit(), stream());
 }
 
 void Sin::eval_cpu(const std::vector<array>& inputs, array& out) {
