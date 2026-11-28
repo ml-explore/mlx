@@ -2467,7 +2467,7 @@ class Unflatten : public UnaryPrimitive {
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   bool is_equivalent(const Primitive& other) const override;
 
-  static Shape output_shape(const array& input, int axis, const Shape& shape);
+  static Shape output_shape(const array& input, int axis, Shape shape);
   auto state() const {
     return std::make_pair(axis_, shape_);
   }

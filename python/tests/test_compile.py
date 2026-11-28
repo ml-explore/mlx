@@ -689,12 +689,82 @@ class TestCompile(mlx_tests.MLXTestCase):
                         self.assertEqual(trace_count, 1)
 
     def test_shapeless_compile_unflatten(self):
-        x = mx.zeros((1, 1, 4 * 32))
+        for axis, shape, transposed in product(
+            (0, 1, -1), ((2, -1), (-1, 2), (2, -1, 2), (-1,)), (False, True)
+        ):
+            with self.subTest(axis=axis, shape=shape, transposed=transposed):
+                trace_count = 0
 
+                def fun(x):
+                    nonlocal trace_count
+                    trace_count += 1
+                    return mx.unflatten(x, axis, shape)
+
+                cfun = mx.compile(fun, shapeless=True)
+                for n in (8, 12, 4, 0, 8):
+                    input_shape = [3, 3, 3]
+                    input_shape[axis] = n
+                    x = mx.arange(math.prod(input_shape)).reshape(input_shape)
+                    if transposed:
+                        x = mx.contiguous(x.T).T
+                    expected = mx.unflatten(x, axis, shape)
+                    actual = cfun(x)
+                    self.assertEqual(actual.shape, expected.shape)
+                    self.assertTrue(mx.array_equal(actual, expected))
+                    self.assertEqual(trace_count, 1)
+
+    def test_shapeless_compile_unflatten_invalid_shape(self):
+        for shape, invalid_sizes in (
+            ((2, -1), (3, 9)),
+            ((2, 4), (4, 12)),
+            ((8,), (4, 12)),
+        ):
+            with self.subTest(shape=shape):
+
+                def fun(x):
+                    return mx.unflatten(x, 0, shape)
+
+                cfun = mx.compile(fun, shapeless=True)
+                mx.eval(cfun(mx.arange(8)))
+                for n in invalid_sizes:
+                    with self.assertRaises(ValueError):
+                        cfun(mx.arange(n))
+                self.assertTrue(mx.array_equal(cfun(mx.arange(8)), fun(mx.arange(8))))
+
+        for shape in ((0, -1), (-1, 0), (-1, -1)):
+            with self.subTest(shape=shape):
+                with self.assertRaises(ValueError):
+                    mx.unflatten(mx.array([]), 0, shape)
+
+    def test_shapeless_compile_unflatten_inferred_axes(self):
         def fun(x):
-            return mx.unflatten(x, -1, (4, -1))
+            return mx.unflatten(x, 0, (2, -1)), mx.unflatten(x, 0, (-1, 4))
 
-        self.assertEqual(mx.compile(fun, shapeless=True)(x).shape, (1, 1, 4, 32))
+        cfun = mx.compile(fun, shapeless=True)
+        for n in (8, 12, 4):
+            x = mx.arange(n)
+            for actual, expected in zip(cfun(x), fun(x)):
+                self.assertEqual(actual.shape, expected.shape)
+                self.assertTrue(mx.array_equal(actual, expected))
+
+    def test_shapeless_compile_unflatten_transforms(self):
+        def fun(x):
+            return mx.unflatten(x, 0, (2, -1))
+
+        grad = mx.compile(mx.grad(lambda x: mx.sum(mx.square(fun(x)))), shapeless=True)
+        jvp = mx.compile(lambda x, t: mx.jvp(fun, [x], [t]), shapeless=True)
+        vmap = mx.compile(mx.vmap(fun), shapeless=True)
+        for n in (8, 12, 4):
+            x = mx.arange(n, dtype=mx.float32)
+            self.assertTrue(mx.array_equal(grad(x), 2 * x))
+            primal, tangent = jvp(x, mx.ones_like(x))
+            self.assertTrue(mx.array_equal(primal[0], fun(x)))
+            self.assertTrue(mx.array_equal(tangent[0], mx.ones((2, n // 2))))
+            batched = mx.stack([x, x + 1])
+            actual = vmap(batched)
+            expected = mx.stack([fun(x), fun(x + 1)])
+            self.assertEqual(actual.shape, expected.shape)
+            self.assertTrue(mx.array_equal(actual, expected))
 
     def test_shapeless_compile_gather(self):
         x = mx.zeros((1, 1, 32))
