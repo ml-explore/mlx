@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -42,38 +41,6 @@ MLX_API void compile_erase(
 // Clear the compiler cache causing a recompilation of all compiled functions
 // when called again.
 MLX_API void compile_clear_cache(const CompileCacheWeakPtr& cache);
-
-// Keeps the caches of all threads that traced a compiled function, so the
-// function can be erased from each of them when it is destroyed.
-class CompileCaches {
- public:
-  CompileCaches() = default;
-  CompileCaches(CompileCaches&& other) : caches_(std::move(other.caches_)) {}
-
-  void insert_current() {
-    auto cache = compile_cache();
-    std::lock_guard lock(mtx_);
-    std::erase_if(caches_, [](const auto& c) { return c.expired(); });
-    for (const auto& c : caches_) {
-      if (!c.owner_before(cache) && !cache.owner_before(c)) {
-        return;
-      }
-    }
-    caches_.push_back(std::move(cache));
-  }
-
-  void erase(std::uintptr_t fun_id) {
-    std::lock_guard lock(mtx_);
-    for (const auto& c : caches_) {
-      compile_erase(c, fun_id);
-    }
-    caches_.clear();
-  }
-
- private:
-  std::mutex mtx_;
-  std::vector<CompileCacheWeakPtr> caches_;
-};
 
 bool compile_available_for_device(const Device& device);
 

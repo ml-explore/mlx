@@ -428,18 +428,14 @@ ArrayFunction compile(ArrayFunction fun, bool shapeless /* false */) {
     // lifetime
     return detail::compile(std::move(fun), fun_id, shapeless);
   } else {
-    auto caches = std::make_shared<detail::CompileCaches>();
-    auto cleanup = [caches](auto* p) {
-      caches->erase(reinterpret_cast<std::uintptr_t>(p));
+    auto cleanup = [cache = detail::compile_cache()](auto* p) {
+      detail::compile_erase(cache, reinterpret_cast<std::uintptr_t>(p));
       delete p;
     };
     auto pfun = std::shared_ptr<ArrayFunction>(new ArrayFunction{fun}, cleanup);
     fun_id = reinterpret_cast<std::uintptr_t>(pfun.get());
     return detail::compile(
-        [pfun = std::move(pfun),
-         caches = std::move(caches)](const auto& inputs) {
-          // Only tracing adds an entry to the cache of this thread
-          caches->insert_current();
+        [pfun = std::move(pfun)](const auto& inputs) {
           return (*pfun)(inputs);
         },
         fun_id,
