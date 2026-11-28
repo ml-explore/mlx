@@ -140,8 +140,6 @@ array_api_tests/test_signatures.py::test_func_signature[full_like]
 array_api_tests/test_signatures.py::test_func_signature[ones_like]
 ### Missing argument `device`
 array_api_tests/test_signatures.py::test_func_signature[zeros_like]
-### Missing arguments `prepend` `append`
-array_api_tests/test_signatures.py::test_func_signature[diff]
 ### rejects an integer `axes` argument
 array_api_tests/test_signatures.py::test_func_signature[permute_dims]
 ### Missing argument `copy`
@@ -256,11 +254,6 @@ array_api_tests/test_searching_functions.py::test_searchsorted_with_scalars
 array_api_tests/test_searching_functions.py::test_argmax
 ### returns uint32 indices instead of the required default signed integer dtype
 array_api_tests/test_searching_functions.py::test_argmin
-
-# test_utility_functions.py
-## Misisng arguments
-### Missing argument `append` `prepend`
-array_api_tests/test_utility_functions.py::test_diff_append_prepend
 
 # test_creation_functions.py
 ## Other failures

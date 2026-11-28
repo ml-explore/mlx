@@ -3033,6 +3033,17 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(IndexError):
             mx.diff(a, axis=1)
 
+        pre = mx.array([[9], [8]])
+        app = mx.array([[1, 2], [3, 4]])
+        out = mx.diff(m, axis=1, n=2, prepend=pre, append=app)
+        expected = np.diff(
+            np.array(m), axis=1, n=2, prepend=np.array(pre), append=np.array(app)
+        )
+        self.assertEqual(out.tolist(), expected.tolist())
+
+        with self.assertRaises(ValueError):
+            mx.diff(m, axis=1, prepend=mx.zeros((3, 1)))
+
     def test_squeeze_expand(self):
         a = mx.zeros((2, 1, 2, 1))
         self.assertEqual(mx.squeeze(a).shape, (2, 2))
