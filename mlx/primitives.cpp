@@ -4713,24 +4713,18 @@ std::vector<array> Scatter::vjp(
           throw std::invalid_argument("");
       }
     } else if (num == primals.size() - 1) {
+      Shape slice_sizes(
+          updates.shape().end() - values.ndim(), updates.shape().end());
       switch (reduce_type_) {
         case Scatter::None:
         case Scatter::Sum: {
           // Gather the values from the cotangent
-          auto slice_sizes = cotangents[0].shape();
-          for (auto ax : axes_) {
-            slice_sizes[ax] = 1;
-          }
           vjps.push_back(
               gather(cotangents[0], indices, axes_, slice_sizes, stream()));
           break;
         }
         case Scatter::Max:
         case Scatter::Min: {
-          auto slice_sizes = cotangents[0].shape();
-          for (auto ax : axes_) {
-            slice_sizes[ax] = 1;
-          }
           auto gathered_cotan =
               gather(cotangents[0], indices, axes_, slice_sizes, stream());
           auto gathered_result =
