@@ -770,6 +770,99 @@ TEST_CASE("test assigning a sibling over the last reference keeps the cycle") {
   CHECK(array_equal(last, array({2})).item<bool>());
 }
 
+namespace {
+
+constexpr int deep_graph_depth = 50000;
+
+// Set fake data as a tracker for the ArrayDesc's lifetime.
+std::weak_ptr<array::Data> track(array& a) {
+  a.set_data(allocator::malloc(0));
+  return a.data_shared_ptr();
+}
+
+} // namespace
+
+TEST_CASE("test destroying a deep graph") {
+  std::weak_ptr<array::Data> tracker;
+  {
+    array x({1.0f});
+    auto first = negative(x);
+    tracker = track(first);
+    x = first;
+    for (int i = 0; i < deep_graph_depth; ++i) {
+      x = negative(x);
+    }
+  }
+  CHECK(tracker.expired());
+}
+
+TEST_CASE("test destroying a deep graph with repeated inputs") {
+  std::weak_ptr<array::Data> tracker;
+  {
+    array x({1.0f});
+    auto first = add(x, x);
+    tracker = track(first);
+    x = first;
+    for (int i = 0; i < deep_graph_depth; ++i) {
+      x = add(x, x);
+    }
+  }
+  CHECK(tracker.expired());
+}
+
+TEST_CASE("test destroying a deep graph of multi-output primitives") {
+  std::weak_ptr<array::Data> both_used;
+  std::weak_ptr<array::Data> one_used;
+  {
+    array x({1.0f, 2.0f});
+    for (int i = 0; i < deep_graph_depth; ++i) {
+      auto halves = split(x, 2);
+      if (i == 0) {
+        both_used = track(halves[1]);
+      }
+      x = concatenate({halves[0], halves[1]});
+    }
+    for (int i = 0; i < deep_graph_depth; ++i) {
+      auto halves = split(x, 2);
+      if (i == 0) {
+        one_used = track(halves[1]);
+      }
+      x = concatenate({halves[0], halves[0]});
+    }
+  }
+  CHECK(both_used.expired());
+  CHECK(one_used.expired());
+}
+
+TEST_CASE("test destroying a deep graph whose levels have two inputs") {
+  std::weak_ptr<array::Data> tracker;
+  {
+    array x({1.0f});
+    auto first = negative(x);
+    tracker = track(first);
+    x = first;
+    for (int i = 0; i < deep_graph_depth; ++i) {
+      x = add(x, exp(array({static_cast<float>(i)})));
+    }
+  }
+  CHECK(tracker.expired());
+}
+
+TEST_CASE("test destroying a graph with unused outputs") {
+  std::weak_ptr<array::Data> used;
+  std::weak_ptr<array::Data> unused;
+  {
+    array x({1.0f, 2.0f, 3.0f});
+    auto thirds = split(x, 3);
+    used = track(thirds[0]);
+    unused = track(thirds[2]);
+    auto y = exp(thirds[0]);
+    thirds.clear();
+  }
+  CHECK(used.expired());
+  CHECK(unused.expired());
+}
+
 TEST_CASE("test unaligned scalar item") {
   uint64_t expected = 0x0123456789abcdef;
   for (size_t offset = 1; offset < sizeof(expected); ++offset) {
