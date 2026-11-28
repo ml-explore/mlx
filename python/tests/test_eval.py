@@ -1,8 +1,5 @@
 # Copyright © 2023 Apple Inc.
 
-import os
-import subprocess
-import sys
 import unittest
 
 import mlx.core as mx
@@ -367,30 +364,16 @@ class TestEval(mlx_tests.MLXTestCase):
     def test_fast_synch_cross_stream_after_commit(self):
         # With fast synch, an array consumed on another stream must be ready
         # even when its command buffer is committed before the fence update.
-        # The environment is read once per process, so run in a subprocess.
-        code = """
-import mlx.core as mx
-s = mx.new_stream(mx.gpu)
-for t in range(20):
-    x = mx.random.randint(0, 4, (512, 512), key=mx.random.key(t))
-    x = x.astype(mx.float32)
-    expected = x @ x
-    mx.eval(x, expected)
-    with mx.stream(s):
-        y = x @ x
-    assert mx.array_equal(y, expected).item(), t
-"""
-        env = dict(os.environ)
-        env["MLX_METAL_FAST_SYNCH"] = "1"
-        env["MLX_MAX_OPS_PER_BUFFER"] = "0"
-        result = subprocess.run(
-            [sys.executable, "-c", code],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=20,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
+        with mx.config.scoped_update(MLX_METAL_FAST_SYNCH=1, MLX_MAX_OPS_PER_BUFFER=0):
+            s = mx.new_stream(mx.gpu)
+            for t in range(20):
+                x = mx.random.randint(0, 4, (512, 512), key=mx.random.key(t))
+                x = x.astype(mx.float32)
+                expected = x @ x
+                mx.eval(x, expected)
+                with mx.stream(s):
+                    y = x @ x
+                self.assertTrue(mx.array_equal(y, expected).item(), t)
 
 
 if __name__ == "__main__":
