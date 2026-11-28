@@ -56,7 +56,7 @@ runs:
       run: |
         if ${{ runner.os == 'Linux' }} ; then
           auditwheel repair dist/mlx-*.whl \
-            --plat manylinux_2_35_${{ inputs.arch-tag }} \
+            --plat manylinux_2_39_${{ inputs.arch-tag }} \
             --exclude libmlx.so* \
             --only-plat
         else
@@ -80,11 +80,11 @@ runs:
         if ${{ runner.os == 'Linux' }} ; then
           if [ -f dist/mlx_cpu*.whl ]; then
             auditwheel repair dist/mlx_cpu*.whl \
-              --plat manylinux_2_35_${{ inputs.arch-tag }}
+              --plat manylinux_2_39_${{ inputs.arch-tag }}
           fi
           if [ -f dist/mlx_cuda*.whl ]; then
             auditwheel repair dist/mlx_cuda*.whl \
-              --plat manylinux_2_35_${{ inputs.arch-tag }} \
+              --plat manylinux_2_39_${{ inputs.arch-tag }} \
               --exclude libcublas* \
               --exclude libcuda* \
               --exclude libcudnn* \
