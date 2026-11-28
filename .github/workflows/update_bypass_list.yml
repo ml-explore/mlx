@@ -16,7 +16,7 @@ jobs:
   update_bypass_list:
     name: 'Update bypass list'
     if: github.repository == 'ml-explore/mlx'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7.0.1
       - env:
