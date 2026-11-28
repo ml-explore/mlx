@@ -27,6 +27,13 @@ struct MLX_API ThreadLocalStream : public Stream {
   using Stream::Stream;
 };
 
+using StreamOrDevice = std::variant<
+    std::monostate,
+    Stream,
+    ThreadLocalStream,
+    Device,
+    Device::DeviceType>;
+
 /** Get the default stream of current thread for the given device. */
 MLX_API Stream default_stream(Device d);
 

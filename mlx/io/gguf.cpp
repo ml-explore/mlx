@@ -124,7 +124,9 @@ Shape get_shape(const gguf_tensor& tensor) {
   return shape;
 }
 
-std::tuple<allocator::Data, Dtype> extract_tensor_data(gguf_tensor* tensor) {
+std::tuple<allocator::Data, Dtype> extract_tensor_data(
+    gguf_tensor* tensor,
+    Stream s) {
   if (tensor == nullptr) {
     throw std::invalid_argument(
         "[extract_tensor_data] Input tensor pointer is null.");
@@ -140,7 +142,7 @@ std::tuple<allocator::Data, Dtype> extract_tensor_data(gguf_tensor* tensor) {
         out.buffer().raw_ptr(),
         tensor->weights_data,
         tensor->num_weights * equivalent_dtype.value().size());
-    allocator::move_to_device_memory(out.buffer());
+    allocator::move_to_device_memory(out.buffer(), s);
     return {std::move(out), equivalent_dtype.value()};
   }
   // Otherwise, we convert to float16.
@@ -157,7 +159,7 @@ std::tuple<allocator::Data, Dtype> extract_tensor_data(gguf_tensor* tensor) {
   auto out = allocator::malloc(new_size);
   memcpy(out.buffer().raw_ptr(), data, new_size);
   free(data);
-  allocator::move_to_device_memory(out.buffer());
+  allocator::move_to_device_memory(out.buffer(), s);
   return {std::move(out), float16};
 }
 
@@ -393,7 +395,7 @@ void check_tensor_in_file(const gguf_ctx* ctx, const gguf_tensor& tensor) {
   }
 }
 
-std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
+std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx, Stream s) {
   std::unordered_map<std::string, array> array_map;
   gguf_tensor tensor;
 
@@ -410,10 +412,10 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
     check_tensor_in_file(ctx, tensor);
     if (tensor.type == GGUF_TYPE_Q4_0 || tensor.type == GGUF_TYPE_Q4_1 ||
         tensor.type == GGUF_TYPE_Q8_0) {
-      gguf_load_quantized(array_map, tensor);
+      gguf_load_quantized(array_map, tensor, s);
     } else {
       std::string name(tensor.name, tensor.namelen);
-      auto [data, dtype] = extract_tensor_data(&tensor);
+      auto [data, dtype] = extract_tensor_data(&tensor, s);
       array loaded_array = array(std::move(data), get_shape(tensor), dtype);
       check_insert(array_map.insert({name, loaded_array}));
     }
@@ -437,7 +439,7 @@ GGUFLoad load_gguf(const std::string& file, StreamOrDevice s) {
     throw std::runtime_error("[load_gguf] gguf_init failed");
   }
   auto metadata = load_metadata(ctx.get());
-  auto arrays = load_arrays(ctx.get());
+  auto arrays = load_arrays(ctx.get(), to_stream(s));
   return {arrays, metadata};
 }
 

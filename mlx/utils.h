@@ -19,12 +19,6 @@
 
 namespace mlx::core {
 
-using StreamOrDevice = std::variant<
-    std::monostate,
-    Stream,
-    ThreadLocalStream,
-    Device,
-    Device::DeviceType>;
 MLX_API Stream to_stream(StreamOrDevice s);
 MLX_API Stream to_stream(StreamOrDevice s, Device default_);
 

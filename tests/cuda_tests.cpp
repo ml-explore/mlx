@@ -28,16 +28,6 @@ bool memory_pools_supported() {
   return supported;
 }
 
-// Host buffers are pinned memory read over PCIe only without concurrent
-// managed access (Windows, WSL, Tegra).
-bool host_memory_is_pinned() {
-  int managed = 0;
-  REQUIRE_EQ(
-      cudaDeviceGetAttribute(&managed, cudaDevAttrConcurrentManagedAccess, 0),
-      cudaSuccess);
-  return !managed;
-}
-
 cudaMemoryType residency(void* ptr) {
   cudaPointerAttributes attr{};
   REQUIRE_EQ(cudaPointerGetAttributes(&attr, ptr), cudaSuccess);
@@ -130,30 +120,7 @@ TEST_CASE("test clear cache trims CUDA pool") {
   CHECK_LT(final_reserved, allocated_reserved);
 }
 
-TEST_CASE("test cached host buffer is not reused for device output") {
-  if (!host_memory_is_pinned()) {
-    return;
-  }
-  clear_cache();
-  auto& alloc = cu::allocator();
-  cudaStream_t stream;
-  REQUIRE_EQ(cudaStreamCreate(&stream), cudaSuccess);
-  constexpr size_t size = 1 << 22;
-  // Put a host buffer into the size-keyed cache.
-  alloc.free(alloc.malloc(size));
-  auto buf = alloc.malloc_async(size, 0, stream);
-  CHECK_NE(
-      residency(static_cast<cu::CudaBuffer*>(buf.ptr())->data),
-      cudaMemoryTypeHost);
-  alloc.free(buf);
-  CHECK_EQ(cudaStreamSynchronize(stream), cudaSuccess);
-  CHECK_EQ(cudaStreamDestroy(stream), cudaSuccess);
-}
-
 TEST_CASE("test host data is moved to device memory") {
-  if (!host_memory_is_pinned() || !memory_pools_supported()) {
-    return;
-  }
   auto data = [](const array& a) {
     return static_cast<cu::CudaBuffer*>(a.buffer().ptr())->data;
   };

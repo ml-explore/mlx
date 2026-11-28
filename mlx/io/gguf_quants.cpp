@@ -101,7 +101,8 @@ void extract_q8_0_data(
 
 void gguf_load_quantized(
     std::unordered_map<std::string, array>& a,
-    const gguf_tensor& tensor) {
+    const gguf_tensor& tensor,
+    Stream s) {
   uint64_t weights_per_byte;
   if (tensor.type == GGUF_TYPE_Q4_0 || tensor.type == GGUF_TYPE_Q4_1) {
     weights_per_byte = 2;
@@ -151,9 +152,9 @@ void gguf_load_quantized(
   } else if (tensor.type == GGUF_TYPE_Q8_0) {
     extract_q8_0_data(tensor, weights, scales, biases);
   }
-  allocator::move_to_device_memory(weights.buffer());
-  allocator::move_to_device_memory(scales.buffer());
-  allocator::move_to_device_memory(biases.buffer());
+  allocator::move_to_device_memory(weights.buffer(), s);
+  allocator::move_to_device_memory(scales.buffer(), s);
+  allocator::move_to_device_memory(biases.buffer(), s);
 
   a.emplace(name, std::move(weights));
 

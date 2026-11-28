@@ -189,18 +189,6 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
   // Find available buffer from cache.
   std::unique_lock lock(mutex_);
   CudaBuffer* buf = buffer_cache_.reuse_from_cache(size);
-  // Pinned host memory is read over PCIe, skip it for device allocations.
-  // Put it back instead of freeing, cudaFreeHost synchronizes the device.
-  if (device >= 0 && !supports_managed_memory()) {
-    std::vector<CudaBuffer*> host_bufs;
-    while (buf && buf->device == -1) {
-      host_bufs.push_back(buf);
-      buf = buffer_cache_.reuse_from_cache(size);
-    }
-    for (auto* b : host_bufs) {
-      buffer_cache_.recycle_to_cache(b);
-    }
-  }
   if (!buf) {
     // If we have a lot of memory pressure try to reclaim memory from the cache.
     auto cache_size = buffer_cache_.cache_size();
@@ -219,22 +207,7 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
     }
     lock.unlock();
     if (!buf) {
-      void* data = nullptr;
-      if (device == -1) {
-        data = unified_malloc(size);
-      } else {
-        cu::device(device).make_current();
-        if (mem_pools_[device]) { // supports memory pools
-          CHECK_CUDA_ERROR(cudaMallocAsync(&data, size, stream));
-        } else {
-          CHECK_CUDA_ERROR(cudaMalloc(&data, size));
-        }
-      }
-      if (!data) {
-        std::ostringstream msg;
-        msg << "[malloc] Unable to allocate " << size << " bytes.";
-        throw std::runtime_error(msg.str());
-      }
+      void* data = cuda_malloc_async(size, device, stream);
       buf = new CudaBuffer{data, size, device};
     }
     lock.lock();
@@ -321,10 +294,10 @@ void CudaAllocator::move_to_unified_memory(
       supports_managed_memory() ? cudaMemcpyDefault : cudaMemcpyDeviceToHost;
   if (stream && mem_pools_[buf.device]) {
     CHECK_CUDA_ERROR(cudaMemcpyAsync(data, buf.data, buf.size, kind, stream));
-    free_async(buf, stream);
+    cuda_free_async(buf.data, buf.device, stream);
   } else {
     CHECK_CUDA_ERROR(cudaMemcpy(data, buf.data, buf.size, kind));
-    free_async(buf);
+    cuda_free_async(buf.data, buf.device);
   }
 #ifndef NDEBUG
   swap_allocation(buf.data, data);
@@ -333,37 +306,27 @@ void CudaAllocator::move_to_unified_memory(
   buf.device = -1;
 }
 
-void CudaAllocator::move_to_device_memory(CudaBuffer& buf, int device) {
-  // Without a memory pool there is no free stream to copy on. Small buffers
-  // are cheap to read over PCIe and not worth a copy and a sync.
-  if (supports_managed_memory() || buf.device != -1 || buf.size < page_size ||
-      !mem_pools_[device]) {
-    return;
+void CudaAllocator::move_to_device_memory(
+    CudaBuffer& buf,
+    CommandEncoder& encoder) {
+  // Allocate device buffer and copy to it.
+  int device = encoder.device().cuda_device();
+  void* dbuf = cuda_malloc_async(buf.size, device, encoder.stream());
+  if (mem_pools_[device]) { // async malloc is used
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(
+        dbuf, buf.data, buf.size, cudaMemcpyHostToDevice, encoder.stream()));
+    cuda_free_async(buf.data, buf.device, encoder.stream());
+    encoder.synchronize();
+  } else {
+    CHECK_CUDA_ERROR(
+        cudaMemcpy(dbuf, buf.data, buf.size, cudaMemcpyHostToDevice));
+    cuda_free_async(buf.data, buf.device);
   }
-  cu::device(device).make_current();
-  // The free stream is mostly idle, so waiting on it does not stall on kernels.
-  cudaStream_t stream = free_streams_[device];
-  CudaBuffer* dev;
-  try {
-    dev =
-        static_cast<CudaBuffer*>(malloc_async(buf.size, device, stream).ptr());
-  } catch (const std::runtime_error&) {
-    // Out of device memory, stay in host memory.
-    return;
-  }
-  if (dev->device == device) {
-    try {
-      CHECK_CUDA_ERROR(cudaMemcpyAsync(
-          dev->data, buf.data, buf.size, cudaMemcpyHostToDevice, stream));
-      CHECK_CUDA_ERROR(cudaStreamSynchronize(stream));
-    } catch (...) {
-      free(Buffer{dev});
-      throw;
-    }
-    std::swap(buf, *dev);
-  }
-  // Returns the host memory to the cache.
-  free(Buffer{dev});
+#ifndef NDEBUG
+  swap_allocation(buf.data, dbuf);
+#endif
+  buf.data = dbuf;
+  buf.device = device;
 }
 
 // This must be called with mutex_ acquired
@@ -371,23 +334,49 @@ void CudaAllocator::free_cuda_buffer(CudaBuffer* buf) {
   if (scalar_pool_.in_pool(buf)) {
     scalar_pool_.free(buf);
   } else {
-    free_async(*buf);
+    cuda_free_async(buf->data, buf->device);
     delete buf;
   }
 }
 
-void CudaAllocator::free_async(CudaBuffer& buf, cudaStream_t stream) {
-  if (buf.device == -1) {
-    unified_free(buf.data);
+void* CudaAllocator::cuda_malloc_async(
+    size_t size,
+    int device,
+    cudaStream_t stream) {
+  void* data = nullptr;
+  if (device == -1) {
+    data = unified_malloc(size);
+  } else {
+    cu::device(device).make_current();
+    if (mem_pools_[device]) { // supports memory pools
+      CHECK_CUDA_ERROR(cudaMallocAsync(&data, size, stream));
+    } else {
+      CHECK_CUDA_ERROR(cudaMalloc(&data, size));
+    }
+  }
+  if (!data) {
+    std::ostringstream msg;
+    msg << "[malloc] Unable to allocate " << size << " bytes.";
+    throw std::runtime_error(msg.str());
+  }
+  return data;
+}
+
+void CudaAllocator::cuda_free_async(
+    void* data,
+    int device,
+    cudaStream_t stream) {
+  if (device == -1) {
+    unified_free(data);
   } else {
     // Free asynchronously when memory pools is supported.
-    if (mem_pools_[buf.device]) {
+    if (mem_pools_[device]) {
       if (!stream) {
-        stream = free_streams_[buf.device];
+        stream = free_streams_[device];
       }
-      cudaFreeAsync(buf.data, stream);
+      cudaFreeAsync(data, stream);
     } else {
-      cudaFree(buf.data);
+      cudaFree(data);
     }
   }
 }
@@ -501,13 +490,22 @@ bool over_memory_limit() {
   return cu::allocator().over_memory_limit();
 }
 
-void move_to_device_memory(Buffer buffer) {
-  auto d = default_device();
-  if (d.type != Device::gpu || !buffer.ptr()) {
+void move_to_device_memory(Buffer buffer, StreamOrDevice s_) {
+  if (!buffer.ptr()) {
     return;
   }
-  cu::allocator().move_to_device_memory(
-      *static_cast<cu::CudaBuffer*>(buffer.ptr()), cu::device(d).cuda_device());
+  cu::CudaBuffer& buf = *static_cast<cu::CudaBuffer*>(buffer.ptr());
+  if (buf.device != -1) { // already on device memory
+    return;
+  }
+  if (buf.size < cu::page_size) { // small buffers are cheap to read over PCIe
+    return;
+  }
+  Stream s = to_stream(s_);
+  if (s.device.type != Device::gpu) {
+    return;
+  }
+  cu::allocator().move_to_device_memory(buf, cu::get_command_encoder(s));
 }
 
 } // namespace allocator
