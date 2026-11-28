@@ -1357,7 +1357,7 @@ class TestOps(mlx_tests.MLXTestCase):
     def test_exp_argument_reduction(self):
         x = np.linspace(-87, 87, 10001, dtype=np.float32)
         expected = np.exp(x.astype(np.float64))
-        result = mx.exp(mx.array(x), stream=mx.cpu)
+        result = mx.exp(mx.array(x))
         np.testing.assert_allclose(result, expected, rtol=2e-7, atol=0)
 
     def test_erf(self):
