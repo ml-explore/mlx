@@ -456,13 +456,38 @@ auto py_vmap(
   };
 }
 
+// Keeps the caches of all threads that traced a compiled function, so the
+// function can be erased from each of them when it is destroyed.
+class CompileCacheList {
+ public:
+  explicit CompileCacheList(std::uintptr_t fun_id) : fun_id_(fun_id) {}
+
+  ~CompileCacheList() {
+    std::lock_guard lock(mtx_);
+    for (const auto& c : caches_) {
+      compile_erase(c, fun_id_);
+    }
+    caches_.clear();
+  }
+
+  void add(CompileCacheWeakPtr cache) {
+    std::lock_guard lock(mtx_);
+    caches_.push_back(std::move(cache));
+  }
+
+ private:
+  std::uintptr_t fun_id_;
+  std::mutex mtx_;
+  std::list<CompileCacheWeakPtr> caches_;
+};
+
 struct PyCompiledFun {
   nb::callable fun;
   std::uintptr_t fun_id;
   nb::object captured_inputs;
   nb::object captured_outputs;
   bool shapeless;
-  mx::detail::CompileCaches caches;
+  CompileCacheList caches;
 
   // Data to attach to the compiled function that contains the python output
   // structure and the number of arrays in said structure.
@@ -488,7 +513,8 @@ struct PyCompiledFun {
         fun_id(reinterpret_cast<std::uintptr_t>(fun.ptr())),
         captured_inputs(inputs),
         captured_outputs(outputs),
-        shapeless(shapeless) {}
+        shapeless(shapeless),
+        caches(fun_id) {}
 
   PyCompiledFun(const PyCompiledFun&) = delete;
   PyCompiledFun& operator=(const PyCompiledFun&) = delete;
@@ -569,8 +595,7 @@ struct PyCompiledFun {
     recurse(kwargs);
     auto compile_fun = [this, &args, &kwargs, num_args](
                            const std::vector<mx::array>& a) {
-      // Only tracing adds an entry to the cache of this thread
-      caches.insert_current();
+      caches.add(mx::detail::compile_cache());
 
       // Put tracers into captured inputs
       std::vector<mx::array> flat_in_captures;
@@ -640,7 +665,6 @@ struct PyCompiledFun {
   ~PyCompiledFun() {
     nb::gil_scoped_acquire gil;
 
-    caches.erase(fun_id);
     fun.reset();
     captured_inputs.reset();
     captured_outputs.reset();
