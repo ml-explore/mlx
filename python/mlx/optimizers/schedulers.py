@@ -156,6 +156,7 @@ def linear_schedule(init: float, end: float, steps: int) -> Callable:
 
     def schedule(step):
         step = mx.minimum(step, steps)
-        return step * ((end - init) / steps) + init
+        rate = step * ((end - init) / steps) + init
+        return mx.where(step == steps, end, rate)
 
     return schedule
