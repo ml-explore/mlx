@@ -58,6 +58,10 @@ class CudaAllocator : public allocator::Allocator {
   // host memory), and copy the data over. Pass |stream| to copy asynchronously.
   void move_to_unified_memory(CudaBuffer& buf, cudaStream_t stream = nullptr);
 
+  // Replace the memory of |buf| with memory on |device| and copy the data
+  // over synchronously.
+  void move_to_device_memory(CudaBuffer& buf, CommandEncoder& encoder);
+
   size_t get_active_memory() const;
   size_t get_peak_memory() const;
   void reset_peak_memory();
@@ -71,7 +75,9 @@ class CudaAllocator : public allocator::Allocator {
  private:
   size_t memory_limit_locked();
   void free_cuda_buffer(CudaBuffer* buf);
-  void free_async(CudaBuffer& buf, cudaStream_t stream = nullptr);
+  void* cuda_malloc_async(size_t size, int device, cudaStream_t stream);
+  void
+  cuda_free_async(void* data, int device = -1, cudaStream_t stream = nullptr);
 
   CudaAllocator();
   friend CudaAllocator& allocator();

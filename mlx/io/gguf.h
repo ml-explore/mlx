@@ -15,6 +15,7 @@ namespace mlx::core {
 Shape get_shape(const gguf_tensor& tensor);
 void gguf_load_quantized(
     std::unordered_map<std::string, array>& a,
-    const gguf_tensor& tensor);
+    const gguf_tensor& tensor,
+    Stream s);
 
 } // namespace mlx::core

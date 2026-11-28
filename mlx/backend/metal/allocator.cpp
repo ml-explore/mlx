@@ -39,6 +39,8 @@ bool can_reuse_alien_buffer(void* ptr) {
   return buf->storageMode() != MTL::StorageModePrivate;
 }
 
+void move_to_device_memory(Buffer, StreamOrDevice s) {}
+
 } // namespace allocator
 
 namespace metal {

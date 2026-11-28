@@ -91,11 +91,14 @@ array::array(
     const std::function<void(void*)>& deleter)
     : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
   auto buffer = allocator::make_buffer(data, nbytes());
-  if (buffer.ptr() == nullptr) {
+  if (buffer.ptr() == nullptr) { // require copying to managed buffer
     set_data(allocator::malloc(nbytes()));
     auto ptr = static_cast<char*>(data);
     std::copy(ptr, ptr + nbytes(), this->data<char>());
-    deleter(data);
+    if (deleter) {
+      deleter(data);
+    }
+    allocator::move_to_device_memory(this->buffer());
   } else {
     auto wrapped_deleter = [deleter](allocator::Buffer buffer) {
       auto ptr = buffer.raw_ptr();

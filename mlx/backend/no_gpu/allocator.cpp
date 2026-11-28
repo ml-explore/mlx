@@ -193,6 +193,8 @@ bool can_reuse_alien_buffer(void*) {
   return true;
 }
 
+void move_to_device_memory(Buffer, StreamOrDevice s) {}
+
 } // namespace allocator
 
 size_t get_active_memory() {
