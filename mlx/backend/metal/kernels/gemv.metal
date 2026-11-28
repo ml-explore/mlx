@@ -127,10 +127,18 @@ instantiate_gemv_t_bs_blocks(complex64, complex64_t); // clang-format on
   instantiate_gemv_wide_helper(name, itype, 4, kl)  \
   instantiate_gemv_wide_helper(name, itype, 5, kl) // clang-format on
 
+// Float32 tiles at most 4 vectors (gemv_wide_config tile_cap); no nv=5.
+#define instantiate_gemv_wide_fp32(kl)              \
+  instantiate_gemv_wide_helper(float32, float, 2, kl) \
+  instantiate_gemv_wide_helper(float32, float, 3, kl) \
+  instantiate_gemv_wide_helper(float32, float, 4, kl) // clang-format on
+
 instantiate_gemv_wide(float16, half, 16);
 instantiate_gemv_wide(bfloat16, bfloat16_t, 16);
+instantiate_gemv_wide_fp32(16);
 instantiate_gemv_wide(float16, half, 32);
 instantiate_gemv_wide(bfloat16, bfloat16_t, 32);
+instantiate_gemv_wide_fp32(32);
 
 // clang-format off
 #define instantiate_gemv_wide_gather_helper(name, itype, nv, kl) \
@@ -144,7 +152,14 @@ instantiate_gemv_wide(bfloat16, bfloat16_t, 32);
   instantiate_gemv_wide_gather_helper(name, itype, 4, kl)  \
   instantiate_gemv_wide_gather_helper(name, itype, 5, kl) // clang-format on
 
+#define instantiate_gemv_wide_gather_fp32(kl)                    \
+  instantiate_gemv_wide_gather_helper(float32, float, 2, kl)     \
+  instantiate_gemv_wide_gather_helper(float32, float, 3, kl)     \
+  instantiate_gemv_wide_gather_helper(float32, float, 4, kl) // clang-format on
+
 instantiate_gemv_wide_gather(float16, half, 16);
 instantiate_gemv_wide_gather(bfloat16, bfloat16_t, 16);
+instantiate_gemv_wide_gather_fp32(16);
 instantiate_gemv_wide_gather(float16, half, 32);
 instantiate_gemv_wide_gather(bfloat16, bfloat16_t, 32);
+instantiate_gemv_wide_gather_fp32(32);

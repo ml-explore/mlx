@@ -1436,21 +1436,27 @@ inline std::optional<GemvWideConfig> gemv_wide_config(
         });
   };
 
-  bool vec4_aligned = mat_offset % 8 == 0 && vec_offset % 8 == 0 &&
-      mat_ld % 4 == 0 && vec_ld % 4 == 0 && all_aligned(mat_batch_stride, 4) &&
-      all_aligned(vec_batch_stride, 4);
+  // GemvWide loads vec<T, 4>; byte alignment is 4 * sizeof(T) (8 for half /
+  // bfloat16, 16 for float32). Element strides still need a multiple of 4.
+  int vec4_bytes = 4 * out.itemsize();
+  bool vec4_aligned = mat_offset % vec4_bytes == 0 &&
+      vec_offset % vec4_bytes == 0 && mat_ld % 4 == 0 && vec_ld % 4 == 0 &&
+      all_aligned(mat_batch_stride, 4) && all_aligned(vec_batch_stride, 4);
 
   // Wide amortizes one matrix stream over several vectors; M == 1 has
   // nothing to amortize and stays with gemv.
-  if (M <= 1 || N <= 1 || K % 4 != 0 ||
-      (out.dtype() != float16 && out.dtype() != bfloat16) || !vec4_aligned) {
+  bool supported_dtype = out.dtype() == float16 || out.dtype() == bfloat16 ||
+      out.dtype() == float32;
+  if (M <= 1 || N <= 1 || K % 4 != 0 || !supported_dtype || !vec4_aligned) {
     return std::nullopt;
   }
 
-  // A register tile holds at most five vectors (wider collapses occupancy);
-  // M balances across passes that each re-stream the matrix, and a fourth
-  // pass no longer pays.
-  int passes = (M + 4) / 5;
+  // A register tile holds at most five vectors for half types (wider
+  // collapses occupancy). Float32 uses at most four: each vec<float, 4>
+  // load is twice as wide, so the same five-vector tile spills more.
+  // Precompiled float32 kernels match this cap (nv = 2..4 only).
+  int tile_cap = out.dtype() == float32 ? 4 : 5;
+  int passes = (M + tile_cap - 1) / tile_cap;
   if (passes > 3) {
     return std::nullopt;
   }
@@ -1464,7 +1470,8 @@ inline std::optional<GemvWideConfig> gemv_wide_config(
   // single grid column, and tiny outputs starve every column.
   bool full_simd = passes == 1 || N <= 64;
   int grid_x = vocab_wide ? 1 : passes;
-  return GemvWideConfig{(M + passes - 1) / passes, full_simd ? 32 : 16, grid_x};
+  return GemvWideConfig{
+      (M + passes - 1) / passes, full_simd ? 32 : 16, grid_x};
 }
 
 bool gemv_wide(

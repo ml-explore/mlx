@@ -682,6 +682,37 @@ class TestBlas(mlx_tests.MLXTestCase):
             )
             run_test(dtype, (2, 3, 5, 512), (2, 3, 129, 512), nt_np, nt_mx)
 
+        # Issue #4571: fp32 (M, 16384) @ (16384, 24) with small M must stay
+        # correct when routed through gemv_wide instead of steel_gemm_splitk.
+        # M = 12 is the largest FP32 wide tile (tile_cap 4, at most 3 passes);
+        # M = 13 needs a fourth pass and falls back to the general kernels.
+        for M in (2, 3, 4, 6, 8, 12, 13):
+            run_test(mx.float32, (M, 16384), (24, 16384), nt_np, nt_mx)
+
+        # Irregular N (not a multiple of 4): still eligible when mat_ld = K
+        # is vec4-aligned; covers the guarded out_row tail in GemvWide.
+        run_test(mx.float32, (4, 2048), (25, 2048), nt_np, nt_mx)
+
+        # One-float (4-byte) input offset: vec<float, 4> alignment fails →
+        # fallback, still numerically correct.
+        with self.subTest(case="fp32_offset_4"):
+            np.random.seed(7)
+            M, K, N = 4, 2048, 128
+            scale = K**-0.5
+            flat = mx.array(
+                np.random.normal(0.0, scale, M * K + 1).astype(np.float32)
+            )
+            a_mx = flat[1:].reshape(M, K)
+            b_mx = mx.array(
+                np.random.normal(0.0, scale, (N, K)).astype(np.float32)
+            )
+            a_np = np.array(a_mx)
+            b_np = np.array(b_mx)
+            out_np = a_np @ b_np.T
+            out_mx = (a_mx @ mx.swapaxes(b_mx, -1, -2)).astype(mx.float32)
+            self.assertListEqual(list(out_np.shape), list(out_mx.shape))
+            self.assertTrue(np.allclose(out_mx, out_np, atol=0.05 * scale))
+
     def test_mismatch_stride_mm(self):
         np.random.seed(0)
         a_npy = np.random.normal(0.0, 1.0 / 128, (4, 16, 16)).astype(np.float32)
@@ -946,6 +977,10 @@ class TestBlas(mlx_tests.MLXTestCase):
                 c = mx.ones((4, 250), dtype=dtype)
                 out = mx.addmm(c, a, mx.swapaxes(b, -1, -2), 0.125, 0.0)
                 self.assertTrue(np.allclose(out.astype(mx.float32), 12800.0))
+
+        # FP32 addmm on the #4571 shape family (shared gemv_wide config).
+        for M in (2, 8, 12):
+            run_test(mx.float32, None, M, 16384, 24, (M, 24), 1.0, 1.0)
 
     def test_thin_matmul(self):
         if mx.default_device() == mx.cpu:
@@ -1515,6 +1550,10 @@ class TestBlas(mlx_tests.MLXTestCase):
                 ).astype(mx.float32)
                 self.assertListEqual(list(out_np.shape), list(out_mx.shape))
                 self.assertTrue(np.allclose(out_mx, out_np, atol=0.05 * scale))
+
+        # FP32 gather-wide on the #4571 K/N family (shared gemv_wide config).
+        run_test(mx.float32, 4, 2, 16384, 24, 8, (4,))
+        run_test(mx.float32, 4, 8, 16384, 24, 8, (4,))
 
     def test_gather_matmul_grad(self):
         lhs_indices = mx.array([[7, 6], [4, 1], [0, 2]], dtype=mx.uint32)
