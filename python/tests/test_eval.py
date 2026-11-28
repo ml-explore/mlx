@@ -360,6 +360,21 @@ class TestEval(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(out0, out0, stream=mx.cpu))
         self.assertTrue(mx.array_equal(out1, a))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_fast_synch_cross_stream_after_commit(self):
+        # With fast synch, an array consumed on another stream must be ready
+        # even when its command buffer is committed before the fence update.
+        with mx.config.scoped_update(MLX_METAL_FAST_SYNCH=1, MLX_MAX_OPS_PER_BUFFER=0):
+            s = mx.new_stream(mx.gpu)
+            for t in range(20):
+                x = mx.random.randint(0, 4, (512, 512), key=mx.random.key(t))
+                x = x.astype(mx.float32)
+                expected = x @ x
+                mx.eval(x, expected)
+                with mx.stream(s):
+                    y = x @ x
+                self.assertTrue(mx.array_equal(y, expected).item(), t)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

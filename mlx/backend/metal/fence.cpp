@@ -117,6 +117,12 @@ uint32_t Fence::update(Stream stream, const array& x, bool cross_device) {
     compute_encoder.set_input_array(x, 0);
     compute_encoder.set_bytes(nthreads, 1);
     compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+  } else {
+    // Record x as an input so that this encoder waits on the fence of the
+    // encoder that produced it. The barrier below only orders work within
+    // one encoder, and the producer may be in an earlier encoder or command
+    // buffer if it was committed before this update.
+    compute_encoder.set_input_array(x, 2);
   }
 
   // Barrier on previous kernels
