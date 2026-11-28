@@ -20,7 +20,11 @@ namespace jaccl {
 // plain comparison.
 template <typename T>
 constexpr bool is_real_float_v = std::is_same_v<T, float> ||
-    std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>;
+    std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>
+#if defined(__aarch64__)
+    || std::is_same_v<T, __bf16>
+#endif
+    ;
 
 template <typename T>
 inline T nan_max(T a, T b) {
@@ -123,8 +127,7 @@ native_bf16_max(const void* input, void* output, size_t N) {
   auto in = reinterpret_cast<const __bf16*>(input);
   auto out = reinterpret_cast<__bf16*>(output);
   for (size_t i = 0; i < N; i++) {
-    out[i] = static_cast<__bf16>(
-        nan_max(static_cast<float>(out[i]), static_cast<float>(in[i])));
+    out[i] = nan_max(out[i], in[i]);
   }
 }
 
@@ -133,8 +136,7 @@ native_bf16_min(const void* input, void* output, size_t N) {
   auto in = reinterpret_cast<const __bf16*>(input);
   auto out = reinterpret_cast<__bf16*>(output);
   for (size_t i = 0; i < N; i++) {
-    out[i] = static_cast<__bf16>(
-        nan_min(static_cast<float>(out[i]), static_cast<float>(in[i])));
+    out[i] = nan_min(out[i], in[i]);
   }
 }
 
@@ -154,8 +156,7 @@ native_bf16_max(const void* a, const void* b, void* output, size_t N) {
   auto pb = reinterpret_cast<const __bf16* __restrict>(b);
   auto out = reinterpret_cast<__bf16* __restrict>(output);
   for (size_t i = 0; i < N; i++) {
-    out[i] = static_cast<__bf16>(
-        nan_max(static_cast<float>(pa[i]), static_cast<float>(pb[i])));
+    out[i] = nan_max(pa[i], pb[i]);
   }
 }
 
@@ -165,8 +166,7 @@ native_bf16_min(const void* a, const void* b, void* output, size_t N) {
   auto pb = reinterpret_cast<const __bf16* __restrict>(b);
   auto out = reinterpret_cast<__bf16* __restrict>(output);
   for (size_t i = 0; i < N; i++) {
-    out[i] = static_cast<__bf16>(
-        nan_min(static_cast<float>(pa[i]), static_cast<float>(pb[i])));
+    out[i] = nan_min(pa[i], pb[i]);
   }
 }
 
