@@ -843,9 +843,6 @@ array scaled_dot_product_attention(
       v = expand_dims(v, 2, s);
     }
     auto scores = matmul(q, swapaxes(k, -1, -2, s), s);
-    // Rows where a boolean mask leaves no key visible. Their weights are
-    // zeroed after the softmax so the output and its gradient are zero, as
-    // in the fused kernels, instead of a uniform average over the keys.
     std::optional<array> has_visible_key;
     if (has_arr_mask || do_causal || window_size > 0) {
       // Mask must be broadcast-compatible with [B, n_q_heads, L_q, L_kv]
@@ -919,8 +916,8 @@ array scaled_dot_product_attention(
     }
     scores = softmax(scores, std::vector<int>{-1}, true, s);
     if (has_visible_key) {
-      scores =
-          where(*has_visible_key, scores, array(0, scores.dtype()), s);
+      // Make sure scores are zero when all keys are masked out.
+      scores = where(*has_visible_key, scores, array(0, scores.dtype()), s);
     }
     if (has_sinks) {
       // Slice off scores

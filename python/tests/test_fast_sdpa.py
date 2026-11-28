@@ -777,36 +777,42 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
     def test_sdpa_fully_masked_row(self):
         # A query row with no visible key gives zero output and zero gradient
-        # on every path, and the other rows are unaffected.
+        # on fused and unfused paths, and the other rows are unaffected.
         mx.random.seed(0)
         L = 4
         mask = mx.ones((1, 1, L, L), dtype=mx.bool_)
         mask[..., 1, :] = False
-        for D in [32, 64, 80, 128]:
-            q = mx.random.normal(shape=(1, 2, L, D))
-            k = mx.random.normal(shape=(1, 2, L, D))
-            v = mx.random.normal(shape=(1, 2, L, D))
-            scale = 1.0 / D**0.5
+        # D=4 uses the unfused fallback; D=64 supports the fused kernel.
+        for D, fused in ((4, False), (64, True)):
+            with self.subTest(fused=fused):
+                q = mx.random.normal(shape=(1, 2, L, D))
+                k = mx.random.normal(shape=(1, 2, L, D))
+                v = mx.random.normal(shape=(1, 2, L, D))
+                scale = 1.0 / D**0.5
 
-            out = mx.fast.scaled_dot_product_attention(
-                q, k, v, scale=scale, mask=mask
-            )
-            ref = mlx_primitives_sdpa(q, k, v, scale=scale, mask=None)
-            self.assertTrue(mx.array_equal(out[..., 1, :], mx.zeros_like(out[..., 1, :])))
-            for i in (0, 2, 3):
-                self.assertTrue(
-                    mx.allclose(out[..., i, :], ref[..., i, :], atol=1e-4, rtol=1e-4)
-                )
-
-            def loss(q, k, v):
-                return mx.fast.scaled_dot_product_attention(
+                out = mx.fast.scaled_dot_product_attention(
                     q, k, v, scale=scale, mask=mask
-                )[..., 1, :].sum()
+                )
+                ref = mlx_primitives_sdpa(q, k, v, scale=scale, mask=None)
+                self.assertTrue(
+                    mx.array_equal(out[..., 1, :], mx.zeros_like(out[..., 1, :]))
+                )
+                for i in (0, 2, 3):
+                    self.assertTrue(
+                        mx.allclose(
+                            out[..., i, :], ref[..., i, :], atol=1e-4, rtol=1e-4
+                        )
+                    )
 
-            dq, dk, dv = mx.grad(loss, argnums=(0, 1, 2))(q, k, v)
-            for g in (dq, dk, dv):
-                self.assertFalse(mx.any(mx.isnan(g)))
-                self.assertEqual(mx.abs(g).max().item(), 0.0)
+                def loss(q, k, v):
+                    return mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, mask=mask
+                    )[..., 1, :].sum()
+
+                dq, dk, dv = mx.grad(loss, argnums=(0, 1, 2))(q, k, v)
+                for g in (dq, dk, dv):
+                    self.assertFalse(mx.any(mx.isnan(g)))
+                    self.assertEqual(mx.abs(g).max().item(), 0.0)
 
     def test_sdpa_inf_score(self):
         Lkv = 8
