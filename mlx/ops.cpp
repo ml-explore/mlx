@@ -3218,6 +3218,19 @@ array sign(const array& a, StreamOrDevice s /* = {} */) {
   return array(a.shape(), a.dtype(), std::make_shared<Sign>(to_stream(s)), {a});
 }
 
+array signbit(const array& a, StreamOrDevice s /* = {} */) {
+  if (issubdtype(a.dtype(), complexfloating)) {
+    throw std::invalid_argument("[signbit] Not supported for complex types.");
+  }
+  if (a.dtype() == bool_ || issubdtype(a.dtype(), unsignedinteger)) {
+    return full(a.shape(), false, bool_, s);
+  }
+  if (issubdtype(a.dtype(), signedinteger)) {
+    return less(a, array(0, a.dtype()), s);
+  }
+  return array(a.shape(), bool_, std::make_shared<SignBit>(to_stream(s)), {a});
+}
+
 array logical_not(const array& a, StreamOrDevice s /* = {} */) {
   return array(
       a.shape(),

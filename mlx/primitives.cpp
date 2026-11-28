@@ -5124,6 +5124,33 @@ std::pair<std::vector<array>, std::vector<int>> Sign::vmap(
   return {{sign(inputs[0], stream())}, axes};
 }
 
+std::vector<array> SignBit::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return {zeros_like(primals[0], stream())};
+}
+
+std::vector<array> SignBit::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return {zeros_like(tangents[0], stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> SignBit::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {{signbit(inputs[0], stream())}, axes};
+}
+
 std::vector<array> Sin::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

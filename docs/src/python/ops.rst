@@ -173,6 +173,7 @@ Operations
    searchsorted
    sigmoid
    sign
+   signbit
    sin
    sinh
    slice

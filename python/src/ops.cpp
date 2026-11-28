@@ -301,6 +301,30 @@ void init_ops(nb::module_& m) {
             array: The sign of ``a``.
       )pbdoc");
   m.def(
+      "signbit",
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::signbit(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def signbit(a: array | bool | int | float, /, *, stream: StreamOrDevice = None) -> array"),
+      R"pbdoc(
+        Test whether the sign bit is set for each element.
+
+        Negative zero and NaNs with a set sign bit return ``True``.
+        Unsigned integers and booleans return ``False``.
+
+        Args:
+            a (array or bool or int or float): Input array or scalar with a non-complex dtype.
+
+        Returns:
+            array: A boolean array with the same shape as ``a``,
+            containing ``True`` where the sign bit is set and ``False``
+            otherwise.
+      )pbdoc");
+  m.def(
       "positive",
       &mx::positive,
       nb::arg(),

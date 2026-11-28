@@ -1202,6 +1202,15 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = c / np.abs(c)
         self.assertTrue(np.allclose(result, expected))
 
+    def test_signbit(self):
+        a = mx.array([0.0, -0.0, 1.0, -1.0, np.inf, -np.inf, np.nan, -np.nan])
+        result = mx.signbit(a)
+        self.assertEqual(result.dtype, mx.bool_)
+        self.assertTrue(np.array_equal(result, np.signbit(a)))
+
+        with self.assertRaisesRegex(ValueError, "complex"):
+            mx.signbit(mx.array(1, dtype=mx.complex64))
+
     def test_logical_not(self):
         a = mx.array([-1.0, 1.0, 0.0, 1.0, -2.0, 3.0])
         result = mx.logical_not(a)

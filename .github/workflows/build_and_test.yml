@@ -117,7 +117,7 @@ jobs:
 
   build_documentation:
     name: Build Documentation
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: check_lint
     steps:
       - uses: actions/checkout@v7.0.1

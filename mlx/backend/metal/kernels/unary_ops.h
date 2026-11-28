@@ -330,6 +330,13 @@ struct Sign {
   };
 };
 
+struct SignBit {
+  template <typename T>
+  bool operator()(T x) thread {
+    return metal::signbit(x);
+  }
+};
+
 struct Sin {
   template <typename T>
   T operator()(T x) thread {

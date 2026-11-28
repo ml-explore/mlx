@@ -97,6 +97,23 @@ void unary_real_fp(const array& a, array& out, Op op, Stream stream) {
     }
   });
 }
+
+template <typename Op>
+void unary_real_to_bool(const array& a, array& out, Op op, Stream stream) {
+  set_unary_output_data(a, out);
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(a);
+  encoder.set_output_array(out);
+  encoder.dispatch([a = array::unsafe_weak_copy(a),
+                    out = array::unsafe_weak_copy(out),
+                    op = op]() mutable {
+    dispatch_float_types(a.dtype(), "[unary_real_to_bool]", [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      unary_op<T, bool>(a, out, op);
+    });
+  });
+}
+
 template <typename Op>
 void unary_fp(const array& a, array& out, Op op, Stream stream) {
   set_unary_output_data(a, out);
