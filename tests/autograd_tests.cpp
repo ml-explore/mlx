@@ -1512,6 +1512,104 @@ TEST_CASE("test grad dynamic slices") {
   }
 }
 
+TEST_CASE("test scatter_add block vjp") {
+  auto source = zeros({3, 3});
+  auto cotan = reshape(arange(1.f, 10.f), {3, 3});
+  auto updates = ones({2, 2, 2});
+  std::vector<array> indices{array({0, 1}), array({0, 1})};
+  std::vector<int> axes{0, 1};
+  auto expected = array({1.f, 2.f, 4.f, 5.f, 5.f, 6.f, 8.f, 9.f}, {2, 2, 2});
+
+  SUBCASE("overlapping blocks") {}
+
+  SUBCASE("partial unindexed dimension") {
+    source = zeros({3, 4});
+    cotan = reshape(arange(1.f, 13.f), {3, 4});
+    updates = ones({1, 2, 2});
+    indices = {array({1})};
+    axes = {0};
+    expected = array({5.f, 6.f, 9.f, 10.f}, {1, 2, 2});
+  }
+
+  SUBCASE("broadcast index dimensions") {
+    updates = ones({2, 2, 2, 2});
+    indices = {array({0, 1}, {2, 1}), array({0, 1}, {1, 2})};
+    expected = array(
+        {1.f,
+         2.f,
+         4.f,
+         5.f,
+         2.f,
+         3.f,
+         5.f,
+         6.f,
+         4.f,
+         5.f,
+         7.f,
+         8.f,
+         5.f,
+         6.f,
+         8.f,
+         9.f},
+        {2, 2, 2, 2});
+  }
+
+  auto fun = [&](const std::vector<array>& inputs) {
+    return std::vector<array>{scatter_add(inputs[0], indices, inputs[1], axes)};
+  };
+  auto grads = vjp(fun, {source, updates}, {cotan}).second;
+  CHECK(array_equal(grads[0], cotan).item<bool>());
+  REQUIRE_EQ(grads[1].shape(), updates.shape());
+  CHECK(array_equal(grads[1], expected).item<bool>());
+}
+
+TEST_CASE("test scatter_add block scalar gradient") {
+  auto index = array({0});
+  auto weights = array({1.f, 2.f, 3.f, 4.f}, {2, 2});
+  auto fun = [&](const array& x) {
+    auto updates = broadcast_to(x, {1, 2, 2});
+    auto out = scatter_add(zeros({2, 2}), {index, index}, updates, {0, 1});
+    return sum(multiply(out, weights));
+  };
+  auto [value, gradient] = vjp(fun, array(2.f), array(1.f));
+  CHECK_EQ(value.item<float>(), 20.f);
+  CHECK_EQ(gradient.item<float>(), 10.f);
+}
+
+TEST_CASE("test scatter block vjp reductions") {
+  using ScatterFn = array (*)(
+      const array&,
+      const std::vector<array>&,
+      const array&,
+      const std::vector<int>&,
+      StreamOrDevice);
+  for (auto op :
+       {static_cast<ScatterFn>(scatter),
+        static_cast<ScatterFn>(scatter_max),
+        static_cast<ScatterFn>(scatter_min)}) {
+    auto index = array({0});
+    auto updates = array({-2.f, 2.f, 3.f, -3.f}, {1, 2, 2});
+    auto cotan = array({1.f, 2.f, 3.f, 4.f}, {2, 2});
+    auto fun = [&](const std::vector<array>& inputs) {
+      return std::vector<array>{
+          op(inputs[0], {index, index}, inputs[1], {0, 1}, {})};
+    };
+    auto grads = vjp(fun, {zeros({2, 2}), updates}, {cotan}).second;
+    auto expected = array({1.f, 2.f, 3.f, 4.f}, {1, 2, 2});
+    auto source_grad = zeros({2, 2});
+    if (op == static_cast<ScatterFn>(scatter_max)) {
+      expected = array({0.f, 2.f, 3.f, 0.f}, {1, 2, 2});
+      source_grad = array({1.f, 0.f, 0.f, 4.f}, {2, 2});
+    } else if (op == static_cast<ScatterFn>(scatter_min)) {
+      expected = array({1.f, 0.f, 0.f, 4.f}, {1, 2, 2});
+      source_grad = array({0.f, 2.f, 3.f, 0.f}, {2, 2});
+    }
+    CHECK(array_equal(grads[0], source_grad).item<bool>());
+    REQUIRE_EQ(grads[1].shape(), updates.shape());
+    CHECK(array_equal(grads[1], expected).item<bool>());
+  }
+}
+
 TEST_CASE("test masked_scatter autograd") {
   // Test jvp
   {
