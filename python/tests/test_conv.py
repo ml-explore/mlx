@@ -19,6 +19,45 @@ except ImportError:
 
 
 class TestConv(mlx_tests.MLXTestCase):
+    def test_conv_rejects_float64(self):
+        cases = []
+        for ndim in (1, 2, 3):
+            for prefix in ("conv", "conv_transpose"):
+                conv = getattr(mx, f"{prefix}{ndim}d")
+                cases.extend([(conv, ndim, {}), (conv, ndim, {"dilation": 2})])
+                if ndim < 3:
+                    cases.append((conv, ndim, {"groups": 2}))
+        cases.append((mx.conv_general, 2, {"input_dilation": 2, "flip": True}))
+        for (conv, ndim, kwargs), batch, dtypes in product(
+            cases,
+            (0, 1),
+            (
+                (mx.float64, mx.float64),
+                (mx.float64, mx.float32),
+                (mx.float32, mx.float64),
+            ),
+        ):
+            with self.subTest(
+                conv=conv.__name__, ndim=ndim, kwargs=kwargs, batch=batch, dtypes=dtypes
+            ):
+                x = mx.ones(
+                    (batch,) + (5,) * ndim + (2,), dtype=dtypes[0], stream=mx.cpu
+                )
+                w = mx.ones(
+                    (2,) + (2,) * ndim + (2 // kwargs.get("groups", 1),),
+                    dtype=dtypes[1],
+                    stream=mx.cpu,
+                )
+                with self.assertRaisesRegex(ValueError, "float64"):
+                    mx.eval(conv(x, w, **kwargs, stream=mx.cpu))
+
+        for mode in ("full", "same", "valid"):
+            with self.subTest(conv="convolve", mode=mode):
+                x = mx.ones((5,), dtype=mx.float64, stream=mx.cpu)
+                w = mx.ones((2,), dtype=mx.float64, stream=mx.cpu)
+                with self.assertRaisesRegex(ValueError, "float64"):
+                    mx.eval(mx.convolve(x, w, mode, stream=mx.cpu))
+
     def test_numpy_conv(self):
         for dtype in (
             "float16",

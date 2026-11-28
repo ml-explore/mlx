@@ -42,3 +42,11 @@ To keep the input precision, set :envvar:`MLX_ENABLE_INT8_QMM` to ``0``:
 .. code-block:: shell
 
   MLX_ENABLE_INT8_QMM=0 python my_script.py
+
+Convolution dtypes
+------------------
+
+Convolution operations support ``float16``, ``bfloat16``, and ``float32``.
+They do not support ``float64``, including on the CPU. Inputs or weights
+that promote the convolution to ``float64`` raise a ``ValueError``. Cast
+them explicitly to a supported dtype if lower precision is acceptable.

@@ -4742,6 +4742,9 @@ array conv_general(
 
   // Type promotion
   auto out_type = promote_types(in.dtype(), wt.dtype());
+  if (out_type == float64) {
+    throw std::invalid_argument("[conv] float64 is not supported.");
+  }
   in = astype(in, out_type, s);
   wt = astype(wt, out_type, s);
 
