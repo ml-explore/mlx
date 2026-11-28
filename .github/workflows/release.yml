@@ -152,12 +152,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
           ccache-key: 'release'
           ccache-save: ${{ matrix.python-version == '3.10' }}
-      - name: Build macOS 14 package
-        uses: $/.github/actions/build-wheel
-        with:
-          macos-target: '14.0'
-          cmake-args: ${{ steps.setup.outputs.cmake-args }}
-          build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Build macOS 15 package
         uses: $/.github/actions/build-wheel
         with:
