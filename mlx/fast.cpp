@@ -1086,6 +1086,8 @@ std::vector<array> gated_delta_update(
     const array& beta_,
     const std::optional<array>& initial_state, /* = std::nullopt */
     const std::optional<array>& mask_, /* = std::nullopt */
+    std::optional<int> state_at, /* = std::nullopt */
+    bool intermediate_states, /* = false */
     StreamOrDevice s_ /* = {} */) {
   // determine output dtype
   auto s = to_stream(s_);
@@ -1111,13 +1113,38 @@ std::vector<array> gated_delta_update(
   int Hv = v.shape(2);
   int Dv = v.shape(3);
 
+  if (state_at && intermediate_states) {
+    throw std::invalid_argument(
+        "[gated_delta_update] Pass at most one of state_at and intermediate_states.");
+  }
+  if (state_at && (*state_at <= 0 || *state_at >= T)) {
+    std::ostringstream msg;
+    msg << "[gated_delta_update] state_at must be in (0, T) but got "
+        << *state_at << " with T = " << T << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  // 0: final state only; c: states after c and T steps; T: every step.
+  int state_step = intermediate_states ? T : state_at.value_or(0);
+  if (state_step > 0 && s.device == Device::gpu &&
+      !GatedDeltaUpdate::supports_state_steps(s)) {
+    throw std::invalid_argument(
+        "[gated_delta_update] state_at and intermediate_states are not supported on "
+        "this GPU backend yet.");
+  }
+
   auto h0 = initial_state.has_value() ? astype(*initial_state, float32, s)
                                       : zeros({B, Hv, Dv, Dk}, float32, s);
+
+  if (intermediate_states && T == 0) {
+    return {
+        zeros({B, 0, Hv, Dv}, out_dtype, s),
+        zeros({0, B, Hv, Dv, Dk}, float32, s)};
+  }
 
   bool has_mask = mask_.has_value();
   auto mask = has_mask ? astype(*mask_, bool_, s) : array(false);
 
-  auto fallback = [B, T, Hk, Dk, Hv, Dv, has_mask, s](
+  auto fallback = [B, T, Hk, Dk, Hv, Dv, has_mask, state_step, s](
                       std::vector<array> inputs) {
     auto out_dtype = inputs[0].dtype();
     auto q = inputs[0];
@@ -1137,6 +1164,7 @@ std::vector<array> gated_delta_update(
     const array zero = array(0.0f, float32);
 
     std::vector<array> outputs;
+    std::vector<array> states;
     for (int t = 0; t < T; t++) {
       auto get_t = [&](const array& a, int t) {
         Shape start(a.ndim(), 0), stop = a.shape();
@@ -1187,9 +1215,18 @@ std::vector<array> gated_delta_update(
         o_t = where(out_mask, o_t, zero, s);
       }
       outputs.push_back(astype(o_t, out_dtype, s));
+      if (state_step == T || t == state_step - 1) {
+        states.push_back(state);
+      }
     }
     auto out = stack(outputs, 1, s);
-    return std::vector<array>{out, state};
+    if (state_step == 0) {
+      return std::vector<array>{out, state};
+    }
+    if (state_step < T) {
+      states.push_back(state);
+    }
+    return std::vector<array>{out, stack(states, 0, s)};
   };
 
   if (GatedDeltaUpdate::use_fallback(Hk, Dk, Hv, Dv, has_mask, s) ||
@@ -1197,12 +1234,15 @@ std::vector<array> gated_delta_update(
     return fallback({q, k, v, g, beta, h0, mask});
   }
 
+  Shape state_shape = {B, Hv, Dv, Dk};
+  if (state_step > 0) {
+    state_shape.insert(state_shape.begin(), state_step == T ? T : 2);
+  }
   return array::make_arrays(
-      /* output shapes */ {{B, T, Hv, Dv}, {B, Hv, Dv, Dk}},
-      /* dtypes */ {out_dtype, float32},
-      /* primitive */
-      std::make_shared<GatedDeltaUpdate>(s, fallback),
-      /* inputs */ {q, k, v, g, beta, h0});
+      {{B, T, Hv, Dv}, std::move(state_shape)},
+      {out_dtype, float32},
+      std::make_shared<GatedDeltaUpdate>(s, fallback, state_step),
+      {q, k, v, g, beta, h0});
 }
 
 std::vector<array> GatedDeltaUpdate::vjp(
@@ -1215,7 +1255,9 @@ std::vector<array> GatedDeltaUpdate::vjp(
   const int Hv = primals[2].shape(2);
   const int Dv = primals[2].shape(3);
 
-  if (GatedDeltaUpdateVJP::use_fallback(Hk, Dk, Hv, Dv, stream()) ||
+  // The fused vjp takes the cotangent of the final state only.
+  if (state_step_ > 0 ||
+      GatedDeltaUpdateVJP::use_fallback(Hk, Dk, Hv, Dv, stream()) ||
       config::get("MLX_GATED_DELTA_VJP_FALLBACK", 0)) {
     return Custom::vjp(primals, cotangents, argnums, outputs);
   }

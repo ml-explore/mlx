@@ -412,6 +412,8 @@ void init_fast(nb::module_& parent_module) {
       "beta"_a,
       "initial_state"_a = nb::none(), // optional, defaults to None
       "mask"_a = nb::none(), // optional, defaults to None
+      "state_at"_a = nb::none(), // optional, defaults to None
+      "intermediate_states"_a = false,
       "stream"_a = nb::none(), // optional, defaults to None
       R"(
             Gated delta network forward pass.
@@ -431,10 +433,24 @@ void init_fast(nb::module_& parent_module) {
                 mask (array, optional): Boolean mask with shape ``[B, T]``.
                     False entries leave the state unchanged and produce zero
                     output. Default: ``None``.
+                state_at (int, optional): A number of time steps ``c`` with
+                    ``0 < c < T``. If given, the returned state has shape
+                    ``[2, B, Hv, Dv, Dk]`` and holds the states after ``c``
+                    and after ``T`` time steps. Default: ``None``.
+                intermediate_states (bool, optional): If ``True``, the returned state
+                    has shape ``[T, B, Hv, Dv, Dk]`` and holds the state after
+                    every time step. Default: ``False``.
 
             Returns:
                 list(array): The output with shape ``[B, T, Hv, Dv]`` and the
-                final state with shape ``[B, Hv, Dv, Dk]`` and dtype ``float32``.
+                final state with shape ``[B, Hv, Dv, Dk]`` and dtype ``float32``,
+                or the stacked states described above.
+
+            With ``state_at`` or ``intermediate_states``, inputs that have a
+            fused Metal kernel run the sequential kernel rather than the
+            chunked one, and other inputs run the per-step fallback.
+            ``intermediate_states`` allocates ``T * B * Hv * Dv * Dk`` float32
+            values. Neither option is supported on CUDA yet.
         )");
 
   m.def(

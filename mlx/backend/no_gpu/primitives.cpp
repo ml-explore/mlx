@@ -64,6 +64,10 @@ bool fast::GatedDeltaUpdate::use_fallback(
   return true;
 }
 
+bool fast::GatedDeltaUpdate::supports_state_steps(Stream s) {
+  return false;
+}
+
 bool fast::GatedDeltaUpdateVJP::use_fallback(
     int Hk,
     int Dk,

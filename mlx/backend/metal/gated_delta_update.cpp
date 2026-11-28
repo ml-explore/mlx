@@ -92,6 +92,10 @@ bool GatedDeltaUpdate::use_fallback(
   return !supported_gated_delta_shape(Hk, Dk, Hv, Dv);
 }
 
+bool GatedDeltaUpdate::supports_state_steps(Stream s) {
+  return true;
+}
+
 void GatedDeltaUpdate::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
@@ -104,7 +108,11 @@ void GatedDeltaUpdate::eval_gpu(
   // With no steps the final state is the initial state
   if (out.size() == 0) {
     out.set_data(allocator::malloc(0));
-    copy_gpu(inputs[5], hf, CopyType::General, s);
+    if (hf.size() == 0) {
+      hf.set_data(allocator::malloc(0));
+    } else {
+      copy_gpu(inputs[5], hf, CopyType::General, s);
+    }
     return;
   }
 
@@ -123,7 +131,9 @@ void GatedDeltaUpdate::eval_gpu(
   int Dv = v.shape(3);
 
   bool vectorized_g = (g.ndim() == 4);
-  int C = gated_delta_chunk_size(q.dtype(), vectorized_g, T);
+  // Only the sequential kernel stores intermediate states.
+  bool store_steps = state_step_ > 0;
+  int C = store_steps ? 1 : gated_delta_chunk_size(q.dtype(), vectorized_g, T);
   const int ckpt = gated_delta_ckpt(C);
 
   std::string suffix =
@@ -145,6 +155,7 @@ void GatedDeltaUpdate::eval_gpu(
   metal::MTLFCList func_consts = {
       {&save_state, MTL::DataType::DataTypeBool, 200},
       {&vectorized_g, MTL::DataType::DataTypeBool, 201},
+      {&store_steps, MTL::DataType::DataTypeBool, 202},
   };
 
   array dummy = scratch_alloc({1}, float32, s);
@@ -205,12 +216,16 @@ void GatedDeltaUpdate::eval_gpu(
       // name one; it just never stores.
       std::string base_name =
           fmt::format("seq_gated_delta_{}_{}", suffix, ckpt);
+      std::string hash_name = base_name;
+      if (vectorized_g) {
+        hash_name += "_vecg";
+      }
+      if (store_steps) {
+        hash_name += "_steps";
+      }
 
-      auto delta_kernel = get_gated_delta_kernel(
-          d,
-          base_name,
-          vectorized_g ? base_name + "_vecg" : base_name,
-          func_consts);
+      auto delta_kernel =
+          get_gated_delta_kernel(d, base_name, hash_name, func_consts);
 
       compute_encoder.set_compute_pipeline_state(delta_kernel);
 
@@ -225,6 +240,11 @@ void GatedDeltaUpdate::eval_gpu(
       compute_encoder.set_output_array(hf, 7);
       compute_encoder.set_bytes(T, 8);
       // Slot 9 is gated off by the function constant, so it stays unbound.
+      if (store_steps) {
+        size_t state_stride = size_t(B) * Hv * Dv * Dk;
+        compute_encoder.set_bytes(state_step_, 10);
+        compute_encoder.set_bytes(state_stride, 11);
+      }
 
       auto grid = MTL::Size(32, Dv, B * Hv);
       auto threads = MTL::Size(32, 4, 1);
@@ -352,9 +372,11 @@ void GatedDeltaUpdateVJP::eval_gpu(
       fmt::format("{}_{}_{}_{}_{}", get_type_string(q.dtype()), Dk, Dv, Hk, Hv);
 
   bool save_state = true;
+  bool store_steps = false;
   metal::MTLFCList save_consts = {
       {&save_state, MTL::DataType::DataTypeBool, 200},
       {&vectorized_g, MTL::DataType::DataTypeBool, 201},
+      {&store_steps, MTL::DataType::DataTypeBool, 202},
   };
   metal::MTLFCList vjp_consts = {
       {&vectorized_g, MTL::DataType::DataTypeBool, 201},

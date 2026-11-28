@@ -196,6 +196,11 @@ bool GatedDeltaUpdate::use_fallback(
   return Hv % Hk;
 }
 
+bool GatedDeltaUpdate::supports_state_steps(Stream s) {
+  // Not implemented yet.
+  return false;
+}
+
 void GatedDeltaUpdate::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
