@@ -390,6 +390,14 @@ void steel_matmul_regular_axpby(
 
   char devc = d.get_architecture().back();
   GEMM_TPARAM_MACRO(devc)
+  // Few rows: a 32x32 tile holds all rows and gives more threadgroups.
+  if (M <= 32 && static_cast<int64_t>(batch_size_out) * K * N >= (1 << 18)) {
+    bm = 32;
+    bn = 32;
+    bk = 16;
+    wm = 2;
+    wn = 2;
+  }
 
   // Prepare kernel name
   std::ostringstream kname;
