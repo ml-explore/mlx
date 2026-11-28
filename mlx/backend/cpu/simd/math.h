@@ -51,8 +51,11 @@ Simd<T, N> exp(Simd<T, N> in) {
     Simd<float, N> x_init = in;
     auto x = x_init * 1.442695f; // multiply with log_2(e)
     Simd<float, N> ipart, fpart;
-    ipart = floor(x + 0.5);
-    fpart = x - ipart;
+    ipart = floor(x + 0.5f);
+    // Form x * log2(e) - ipart without the rounding error of the product:
+    // 1.442695f is the float32 nearest to log2(e); 1.925963e-8f is the rest.
+    fpart = fma(x_init, Simd<float, N>(1.442695f), -ipart);
+    fpart = fma(x_init, Simd<float, N>(1.925963e-8f), fpart);
 
     x = 1.535336188319500e-4f;
     x = fma(x, fpart, 1.339887440266574e-3f);
